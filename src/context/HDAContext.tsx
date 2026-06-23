@@ -7,7 +7,8 @@ import {
   ModuleType,
   Reservation,
   Commande,
-  StockMovement
+  StockMovement,
+  Chambre
 } from '../types';
 import { 
   initialUsers, 
@@ -31,6 +32,7 @@ interface HDAState {
   reservations: Reservation[];
   commandes: Commande[];
   stockMovements: StockMovement[];
+  chambres: Chambre[];
   activeModule: ModuleType;
   sidebarCollapsed: boolean;
   notifications: Notification[];
@@ -43,36 +45,102 @@ interface Notification {
   timestamp: string;
 }
 
+// ==================== DONNÉES INITIALES POUR LES CHAMBRES ====================
+
+const initialChambres: Chambre[] = [
+  {
+    id: 'ch1',
+    numero: '101',
+    type: 'simple',
+    prix: 120,
+    status: 'libre',
+    etage: 1,
+    capacite: 2,
+  },
+  {
+    id: 'ch2',
+    numero: '102',
+    type: 'double',
+    prix: 180,
+    status: 'occupee',
+    etage: 1,
+    capacite: 2,
+  },
+  {
+    id: 'ch3',
+    numero: '201',
+    type: 'suite',
+    prix: 350,
+    status: 'libre',
+    etage: 2,
+    capacite: 4,
+  },
+  {
+    id: 'ch4',
+    numero: '202',
+    type: 'vip',
+    prix: 250,
+    status: 'reservee',
+    etage: 2,
+    capacite: 2,
+  },
+  {
+    id: 'ch5',
+    numero: '301',
+    type: 'vip',
+    prix: 500,
+    status: 'libre',
+    etage: 3,
+    capacite: 4,
+  }
+];
+
 // ==================== ACTIONS ====================
 
 type Action =
   | { type: 'SET_MODULE'; payload: ModuleType }
   | { type: 'TOGGLE_SIDEBAR' }
+  // Actions Stock
   | { type: 'ADD_STOCK_ITEM'; payload: Omit<StockItem, 'id' | 'createdAt' | 'updatedAt'> }
   | { type: 'UPDATE_STOCK_ITEM'; payload: StockItem }
   | { type: 'DELETE_STOCK_ITEM'; payload: string }
+  // Actions Transactions
   | { type: 'ADD_TRANSACTION'; payload: Omit<CaisseTransaction, 'id' | 'date'> }
   | { type: 'ADD_CASINO_TRANSACTION'; payload: { jeuId: string; transaction: Omit<CaisseTransaction, 'id' | 'date'> } }
+  // Actions Utilisateurs
   | { type: 'ADD_USER'; payload: Omit<User, 'id' | 'createdAt'> }
   | { type: 'UPDATE_USER'; payload: User }
   | { type: 'DELETE_USER'; payload: string }
+  // Actions Réservations
   | { type: 'ADD_RESERVATION'; payload: Omit<Reservation, 'id' | 'createdAt'> }
   | { type: 'UPDATE_RESERVATION'; payload: Reservation }
+  | { type: 'DELETE_RESERVATION'; payload: string }
+  // Actions Commandes
   | { type: 'ADD_COMMANDE'; payload: Omit<Commande, 'id' | 'createdAt'> }
+  | { type: 'UPDATE_COMMANDE'; payload: Commande }
+  | { type: 'DELETE_COMMANDE'; payload: string }
+  // Actions Jeux Casino
   | { type: 'UPDATE_JEU'; payload: JeuCasino }
+  // Actions Notifications
   | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, 'id' | 'timestamp'> }
-  | { type: 'CLEAR_NOTIFICATION'; payload: string };
+  | { type: 'CLEAR_NOTIFICATION'; payload: string }
+  // Actions Chambres
+  | { type: 'ADD_CHAMBRE'; payload: Chambre }
+  | { type: 'UPDATE_CHAMBRE'; payload: Chambre }
+  | { type: 'DELETE_CHAMBRE'; payload: string };
 
 // ==================== REDUCER ====================
 
 const hdaReducer = (state: HDAState, action: Action): HDAState => {
   switch (action.type) {
+    // ===== NAVIGATION =====
     case 'SET_MODULE':
       return { ...state, activeModule: action.payload };
     
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
     
+    // ===== STOCK =====
     case 'ADD_STOCK_ITEM': {
       const newItem: StockItem = {
         ...action.payload,
@@ -99,6 +167,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         stockItems: state.stockItems.filter(item => item.id !== action.payload)
       };
     
+    // ===== TRANSACTIONS =====
     case 'ADD_TRANSACTION': {
       const newTransaction: CaisseTransaction = {
         ...action.payload,
@@ -144,6 +213,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
     }
     
+    // ===== UTILISATEURS =====
     case 'ADD_USER': {
       const newUser: User = {
         ...action.payload,
@@ -165,6 +235,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         users: state.users.filter(u => u.id !== action.payload)
       };
     
+    // ===== RÉSERVATIONS =====
     case 'ADD_RESERVATION': {
       const newRes: Reservation = {
         ...action.payload,
@@ -180,6 +251,13 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         reservations: state.reservations.map(r => r.id === action.payload.id ? action.payload : r)
       };
     
+    case 'DELETE_RESERVATION':
+      return {
+        ...state,
+        reservations: state.reservations.filter(r => r.id !== action.payload)
+      };
+    
+    // ===== COMMANDES =====
     case 'ADD_COMMANDE': {
       const newCmd: Commande = {
         ...action.payload,
@@ -189,12 +267,26 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       return { ...state, commandes: [newCmd, ...state.commandes] };
     }
     
+    case 'UPDATE_COMMANDE':
+      return {
+        ...state,
+        commandes: state.commandes.map(c => c.id === action.payload.id ? action.payload : c)
+      };
+    
+    case 'DELETE_COMMANDE':
+      return {
+        ...state,
+        commandes: state.commandes.filter(c => c.id !== action.payload)
+      };
+    
+    // ===== JEUX CASINO =====
     case 'UPDATE_JEU':
       return {
         ...state,
         jeux: state.jeux.map(j => j.id === action.payload.id ? action.payload : j)
       };
     
+    // ===== NOTIFICATIONS =====
     case 'ADD_NOTIFICATION': {
       const notif: Notification = {
         ...action.payload,
@@ -209,13 +301,34 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         ...state,
         notifications: state.notifications.filter(n => n.id !== action.payload)
       };
+
+    // ===== CHAMBRES =====
+    case 'ADD_CHAMBRE':
+      return {
+        ...state,
+        chambres: [...state.chambres, action.payload]
+      };
+    
+    case 'UPDATE_CHAMBRE':
+      return {
+        ...state,
+        chambres: state.chambres.map(c => 
+          c.id === action.payload.id ? action.payload : c
+        )
+      };
+    
+    case 'DELETE_CHAMBRE':
+      return {
+        ...state,
+        chambres: state.chambres.filter(c => c.id !== action.payload)
+      };
     
     default:
       return state;
   }
 };
 
-// ==================== CONTEXT ====================
+// ==================== STATE INITIAL ====================
 
 const initialState: HDAState = {
   users: initialUsers,
@@ -226,6 +339,7 @@ const initialState: HDAState = {
   reservations: reservations,
   commandes: commandes,
   stockMovements: stockMovements,
+  chambres: initialChambres,
   activeModule: 'dashboard',
   sidebarCollapsed: false,
   notifications: [
@@ -234,6 +348,8 @@ const initialState: HDAState = {
     { id: 'n3', type: 'error', message: 'Stock épuisé: Truffe Noire', timestamp: new Date().toISOString() },
   ]
 };
+
+// ==================== CONTEXT ====================
 
 interface HDAContextType {
   state: HDAState;
@@ -251,6 +367,8 @@ const HDAContext = createContext<HDAContextType | undefined>(undefined);
 export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(hdaReducer, initialState);
 
+  // ===== HELPERS =====
+  
   const getModuleTransactions = (module: ModuleType) => {
     return state.transactions.filter(t => t.module === module);
   };
