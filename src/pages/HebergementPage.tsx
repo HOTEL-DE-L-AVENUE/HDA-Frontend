@@ -3,25 +3,47 @@ import { StockManager, CaisseManager } from '../components/StockManager';
 import { useHDA } from '../context/HDAContext';
 import { Badge, Modal, Input, Select, Button, DataTable } from '../components/UI';
 import { formatCurrency, formatDate } from '../utils/data';
-import { Reservation } from '../types';
-import { BedDouble, Plus, Calendar, Users } from 'lucide-react';
+import { Reservation, Chambre } from '../types';
+import { BedDouble, Plus, Calendar, Users, DoorOpen, Pencil, Trash2, X } from 'lucide-react';
 
 const tabs = [
   { id: 'reservations', label: 'Réservations' },
+  { id: 'chambres', label: 'Chambres' },
   { id: 'stock', label: 'Stock' },
   { id: 'caisse', label: 'Caisse' },
 ];
+
+// Types pour les chambres
+interface ChambreForm {
+  numero: string;
+  type: string;
+  prix: number;
+  capacite: number;
+  description: string;
+  statut: 'disponible' | 'occupee' | 'maintenance' | 'reservée';
+}
 
 export const HebergementPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const [activeTab, setActiveTab] = useState('reservations');
   const [showModal, setShowModal] = useState(false);
+  const [showChambreModal, setShowChambreModal] = useState(false);
+  const [editingChambre, setEditingChambre] = useState<Chambre | null>(null);
   const [form, setForm] = useState({ 
     clientNom: '', clientPrenom: '', clientTel: '', 
     chambres: '', dateArrivee: '', dateDepart: '', 
     montantTotal: 0, status: 'confirmee' 
   });
+  const [chambreForm, setChambreForm] = useState<ChambreForm>({
+    numero: '',
+    type: 'Standard',
+    prix: 0,
+    capacite: 2,
+    description: '',
+    statut: 'disponible'
+  });
 
+  // Gestion des réservations
   const handleAddReservation = () => {
     if (!form.clientNom || !form.dateArrivee) return;
     const nuits = Math.ceil((new Date(form.dateDepart).getTime() - new Date(form.dateArrivee).getTime()) / (1000 * 3600 * 24));
@@ -33,9 +55,68 @@ export const HebergementPage: React.FC = () => {
       status: form.status as Reservation['status']
     }});
     setShowModal(false);
+    // Réinitialiser le formulaire
+    setForm({ clientNom: '', clientPrenom: '', clientTel: '', chambres: '', dateArrivee: '', dateDepart: '', montantTotal: 0, status: 'confirmee' });
   };
 
-  const columns = [
+  // Gestion des chambres - CRUD
+  const handleAddChambre = () => {
+    if (!chambreForm.numero || !chambreForm.prix) return;
+    const newChambre: Chambre = {
+      id: Date.now().toString(),
+      ...chambreForm,
+      disponible: chambreForm.statut === 'disponible'
+    };
+    dispatch({ type: 'ADD_CHAMBRE', payload: newChambre });
+    setShowChambreModal(false);
+    resetChambreForm();
+  };
+
+  const handleEditChambre = () => {
+    if (!editingChambre) return;
+    const updatedChambre: Chambre = {
+      ...editingChambre,
+      ...chambreForm,
+      disponible: chambreForm.statut === 'disponible'
+    };
+    dispatch({ type: 'UPDATE_CHAMBRE', payload: updatedChambre });
+    setShowChambreModal(false);
+    setEditingChambre(null);
+    resetChambreForm();
+  };
+
+  const handleDeleteChambre = (id: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette chambre ?')) {
+      dispatch({ type: 'DELETE_CHAMBRE', payload: id });
+    }
+  };
+
+  const resetChambreForm = () => {
+    setChambreForm({
+      numero: '',
+      type: 'Standard',
+      prix: 0,
+      capacite: 2,
+      description: '',
+      statut: 'disponible'
+    });
+  };
+
+  const openEditChambre = (chambre: Chambre) => {
+    setEditingChambre(chambre);
+    setChambreForm({
+      numero: chambre.numero,
+      type: chambre.type,
+      prix: chambre.prix,
+      capacite: chambre.capacite,
+      description: chambre.description || '',
+      statut: chambre.statut || 'disponible'
+    });
+    setShowChambreModal(true);
+  };
+
+  // Colonnes pour les réservations
+  const reservationColumns = [
     { key: 'client', label: 'Client', render: (r: Reservation) => (
       <div>
         <p className="text-white font-medium">{r.clientPrenom} {r.clientNom}</p>
@@ -75,10 +156,47 @@ export const HebergementPage: React.FC = () => {
     )},
   ];
 
+  // Colonnes pour les chambres
+  const chambreColumns = [
+    { key: 'numero', label: 'N° Chambre', render: (c: Chambre) => (
+      <span className="text-white font-medium">{c.numero}</span>
+    )},
+    { key: 'type', label: 'Type', render: (c: Chambre) => (
+      <span className="text-slate-300">{c.type}</span>
+    )},
+    { key: 'capacite', label: 'Capacité', render: (c: Chambre) => (
+      <span className="text-slate-300">{c.capacite} pers.</span>
+    )},
+    { key: 'prix', label: 'Prix / Nuit', render: (c: Chambre) => (
+      <span className="text-amber-400 font-bold">{formatCurrency(c.prix)}</span>
+    )},
+    { key: 'statut', label: 'Statut', render: (c: Chambre) => {
+      const statusMap = {
+        disponible: { label: 'Disponible', variant: 'success' },
+        occupee: { label: 'Occupée', variant: 'warning' },
+        maintenance: { label: 'Maintenance', variant: 'danger' },
+        reservée: { label: 'Réservée', variant: 'info' }
+      };
+      const status = statusMap[c.statut || 'disponible'];
+      return <Badge variant={status.variant as any}>{status.label}</Badge>;
+    }},
+    { key: 'actions', label: '', render: (c: Chambre) => (
+      <div className="flex gap-2">
+        <Button size="sm" variant="secondary" onClick={() => openEditChambre(c)}>
+          <Pencil size={14} />
+        </Button>
+        <Button size="sm" variant="danger" onClick={() => handleDeleteChambre(c.id)}>
+          <Trash2 size={14} />
+        </Button>
+      </div>
+    )},
+  ];
+
+  // Statistiques
   const stats = [
     { label: 'Total Réservations', value: state.reservations.length, icon: <Calendar size={20} className="text-white" />, gradient: 'from-blue-500 to-cyan-600' },
     { label: 'En Cours', value: state.reservations.filter(r => r.status === 'en_cours').length, icon: <BedDouble size={20} className="text-white" />, gradient: 'from-amber-500 to-orange-500' },
-    { label: 'Confirmées', value: state.reservations.filter(r => r.status === 'confirmee').length, icon: <Users size={20} className="text-white" />, gradient: 'from-emerald-500 to-green-600' },
+    { label: 'Chambres Disponibles', value: state.chambres?.filter(c => c.statut === 'disponible').length || 0, icon: <DoorOpen size={20} className="text-white" />, gradient: 'from-emerald-500 to-green-600' },
     { label: 'Revenu Total', value: formatCurrency(state.reservations.reduce((sum, r) => sum + r.montantTotal, 0)), icon: <Plus size={20} className="text-white" />, gradient: 'from-violet-500 to-purple-600' },
   ];
 
@@ -109,29 +227,52 @@ export const HebergementPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-900 border border-slate-800/50 rounded-2xl p-1 w-fit">
+      <div className="flex gap-1 bg-slate-900 border border-slate-800/50 rounded-2xl p-1 w-fit flex-wrap">
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
+            className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content - Réservations */}
       {activeTab === 'reservations' && (
         <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/50">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-800/50 gap-3">
             <h3 className="text-white font-semibold">Réservations</h3>
-            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>Nouvelle réservation</Button>
+            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)} className="w-full sm:w-auto">
+              Nouvelle réservation
+            </Button>
           </div>
-          <DataTable data={state.reservations} columns={columns} />
+          <DataTable data={state.reservations} columns={reservationColumns} />
         </div>
       )}
+
+      {/* Tab Content - Chambres */}
+      {activeTab === 'chambres' && (
+        <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-800/50 gap-3">
+            <h3 className="text-white font-semibold">Gestion des Chambres</h3>
+            <Button icon={<Plus size={16} />} onClick={() => {
+              resetChambreForm();
+              setEditingChambre(null);
+              setShowChambreModal(true);
+            }} className="w-full sm:w-auto">
+              Ajouter une chambre
+            </Button>
+          </div>
+          <DataTable data={state.chambres || []} columns={chambreColumns} />
+        </div>
+      )}
+
+      {/* Tab Content - Stock */}
       {activeTab === 'stock' && <StockManager module="hebergement" categories={['Linge', 'Hygiène', 'Mobilier', 'Électronique', 'Nettoyage', 'Autre']} />}
+
+      {/* Tab Content - Caisse */}
       {activeTab === 'caisse' && <CaisseManager module="hebergement" categories={['Hébergement', 'Stock', 'Maintenance', 'Personnel', 'Autre']} title="Caisse Hébergement" gradient="from-blue-500 to-cyan-600" />}
 
-      {/* Modal */}
+      {/* Modal Réservation */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nouvelle Réservation" size="lg">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -139,7 +280,7 @@ export const HebergementPage: React.FC = () => {
             <Input label="Prénom" value={form.clientPrenom} onChange={e => setForm({...form, clientPrenom: e.target.value})} placeholder="Prénom" />
           </div>
           <Input label="Téléphone" value={form.clientTel} onChange={e => setForm({...form, clientTel: e.target.value})} placeholder="+33 6 XX XX XX XX" />
-          <Input label="Chambres (ex: 101, 102)" value={form.chambres} onChange={e => setForm({...form, chambres: e.target.value})} />
+          <Input label="Chambres (ex: 101, 102)" value={form.chambres} onChange={e => setForm({...form, chambres: e.target.value})} placeholder="Numéros des chambres séparés par des virgules" />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Arrivée" type="date" value={form.dateArrivee} onChange={e => setForm({...form, dateArrivee: e.target.value})} />
             <Input label="Départ" type="date" value={form.dateDepart} onChange={e => setForm({...form, dateDepart: e.target.value})} />
@@ -149,9 +290,87 @@ export const HebergementPage: React.FC = () => {
             { value: 'confirmee', label: 'Confirmée' },
             { value: 'en_cours', label: 'En cours' },
           ]} />
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Annuler</Button>
             <Button onClick={handleAddReservation} className="flex-1">Enregistrer</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Chambre */}
+      <Modal isOpen={showChambreModal} onClose={() => {
+        setShowChambreModal(false);
+        setEditingChambre(null);
+        resetChambreForm();
+      }} title={editingChambre ? "Modifier la chambre" : "Ajouter une chambre"} size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input 
+              label="Numéro de chambre" 
+              value={chambreForm.numero} 
+              onChange={e => setChambreForm({...chambreForm, numero: e.target.value})} 
+              placeholder="Ex: 101" 
+            />
+            <Select 
+              label="Type" 
+              value={chambreForm.type} 
+              onChange={e => setChambreForm({...chambreForm, type: e.target.value})} 
+              options={[
+                { value: 'Standard', label: 'Standard' },
+                { value: 'Supérieure', label: 'Supérieure' },
+                { value: 'Deluxe', label: 'Deluxe' },
+                { value: 'Suite', label: 'Suite' },
+                { value: 'Présidentielle', label: 'Présidentielle' },
+              ]} 
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input 
+              label="Prix par nuit (€)" 
+              type="number" 
+              value={chambreForm.prix} 
+              onChange={e => setChambreForm({...chambreForm, prix: Number(e.target.value)})} 
+              placeholder="0" 
+            />
+            <Select 
+              label="Capacité" 
+              value={chambreForm.capacite.toString()} 
+              onChange={e => setChambreForm({...chambreForm, capacite: Number(e.target.value)})} 
+              options={[
+                { value: '1', label: '1 personne' },
+                { value: '2', label: '2 personnes' },
+                { value: '3', label: '3 personnes' },
+                { value: '4', label: '4 personnes' },
+                { value: '5', label: '5 personnes' },
+              ]} 
+            />
+          </div>
+          <Select 
+            label="Statut" 
+            value={chambreForm.statut} 
+            onChange={e => setChambreForm({...chambreForm, statut: e.target.value as ChambreForm['statut']})} 
+            options={[
+              { value: 'disponible', label: 'Disponible' },
+              { value: 'occupee', label: 'Occupée' },
+              { value: 'reservée', label: 'Réservée' },
+              { value: 'maintenance', label: 'Maintenance' },
+            ]} 
+          />
+          <Input 
+            label="Description" 
+            value={chambreForm.description} 
+            onChange={e => setChambreForm({...chambreForm, description: e.target.value})} 
+            placeholder="Description de la chambre..." 
+          />
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button variant="secondary" onClick={() => {
+              setShowChambreModal(false);
+              setEditingChambre(null);
+              resetChambreForm();
+            }} className="flex-1">Annuler</Button>
+            <Button onClick={editingChambre ? handleEditChambre : handleAddChambre} className="flex-1">
+              {editingChambre ? 'Modifier' : 'Ajouter'}
+            </Button>
           </div>
         </div>
       </Modal>
