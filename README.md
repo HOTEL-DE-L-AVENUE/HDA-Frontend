@@ -5,7 +5,7 @@ npm run dev
 
 ```txt
 npm run deploy
-```
+```dfgh
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 
