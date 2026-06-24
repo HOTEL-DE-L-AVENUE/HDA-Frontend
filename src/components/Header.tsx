@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useHDA } from '../context/HDAContext';
-import { Bell, Search, ChevronRight, X } from 'lucide-react';
+import { Bell, Search, ChevronRight, X, LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo_s.png';
 
 const MODULE_LABELS: Record<string, string> = {
@@ -25,20 +26,42 @@ const NOTIFICATION_COLORS = {
 export const Header: React.FC = () => {
   const { state, dispatch } = useHDA();
   const { activeModule, notifications, currentUser } = state;
+  const navigate = useNavigate();
+  
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
   const notifRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // Gestion du click outside pour les deux dropdowns
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotifs(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Gestion de la déconnexion
+  const handleLogout = () => {
+    // Nettoyer le localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('rememberMe');
+    
+    // Rediriger vers la page de login
+    navigate('/login');
+    
+    // Fermer le menu
+    setShowUserMenu(false);
+  };
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -119,7 +142,10 @@ export const Header: React.FC = () => {
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button
-            onClick={() => setShowNotifs(!showNotifs)}
+            onClick={() => {
+              setShowNotifs(!showNotifs);
+              setShowUserMenu(false);
+            }}
             className="w-9 h-9 rounded-xl flex items-center justify-center transition-all relative"
             style={{
               backgroundColor: 'var(--color-surface-2)',
@@ -146,7 +172,7 @@ export const Header: React.FC = () => {
             )}
           </button>
 
-          {/* Modal de notification - z-index augmenté */}
+          {/* Dropdown Notifications */}
           {showNotifs && (
             <div
               className="absolute right-0 top-11 w-72 sm:w-80 rounded-2xl shadow-xl overflow-hidden"
@@ -154,7 +180,7 @@ export const Header: React.FC = () => {
                 backgroundColor: 'var(--color-surface)',
                 border: '1px solid var(--color-border)',
                 boxShadow: 'var(--shadow-lg)',
-                zIndex: 9999, // ← z-index très élevé pour passer au-dessus de tout
+                zIndex: 9999,
                 position: 'absolute',
                 maxHeight: '400px',
               }}
@@ -213,27 +239,170 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        {/* Avatar */}
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-opacity shadow-sm flex-shrink-0"
-          style={{
-            backgroundColor: 'var(--color-accent)',
-            boxShadow: 'var(--shadow-accent)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = '0.85';
-            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = '1';
-            e.currentTarget.style.boxShadow = 'var(--shadow-accent)';
-          }}
-        >
-          <span className="text-black font-bold text-xs">
-            {currentUser.prenom[0]}{currentUser.nom[0]}
-          </span>
+        {/* Avatar avec menu utilisateur */}
+        <div className="relative" ref={userMenuRef}>
+          <button
+            onClick={() => {
+              setShowUserMenu(!showUserMenu);
+              setShowNotifs(false);
+            }}
+            className="flex items-center gap-2 px-2 py-1.5 rounded-xl transition-all"
+            style={{
+              backgroundColor: showUserMenu ? 'var(--color-surface-3)' : 'transparent',
+              border: '1px solid transparent',
+            }}
+            onMouseEnter={(e) => {
+              if (!showUserMenu) {
+                e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!showUserMenu) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
+          >
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-opacity shadow-sm flex-shrink-0"
+              style={{
+                backgroundColor: 'var(--color-accent)',
+                boxShadow: 'var(--shadow-accent)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.85';
+                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
+                e.currentTarget.style.boxShadow = 'var(--shadow-accent)';
+              }}
+            >
+              <span className="text-black font-bold text-xs">
+                {currentUser.prenom?.[0] || 'U'}{currentUser.nom?.[0] || 'S'}
+              </span>
+            </div>
+            <ChevronDown 
+              size={14} 
+              className={`text-muted transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {/* Dropdown Menu Utilisateur */}
+          {showUserMenu && (
+            <div
+              className="absolute right-0 top-12 w-56 rounded-2xl shadow-xl overflow-hidden"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 9999,
+                position: 'absolute',
+              }}
+            >
+              {/* En-tête utilisateur */}
+              <div
+                className="px-4 py-3"
+                style={{ borderBottom: '1px solid var(--color-border)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{
+                      backgroundColor: 'var(--color-accent)',
+                      boxShadow: 'var(--shadow-accent)',
+                    }}
+                  >
+                    <span className="text-black font-bold text-sm">
+                      {currentUser.prenom?.[0] || 'U'}{currentUser.nom?.[0] || 'S'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-primary font-medium text-sm truncate">
+                      {currentUser.prenom} {currentUser.nom}
+                    </p>
+                    <p className="text-muted text-xs truncate">{currentUser.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu items */}
+              <div className="py-1">
+                {/* Profil */}
+                <button
+                  onClick={() => {
+                    navigate('/profile');
+                    setShowUserMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                  style={{
+                    color: 'var(--color-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+                    e.currentTarget.style.color = 'var(--color-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--color-secondary)';
+                  }}
+                >
+                  <User size={16} className="text-muted" />
+                  <span>Mon profil</span>
+                </button>
+
+                {/* Paramètres */}
+                <button
+                  onClick={() => {
+                    navigate('/settings');
+                    setShowUserMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                  style={{
+                    color: 'var(--color-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+                    e.currentTarget.style.color = 'var(--color-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--color-secondary)';
+                  }}
+                >
+                  <Settings size={16} className="text-muted" />
+                  <span>Paramètres</span>
+                </button>
+
+                {/* Séparateur */}
+                <div
+                  className="my-1 mx-4"
+                  style={{ borderTop: '1px solid var(--color-border)' }}
+                />
+
+                {/* Déconnexion */}
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                  style={{
+                    color: 'var(--color-danger)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-danger-bg)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <LogOut size={16} />
+                  <span>Se déconnecter</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
   );
 };
+
+export default Header;
