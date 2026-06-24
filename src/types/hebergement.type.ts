@@ -71,6 +71,8 @@ export interface RoomMaintenance {
 }
 
 export interface Client {
+  is_casino_player: any;
+  is_casino_player: any;
   id: number;
   code_client: string;
   nom: string;
