@@ -143,7 +143,6 @@ const ClientsPage: React.FC = () => {
 
   // Génération du QR Code
   const generateQRCode = (client: Client) => {
-    // Créer les données du client au format JSON
     const clientData = {
       id: client.id,
       name: `${client.firstName} ${client.lastName}`,
@@ -154,13 +153,11 @@ const ClientsPage: React.FC = () => {
       createdAt: client.createdAt
     };
 
-    // Convertir en chaîne JSON
     const jsonString = JSON.stringify(clientData);
     setQrCodeData(jsonString);
     setSelectedClient(client);
     setIsQRModalOpen(true);
 
-    // Générer le QR Code après l'ouverture de la modale
     setTimeout(() => {
       generateQRCodeImage(jsonString);
     }, 100);
@@ -170,29 +167,20 @@ const ClientsPage: React.FC = () => {
     const canvas = qrCanvasRef.current;
     if (!canvas) return;
 
-    // Utiliser une bibliothèque de QR Code simple (implémentation manuelle)
-    // Dans un projet réel, utilisez qrcode.react ou qrcode.js
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Nettoyer le canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Taille du QR Code
     const size = 200;
     const cellSize = 4;
     const margin = 20;
 
-    // Fond blanc
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Générer un QR Code simple (version simplifiée)
-    // Note: Pour une vraie génération, utilisez une bibliothèque comme qrcode.react
-    // Cette partie est une simulation visuelle
     const qrMatrix = generateSimpleQRMatrix(data);
     
-    // Dessiner le QR Code
     const startX = (canvas.width - size) / 2;
     const startY = (canvas.height - size) / 2;
 
@@ -210,23 +198,19 @@ const ClientsPage: React.FC = () => {
       }
     }
 
-    // Ajouter un texte "Client" en bas
     ctx.fillStyle = '#000000';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('Client ID: ' + selectedClient?.id, canvas.width / 2, canvas.height - 10);
   };
 
-  // Simulation de génération de QR Code (pour l'exemple)
   const generateSimpleQRMatrix = (data: string): number[][] => {
-    // Créer une matrice simple pour l'exemple
     const matrix: number[][] = [];
     const size = 45;
     
     for (let i = 0; i < size; i++) {
       matrix[i] = [];
       for (let j = 0; j < size; j++) {
-        // Utiliser le contenu des données pour générer des motifs
         const hash = data.split('').reduce((acc, char, index) => {
           return acc + char.charCodeAt(0) * (index + 1);
         }, 0);
@@ -239,7 +223,6 @@ const ClientsPage: React.FC = () => {
     return matrix;
   };
 
-  // Copier les données du QR Code
   const copyQRData = () => {
     if (qrCodeData) {
       navigator.clipboard.writeText(qrCodeData);
@@ -248,7 +231,6 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  // Télécharger le QR Code
   const downloadQRCode = () => {
     const canvas = qrCanvasRef.current;
     if (canvas) {
@@ -259,7 +241,6 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  // Imprimer le QR Code
   const printQRCode = () => {
     const canvas = qrCanvasRef.current;
     if (canvas) {
@@ -268,11 +249,11 @@ const ClientsPage: React.FC = () => {
         printWindow.document.write(`
           <html>
             <head><title>QR Code Client</title></head>
-            <body style="display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">
-              <div style="text-align:center;">
+            <body style="display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#f8fafc;">
+              <div style="text-align:center;background:white;padding:40px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
                 <img src="${canvas.toDataURL('image/png')}" style="width:300px;height:300px;" />
-                <h2>Client: ${selectedClient?.firstName} ${selectedClient?.lastName}</h2>
-                <p>ID: ${selectedClient?.id}</p>
+                <h2 style="color:#0f172a;">Client: ${selectedClient?.firstName} ${selectedClient?.lastName}</h2>
+                <p style="color:#64748b;">ID: ${selectedClient?.id}</p>
               </div>
             </body>
           </html>
@@ -283,7 +264,6 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  // Filtrage des clients
   const getFilteredClients = (): Client[] => {
     let filtered = clients;
     
@@ -310,7 +290,6 @@ const ClientsPage: React.FC = () => {
   const startIndex: number = (currentPage - 1) * itemsPerPage;
   const paginatedClients: Client[] = filteredClients.slice(startIndex, startIndex + itemsPerPage);
 
-  // Gestion du formulaire
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -373,17 +352,17 @@ const ClientsPage: React.FC = () => {
   const getStatusBadge = (status: Client['status']): JSX.Element => {
     const statusConfig: Record<Client['status'], StatusConfig> = {
       actif: { 
-        color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', 
+        color: 'bg-emerald-100 text-emerald-700 border-emerald-200', 
         icon: <CheckCircle size={12} />,
         label: 'Actif'
       },
       inactif: { 
-        color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', 
+        color: 'bg-gray-100 text-gray-700 border-gray-200', 
         icon: <XCircle size={12} />,
         label: 'Inactif'
       },
       en_attente: { 
-        color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', 
+        color: 'bg-yellow-100 text-yellow-700 border-yellow-200', 
         icon: <Clock size={12} />,
         label: 'En attente'
       }
@@ -398,7 +377,6 @@ const ClientsPage: React.FC = () => {
     );
   };
 
-  // Statistiques
   const stats = {
     total: clients.length,
     actifs: clients.filter(c => c.status === 'actif').length,
@@ -407,24 +385,24 @@ const ClientsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white p-6">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         {/* En-tête */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               Gestion des Clients
             </h1>
-            <p className="text-gray-400 mt-1">Gérez les informations de vos clients</p>
+            <p className="text-gray-500 mt-1">Gérez les informations de vos clients</p>
           </div>
           <div className="flex gap-3">
-            <button className="px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition flex items-center gap-2 border border-slate-700/50">
+            <button className="px-4 py-2 bg-white hover:bg-gray-50 rounded-lg transition flex items-center gap-2 border border-gray-200 shadow-sm">
               <Download size={18} />
               Exporter
             </button>
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition flex items-center gap-2 shadow-lg shadow-purple-500/30"
             >
               <UserPlus size={18} />
               Nouveau Client
@@ -435,7 +413,7 @@ const ClientsPage: React.FC = () => {
         {/* Recherche et filtres */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Rechercher un client..."
@@ -444,7 +422,7 @@ const ClientsPage: React.FC = () => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 transition"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition shadow-sm"
             />
           </div>
           <div className="flex gap-2">
@@ -454,14 +432,14 @@ const ClientsPage: React.FC = () => {
                 setFilterStatus(e.target.value);
                 setCurrentPage(1);
               }}
-              className="px-4 py-2.5 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+              className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition shadow-sm"
             >
               <option value="tous">Tous les statuts</option>
               <option value="actif">Actifs</option>
               <option value="inactif">Inactifs</option>
               <option value="en_attente">En attente</option>
             </select>
-            <button className="px-4 py-2.5 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition flex items-center gap-2 border border-slate-700/50">
+            <button className="px-4 py-2.5 bg-white hover:bg-gray-50 rounded-lg transition flex items-center gap-2 border border-gray-200 shadow-sm">
               <Filter size={18} />
               Filtres
             </button>
@@ -470,39 +448,39 @@ const ClientsPage: React.FC = () => {
 
         {/* Statistiques */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Total Clients</p>
-            <p className="text-2xl font-bold">{stats.total}</p>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <p className="text-gray-500 text-sm">Total Clients</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
           </div>
-          <div className="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Clients Actifs</p>
-            <p className="text-2xl font-bold text-emerald-400">{stats.actifs}</p>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <p className="text-gray-500 text-sm">Clients Actifs</p>
+            <p className="text-2xl font-bold text-emerald-600">{stats.actifs}</p>
           </div>
-          <div className="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Visites Total</p>
-            <p className="text-2xl font-bold text-blue-400">{stats.totalVisits}</p>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <p className="text-gray-500 text-sm">Visites Total</p>
+            <p className="text-2xl font-bold text-blue-600">{stats.totalVisits}</p>
           </div>
-          <div className="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
-            <p className="text-gray-400 text-sm">Revenus Total</p>
-            <p className="text-2xl font-bold text-yellow-400">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <p className="text-gray-500 text-sm">Revenus Total</p>
+            <p className="text-2xl font-bold text-yellow-600">
               {stats.totalSpent.toLocaleString('fr-FR')} €
             </p>
           </div>
         </div>
 
         {/* Tableau */}
-        <div className="bg-slate-900/50 border border-slate-800/50 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-800/50">
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Client</th>
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Contact</th>
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Localisation</th>
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Statut</th>
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Visites</th>
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Dépensé</th>
-                  <th className="text-left p-4 text-gray-400 font-medium text-sm">Actions</th>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Client</th>
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Contact</th>
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Localisation</th>
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Statut</th>
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Visites</th>
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Dépensé</th>
+                  <th className="text-left p-4 text-gray-600 font-medium text-sm">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -514,47 +492,47 @@ const ClientsPage: React.FC = () => {
                   </tr>
                 ) : (
                   paginatedClients.map((client) => (
-                    <tr key={client.id} className="border-b border-slate-800/30 hover:bg-slate-800/30 transition">
+                    <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
                             {client.firstName[0]}{client.lastName[0]}
                           </div>
                           <div>
-                            <p className="font-medium">{client.firstName} {client.lastName}</p>
-                            <p className="text-sm text-gray-400">Depuis {client.createdAt}</p>
+                            <p className="font-medium text-gray-900">{client.firstName} {client.lastName}</p>
+                            <p className="text-sm text-gray-500">Depuis {client.createdAt}</p>
                           </div>
                         </div>
                       </td>
                       <td className="p-4">
                         <div className="space-y-1">
-                          <p className="text-sm flex items-center gap-1">
-                            <Mail size={14} className="text-gray-500" />
+                          <p className="text-sm flex items-center gap-1 text-gray-700">
+                            <Mail size={14} className="text-gray-400" />
                             {client.email}
                           </p>
-                          <p className="text-sm flex items-center gap-1">
-                            <Phone size={14} className="text-gray-500" />
+                          <p className="text-sm flex items-center gap-1 text-gray-700">
+                            <Phone size={14} className="text-gray-400" />
                             {client.phone}
                           </p>
                         </div>
                       </td>
                       <td className="p-4">
                         <div className="space-y-1 text-sm">
-                          <p className="flex items-center gap-1">
-                            <MapPin size={14} className="text-gray-500" />
+                          <p className="flex items-center gap-1 text-gray-700">
+                            <MapPin size={14} className="text-gray-400" />
                             {client.address}
                           </p>
-                          <p className="text-gray-400">{client.city}, {client.country}</p>
+                          <p className="text-gray-500">{client.city}, {client.country}</p>
                         </div>
                       </td>
                       <td className="p-4">
                         {getStatusBadge(client.status)}
                       </td>
                       <td className="p-4 text-center">
-                        <span className="text-lg font-semibold">{client.totalVisits}</span>
+                        <span className="text-lg font-semibold text-gray-900">{client.totalVisits}</span>
                       </td>
                       <td className="p-4">
-                        <span className="font-semibold text-yellow-400">
+                        <span className="font-semibold text-yellow-600">
                           {client.totalSpent.toLocaleString('fr-FR')} €
                         </span>
                       </td>
@@ -562,31 +540,31 @@ const ClientsPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <button 
                             onClick={() => handleView(client)}
-                            className="p-1.5 hover:bg-purple-500/20 rounded-lg transition"
+                            className="p-1.5 hover:bg-purple-100 rounded-lg transition"
                             title="Voir les détails"
                           >
-                            <Eye size={16} className="text-purple-400" />
+                            <Eye size={16} className="text-purple-600" />
                           </button>
                           <button 
                             onClick={() => generateQRCode(client)}
-                            className="p-1.5 hover:bg-emerald-500/20 rounded-lg transition"
+                            className="p-1.5 hover:bg-emerald-100 rounded-lg transition"
                             title="Générer QR Code"
                           >
-                            <QrCode size={16} className="text-emerald-400" />
+                            <QrCode size={16} className="text-emerald-600" />
                           </button>
                           <button 
                             onClick={() => handleEdit(client)}
-                            className="p-1.5 hover:bg-blue-500/20 rounded-lg transition"
+                            className="p-1.5 hover:bg-blue-100 rounded-lg transition"
                             title="Modifier"
                           >
-                            <Edit size={16} className="text-blue-400" />
+                            <Edit size={16} className="text-blue-600" />
                           </button>
                           <button 
                             onClick={() => handleDelete(client.id)}
-                            className="p-1.5 hover:bg-red-500/20 rounded-lg transition"
+                            className="p-1.5 hover:bg-red-100 rounded-lg transition"
                             title="Supprimer"
                           >
-                            <Trash2 size={16} className="text-red-400" />
+                            <Trash2 size={16} className="text-red-600" />
                           </button>
                         </div>
                       </td>
@@ -599,15 +577,15 @@ const ClientsPage: React.FC = () => {
           
           {/* Pagination */}
           {filteredClients.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-800/50">
-              <p className="text-sm text-gray-400">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+              <p className="text-sm text-gray-600">
                 Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredClients.length)} sur {filteredClients.length}
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 bg-slate-800/50 rounded hover:bg-slate-700/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
                 >
                   Précédent
                 </button>
@@ -617,8 +595,8 @@ const ClientsPage: React.FC = () => {
                     onClick={() => setCurrentPage(page)}
                     className={`px-3 py-1 rounded transition ${
                       currentPage === page
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : 'bg-slate-800/50 hover:bg-slate-700/50'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700'
                     }`}
                   >
                     {page}
@@ -627,7 +605,7 @@ const ClientsPage: React.FC = () => {
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 bg-slate-800/50 rounded hover:bg-slate-700/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
                 >
                   Suivant
                 </button>
@@ -639,20 +617,20 @@ const ClientsPage: React.FC = () => {
 
       {/* Modal Ajout/Modification */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-gray-200 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold">
+                <h2 className="text-xl font-bold text-gray-900">
                   {editingClient ? 'Modifier le client' : 'Nouveau client'}
                 </h2>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-gray-500 text-sm mt-1">
                   {editingClient ? 'Modifiez les informations' : 'Ajoutez un nouveau client'}
                 </p>
               </div>
               <button
                 onClick={closeModal}
-                className="p-2 hover:bg-slate-800/50 rounded-lg transition"
+                className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-500"
               >
                 <X size={20} />
               </button>
@@ -661,8 +639,8 @@ const ClientsPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Prénom <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Prénom <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -670,12 +648,12 @@ const ClientsPage: React.FC = () => {
                     value={formData.firstName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Nom <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nom <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -683,15 +661,15 @@ const ClientsPage: React.FC = () => {
                     value={formData.lastName}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Email <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -699,12 +677,12 @@ const ClientsPage: React.FC = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Téléphone <span className="text-red-400">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Téléphone <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -712,52 +690,52 @@ const ClientsPage: React.FC = () => {
                     value={formData.phone}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Adresse</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
                 <input
                   type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Ville</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
                   <input
                     type="text"
                     name="city"
                     value={formData.city}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Pays</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                   <input
                     type="text"
                     name="country"
                     value={formData.country}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Statut</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                 <select
                   name="status"
                   value={formData.status}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 transition"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
                 >
                   <option value="actif">Actif</option>
                   <option value="inactif">Inactif</option>
@@ -766,28 +744,28 @@ const ClientsPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Notes</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea
                   name="notes"
                   value={formData.notes}
                   onChange={handleInputChange}
                   rows={3}
-                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:border-blue-500/50 resize-none"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
                   placeholder="Informations supplémentaires..."
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition"
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg transition flex items-center gap-2"
+                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition flex items-center gap-2"
                 >
                   {editingClient ? 'Modifier' : 'Ajouter'}
                 </button>
@@ -799,18 +777,18 @@ const ClientsPage: React.FC = () => {
 
       {/* Modal Visualisation */}
       {isViewModalOpen && selectedClient && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-gray-200 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold">Détails du client</h2>
-                <p className="text-gray-400 text-sm mt-1">
+                <h2 className="text-xl font-bold text-gray-900">Détails du client</h2>
+                <p className="text-gray-500 text-sm mt-1">
                   {selectedClient.firstName} {selectedClient.lastName}
                 </p>
               </div>
               <button
                 onClick={() => setIsViewModalOpen(false)}
-                className="p-2 hover:bg-slate-800/50 rounded-lg transition"
+                className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-500"
               >
                 <X size={20} />
               </button>
@@ -818,80 +796,80 @@ const ClientsPage: React.FC = () => {
 
             <div className="p-6 space-y-6">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white text-2xl font-semibold">
                   {selectedClient.firstName[0]}{selectedClient.lastName[0]}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">{selectedClient.firstName} {selectedClient.lastName}</h3>
+                  <h3 className="text-xl font-bold text-gray-900">{selectedClient.firstName} {selectedClient.lastName}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     {getStatusBadge(selectedClient.status)}
-                    <span className="text-sm text-gray-400">• Depuis {selectedClient.createdAt}</span>
+                    <span className="text-sm text-gray-500">• Depuis {selectedClient.createdAt}</span>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-gray-400">Contact</h4>
+                  <h4 className="text-sm font-medium text-gray-500">Contact</h4>
                   <div className="space-y-2 text-sm">
-                    <p className="flex items-center gap-2">
-                      <Mail size={16} className="text-gray-500" />
+                    <p className="flex items-center gap-2 text-gray-700">
+                      <Mail size={16} className="text-gray-400" />
                       {selectedClient.email}
                     </p>
-                    <p className="flex items-center gap-2">
-                      <Phone size={16} className="text-gray-500" />
+                    <p className="flex items-center gap-2 text-gray-700">
+                      <Phone size={16} className="text-gray-400" />
                       {selectedClient.phone}
                     </p>
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-gray-400">Adresse</h4>
+                  <h4 className="text-sm font-medium text-gray-500">Adresse</h4>
                   <div className="space-y-2 text-sm">
-                    <p className="flex items-center gap-2">
-                      <MapPin size={16} className="text-gray-500" />
+                    <p className="flex items-center gap-2 text-gray-700">
+                      <MapPin size={16} className="text-gray-400" />
                       {selectedClient.address}
                     </p>
-                    <p className="text-gray-400">{selectedClient.city}, {selectedClient.country}</p>
+                    <p className="text-gray-500">{selectedClient.city}, {selectedClient.country}</p>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-800/30 rounded-lg p-4 text-center">
-                  <p className="text-sm text-gray-400">Visites</p>
-                  <p className="text-2xl font-bold text-blue-400">{selectedClient.totalVisits}</p>
+                <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+                  <p className="text-sm text-gray-500">Visites</p>
+                  <p className="text-2xl font-bold text-blue-600">{selectedClient.totalVisits}</p>
                 </div>
-                <div className="bg-slate-800/30 rounded-lg p-4 text-center">
-                  <p className="text-sm text-gray-400">Dépensé</p>
-                  <p className="text-2xl font-bold text-yellow-400">{selectedClient.totalSpent.toLocaleString('fr-FR')} €</p>
+                <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+                  <p className="text-sm text-gray-500">Dépensé</p>
+                  <p className="text-2xl font-bold text-yellow-600">{selectedClient.totalSpent.toLocaleString('fr-FR')} €</p>
                 </div>
-                <div className="bg-slate-800/30 rounded-lg p-4 text-center">
-                  <p className="text-sm text-gray-400">Depuis le</p>
-                  <p className="text-2xl font-bold text-purple-400">{selectedClient.createdAt}</p>
+                <div className="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+                  <p className="text-sm text-gray-500">Depuis le</p>
+                  <p className="text-2xl font-bold text-purple-600">{selectedClient.createdAt}</p>
                 </div>
               </div>
 
               {selectedClient.notes && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Notes</h4>
-                  <p className="text-sm bg-slate-800/30 rounded-lg p-4">{selectedClient.notes}</p>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Notes</h4>
+                  <p className="text-sm bg-gray-50 rounded-lg p-4 border border-gray-200 text-gray-700">{selectedClient.notes}</p>
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setIsViewModalOpen(false);
                     generateQRCode(selectedClient);
                   }}
-                  className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg transition flex items-center gap-2 border border-emerald-500/30"
+                  className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition flex items-center gap-2 border border-emerald-200 text-emerald-700"
                 >
-                  <QrCode size={16} className="text-emerald-400" />
+                  <QrCode size={16} className="text-emerald-600" />
                   QR Code
                 </button>
                 <button
                   onClick={() => setIsViewModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition"
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700"
                 >
                   Fermer
                 </button>
@@ -900,7 +878,7 @@ const ClientsPage: React.FC = () => {
                     setIsViewModalOpen(false);
                     handleEdit(selectedClient);
                   }}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg transition flex items-center gap-2"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition flex items-center gap-2"
                 >
                   <Edit size={16} />
                   Modifier
@@ -913,21 +891,21 @@ const ClientsPage: React.FC = () => {
 
       {/* Modal QR Code */}
       {isQRModalOpen && selectedClient && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md">
-            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-gray-200 rounded-xl w-full max-w-md shadow-xl">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <QrCode size={20} className="text-emerald-400" />
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <QrCode size={20} className="text-emerald-600" />
                   QR Code Client
                 </h2>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-gray-500 text-sm mt-1">
                   {selectedClient.firstName} {selectedClient.lastName}
                 </p>
               </div>
               <button
                 onClick={() => setIsQRModalOpen(false)}
-                className="p-2 hover:bg-slate-800/50 rounded-lg transition"
+                className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-500"
               >
                 <X size={20} />
               </button>
@@ -935,8 +913,7 @@ const ClientsPage: React.FC = () => {
 
             <div className="p-6">
               <div className="flex flex-col items-center">
-                {/* Canvas pour le QR Code */}
-                <div className="bg-white rounded-lg p-4 mb-4">
+                <div className="bg-white rounded-lg p-4 mb-4 border border-gray-200">
                   <canvas
                     ref={qrCanvasRef}
                     width={250}
@@ -945,47 +922,45 @@ const ClientsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Informations du client */}
                 <div className="w-full space-y-2 mb-4">
-                  <div className="bg-slate-800/30 rounded-lg p-3">
-                    <p className="text-sm text-gray-400">Client ID</p>
-                    <p className="font-mono text-sm">#{selectedClient.id}</p>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-sm text-gray-500">Client ID</p>
+                    <p className="font-mono text-sm text-gray-900">#{selectedClient.id}</p>
                   </div>
-                  <div className="bg-slate-800/30 rounded-lg p-3">
-                    <p className="text-sm text-gray-400">Nom complet</p>
-                    <p className="font-medium">{selectedClient.firstName} {selectedClient.lastName}</p>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-sm text-gray-500">Nom complet</p>
+                    <p className="font-medium text-gray-900">{selectedClient.firstName} {selectedClient.lastName}</p>
                   </div>
-                  <div className="bg-slate-800/30 rounded-lg p-3">
-                    <p className="text-sm text-gray-400">Email</p>
-                    <p className="text-sm">{selectedClient.email}</p>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="text-sm text-gray-700">{selectedClient.email}</p>
                   </div>
-                  <div className="bg-slate-800/30 rounded-lg p-3">
-                    <p className="text-sm text-gray-400">Téléphone</p>
-                    <p className="text-sm">{selectedClient.phone}</p>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-sm text-gray-500">Téléphone</p>
+                    <p className="text-sm text-gray-700">{selectedClient.phone}</p>
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex flex-wrap justify-center gap-2 w-full">
                   <button
                     onClick={copyQRData}
-                    className="flex-1 min-w-[100px] px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition flex items-center justify-center gap-2 border border-blue-500/30"
+                    className="flex-1 min-w-[100px] px-4 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition flex items-center justify-center gap-2 border border-blue-200 text-blue-700"
                   >
-                    {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} className="text-blue-400" />}
+                    {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} className="text-blue-600" />}
                     {copied ? 'Copié !' : 'Copier'}
                   </button>
                   <button
                     onClick={downloadQRCode}
-                    className="flex-1 min-w-[100px] px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg transition flex items-center justify-center gap-2 border border-purple-500/30"
+                    className="flex-1 min-w-[100px] px-4 py-2 bg-purple-50 hover:bg-purple-100 rounded-lg transition flex items-center justify-center gap-2 border border-purple-200 text-purple-700"
                   >
-                    <Download size={16} className="text-purple-400" />
+                    <Download size={16} className="text-purple-600" />
                     Télécharger
                   </button>
                   <button
                     onClick={printQRCode}
-                    className="flex-1 min-w-[100px] px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg transition flex items-center justify-center gap-2 border border-emerald-500/30"
+                    className="flex-1 min-w-[100px] px-4 py-2 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition flex items-center justify-center gap-2 border border-emerald-200 text-emerald-700"
                   >
-                    <Printer size={16} className="text-emerald-400" />
+                    <Printer size={16} className="text-emerald-600" />
                     Imprimer
                   </button>
                   <button
@@ -997,16 +972,16 @@ const ClientsPage: React.FC = () => {
                         });
                       }
                     }}
-                    className="flex-1 min-w-[100px] px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 rounded-lg transition flex items-center justify-center gap-2 border border-yellow-500/30"
+                    className="flex-1 min-w-[100px] px-4 py-2 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition flex items-center justify-center gap-2 border border-yellow-200 text-yellow-700"
                   >
-                    <Share2 size={16} className="text-yellow-400" />
+                    <Share2 size={16} className="text-yellow-600" />
                     Partager
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-800 text-center">
+            <div className="p-4 border-t border-gray-200 text-center bg-gray-50 rounded-b-xl">
               <p className="text-xs text-gray-500">
                 Scannez ce QR Code pour accéder aux informations du client
               </p>

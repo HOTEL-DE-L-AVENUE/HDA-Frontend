@@ -1,6 +1,305 @@
 @import "tailwindcss";
 
-/* Custom scrollbar */
+/* ===== MODE CLAIR - Tout en blanc ===== */
+
+/* Fond général */
+body {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar,
+.bg-slate-900,
+.bg-slate-950,
+.bg-gray-900,
+.bg-gray-950,
+.bg-zinc-900,
+.bg-zinc-950,
+aside {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+/* Sidebar items */
+.sidebar-item,
+.sidebar-link,
+.nav-link,
+.nav-item {
+  color: #334155 !important;
+}
+
+.sidebar-item:hover,
+.sidebar-link:hover,
+.nav-link:hover,
+.nav-item:hover {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.sidebar-item.active,
+.sidebar-link.active,
+.nav-link.active,
+.nav-item.active {
+  background-color: #f1f5f9 !important;
+  color: #2563eb !important;
+  border-left: 3px solid #2563eb !important;
+}
+
+/* Sidebar icons */
+.sidebar-icon,
+.nav-icon {
+  color: #64748b !important;
+}
+
+.sidebar-item:hover .sidebar-icon,
+.nav-item:hover .nav-icon {
+  color: #0f172a !important;
+}
+
+.sidebar-item.active .sidebar-icon,
+.nav-item.active .nav-icon {
+  color: #2563eb !important;
+}
+
+/* Sidebar logo area */
+.sidebar-logo,
+.sidebar-header {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* ===== HEADER / NAVBAR ===== */
+header,
+.navbar,
+.bg-slate-800,
+.bg-slate-900,
+.bg-gray-800,
+.bg-gray-900,
+.bg-zinc-800,
+.bg-zinc-900,
+nav {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Header text */
+header .text-white,
+.navbar .text-white,
+nav .text-white,
+header .text-slate-100,
+.navbar .text-slate-100,
+nav .text-slate-100 {
+  color: #0f172a !important;
+}
+
+header .text-slate-300,
+.navbar .text-slate-300,
+nav .text-slate-300 {
+  color: #64748b !important;
+}
+
+/* Header icons */
+header .icon,
+.navbar .icon,
+nav .icon {
+  color: #64748b !important;
+}
+
+header .icon:hover,
+.navbar .icon:hover,
+nav .icon:hover {
+  color: #0f172a !important;
+}
+
+/* Header buttons */
+header button,
+.navbar button,
+nav button {
+  color: #64748b !important;
+}
+
+header button:hover,
+.navbar button:hover,
+nav button:hover {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* ===== HEADER DROPDOWN ===== */
+.dropdown-menu,
+.header-dropdown,
+.nav-dropdown {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.dropdown-item:hover,
+.header-dropdown-item:hover {
+  background-color: #f8fafc !important;
+}
+
+/* ===== Surcharge des fonds sombres en BLANC ===== */
+.bg-slate-700,
+.bg-slate-800,
+.bg-slate-900,
+.bg-slate-950,
+.bg-gray-700,
+.bg-gray-800,
+.bg-gray-900,
+.bg-gray-950,
+.bg-zinc-700,
+.bg-zinc-800,
+.bg-zinc-900,
+.bg-zinc-950,
+.bg-neutral-700,
+.bg-neutral-800,
+.bg-neutral-900,
+.bg-neutral-950 {
+  background-color: #ffffff !important;
+}
+
+.bg-slate-500,
+.bg-slate-600,
+.bg-gray-500,
+.bg-gray-600,
+.bg-zinc-500,
+.bg-zinc-600,
+.bg-neutral-500,
+.bg-neutral-600 {
+  background-color: #f8fafc !important;
+}
+
+.bg-slate-400,
+.bg-gray-400,
+.bg-zinc-400 {
+  background-color: #f1f5f9 !important;
+}
+
+/* ===== Surcharge des textes clairs ===== */
+.text-white,
+.text-slate-100,
+.text-slate-200,
+.text-gray-100,
+.text-gray-200,
+.text-zinc-100,
+.text-zinc-200,
+.text-neutral-100,
+.text-neutral-200 {
+  color: #0f172a !important;
+}
+
+.text-slate-300,
+.text-slate-400,
+.text-gray-300,
+.text-gray-400,
+.text-zinc-300,
+.text-zinc-400 {
+  color: #334155 !important;
+}
+
+.text-slate-500,
+.text-gray-500,
+.text-zinc-500 {
+  color: #64748b !important;
+}
+
+/* ===== Surcharge des bordures ===== */
+.border-slate-700,
+.border-slate-800,
+.border-slate-900,
+.border-gray-700,
+.border-gray-800,
+.border-gray-900,
+.border-zinc-700,
+.border-zinc-800,
+.border-zinc-900 {
+  border-color: #e2e8f0 !important;
+}
+
+.border-slate-600,
+.border-gray-600,
+.border-zinc-600 {
+  border-color: #cbd5e1 !important;
+}
+
+/* ===== Surcharge des inputs ===== */
+input,
+textarea,
+select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #94a3b8 !important;
+  outline: 2px solid #94a3b8 !important;
+  outline-offset: 0 !important;
+}
+
+/* ===== Surcharge des placeholders ===== */
+::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+/* ===== Surcharge des boutons ===== */
+.btn-primary,
+.bg-blue-600,
+.bg-blue-700,
+.bg-indigo-600,
+.bg-indigo-700 {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.btn-primary:hover,
+.bg-blue-600:hover,
+.bg-blue-700:hover {
+  background-color: #1d4ed8 !important;
+}
+
+.bg-blue-500 {
+  background-color: #3b82f6 !important;
+}
+
+/* Boutons secondaires */
+.btn-secondary,
+.bg-gray-600,
+.bg-gray-700 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.btn-secondary:hover,
+.bg-gray-600:hover,
+.bg-gray-700:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* ===== Surcharge des cartes ===== */
+.bg-slate-800\/50,
+.bg-slate-900\/50,
+.bg-gray-800\/50,
+.bg-gray-900\/50,
+.bg-zinc-800\/50,
+.bg-zinc-900\/50 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.bg-slate-800\/30,
+.bg-slate-900\/30,
+.bg-gray-800\/30,
+.bg-gray-900\/30 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* ===== CUSTOM SCROLLBAR ===== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -9,38 +308,46 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #cbd5e1 !important;
   border-radius: 100px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #94a3b8 !important;
 }
 
-/* Custom select styling */
+/* ===== CUSTOM SELECT STYLING ===== */
 select option {
-  background-color: #1e293b;
-  color: white;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
-/* Smooth transitions */
+/* ===== SMOOTH TRANSITIONS ===== */
 * {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Font rendering */
+/* ===== FONT RENDERING ===== */
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #020617;
 }
 
-/* Glassmorphism utility */
+/* ===== GLASSMORPHISM UTILITY ===== */
 .glass {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
-/* Custom gradient text */
+.glass-dark {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ===== CUSTOM GRADIENT TEXT ===== */
 .text-gradient {
   background: linear-gradient(135deg, #f59e0b, #f97316);
   -webkit-background-clip: text;
@@ -48,7 +355,7 @@ body {
   background-clip: text;
 }
 
-/* Line clamp */
+/* ===== LINE CLAMP ===== */
 .line-clamp-2 {
   overflow: hidden;
   display: -webkit-box;
@@ -56,7 +363,14 @@ body {
   -webkit-box-orient: vertical;
 }
 
-/* Animated pulse for live indicators */
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* ===== ANIMATED PULSE ===== */
 @keyframes pulse-slow {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -65,13 +379,325 @@ body {
   animation: pulse-slow 2s ease-in-out infinite;
 }
 
-/* Recharts custom styles */
+/* ===== RECHARTS CUSTOM STYLES ===== */
 .recharts-tooltip-cursor {
-  fill: rgba(255, 255, 255, 0.03) !important;
+  fill: rgba(0, 0, 0, 0.02) !important;
 }
 
-/* Number input */
+.recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.recharts-tooltip-label {
+  color: #0f172a !important;
+}
+
+.recharts-tooltip-item {
+  color: #334155 !important;
+}
+
+/* ===== NUMBER INPUT ===== */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.3;
+}
+
+/* ===== TABLEAUX ===== */
+table {
+  background-color: #ffffff !important;
+}
+
+thead tr,
+thead th {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+tbody tr {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+tbody tr:hover {
+  background-color: #fafbfc !important;
+}
+
+td {
+  color: #0f172a !important;
+}
+
+/* ===== MODALES / OVERLAYS ===== */
+.modal-overlay,
+.overlay {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+.modal-content,
+.dialog-content {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+/* ===== DROPDOWNS / MENUS ===== */
+.dropdown-menu {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.dropdown-item:hover {
+  background-color: #f8fafc !important;
+}
+
+/* ===== BADGES ===== */
+.badge {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.badge-success {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+.badge-warning {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+}
+
+.badge-danger {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+}
+
+.badge-info {
+  background-color: #dbeafe !important;
+  color: #1e40af !important;
+}
+
+/* ===== NOTIFICATIONS / TOASTS ===== */
+.toast {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* ===== LOADERS ===== */
+.loader {
+  border-color: #f1f5f9 !important;
+  border-top-color: #3b82f6 !important;
+}
+
+/* ===== FOOTER ===== */
+footer {
+  background-color: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+/* ===== PAGINATION ===== */
+.pagination-item {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.pagination-item:hover {
+  background-color: #f8fafc !important;
+}
+
+.pagination-item.active {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+}
+
+/* ===== FORM LABELS ===== */
+label {
+  color: #0f172a !important;
+}
+
+/* ===== CHECKBOXES / RADIOS ===== */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #2563eb !important;
+}
+
+/* ===== TABS ===== */
+.tab {
+  color: #64748b !important;
+  border-bottom: 2px solid transparent !important;
+}
+
+.tab:hover {
+  color: #0f172a !important;
+}
+
+.tab.active {
+  color: #2563eb !important;
+  border-bottom-color: #2563eb !important;
+}
+
+/* ===== ACCORDION ===== */
+.accordion-header {
+  background-color: #fafbfc !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.accordion-content {
+  background-color: #ffffff !important;
+}
+
+/* ===== CARDS ===== */
+.card {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+/* ===== PROGRESS BARS ===== */
+.progress-bar {
+  background-color: #f1f5f9 !important;
+}
+
+.progress-bar-fill {
+  background-color: #2563eb !important;
+}
+
+/* ===== TOOLTIPS ===== */
+.tooltip {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+/* ===== POPOVER ===== */
+.popover {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* ===== ALERTES ===== */
+.alert-success {
+  background-color: #f0fdf4 !important;
+  border-color: #86efac !important;
+  color: #166534 !important;
+}
+
+.alert-warning {
+  background-color: #fefce8 !important;
+  border-color: #fde047 !important;
+  color: #92400e !important;
+}
+
+.alert-danger {
+  background-color: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #991b1b !important;
+}
+
+.alert-info {
+  background-color: #eff6ff !important;
+  border-color: #93c5fd !important;
+  color: #1e40af !important;
+}
+
+/* ===== SWITCH TOGGLE ===== */
+.switch {
+  background-color: #e2e8f0 !important;
+}
+
+.switch.active {
+  background-color: #2563eb !important;
+}
+
+/* ===== DATE PICKER ===== */
+.react-datepicker {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.react-datepicker__header {
+  background-color: #f8fafc !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.react-datepicker__day--selected {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* ===== CHIPS / TAGS ===== */
+.chip {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.chip-remove:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* ===== DRAWER ===== */
+.drawer {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+/* ===== COMMANDE RAPIDE (CMD+K) ===== */
+.command-palette {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+.command-item:hover {
+  background-color: #f8fafc !important;
+}
+
+.command-item.active {
+  background-color: #eff6ff !important;
+  color: #2563eb !important;
+}
+
+/* ===== SIDEBAR SPECIFIQUE ===== */
+[class*="sidebar"],
+[class*="Sidebar"],
+[class*="drawer"],
+[class*="Drawer"] {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+[class*="sidebar"] a,
+[class*="sidebar"] button,
+[class*="Sidebar"] a,
+[class*="Sidebar"] button {
+  color: #334155 !important;
+}
+
+[class*="sidebar"] a:hover,
+[class*="sidebar"] button:hover,
+[class*="Sidebar"] a:hover,
+[class*="Sidebar"] button:hover {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[class*="sidebar"] .active,
+[class*="Sidebar"] .active {
+  background-color: #f1f5f9 !important;
+  color: #2563eb !important;
+}
+
+/* ===== HEADER SPECIFIQUE ===== */
+[class*="header"],
+[class*="Header"],
+[class*="navbar"],
+[class*="Navbar"] {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
