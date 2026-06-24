@@ -1,395 +1,395 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useHDA } from '../context/HDAContext';
-import { JeuCasino } from '../types';
-import { formatCurrency, formatDate } from '../utils/data';
-import { CaisseCard, Modal, Input, Button, Badge } from '../components/UI';
-import { StockManager } from '../components/StockManager';
-import { Dices, TrendingUp, TrendingDown, Plus, ArrowUpRight, ArrowDownRight, ChevronRight, Trophy, Zap } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { formatCurrency } from '../utils/data';
+import { 
+  Dices, 
+  TrendingUp, 
+  TrendingDown, 
+  Users,
+  LayoutDashboard,
+  CreditCard,
+  Package,
+  DollarSign
+} from 'lucide-react';
 
-const tabs = [
-  { id: 'overview', label: 'Vue d\'ensemble' },
-  { id: 'jeux', label: 'Jeux & Caisses' },
-  { id: 'stock', label: 'Stock' },
-  { id: 'caisse', label: 'Caisse Globale' },
-];
+// Import des composants du dossier Casino
+import { CasinoHeader } from '../components/Casino/Entete/CasinoHeader';
+import { CasinoTabs } from '../components/Casino/Tabs/CasinoTabs';
+import { OverviewTab } from '../components/Casino/Tabs/OverviewTab';
+import { RoomsTab } from '../components/Casino/Tabs/RoomsTab';
+import { CardsTab } from '../components/Casino/Tabs/CardsTab';
+import { ClientsTab } from '../components/Casino/Tabs/ClientsTab';
+import { StockTab } from '../components/Casino/Tabs/StockTab';
+import { CaisseTab } from '../components/Casino/Tabs/CaisseTab';
+import { RoomModal } from '../components/Casino/Modals/RoomModal';
+import { CashierModal } from '../components/Casino/Modals/CashierModal';
+import { SessionModal } from '../components/Casino/Modals/SessionModal';
+import { TransactionModal } from '../components/Casino/Modals/TransactionModal';
+import { ChipTransactionModal } from '../components/Casino/Modals/ChipTransactionModal';
+import { CardModal } from '../components/Casino/Modals/CardModal';
+import { CreditModal } from '../components/Casino/Modals/CreditModal';
 
-const jeuTypeLabels: Record<string, string> = {
-  roulette: 'Roulette',
-  blackjack: 'Blackjack',
-  poker: 'Poker',
-  machines_sous: 'Machines à sous',
-  baccara: 'Baccara',
-  craps: 'Craps',
-  keno: 'Keno',
-  loterie: 'Loterie',
-};
+// Types
+import type { 
+  CasinoRoom, 
+  CasinoCashier, 
+  CasinoSession, 
+  CasinoCard, 
+  CasinoTransaction,
+  CasinoChipTransaction,
+  CasinoCredit,
+  Client 
+} from '../components/Casino/types';
 
 export const CasinoPage: React.FC = () => {
-  const { state, dispatch, getCasinoTotalCaisse } = useHDA();
+  const { state, dispatch } = useHDA();
+  
+  // États
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedJeu, setSelectedJeu] = useState<JeuCasino | null>(null);
-  const [showTxModal, setShowTxModal] = useState(false);
-  const [txForm, setTxForm] = useState({ type: 'entree', montant: 0, description: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState<CasinoRoom | null>(null);
+  const [loading, setLoading] = useState(false);
+  
+  // Données
+  const [rooms, setRooms] = useState<CasinoRoom[]>([]);
+  const [cashiers, setCashiers] = useState<CasinoCashier[]>([]);
+  const [sessions, setSessions] = useState<CasinoSession[]>([]);
+  const [cards, setCards] = useState<CasinoCard[]>([]);
+  const [transactions, setTransactions] = useState<CasinoTransaction[]>([]);
+  const [chipTransactions, setChipTransactions] = useState<CasinoChipTransaction[]>([]);
+  const [credits, setCredits] = useState<CasinoCredit[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  
+  // Modales
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [showCashierModal, setShowCashierModal] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [showChipTransactionModal, setShowChipTransactionModal] = useState(false);
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  
+  // Formulaires
+  const [roomForm, setRoomForm] = useState({ nom: '', type_salle: 'PRINCIPALE', statut: 'OUVERTE' as const });
+  const [cashierForm, setCashierForm] = useState({ room_id: 0, nom: '', statut: 'OUVERTE' as const });
+  const [sessionForm, setSessionForm] = useState({ cashier_id: 0, user_id: 0, fond_initial: 0 });
+  const [transactionForm, setTransactionForm] = useState({
+    client_id: 0, session_id: 0, type_transaction: 'ACHAT_JETONS' as const,
+    montant: 0, moyen_paiement: 'ESPECES' as const, description: ''
+  });
+  const [chipTransactionForm, setChipTransactionForm] = useState({
+    client_id: 0, transaction_type: 'ACHAT' as const, quantite: 0, valeur_unitaire: 0
+  });
+  const [cardForm, setCardForm] = useState({ client_id: 0, niveau: 'BRONZE' });
+  const [creditForm, setCreditForm] = useState({ client_id: 0, montant_accorde: 0, echeance: '' });
 
-  const casinoTotal = getCasinoTotalCaisse();
-  const jeuxActifs = state.jeux.filter(j => j.actif);
-  const totalTables = state.jeux.reduce((sum, j) => sum + (j.actif ? j.tables : 0), 0);
+  // Chargement des données
+  useEffect(() => {
+    setLoading(true);
+    setTimeout(() => {
+      // Clients
+      const mockClients: Client[] = [
+        { id: 1, code_client: 'CL001', nom: 'Rakoto', prenom: 'Jean', telephone: '+261 34 123 4567', email: 'jean@email.com', is_casino_player: true, statut: 'ACTIF' },
+        { id: 2, code_client: 'CL002', nom: 'Rabe', prenom: 'Marie', telephone: '+261 33 987 6543', email: 'marie@email.com', is_casino_player: true, statut: 'ACTIF' },
+        { id: 3, code_client: 'CL003', nom: 'Andrian', prenom: 'Pierre', telephone: '+261 32 456 7890', email: 'pierre@email.com', is_casino_player: false, statut: 'ACTIF' },
+        { id: 4, code_client: 'CL004', nom: 'Razafy', prenom: 'Lala', telephone: '+261 34 789 0123', email: 'lala@email.com', is_casino_player: true, statut: 'ACTIF' },
+      ];
+      setClients(mockClients);
 
-  const barData = state.jeux.map(j => ({
-    name: j.nom.split(' ')[0],
-    solde: j.caisse.soldeTotal,
-    entrees: j.caisse.totalEntrees,
-    sorties: j.caisse.totalSorties,
-    actif: j.actif,
-  }));
+      // Rooms
+      const mockRooms: CasinoRoom[] = [
+        { id: 1, nom: 'Salle Principale', type_salle: 'PRINCIPALE', statut: 'OUVERTE' },
+        { id: 2, nom: 'Salle VIP', type_salle: 'VIP', statut: 'OUVERTE' },
+        { id: 3, nom: 'Salle Poker', type_salle: 'POKER', statut: 'OUVERTE' },
+        { id: 4, nom: 'Salle Machines', type_salle: 'MACHINES', statut: 'FERMEE' },
+      ];
+      setRooms(mockRooms);
 
-  const handleAddJeuTransaction = () => {
-    if (!selectedJeu || !txForm.montant || !txForm.description) return;
-    dispatch({
-      type: 'ADD_CASINO_TRANSACTION',
-      payload: {
-        jeuId: selectedJeu.id,
-        transaction: {
-          type: txForm.type as 'entree' | 'sortie',
-          montant: txForm.montant,
-          description: txForm.description,
-          categorie: 'Jeux',
-          userId: state.currentUser.id,
-          userName: `${state.currentUser.prenom} ${state.currentUser.nom}`,
-          module: 'casino',
-          sousModule: selectedJeu.type,
-        }
+      // Cashiers
+      const mockCashiers: CasinoCashier[] = [
+        { id: 1, room_id: 1, nom: 'Caisse 1 - Principale', statut: 'OUVERTE' },
+        { id: 2, room_id: 1, nom: 'Caisse 2 - Principale', statut: 'OUVERTE' },
+        { id: 3, room_id: 2, nom: 'Caisse VIP', statut: 'OUVERTE' },
+        { id: 4, room_id: 3, nom: 'Caisse Poker', statut: 'FERMEE' },
+      ];
+      setCashiers(mockCashiers);
+
+      // Sessions
+      const mockSessions: CasinoSession[] = [
+        { id: 1, cashier_id: 1, user_id: 1, ouverture_at: new Date().toISOString(), fermeture_at: null, fond_initial: 5000, fond_final: null, ecart: null },
+        { id: 2, cashier_id: 2, user_id: 1, ouverture_at: new Date(Date.now() - 3600000).toISOString(), fermeture_at: new Date().toISOString(), fond_initial: 3000, fond_final: 4500, ecart: 1500 },
+      ];
+      setSessions(mockSessions);
+
+      // Cards
+      const mockCards: CasinoCard[] = [
+        { id: 1, client_id: 1, numero_carte: 'CARD-0001', niveau: 'OR', points: 1250 },
+        { id: 2, client_id: 2, numero_carte: 'CARD-0002', niveau: 'ARGENT', points: 450 },
+        { id: 3, client_id: 4, numero_carte: 'CARD-0003', niveau: 'PLATINE', points: 3200 },
+      ];
+      setCards(mockCards);
+
+      // Transactions
+      const mockTransactions: CasinoTransaction[] = [
+        { id: 1, client_id: 1, session_id: 1, type_transaction: 'ACHAT_JETONS', montant: 1000, moyen_paiement: 'ESPECES', created_at: new Date().toISOString() },
+        { id: 2, client_id: 2, session_id: 1, type_transaction: 'GAIN', montant: 2500, moyen_paiement: 'CARTE', created_at: new Date(Date.now() - 3600000).toISOString() },
+        { id: 3, client_id: 1, session_id: 2, type_transaction: 'DEPOT', montant: 5000, moyen_paiement: 'VIREMENT', created_at: new Date(Date.now() - 7200000).toISOString() },
+      ];
+      setTransactions(mockTransactions);
+
+      // Credits
+      const mockCredits: CasinoCredit[] = [
+        { id: 1, client_id: 1, montant_accorde: 5000, encours: 3200, echeance: '2026-07-01', statut: 'ACTIF' },
+        { id: 2, client_id: 2, montant_accorde: 2000, encours: 500, echeance: '2026-06-15', statut: 'ACTIF' },
+      ];
+      setCredits(mockCredits);
+
+      setLoading(false);
+    }, 500);
+  }, []);
+
+  // Calcul des totaux
+  const casinoTotal = {
+    solde: transactions.reduce((sum, t) => {
+      if (t.type_transaction === 'ACHAT_JETONS' || t.type_transaction === 'GAIN' || t.type_transaction === 'DEPOT') {
+        return sum + t.montant;
       }
-    });
-    setShowTxModal(false);
-    setTxForm({ type: 'entree', montant: 0, description: '' });
+      return sum - t.montant;
+    }, 0),
+    entrees: transactions.filter(t => t.type_transaction === 'ACHAT_JETONS' || t.type_transaction === 'GAIN' || t.type_transaction === 'DEPOT').reduce((sum, t) => sum + t.montant, 0),
+    sorties: transactions.filter(t => t.type_transaction === 'RACHAT_JETONS' || t.type_transaction === 'PERTE' || t.type_transaction === 'RETRAIT').reduce((sum, t) => sum + t.montant, 0),
   };
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-surface border border-base rounded-xl p-3 text-xs">
-          {payload.map((p: any) => (
-            <div key={p.name} className="flex justify-between gap-3">
-              <span className="text-muted">{p.name === 'entrees' ? 'Entrées' : p.name === 'sorties' ? 'Sorties' : 'Solde'}:</span>
-              <span className="text-primary font-semibold">{formatCurrency(p.value)}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
+  const roomsActives = rooms.filter(r => r.statut === 'OUVERTE');
+  const cashiersActifs = cashiers.filter(c => c.statut === 'OUVERTE');
+  const joueursActifs = clients.filter(c => c.is_casino_player && c.statut === 'ACTIF');
+
+  // Données pour le graphique
+  const barData = rooms.map(room => {
+    const roomTransactions = transactions.filter(t => {
+      const session = sessions.find(s => s.id === t.session_id);
+      const cashier = cashiers.find(c => c.id === session?.cashier_id);
+      return cashier?.room_id === room.id;
+    });
+    const entrees = roomTransactions.filter(t => t.type_transaction === 'ACHAT_JETONS' || t.type_transaction === 'GAIN' || t.type_transaction === 'DEPOT').reduce((sum, t) => sum + t.montant, 0);
+    const sorties = roomTransactions.filter(t => t.type_transaction === 'RACHAT_JETONS' || t.type_transaction === 'PERTE' || t.type_transaction === 'RETRAIT').reduce((sum, t) => sum + t.montant, 0);
+    return { name: room.nom.split(' ')[0], solde: entrees - sorties, entrees, sorties, actif: room.statut === 'OUVERTE' };
+  });
+
+  // Statistiques
+  const stats = [
+    { label: 'Solde Casino', value: formatCurrency(casinoTotal.solde), icon: <Dices size={20} className="text-black" /> },
+    { label: 'Total Entrées', value: formatCurrency(casinoTotal.entrees), icon: <TrendingUp size={20} className="text-black" /> },
+    { label: 'Total Sorties', value: formatCurrency(casinoTotal.sorties), icon: <TrendingDown size={20} className="text-black" /> },
+    { label: 'Joueurs Actifs', value: joueursActifs.length, icon: <Users size={20} className="text-black" /> },
+  ];
+
+  // Handlers
+  const handleAddRoom = (data: any) => {
+    const newRoom: CasinoRoom = { id: rooms.length + 1, ...data };
+    setRooms([...rooms, newRoom]);
+    alert('Salle créée avec succès !');
+  };
+
+  const handleAddCashier = (data: any) => {
+    const newCashier: CasinoCashier = { id: cashiers.length + 1, ...data };
+    setCashiers([...cashiers, newCashier]);
+    alert('Caisse créée avec succès !');
+  };
+
+  const handleAddSession = (data: any) => {
+    const newSession: CasinoSession = {
+      id: sessions.length + 1,
+      ...data,
+      ouverture_at: new Date().toISOString(),
+      fermeture_at: null,
+      fond_final: null,
+      ecart: null
+    };
+    setSessions([...sessions, newSession]);
+    alert('Session ouverte avec succès !');
+  };
+
+  const handleAddTransaction = (data: any) => {
+    const newTransaction: CasinoTransaction = {
+      id: transactions.length + 1,
+      ...data,
+      created_at: new Date().toISOString()
+    };
+    setTransactions([...transactions, newTransaction]);
+    alert('Transaction enregistrée avec succès !');
+  };
+
+  const handleAddChipTransaction = (data: any) => {
+    const newChipTransaction: CasinoChipTransaction = {
+      id: chipTransactions.length + 1,
+      ...data,
+      created_at: new Date().toISOString()
+    };
+    setChipTransactions([...chipTransactions, newChipTransaction]);
+    alert('Transaction de jetons enregistrée !');
+  };
+
+  const handleAddCard = (data: any) => {
+    const newCard: CasinoCard = {
+      id: cards.length + 1,
+      ...data,
+      numero_carte: `CARD-${String(cards.length + 1).padStart(4, '0')}`,
+      points: 0
+    };
+    setCards([...cards, newCard]);
+    alert('Carte de fidélité créée avec succès !');
+  };
+
+  const handleAddCredit = (data: any) => {
+    const newCredit: CasinoCredit = {
+      id: credits.length + 1,
+      ...data,
+      encours: data.montant_accorde,
+      statut: 'ACTIF'
+    };
+    setCredits([...credits, newCredit]);
+    alert('Crédit accordé avec succès !');
+  };
+
+  // Props partagées
+  const sharedProps = {
+    rooms,
+    cashiers,
+    sessions,
+    cards,
+    transactions,
+    chipTransactions,
+    credits,
+    clients,
+    selectedRoom,
+    setSelectedRoom,
+    barData,
+    casinoTotal,
+    roomsActives,
+    cashiersActifs,
+    joueursActifs,
+    searchQuery,
+    filterStatus,
+    setSearchQuery,
+    setFilterStatus,
+    onNewRoom: () => setShowRoomModal(true),
+    onNewCashier: () => setShowCashierModal(true),
+    onNewSession: () => setShowSessionModal(true),
+    onNewTransaction: () => setShowTransactionModal(true),
+    onNewChipTransaction: () => setShowChipTransactionModal(true),
+    onNewCard: () => setShowCardModal(true),
+    onNewCredit: () => setShowCreditModal(true),
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-primary text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif' }}>
-            Casino
-          </h2>
-          <p className="text-muted text-sm mt-1">Gestion des jeux, tables et caisses</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-success-bg border border-success/20">
-            <Zap size={14} className="text-success" />
-            <span className="text-success text-sm font-medium">{jeuxActifs.length} jeux actifs</span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
-            <Dices size={24} className="text-black" />
-          </div>
-        </div>
-      </div>
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden p-6">
+      {/* Header avec statistiques */}
+      <CasinoHeader 
+        stats={stats}
+        onNewRoom={() => setShowRoomModal(true)}
+        onNewSession={() => setShowSessionModal(true)}
+        onNewTransaction={() => setShowTransactionModal(true)}
+      />
 
-      {/* Global Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Solde Casino', value: formatCurrency(casinoTotal.solde), color: 'text-primary' },
-          { label: 'Total Entrées', value: formatCurrency(casinoTotal.entrees), color: 'text-success' },
-          { label: 'Total Sorties', value: formatCurrency(casinoTotal.sorties), color: 'text-danger' },
-          { label: 'Tables Actives', value: totalTables, color: 'text-accent' },
-        ].map(s => (
-          <div key={s.label} className="bg-surface border border-base rounded-2xl p-5">
-            <p className="text-muted text-xs mb-1">{s.label}</p>
-            <p className={`${s.color} font-bold text-xl`}>{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-surface border border-base rounded-2xl p-1 w-fit overflow-x-auto">
-        {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`tab px-5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
-              activeTab === tab.id ? 'active' : ''
-            }`}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Bar Chart */}
-          <div className="bg-surface border border-base rounded-2xl p-6">
-            <h3 className="text-primary font-semibold mb-6">Performance par Jeu</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={barData} barSize={28}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: '#aaaaaa', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#aaaaaa', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k€`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="entrees" name="entrees" radius={[4, 4, 0, 0]}>
-                  {barData.map((entry, i) => (
-                    <Cell key={i} fill={entry.actif ? '#4ade80' : '#2a2a2a'} fillOpacity={0.8} />
-                  ))}
-                </Bar>
-                <Bar dataKey="sorties" name="sorties" radius={[4, 4, 0, 0]}>
-                  {barData.map((entry, i) => (
-                    <Cell key={i} fill={entry.actif ? '#f87171' : '#2a2a2a'} fillOpacity={0.7} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Jeux Grid Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {state.jeux.map(jeu => (
-              <div key={jeu.id} 
-                className="bg-surface border border-base rounded-2xl p-5 cursor-pointer hover:border-accent hover:shadow-accent transition-all group"
-                onClick={() => { setActiveTab('jeux'); setSelectedJeu(jeu); }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-2xl">
-                    {jeu.icon}
-                  </div>
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                    jeu.actif 
-                      ? 'bg-success-bg text-success border border-success/30' 
-                      : 'bg-surface-2 text-muted border border-base'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${jeu.actif ? 'bg-success animate-pulse' : 'bg-muted'}`} />
-                    {jeu.actif ? 'Actif' : 'Fermé'}
-                  </div>
-                </div>
-                <h4 className="text-primary font-semibold mb-1 text-sm">{jeu.nom}</h4>
-                <p className="text-muted text-xs mb-3">{jeu.tables} table{jeu.tables > 1 ? 's' : ''} • Mise: {formatCurrency(jeu.mise_min)}-{formatCurrency(jeu.mise_max)}</p>
-                <div className="pt-3 border-t border-base">
-                  <p className="text-accent font-bold text-lg">{formatCurrency(jeu.caisse.soldeTotal)}</p>
-                  <div className="flex gap-3 mt-1">
-                    <span className="text-success text-xs">+{formatCurrency(jeu.caisse.totalEntrees)}</span>
-                    <span className="text-danger text-xs">-{formatCurrency(jeu.caisse.totalSorties)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center text-subtle text-xs mt-2 group-hover:text-primary transition-colors">
-                  <span>Voir détails</span>
-                  <ChevronRight size={12} className="ml-1" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Jeux Detail Tab */}
-      {activeTab === 'jeux' && (
-        <div className="space-y-6">
-          {/* Jeux Selection */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            {state.jeux.map(jeu => (
-              <button
-                key={jeu.id}
-                onClick={() => setSelectedJeu(jeu)}
-                className={`p-3 rounded-xl border transition-all text-center ${
-                  selectedJeu?.id === jeu.id 
-                    ? 'border-accent bg-accent-4' 
-                    : 'border-base bg-surface hover:border-accent'
-                }`}
-              >
-                <div className="text-2xl mb-1">{jeu.icon}</div>
-                <p className="text-xs text-muted truncate">{jeu.nom.split(' ')[0]}</p>
-              </button>
-            ))}
-          </div>
-
-          {/* Selected Jeu Detail */}
-          {selectedJeu ? (
-            <div className="space-y-6">
-              {/* Jeu Header */}
-              <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${selectedJeu.couleur} p-6`}>
-                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,white,transparent)]" />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="text-4xl">{selectedJeu.icon}</div>
-                    <div>
-                      <h3 className="text-primary font-bold text-xl">{selectedJeu.nom}</h3>
-                      <p className="text-secondary/70 text-sm">{selectedJeu.tables} tables • Mise: {formatCurrency(selectedJeu.mise_min)} - {formatCurrency(selectedJeu.mise_max)}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-secondary/70 text-sm">Solde Caisse</p>
-                    <p className="text-primary font-black text-3xl">{formatCurrency(selectedJeu.caisse.soldeTotal)}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20">
-                  <div>
-                    <p className="text-secondary/60 text-xs">Total Entrées</p>
-                    <p className="text-primary font-bold text-lg">{formatCurrency(selectedJeu.caisse.totalEntrees)}</p>
-                  </div>
-                  <div>
-                    <p className="text-secondary/60 text-xs">Total Sorties</p>
-                    <p className="text-primary font-bold text-lg">{formatCurrency(selectedJeu.caisse.totalSorties)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Transactions de ce jeu */}
-              <div className="bg-surface border border-base rounded-2xl overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-base">
-                  <h3 className="text-primary font-semibold">Transactions — {selectedJeu.nom}</h3>
-                  <Button icon={<Plus size={16} />} onClick={() => setShowTxModal(true)} size="sm">
-                    Transaction
-                  </Button>
-                </div>
-                <div className="divide-y divide-base max-h-64 overflow-y-auto">
-                  {selectedJeu.caisse.transactions.length === 0 ? (
-                    <div className="p-8 text-center text-muted">Aucune transaction</div>
-                  ) : (
-                    selectedJeu.caisse.transactions.map(tx => (
-                      <div key={tx.id} className="flex items-center gap-4 px-6 py-3 hover:bg-surface-2">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${tx.type === 'entree' ? 'bg-success-bg' : 'bg-danger-bg'}`}>
-                          {tx.type === 'entree' ? <ArrowUpRight size={16} className="text-success" /> : <ArrowDownRight size={16} className="text-danger" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
-                          <p className="text-muted text-xs">{tx.userName} • {formatDate(tx.date)}</p>
-                        </div>
-                        <p className={`font-bold ${tx.type === 'entree' ? 'text-success' : 'text-danger'}`}>
-                          {tx.type === 'entree' ? '+' : '-'}{formatCurrency(tx.montant)}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-surface border border-base rounded-2xl p-12 text-center">
-              <Dices size={48} className="text-muted mx-auto mb-4" />
-              <p className="text-muted">Sélectionnez un jeu pour voir les détails</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Stock Tab */}
-      {activeTab === 'stock' && <StockManager module="casino" categories={['Jeux', 'Jetons', 'Cartes', 'Équipement', 'Bar', 'Autre']} />}
-
-      {/* Caisse Globale Tab */}
-      {activeTab === 'caisse' && (
-        <div className="space-y-6">
-          <CaisseCard 
-            solde={casinoTotal.solde} 
-            entrees={casinoTotal.entrees} 
-            sorties={casinoTotal.sorties} 
-            title="Caisse Casino — Globale" 
-            gradient="from-accent to-accent-2" 
+      {/* Barre de recherche et filtres */}
+      <div className="flex flex-col sm:flex-row gap-3 w-full">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Rechercher une salle, un joueur..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-10 pl-9 pr-4 rounded-xl text-primary placeholder-subtle text-sm"
+            style={{
+              backgroundColor: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              outline: 'none',
+            }}
           />
-          
-          {/* Per game breakdown */}
-          <div className="bg-surface border border-base rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-base">
-              <h3 className="text-primary font-semibold flex items-center gap-2">
-                <Trophy size={16} className="text-accent" />
-                Répartition par Jeu
-              </h3>
-            </div>
-            <div className="divide-y divide-base">
-              {state.jeux.map(jeu => {
-                const pct = casinoTotal.entrees > 0 ? (jeu.caisse.totalEntrees / casinoTotal.entrees) * 100 : 0;
-                return (
-                  <div key={jeu.id} className="px-6 py-4 hover:bg-surface-2 transition-colors">
-                    <div className="flex items-center gap-4 mb-2">
-                      <div className="w-9 h-9 rounded-xl bg-accent/20 flex items-center justify-center text-lg flex-shrink-0">
-                        {jeu.icon}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-primary font-medium text-sm">{jeu.nom}</span>
-                          <span className="text-accent font-bold">{formatCurrency(jeu.caisse.soldeTotal)}</span>
-                        </div>
-                        <div className="progress-bar h-1.5">
-                          <div className="progress-fill h-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                      <span className="text-muted text-xs w-12 text-right">{pct.toFixed(1)}%</span>
-                    </div>
-                    <div className="flex gap-4 ml-13 pl-13 text-xs">
-                      <span className="text-success">+{formatCurrency(jeu.caisse.totalEntrees)}</span>
-                      <span className="text-danger">-{formatCurrency(jeu.caisse.totalSorties)}</span>
-                      <span className={`${jeu.actif ? 'text-success' : 'text-muted'}`}>{jeu.actif ? 'Actif' : 'Fermé'}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* All Casino Transactions */}
-          <div className="bg-surface border border-base rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-base">
-              <h3 className="text-primary font-semibold">Toutes les Transactions Casino</h3>
-            </div>
-            <div className="divide-y divide-base max-h-80 overflow-y-auto">
-              {state.transactions.filter(t => t.module === 'casino').map(tx => (
-                <div key={tx.id} className="flex items-center gap-4 px-6 py-3 hover:bg-surface-2">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${tx.type === 'entree' ? 'bg-success-bg' : 'bg-danger-bg'}`}>
-                    {tx.type === 'entree' ? <ArrowUpRight size={16} className="text-success" /> : <ArrowDownRight size={16} className="text-danger" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
-                    <p className="text-muted text-xs capitalize">{tx.sousModule ? jeuTypeLabels[tx.sousModule] : ''} • {tx.userName}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-bold ${tx.type === 'entree' ? 'text-success' : 'text-danger'}`}>
-                      {tx.type === 'entree' ? '+' : '-'}{formatCurrency(tx.montant)}
-                    </p>
-                    <p className="text-subtle text-xs">{formatDate(tx.date)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
-      )}
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="w-full sm:w-48 h-10 rounded-xl text-primary text-sm px-4"
+          style={{
+            backgroundColor: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
+            outline: 'none',
+          }}
+        >
+          <option value="">Tous les statuts</option>
+          <option value="OUVERTE">Ouverte</option>
+          <option value="FERMEE">Fermée</option>
+          <option value="ACTIF">Actif</option>
+          <option value="INACTIF">Inactif</option>
+        </select>
+      </div>
 
-      {/* Transaction Modal */}
-      <Modal isOpen={showTxModal} onClose={() => setShowTxModal(false)} title={`Transaction — ${selectedJeu?.nom || ''}`}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {['entree', 'sortie'].map(type => (
-              <button key={type} onClick={() => setTxForm({...txForm, type})}
-                className={`h-12 rounded-xl font-semibold text-sm transition-all ${
-                  txForm.type === type 
-                    ? type === 'entree' ? 'bg-success text-black' : 'bg-danger text-black'
-                    : 'bg-surface-2 text-muted'
-                }`}>
-                {type === 'entree' ? '+ Gain Casino' : '- Paiement Jackpot'}
-              </button>
-            ))}
-          </div>
-          <Input label="Montant (€)" type="number" value={txForm.montant} onChange={e => setTxForm({...txForm, montant: Number(e.target.value)})} />
-          <Input label="Description" value={txForm.description} onChange={e => setTxForm({...txForm, description: e.target.value})} placeholder="Ex: Tournoi poker - 8 joueurs" />
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setShowTxModal(false)} className="flex-1">Annuler</Button>
-            <Button onClick={handleAddJeuTransaction} className="flex-1">Enregistrer</Button>
-          </div>
-        </div>
-      </Modal>
+      {/* Onglets */}
+      <CasinoTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      {/* Contenu des onglets */}
+      <div className="w-full">
+        {activeTab === 'overview' && <OverviewTab {...sharedProps} />}
+        {activeTab === 'rooms' && <RoomsTab {...sharedProps} />}
+        {activeTab === 'cards' && <CardsTab {...sharedProps} />}
+        {activeTab === 'clients' && <ClientsTab {...sharedProps} />}
+        {activeTab === 'stock' && <StockTab />}
+        {activeTab === 'caisse' && <CaisseTab {...sharedProps} />}
+      </div>
+
+      {/* ========== MODALS ========== */}
+      
+      <RoomModal
+        isOpen={showRoomModal}
+        onClose={() => setShowRoomModal(false)}
+        onSubmit={handleAddRoom}
+      />
+
+      <CashierModal
+        isOpen={showCashierModal}
+        onClose={() => setShowCashierModal(false)}
+        rooms={rooms}
+        onSubmit={handleAddCashier}
+      />
+
+      <SessionModal
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        cashiers={cashiers}
+        onSubmit={handleAddSession}
+      />
+
+      <TransactionModal
+        isOpen={showTransactionModal}
+        onClose={() => setShowTransactionModal(false)}
+        clients={clients}
+        sessions={sessions}
+        onSubmit={handleAddTransaction}
+      />
+
+      <ChipTransactionModal
+        isOpen={showChipTransactionModal}
+        onClose={() => setShowChipTransactionModal(false)}
+        clients={clients}
+        onSubmit={handleAddChipTransaction}
+      />
+
+      <CardModal
+        isOpen={showCardModal}
+        onClose={() => setShowCardModal(false)}
+        clients={clients}
+        onSubmit={handleAddCard}
+      />
+
+      <CreditModal
+        isOpen={showCreditModal}
+        onClose={() => setShowCreditModal(false)}
+        clients={clients}
+        onSubmit={handleAddCredit}
+      />
     </div>
   );
 };
