@@ -1,187 +1,344 @@
-import React, { useState } from 'react';
-import { StockManager, CaisseManager } from '../components/StockManager';
-import { Badge, Button, Modal, Input, Select, DataTable } from '../components/UI';
+import React, { useState, useEffect } from 'react';
 import { useHDA } from '../context/HDAContext';
-import { Commande } from '../types';
-import { formatCurrency, formatDate } from '../utils/data';
-import { UtensilsCrossed, Plus, ChefHat } from 'lucide-react';
+import { formatCurrency } from '../utils/data';
+import { ShoppingCart, Clock, CheckCircle, TrendingUp } from 'lucide-react';
 
-const tabs = [
-  { id: 'commandes', label: 'Commandes' },
-  { id: 'menu', label: 'Menu' },
-  { id: 'stock', label: 'Stock' },
-  { id: 'caisse', label: 'Caisse' },
-];
+// Import des composants du dossier Restaurant
+import { RestaurantHeader } from '../components/Restaurant/Entete/RestaurantHeader';
+import { RestaurantTabs } from '../components/Restaurant/Tabs/RestaurantTabs';
+import { CommandesTab } from '../components/Restaurant/Tabs/CommandesTab';
+import { MenuTab } from '../components/Restaurant/Tabs/MenuTab';
+import { TablesTab } from '../components/Restaurant/Tabs/TablesTab';
+import { StockTab } from '../components/Restaurant/Tabs/StockTab';
+import { CaisseTab } from '../components/Restaurant/Tabs/CaisseTab';
+import { OrderModal } from '../components/Restaurant/Modals/OrderModal';
+import { TableModal } from '../components/Restaurant/Modals/TableModal';
+import { ProductModal } from '../components/Restaurant/Modals/ProductModal';
+import { ClientModal } from '../components/Restaurant/Modals/ClientModal';
 
-const menuItems = [
-  { id: 'm1', nom: 'Filet de Bœuf Rossini', categorie: 'Plats', prix: 68, disponible: true, description: 'Médaillon de bœuf, escalope de foie gras, sauce Périgueux' },
-  { id: 'm2', nom: 'Homard Thermidor', categorie: 'Fruits de mer', prix: 95, disponible: true, description: 'Homard breton, sauce thermidor, riz pilaf' },
-  { id: 'm3', nom: 'Soupe de Truffes', categorie: 'Entrées', prix: 45, disponible: false, description: 'Velouté de truffes noires, brioche feuilletée' },
-  { id: 'm4', nom: 'Foie Gras Poêlé', categorie: 'Entrées', prix: 38, disponible: true, description: 'Foie gras de canard, chutney de figues, pain brioché' },
-  { id: 'm5', nom: 'Menu Dégustation 7 plats', categorie: 'Menus', prix: 185, disponible: true, description: 'Voyage gastronomique signé par le Chef étoilé' },
-  { id: 'm6', nom: 'Soufflé au Grand Marnier', categorie: 'Desserts', prix: 28, disponible: true, description: 'Soufflé chaud, crème anglaise à la vanille Bourbon' },
-  { id: 'm7', nom: 'Assiette de Fromages', categorie: 'Fromages', prix: 24, disponible: true, description: 'Sélection affinée, confitures artisanales' },
-  { id: 'm8', nom: 'Château Margaux 2018', categorie: 'Vins', prix: 380, disponible: true, description: 'Grand Cru Classé, Médoc' },
-];
-
-const categColors: Record<string, string> = {
-  'Plats': 'from-orange-500 to-amber-600',
-  'Fruits de mer': 'from-blue-500 to-cyan-600',
-  'Entrées': 'from-green-500 to-emerald-600',
-  'Menus': 'from-violet-500 to-purple-600',
-  'Desserts': 'from-pink-500 to-rose-600',
-  'Fromages': 'from-amber-600 to-yellow-600',
-  'Vins': 'from-red-600 to-rose-700',
-};
+// Types
+import type { 
+  TableRestaurant, 
+  Order, 
+  Product, 
+  Category, 
+  Client 
+} from '../components/Restaurant/types';
 
 export const RestaurantPage: React.FC = () => {
   const { state, dispatch } = useHDA();
+  
+  // États
   const [activeTab, setActiveTab] = useState('commandes');
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ tableNumero: '', serveur: '', montantTotal: 0, status: 'en_attente' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [loading, setLoading] = useState(false);
+  
+  // Données
+  const [tables, setTables] = useState<TableRestaurant[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  
+  // Modales
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
+  
+  // Édition
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const handleAddCommande = () => {
-    if (!form.tableNumero) return;
-    dispatch({ type: 'ADD_COMMANDE', payload: {
-      ...form,
-      items: [],
-      montantTotal: form.montantTotal,
-      status: form.status as Commande['status'],
-    }});
-    setShowModal(false);
+  // Chargement des données
+  useEffect(() => {
+    setLoading(true);
+    setTimeout(() => {
+      const mockCategories: Category[] = [
+        { id: 1, nom: 'Plats' },
+        { id: 2, nom: 'Entrées' },
+        { id: 3, nom: 'Desserts' },
+        { id: 4, nom: 'Boissons' },
+        { id: 5, nom: 'Vins' },
+        { id: 6, nom: 'Menus' }
+      ];
+      setCategories(mockCategories);
+
+      const mockProducts: Product[] = [
+        { id: 1, category_id: 1, code: 'PROD-001', nom: 'Filet de Bœuf Rossini', unite: 'PIECE', prix_achat: 30, prix_vente: 68, actif: true, type_produit: 'PRODUIT_FINI' },
+        { id: 2, category_id: 1, code: 'PROD-002', nom: 'Homard Thermidor', unite: 'PIECE', prix_achat: 45, prix_vente: 95, actif: true, type_produit: 'PRODUIT_FINI' },
+        { id: 3, category_id: 2, code: 'PROD-003', nom: 'Soupe de Truffes', unite: 'PORTION', prix_achat: 20, prix_vente: 45, actif: false, type_produit: 'PRODUIT_FINI' },
+        { id: 4, category_id: 2, code: 'PROD-004', nom: 'Foie Gras Poêlé', unite: 'PIECE', prix_achat: 18, prix_vente: 38, actif: true, type_produit: 'PRODUIT_FINI' },
+        { id: 5, category_id: 6, code: 'PROD-005', nom: 'Menu Dégustation 7 plats', unite: 'PORTION', prix_achat: 85, prix_vente: 185, actif: true, type_produit: 'PRODUIT_FINI' },
+        { id: 101, category_id: 1, code: 'ING-001', nom: 'Bœuf', unite: 'KG', prix_achat: 12, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' },
+        { id: 102, category_id: 1, code: 'ING-002', nom: 'Homard', unite: 'KG', prix_achat: 25, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' }
+      ];
+      setProducts(mockProducts);
+
+      const mockTables: TableRestaurant[] = [
+        { id: 1, numero: 'T1', capacite: 4, statut: 'LIBRE' },
+        { id: 2, numero: 'T2', capacite: 2, statut: 'OCCUPEE' },
+        { id: 3, numero: 'VIP1', capacite: 6, statut: 'LIBRE' },
+        { id: 4, numero: 'T3', capacite: 4, statut: 'RESERVEE' },
+        { id: 5, numero: 'Terrasse1', capacite: 8, statut: 'LIBRE' }
+      ];
+      setTables(mockTables);
+
+      const mockClients: Client[] = [
+        { id: 1, code_client: 'CL001', nom: 'Rakoto', prenom: 'Jean', telephone: '+261 34 123 4567', email: 'jean@email.com' },
+        { id: 2, code_client: 'CL002', nom: 'Rabe', prenom: 'Marie', telephone: '+261 33 987 6543', email: 'marie@email.com' }
+      ];
+      setClients(mockClients);
+
+      const mockOrders: Order[] = [
+        {
+          id: 1, client_id: null, source_module: 'RESTAURANT', montant_total: 136,
+          statut: 'EN_COURS', created_at: new Date().toISOString(),
+          table: mockTables[0],
+          items: [{ id: 1, order_id: 1, product_id: 1, quantite: 2, prix_unitaire: 68 }]
+        },
+        {
+          id: 2, client_id: 2, source_module: 'RESTAURANT', montant_total: 185,
+          statut: 'PAYEE', created_at: new Date(Date.now() - 3600000).toISOString(),
+          table: mockTables[2],
+          items: [{ id: 2, order_id: 2, product_id: 5, quantite: 1, prix_unitaire: 185 }]
+        }
+      ];
+      setOrders(mockOrders);
+      setLoading(false);
+    }, 500);
+  }, []);
+
+  // ========== HANDLERS ==========
+
+  // Commandes
+  const handleAddOrder = (formData: any) => {
+    const table = tables.find(t => t.id === formData.table_id);
+    const newOrder: Order = {
+      id: orders.length + 1,
+      client_id: formData.client_id || null,
+      source_module: 'RESTAURANT',
+      montant_total: formData.montant_total,
+      statut: 'EN_ATTENTE',
+      created_at: new Date().toISOString(),
+      table: table,
+      items: formData.items.map((item: any) => ({
+        id: Date.now(),
+        order_id: orders.length + 1,
+        ...item
+      }))
+    };
+    setOrders([...orders, newOrder]);
+    if (table) {
+      setTables(tables.map(t => t.id === table.id ? { ...t, statut: 'OCCUPEE' } : t));
+    }
   };
 
-  const commandeColumns = [
-    { key: 'table', label: 'Table', render: (c: Commande) => (
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
-        <span className="text-white font-bold text-sm">{c.tableNumero}</span>
-      </div>
-    )},
-    { key: 'items', label: 'Articles', render: (c: Commande) => (
-      <div>
-        {c.items.length === 0 ? <span className="text-slate-600 text-sm">—</span> : (
-          c.items.slice(0, 2).map((item, i) => (
-            <p key={i} className="text-slate-300 text-sm">{item.nom} x{item.quantite}</p>
-          ))
-        )}
-        {c.items.length > 2 && <p className="text-slate-600 text-xs">+{c.items.length - 2} autres</p>}
-      </div>
-    )},
-    { key: 'serveur', label: 'Serveur', render: (c: Commande) => (
-      <span className="text-slate-300">{c.serveur || '—'}</span>
-    )},
-    { key: 'montantTotal', label: 'Montant', render: (c: Commande) => (
-      <span className="text-amber-400 font-bold">{formatCurrency(c.montantTotal)}</span>
-    )},
-    { key: 'status', label: 'Statut', render: (c: Commande) => (
-      <Badge variant={c.status}>
-        {c.status === 'en_attente' ? 'En attente' : c.status === 'en_cours' ? 'En cours' : c.status === 'servie' ? 'Servie' : c.status === 'payee' ? 'Payée' : 'Annulée'}
-      </Badge>
-    )},
-    { key: 'date', label: 'Heure', render: (c: Commande) => (
-      <span className="text-slate-500 text-xs">{formatDate(c.createdAt)}</span>
-    )},
-    { key: 'actions', label: '', render: (c: Commande) => (
-      <div className="flex gap-2">
-        {c.status === 'en_attente' && <Button size="sm" variant="secondary" onClick={() => dispatch({ type: 'ADD_COMMANDE', payload: {...c, status: 'en_cours' as Commande['status']} })}>Démarrer</Button>}
-        {c.status === 'servie' && <Button size="sm" onClick={() => dispatch({ type: 'ADD_COMMANDE', payload: {...c, status: 'payee' as Commande['status']} })}>Encaisser</Button>}
-      </div>
-    )},
-  ];
+  const handleUpdateOrderStatus = (orderId: number, status: Order['statut']) => {
+    setOrders(orders.map(o => o.id === orderId ? { ...o, statut: status } : o));
+  };
 
+  const handlePayment = (orderId: number) => {
+    setOrders(orders.map(o => o.id === orderId ? { ...o, statut: 'PAYEE' } : o));
+    const order = orders.find(o => o.id === orderId);
+    if (order?.table) {
+      setTables(tables.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+    }
+  };
+
+  const handleCancelOrder = (orderId: number) => {
+    if (window.confirm('Annuler cette commande ?')) {
+      setOrders(orders.map(o => o.id === orderId ? { ...o, statut: 'ANNULEE' } : o));
+    }
+  };
+
+  // Tables
+  const handleAddTable = (formData: any) => {
+    const newTable: TableRestaurant = { id: tables.length + 1, ...formData };
+    setTables([...tables, newTable]);
+  };
+
+  const handleDeleteTable = (id: number) => {
+    if (window.confirm('Supprimer cette table ?')) {
+      setTables(tables.filter(t => t.id !== id));
+    }
+  };
+
+  // Produits
+  const handleAddProduct = (formData: any) => {
+    const newProduct: Product = {
+      ...formData,
+      id: products.length + 1,
+      code: `PROD-${Date.now()}`,
+      prix_achat: 0,
+    };
+    setProducts([...products, newProduct]);
+    setShowProductModal(false);
+  };
+
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setShowProductModal(true);
+  };
+
+  const handleUpdateProduct = (formData: any) => {
+    if (editingProduct) {
+      setProducts(products.map(p => 
+        p.id === editingProduct.id ? { ...p, ...formData } : p
+      ));
+      setEditingProduct(null);
+    }
+    setShowProductModal(false);
+  };
+
+  const handleDeleteProduct = (id: number) => {
+    if (window.confirm('Supprimer ce produit ?')) {
+      setProducts(products.map(p => p.id === id ? { ...p, actif: false } : p));
+    }
+  };
+
+  // Clients
+  const handleAddClient = (formData: any) => {
+    const newClient: Client = {
+      id: clients.length + 1,
+      code_client: `CL${String(clients.length + 1).padStart(3, '0')}`,
+      ...formData
+    };
+    setClients([...clients, newClient]);
+    setShowClientModal(false);
+    alert('Client créé avec succès !');
+  };
+
+  // Statistiques
   const stats = [
-    { label: 'Total Commandes', value: state.commandes.length, color: 'text-white' },
-    { label: 'En Cours', value: state.commandes.filter(c => c.status === 'en_cours').length, color: 'text-amber-400' },
-    { label: 'Payées', value: state.commandes.filter(c => c.status === 'payee').length, color: 'text-emerald-400' },
-    { label: 'CA Journée', value: formatCurrency(state.commandes.filter(c => c.status === 'payee').reduce((sum, c) => sum + c.montantTotal, 0)), color: 'text-amber-400' },
+    { label: 'Total Commandes', value: orders.length, icon: <ShoppingCart size={20} className="text-black" /> },
+    { label: 'En Cours', value: orders.filter(o => o.statut === 'EN_COURS' || o.statut === 'EN_ATTENTE').length, icon: <Clock size={20} className="text-black" /> },
+    { label: 'Payées', value: orders.filter(o => o.statut === 'PAYEE').length, icon: <CheckCircle size={20} className="text-black" /> },
+    { label: 'CA Journée', value: formatCurrency(orders.filter(o => o.statut === 'PAYEE').reduce((sum, o) => sum + o.montant_total, 0)), icon: <TrendingUp size={20} className="text-black" /> }
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-white text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif' }}>Restaurant</h2>
-          <p className="text-slate-500 text-sm mt-1">Gestion gastronomique & commandes</p>
+    <div className="w-full max-w-full space-y-6 overflow-x-hidden">
+      {/* Header avec statistiques */}
+      <RestaurantHeader 
+        stats={stats} 
+        onNewOrder={() => setShowOrderModal(true)} 
+      />
+
+      {/* Barre de recherche et filtres */}
+      <div className="flex flex-col sm:flex-row gap-3 w-full">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Rechercher..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-10 pl-9 pr-4 rounded-xl text-primary placeholder-subtle text-sm"
+            style={{
+              backgroundColor: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              outline: 'none',
+            }}
+          />
         </div>
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
-          <UtensilsCrossed size={24} className="text-white" />
-        </div>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="w-full sm:w-48 h-10 rounded-xl text-primary text-sm px-4"
+          style={{
+            backgroundColor: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
+            outline: 'none',
+          }}
+        >
+          <option value="">Tous les statuts</option>
+          <option value="EN_ATTENTE">En attente</option>
+          <option value="EN_COURS">En cours</option>
+          <option value="SERVIE">Servie</option>
+          <option value="PAYEE">Payée</option>
+        </select>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(s => (
-          <div key={s.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-5">
-            <p className="text-slate-500 text-xs mb-1">{s.label}</p>
-            <p className={`${s.color} font-bold text-xl`}>{s.value}</p>
-          </div>
-        ))}
+      {/* Onglets */}
+      <RestaurantTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      {/* Contenu des onglets */}
+      <div className="w-full">
+        {activeTab === 'commandes' && (
+          <CommandesTab 
+            orders={orders}
+            products={products}
+            onUpdateStatus={handleUpdateOrderStatus}
+            onPayment={handlePayment}
+            onCancel={handleCancelOrder}
+            onNewOrder={() => setShowOrderModal(true)}
+          />
+        )}
+        {activeTab === 'menu' && (
+          <MenuTab 
+            products={products}
+            categories={categories}
+            onAddProduct={() => {
+              setEditingProduct(null);
+              setShowProductModal(true);
+            }}
+            onEditProduct={handleEditProduct}
+            onDeleteProduct={handleDeleteProduct}
+          />
+        )}
+        {activeTab === 'tables' && (
+          <TablesTab 
+            tables={tables}
+            onAddTable={() => setShowTableModal(true)}
+            onDeleteTable={handleDeleteTable}
+            onSelectTable={() => setShowOrderModal(true)}
+          />
+        )}
+        {activeTab === 'stock' && (
+          <StockTab products={products} />
+        )}
+        {activeTab === 'caisse' && (
+          <CaisseTab 
+            orders={orders}
+            onPayment={handlePayment}
+          />
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-900 border border-slate-800/50 rounded-2xl p-1 w-fit">
-        {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'}`}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* ========== MODALS ========== */}
+      
+      <OrderModal
+        isOpen={showOrderModal}
+        onClose={() => setShowOrderModal(false)}
+        tables={tables}
+        products={products}
+        clients={clients}
+        onSubmit={handleAddOrder}
+        onNewClient={() => setShowClientModal(true)}
+      />
 
-      {/* Tab Content */}
-      {activeTab === 'commandes' && (
-        <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/50">
-            <h3 className="text-white font-semibold flex items-center gap-2">
-              <ChefHat size={18} className="text-orange-400" />
-              Commandes
-            </h3>
-            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>Nouvelle commande</Button>
-          </div>
-          <DataTable data={state.commandes} columns={commandeColumns} />
-        </div>
-      )}
+      <TableModal
+        isOpen={showTableModal}
+        onClose={() => setShowTableModal(false)}
+        onSubmit={handleAddTable}
+      />
 
-      {activeTab === 'menu' && (
-        <div>
-          <h3 className="text-white font-semibold mb-4">Carte du Restaurant</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {menuItems.map(item => (
-              <div key={item.id} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-5 hover:border-slate-700/50 transition-all">
-                <div className="flex items-start justify-between mb-3">
-                  <span className={`px-2.5 py-1 rounded-lg text-xs font-medium bg-gradient-to-r ${categColors[item.categorie] || 'from-slate-600 to-slate-700'} text-white`}>
-                    {item.categorie}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs ${item.disponible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-                    {item.disponible ? '● Disponible' : '○ Indispo'}
-                  </span>
-                </div>
-                <h4 className="text-white font-semibold mb-1">{item.nom}</h4>
-                <p className="text-slate-500 text-sm mb-3 line-clamp-2">{item.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-amber-400 font-bold text-xl">{formatCurrency(item.prix)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <ProductModal
+        isOpen={showProductModal}
+        onClose={() => {
+          setShowProductModal(false);
+          setEditingProduct(null);
+        }}
+        onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
+        categories={categories}
+        editingProduct={editingProduct}
+      />
 
-      {activeTab === 'stock' && <StockManager module="restaurant" categories={['Viande', 'Fruits de mer', 'Légumes', 'Fruits', 'Épicerie', 'Épices', 'Boissons', 'Autre']} />}
-      {activeTab === 'caisse' && <CaisseManager module="restaurant" categories={['Restaurant', 'Stock', 'Personnel', 'Équipement', 'Autre']} title="Caisse Restaurant" gradient="from-orange-500 to-amber-600" />}
-
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nouvelle Commande">
-        <div className="space-y-4">
-          <Input label="Numéro de table" value={form.tableNumero} onChange={e => setForm({...form, tableNumero: e.target.value})} placeholder="T1, VIP1..." />
-          <Input label="Serveur" value={form.serveur} onChange={e => setForm({...form, serveur: e.target.value})} placeholder="Nom du serveur" />
-          <Input label="Montant estimé (€)" type="number" value={form.montantTotal} onChange={e => setForm({...form, montantTotal: Number(e.target.value)})} />
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Annuler</Button>
-            <Button onClick={handleAddCommande} className="flex-1">Créer</Button>
-          </div>
-        </div>
-      </Modal>
+      <ClientModal
+        isOpen={showClientModal}
+        onClose={() => setShowClientModal(false)}
+        onSubmit={handleAddClient}
+      />
     </div>
   );
 };
