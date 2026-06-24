@@ -1,3 +1,5 @@
+// ─── Entités ────────────────────────────────────────────────────────────────
+
 export interface RoomType {
   id: number;
   nom: string;
@@ -76,11 +78,10 @@ export interface Client {
   telephone: string;
   email: string;
   adresse: string;
-  type_piece?: string;
-  numero_piece?: string;
 }
 
-// Formulaires
+// ─── Formulaires ─────────────────────────────────────────────────────────────
+
 export interface ReservationForm {
   client_id: number;
   room_id: number;
@@ -121,43 +122,12 @@ export interface MaintenanceForm {
   cout: number;
 }
 
-// Constantes
-export const STATUTS_ROOM = {
-  LIBRE: { label: 'Libre', variant: 'success' },
-  OCCUPEE: { label: 'Occupée', variant: 'warning' },
-  RESERVEE: { label: 'Réservée', variant: 'info' },
-  NETTOYAGE: { label: 'Nettoyage', variant: 'secondary' },
-  MAINTENANCE: { label: 'Maintenance', variant: 'danger' },
-  HORS_SERVICE: { label: 'Hors service', variant: 'danger' },
-};
-
-export const STATUTS_RESERVATION = {
-  CONFIRMEE: { label: 'Confirmée', variant: 'success' },
-  EN_COURS: { label: 'En cours', variant: 'warning' },
-  TERMINEE: { label: 'Terminée', variant: 'secondary' },
-  ANNULEE: { label: 'Annulée', variant: 'danger' },
-};
-
-export const TYPES_EQUIPMENT_STATUT = {
-  BON: { label: 'Bon', variant: 'success' },
-  EN_PANNE: { label: 'En panne', variant: 'danger' },
-  REMPLACE: { label: 'Remplacé', variant: 'warning' },
-  HORS_SERVICE: { label: 'Hors service', variant: 'danger' },
-};
-
-export const TYPES_HOUSEKEEPING = {
-  NETTOYAGE: 'Nettoyage',
-  DESINFECTION: 'Désinfection',
-  CHANGEMENT_DRAPS: 'Changement draps',
-  CONTROLE: 'Contrôle',
-};
-
-export const TABS = [
-  { id: 'reservations', label: 'Réservations', icon: 'Calendar' },
-  { id: 'chambres', label: 'Chambres', icon: 'BedDouble' },
-  { id: 'equipements', label: 'Équipements', icon: 'Settings' },
-  { id: 'housekeeping', label: 'Ménage', icon: 'Housekeeping' },
-  { id: 'maintenance', label: 'Maintenance', icon: 'Wrench' },
-  { id: 'stock', label: 'Stock', icon: 'Package' },
-  { id: 'caisse', label: 'Caisse', icon: 'DollarSign' },
-];
+export interface ClientForm {
+  nom: string;
+  prenom: string;
+  telephone: string;
+  email: string;
+  adresse: string;
+  type_piece: string;
+  numero_piece: string;
+}
