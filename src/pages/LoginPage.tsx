@@ -142,7 +142,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-slate-500 text-sm">
-            © {new Date().getFullYear()} Finance Pour Tous. Tous droits réservés.
+            © {new Date().getFullYear()} Hôtel de l'avenue. Tous droits réservés.
           </p>
         </div>
       </div>
