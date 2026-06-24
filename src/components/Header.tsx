@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useHDA } from '../context/HDAContext';
-import { Bell, Search, Menu, X, ChevronRight } from 'lucide-react';
+import { Bell, Search, ChevronRight, X } from 'lucide-react';
+import logo from '../assets/logo_s.png';
 
-const moduleLabels: Record<string, string> = {
+const MODULE_LABELS: Record<string, string> = {
   dashboard: 'Tableau de Bord',
   hebergement: 'Hébergement',
   hotel: 'Hôtel',
@@ -10,120 +11,226 @@ const moduleLabels: Record<string, string> = {
   bar: 'Bar & Lounge',
   casino: 'Casino',
   finances: 'Finances',
+  clients: 'Clients',
   utilisateurs: 'Utilisateurs',
+};
+
+const NOTIFICATION_COLORS = {
+  warning: { bg: 'var(--color-accent-4)', text: 'var(--color-accent)', dot: 'var(--color-accent)' },
+  error: { bg: 'var(--color-danger-bg)', text: 'var(--color-danger)', dot: 'var(--color-danger)' },
+  success: { bg: 'var(--color-success-bg)', text: 'var(--color-success)', dot: 'var(--color-success)' },
+  info: { bg: 'var(--color-info-bg)', text: 'var(--color-info)', dot: 'var(--color-info)' },
 };
 
 export const Header: React.FC = () => {
   const { state, dispatch } = useHDA();
-  const { activeModule, notifications, sidebarCollapsed } = state;
-  const [showNotifs, setShowNotifs] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const { activeModule, notifications, currentUser } = state;
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const notifRef = useRef<HTMLDivElement>(null);
 
-  const notifTypeColors: Record<string, string> = {
-    warning: 'bg-amber-500/20 border-amber-500/40 text-amber-300',
-    error: 'bg-red-500/20 border-red-500/40 text-red-300',
-    success: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300',
-    info: 'bg-blue-500/20 border-blue-500/40 text-blue-300',
-  };
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifs(false);
+      }
+    };
 
-  const notifDotColors: Record<string, string> = {
-    warning: 'bg-amber-400',
-    error: 'bg-red-400',
-    success: 'bg-emerald-400',
-    info: 'bg-blue-400',
-  };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const timeStr = today.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <header className="h-20 flex items-center px-6 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-40">
+    <header
+      className="h-16 flex items-center px-4 md:px-6 sticky top-0 z-40 gap-4 w-full max-w-full overflow-visible"
+      style={{
+        backgroundColor: 'var(--color-surface)',
+        borderBottom: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 flex-1">
-        <button
-          onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
-          className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all mr-2 md:hidden"
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <div
+          className="md:hidden w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mr-1 overflow-hidden"
+          style={{
+            boxShadow: 'var(--shadow-accent)',
+          }}
         >
-          <Menu size={18} />
-        </button>
-        <span className="text-slate-600 text-sm">HDA</span>
-        <ChevronRight size={14} className="text-slate-700" />
-        <span className="text-white font-semibold text-sm">{moduleLabels[activeModule]}</span>
+          <img
+            src={logo}
+            alt="HDA"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block',
+            }}
+          />
+        </div>
+        <span className="text-muted text-xs hidden sm:block flex-shrink-0">HDA</span>
+        <ChevronRight size={12} className="text-subtle hidden sm:block flex-shrink-0" />
+        <span className="text-primary font-semibold text-sm truncate">
+          {MODULE_LABELS[activeModule] || activeModule}
+        </span>
       </div>
 
-      {/* Search */}
-      <div className="hidden md:flex items-center gap-3 flex-1 max-w-md mx-4">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+      {/* Search - Desktop */}
+      <div className="hidden md:flex items-center flex-1 max-w-xs">
+        <div className="relative w-full">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="text"
             placeholder="Rechercher..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 bg-slate-800/60 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50 focus:bg-slate-800 transition-all"
+            className="w-full h-9 pl-9 pr-4 rounded-xl text-primary placeholder-subtle text-sm transition-all"
+            style={{
+              backgroundColor: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+              outline: 'none',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'var(--color-accent)';
+              e.currentTarget.style.backgroundColor = 'var(--color-surface)';
+              e.currentTarget.style.boxShadow = '0 0 0 3px var(--color-accent-4)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'var(--color-border)';
+              e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
           />
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
-        {/* Date */}
-        <div className="hidden lg:block text-right">
-          <p className="text-white text-sm font-medium">
-            {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-          <p className="text-slate-500 text-xs">
-            {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          </p>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Date - Desktop */}
+        <div className="hidden lg:block text-right mr-1">
+          <p className="text-secondary text-xs font-medium capitalize leading-tight">{dateStr}</p>
+          <p className="text-subtle text-[10px]">{timeStr}</p>
         </div>
 
         {/* Notifications */}
-        <div className="relative">
+        <div className="relative" ref={notifRef}>
           <button
             onClick={() => setShowNotifs(!showNotifs)}
-            className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all relative"
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all relative"
+            style={{
+              backgroundColor: 'var(--color-surface-2)',
+              color: 'var(--color-muted)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--color-surface-3)';
+              e.currentTarget.style.color = 'var(--color-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+              e.currentTarget.style.color = 'var(--color-muted)';
+            }}
           >
-            <Bell size={18} />
+            <Bell size={16} />
             {notifications.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-slate-950" />
+              <span
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2"
+                style={{
+                  backgroundColor: 'var(--color-accent)',
+                  ringColor: 'var(--color-surface)',
+                }}
+              />
             )}
           </button>
 
-          {/* Dropdown */}
+          {/* Modal de notification - z-index augmenté */}
           {showNotifs && (
-            <div className="absolute right-0 top-12 w-80 bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-                <h3 className="text-white font-semibold text-sm">Alertes</h3>
-                <span className="text-xs text-slate-500">{notifications.length} non lues</span>
+            <div
+              className="absolute right-0 top-11 w-72 sm:w-80 rounded-2xl shadow-xl overflow-hidden"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 9999, // ← z-index très élevé pour passer au-dessus de tout
+                position: 'absolute',
+                maxHeight: '400px',
+              }}
+            >
+              <div
+                className="flex items-center justify-between px-4 py-2.5"
+                style={{ borderBottom: '1px solid var(--color-border)' }}
+              >
+                <h3 className="text-primary font-semibold text-xs">Alertes</h3>
+                <span className="text-[10px] text-muted">{notifications.length} non lues</span>
               </div>
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-72 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="p-6 text-center text-slate-500 text-sm">Aucune alerte</div>
+                  <div className="p-5 text-center text-muted text-xs">Aucune alerte</div>
                 ) : (
-                  notifications.map(notif => (
-                    <div key={notif.id} className={`flex items-start gap-3 px-4 py-3 border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors`}>
-                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${notifDotColors[notif.type]}`} />
-                      <div className="flex-1">
-                        <p className={`text-xs font-medium ${notifTypeColors[notif.type].split(' ')[2]}`}>{notif.message}</p>
-                        <p className="text-slate-600 text-xs mt-0.5">
-                          {new Date(notif.timestamp).toLocaleTimeString('fr-FR')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => dispatch({ type: 'CLEAR_NOTIFICATION', payload: notif.id })}
-                        className="text-slate-600 hover:text-slate-400 transition-colors"
+                  notifications.map((notif) => {
+                    const colors = NOTIFICATION_COLORS[notif.type] || NOTIFICATION_COLORS.info;
+                    return (
+                      <div
+                        key={notif.id}
+                        className="flex items-start gap-3 px-4 py-2.5 transition-colors"
+                        style={{
+                          borderBottom: '1px solid var(--color-surface-2)',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                       >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))
+                        <div
+                          className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
+                          style={{ backgroundColor: colors.dot }}
+                        />
+                        <div className="flex-1">
+                          <p className="text-xs font-medium" style={{ color: colors.text }}>
+                            {notif.message}
+                          </p>
+                          <p className="text-subtle text-[10px] mt-0.5">
+                            {new Date(notif.timestamp).toLocaleTimeString('fr-FR')}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => dispatch({ type: 'CLEAR_NOTIFICATION', payload: notif.id })}
+                          className="text-subtle hover:text-primary transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
           )}
         </div>
 
-        {/* User Avatar */}
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity">
-          <span className="text-white font-bold text-sm">
-            {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
+        {/* Avatar */}
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer transition-opacity shadow-sm flex-shrink-0"
+          style={{
+            backgroundColor: 'var(--color-accent)',
+            boxShadow: 'var(--shadow-accent)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '0.85';
+            e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '1';
+            e.currentTarget.style.boxShadow = 'var(--shadow-accent)';
+          }}
+        >
+          <span className="text-black font-bold text-xs">
+            {currentUser.prenom[0]}{currentUser.nom[0]}
           </span>
         </div>
       </div>

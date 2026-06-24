@@ -14,44 +14,33 @@ import ClientsPage from './pages/ClientsPage';
 
 const PageRenderer: React.FC = () => {
   const { state } = useHDA();
-
   switch (state.activeModule) {
-    case 'dashboard': return <Dashboard />;
-    case 'hebergement': return <HebergementPage />;
-    case 'hotel': return <HotelPage />;
-    case 'restaurant': return <RestaurantPage />;
-    case 'bar': return <BarPage />;
-    case 'casino': return <CasinoPage />;
-    case 'finances': return <FinancesPage />;
+    case 'dashboard':    return <Dashboard />;
+    case 'hebergement':  return <HebergementPage />;
+    case 'hotel':        return <HotelPage />;
+    case 'restaurant':   return <RestaurantPage />;
+    case 'bar':          return <BarPage />;
+    case 'casino':       return <CasinoPage />;
+    case 'finances':     return <FinancesPage />;
     case 'utilisateurs': return <UtilisateursPage />;
-    case 'clients': return <ClientsPage />;
-
-    default: return <Dashboard />;
+    case 'clients':      return <ClientsPage />;
+    default:             return <Dashboard />;
   }
 };
 
 function App() {
-  const { state } = useHDA();
-  const { sidebarCollapsed } = state;
-
   return (
-    <div className="min-h-screen bg-slate-950 text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
-      {/* Sidebar */}
+    <div className="min-h-screen w-full overflow-x-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
       <Sidebar />
 
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
+      {/* Main Content - Occupe tout l'espace restant */}
+      <div className="md:ml-[72px] w-full md:w-[calc(100%-72px)] min-h-screen">
         <Header />
-        <main className="p-6 lg:p-8 max-w-screen-2xl">
-          <PageRenderer />
+        <main className="p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
+          <div className="w-full max-w-full">
+            <PageRenderer />
+          </div>
         </main>
-      </div>
-
-      {/* Ambient Background Effects */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-0 left-1/3 w-96 h-96 rounded-full bg-amber-500/3 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-violet-500/3 blur-3xl" />
-        <div className="absolute top-1/2 right-0 w-64 h-64 rounded-full bg-emerald-500/3 blur-3xl" />
       </div>
     </div>
   );
