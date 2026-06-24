@@ -1,19 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { Bell, Search, ChevronRight, X, LogOut, User, Settings, ChevronDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/logo_s.png';
 
-const MODULE_LABELS: Record<string, string> = {
-  dashboard: 'Tableau de Bord',
-  hebergement: 'Hébergement',
-  hotel: 'Hôtel',
-  restaurant: 'Restaurant',
-  bar: 'Bar & Lounge',
-  casino: 'Casino',
-  finances: 'Finances',
-  clients: 'Clients',
-  utilisateurs: 'Utilisateurs',
+const ROUTE_LABELS: Record<string, string> = {
+  '/dashboard': 'Tableau de Bord',
+  '/hebergement': 'Hébergement',
+  '/hotel': 'Hôtel',
+  '/restaurant': 'Restaurant',
+  '/bar': 'Bar & Lounge',
+  '/casino': 'Casino',
+  '/finances': 'Finances',
+  '/clients': 'Clients',
+  '/utilisateurs': 'Utilisateurs',
+  '/profile': 'Mon profil',
+  '/settings': 'Paramètres',
 };
 
 const NOTIFICATION_COLORS = {
@@ -25,13 +27,15 @@ const NOTIFICATION_COLORS = {
 
 export const Header: React.FC = () => {
   const { state, dispatch } = useHDA();
-  const { activeModule, notifications, currentUser } = state;
+  const { notifications, currentUser } = state;
+
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -52,20 +56,17 @@ export const Header: React.FC = () => {
 
   // Gestion de la déconnexion
   const handleLogout = () => {
-    // Nettoyer le localStorage
-    localStorage.removeItem('token');
-    localStorage.removeItem('rememberMe');
-    
-    // Rediriger vers la page de login
-    navigate('/login');
-    
-    // Fermer le menu
+    localStorage.clear();
+
     setShowUserMenu(false);
+
+    navigate('/login', { replace: true });
   };
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const timeStr = today.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const currentPage = ROUTE_LABELS[location.pathname] || 'Tableau de Bord';
 
   return (
     <header
@@ -98,7 +99,7 @@ export const Header: React.FC = () => {
         <span className="text-muted text-xs hidden sm:block flex-shrink-0">HDA</span>
         <ChevronRight size={12} className="text-subtle hidden sm:block flex-shrink-0" />
         <span className="text-primary font-semibold text-sm truncate">
-          {MODULE_LABELS[activeModule] || activeModule}
+          {currentPage}
         </span>
       </div>
 
@@ -281,8 +282,8 @@ export const Header: React.FC = () => {
                 {currentUser.prenom?.[0] || 'U'}{currentUser.nom?.[0] || 'S'}
               </span>
             </div>
-            <ChevronDown 
-              size={14} 
+            <ChevronDown
+              size={14}
               className={`text-muted transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`}
             />
           </button>
