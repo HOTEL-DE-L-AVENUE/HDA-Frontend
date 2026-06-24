@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatCurrency, formatDate } from '../../../utils/data';
 import { Button, Badge } from '../../UI';
-import { Plus, ArrowUpRight, ArrowDownRight, DollarSign } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, DollarSign,Dices  } from 'lucide-react';
 import type { CasinoRoom, CasinoCashier, CasinoSession, CasinoTransaction, Client } from '../types';
 
 interface RoomsTabProps {
