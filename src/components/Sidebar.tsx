@@ -82,12 +82,12 @@ export const Sidebar: React.FC = () => {
       <>
         {/* Overlay */}
         <div 
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 transition-opacity duration-300"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 transition-opacity duration-300"
           onClick={() => setIsMobileOpen(false)}
         />
         
         {/* Mobile Sidebar */}
-        <aside className="fixed left-0 top-0 h-full w-[280px] z-50 transition-transform duration-300 ease-in-out bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border-r border-slate-800/50 flex flex-col">
+        <aside className="fixed left-0 top-0 h-full w-[280px] z-50 transition-transform duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col">
           <MobileSidebarContent 
             state={state}
             activeModule={activeModule}
@@ -109,7 +109,7 @@ export const Sidebar: React.FC = () => {
       {isMobile && !isMobileOpen && (
         <button
           onClick={toggleSidebar}
-          className="fixed top-4 left-4 z-50 p-2 rounded-xl bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 text-white hover:bg-slate-700 transition-all"
+          className="fixed top-4 left-4 z-50 p-2 rounded-xl bg-white/90 backdrop-blur-sm border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
         >
           <Menu size={24} />
         </button>
@@ -119,8 +119,7 @@ export const Sidebar: React.FC = () => {
       <aside
         className={`
           hidden md:flex fixed left-0 top-0 h-full z-50 transition-all duration-300 ease-in-out
-          flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950
-          border-r border-slate-800/50
+          flex-col bg-white border-r border-gray-200
           ${sidebarCollapsed ? 'w-20' : 'w-72'}
         `}
       >
@@ -151,28 +150,28 @@ const DesktopSidebarContent: React.FC<any> = ({
   return (
     <>
       {/* Logo */}
-      <div className={`flex items-center h-20 px-4 border-b border-slate-800/50 ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+      <div className={`flex items-center h-20 px-4 border-b border-gray-200 ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!sidebarCollapsed && (
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-              <span className="text-slate-950 font-black text-lg">H</span>
+              <span className="text-white font-black text-lg">H</span>
             </div>
             <div>
-              <h1 className="text-white font-black text-xl tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
+              <h1 className="text-gray-900 font-black text-xl tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
                 HDA
               </h1>
-              <p className="text-slate-500 text-xs font-medium tracking-widest uppercase">Platform</p>
+              <p className="text-gray-500 text-xs font-medium tracking-widest uppercase">Platform</p>
             </div>
           </div>
         )}
         {sidebarCollapsed && (
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-            <span className="text-slate-950 font-black text-lg">H</span>
+            <span className="text-white font-black text-lg">H</span>
           </div>
         )}
         <button
           onClick={toggleSidebar}
-          className={`w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all ${sidebarCollapsed ? 'hidden' : 'flex'}`}
+          className={`w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all ${sidebarCollapsed ? 'hidden' : 'flex'}`}
         >
           <ChevronLeft size={16} />
         </button>
@@ -182,16 +181,16 @@ const DesktopSidebarContent: React.FC<any> = ({
       {sidebarCollapsed && (
         <button
           onClick={toggleSidebar}
-          className="mx-auto mt-2 w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+          className="mx-auto mt-2 w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all"
         >
           <ChevronRight size={16} />
         </button>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {!sidebarCollapsed && (
-          <p className="text-slate-600 text-xs font-semibold uppercase tracking-widest px-3 mb-3">Navigation</p>
+          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest px-3 mb-3">Navigation</p>
         )}
 
         {navItems.map((item) => {
@@ -203,8 +202,8 @@ const DesktopSidebarContent: React.FC<any> = ({
               className={`
                 w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
                 ${isActive
-                  ? 'bg-white/10 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-gray-100 text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }
                 ${sidebarCollapsed ? 'justify-center' : ''}
                 touch-manipulation
@@ -218,15 +217,15 @@ const DesktopSidebarContent: React.FC<any> = ({
               <div className={`
                 w-9 h-9 rounded-lg flex items-center justify-center transition-all flex-shrink-0
                 ${isActive
-                  ? `bg-gradient-to-br ${item.gradient} shadow-lg`
-                  : 'bg-slate-800 group-hover:bg-slate-700'
+                  ? `bg-gradient-to-br ${item.gradient} shadow-lg text-white`
+                  : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700'
                 }
               `}>
                 {item.icon}
               </div>
 
               {!sidebarCollapsed && (
-                <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'text-white' : ''}`}>
+                <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'text-gray-900' : ''}`}>
                   {item.label}
                 </span>
               )}
@@ -243,36 +242,36 @@ const DesktopSidebarContent: React.FC<any> = ({
 
       {/* Performance Quick View */}
       {!sidebarCollapsed && (
-        <div className="mx-3 mb-3 p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+        <div className="mx-3 mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={14} className="text-amber-400" />
-            <span className="text-amber-400 text-xs font-semibold uppercase tracking-wide">Performance</span>
+            <TrendingUp size={14} className="text-amber-600" />
+            <span className="text-amber-600 text-xs font-semibold uppercase tracking-wide">Performance</span>
           </div>
-          <div className="text-white font-bold text-lg">+18.4%</div>
-          <div className="text-slate-400 text-xs">vs mois dernier</div>
-          <div className="mt-2 h-1.5 rounded-full bg-slate-800">
+          <div className="text-gray-900 font-bold text-lg">+18.4%</div>
+          <div className="text-gray-500 text-xs">vs mois dernier</div>
+          <div className="mt-2 h-1.5 rounded-full bg-gray-200">
             <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: '72%' }} />
           </div>
         </div>
       )}
 
       {/* User Profile */}
-      <div className={`p-3 border-t border-slate-800/50 ${sidebarCollapsed ? 'flex justify-center' : ''}`}>
+      <div className={`p-3 border-t border-gray-200 ${sidebarCollapsed ? 'flex justify-center' : ''}`}>
         {!sidebarCollapsed ? (
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
+          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-all group">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-sm">
                 {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-semibold truncate">
+              <p className="text-gray-900 text-sm font-semibold truncate">
                 {state.currentUser.prenom} {state.currentUser.nom}
               </p>
-              <p className="text-slate-500 text-xs capitalize">{state.currentUser.role}</p>
+              <p className="text-gray-500 text-xs capitalize">{state.currentUser.role}</p>
             </div>
             <div className="relative">
-              <Bell size={16} className="text-slate-400 group-hover:text-white transition-colors" />
+              <Bell size={16} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
                   {unreadCount}
@@ -310,29 +309,29 @@ const MobileSidebarContent: React.FC<any> = ({
   return (
     <>
       {/* Header avec bouton de fermeture */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-800/50">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-            <span className="text-slate-950 font-black text-lg">H</span>
+            <span className="text-white font-black text-lg">H</span>
           </div>
           <div>
-            <h1 className="text-white font-black text-xl tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h1 className="text-gray-900 font-black text-xl tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
               HDA
             </h1>
-            <p className="text-slate-500 text-xs font-medium tracking-widest uppercase">Platform</p>
+            <p className="text-gray-500 text-xs font-medium tracking-widest uppercase">Platform</p>
           </div>
         </div>
         <button
           onClick={toggleSidebar}
-          className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all"
         >
           <X size={20} />
         </button>
       </div>
 
       {/* Navigation Mobile */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-        <p className="text-slate-600 text-xs font-semibold uppercase tracking-widest px-3 mb-3">Navigation</p>
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest px-3 mb-3">Navigation</p>
 
         {navItems.map((item) => {
           const isActive = activeModule === item.id;
@@ -343,8 +342,8 @@ const MobileSidebarContent: React.FC<any> = ({
               className={`
                 w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
                 ${isActive
-                  ? 'bg-white/10 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-gray-100 text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }
                 touch-manipulation
               `}
@@ -356,14 +355,14 @@ const MobileSidebarContent: React.FC<any> = ({
               <div className={`
                 w-9 h-9 rounded-lg flex items-center justify-center transition-all flex-shrink-0
                 ${isActive
-                  ? `bg-gradient-to-br ${item.gradient} shadow-lg`
-                  : 'bg-slate-800 group-hover:bg-slate-700'
+                  ? `bg-gradient-to-br ${item.gradient} shadow-lg text-white`
+                  : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700'
                 }
               `}>
                 {item.icon}
               </div>
 
-              <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'text-white' : ''}`}>
+              <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'text-gray-900' : ''}`}>
                 {item.label}
               </span>
 
@@ -378,34 +377,34 @@ const MobileSidebarContent: React.FC<any> = ({
       </nav>
 
       {/* Performance Quick View Mobile */}
-      <div className="mx-3 mb-3 p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+      <div className="mx-3 mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
         <div className="flex items-center gap-2 mb-2">
-          <TrendingUp size={14} className="text-amber-400" />
-          <span className="text-amber-400 text-xs font-semibold uppercase tracking-wide">Performance</span>
+          <TrendingUp size={14} className="text-amber-600" />
+          <span className="text-amber-600 text-xs font-semibold uppercase tracking-wide">Performance</span>
         </div>
-        <div className="text-white font-bold text-lg">+18.4%</div>
-        <div className="text-slate-400 text-xs">vs mois dernier</div>
-        <div className="mt-2 h-1.5 rounded-full bg-slate-800">
+        <div className="text-gray-900 font-bold text-lg">+18.4%</div>
+        <div className="text-gray-500 text-xs">vs mois dernier</div>
+        <div className="mt-2 h-1.5 rounded-full bg-gray-200">
           <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: '72%' }} />
         </div>
       </div>
 
       {/* User Profile Mobile */}
-      <div className="p-3 border-t border-slate-800/50">
-        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-all group">
+      <div className="p-3 border-t border-gray-200">
+        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-all group">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
             <span className="text-white font-bold text-sm">
               {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-semibold truncate">
+            <p className="text-gray-900 text-sm font-semibold truncate">
               {state.currentUser.prenom} {state.currentUser.nom}
             </p>
-            <p className="text-slate-500 text-xs capitalize">{state.currentUser.role}</p>
+            <p className="text-gray-500 text-xs capitalize">{state.currentUser.role}</p>
           </div>
           <div className="relative">
-            <Bell size={16} className="text-slate-400 group-hover:text-white transition-colors" />
+            <Bell size={16} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
             {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
                 {unreadCount}
