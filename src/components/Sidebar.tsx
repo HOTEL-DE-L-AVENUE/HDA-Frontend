@@ -9,29 +9,31 @@ import {
 } from 'lucide-react';
 // ⬇️ IMPORTEZ VOTRE LOGO
 import logo from '../assets/logo_s.png'; // Ajustez le chemin selon votre structure
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NavItem {
   id: ModuleType;
   label: string;
   icon: React.ReactNode;
   gradient: string;
+  path: string;
   badge?: number;
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard',    label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2' },
-  { id: 'hebergement',  label: 'Hébergement',     icon: <BedDouble size={20} />,       gradient: 'from-accent to-accent-2' },
-  { id: 'hotel',        label: 'Hôtel',           icon: <Hotel size={20} />,           gradient: 'from-accent to-accent-2' },
-  { id: 'restaurant',   label: 'Restaurant',      icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2' },
-  { id: 'bar',          label: 'Bar & Lounge',    icon: <Wine size={20} />,            gradient: 'from-accent to-accent-2' },
-  { id: 'casino',       label: 'Casino',          icon: <Dices size={20} />,           gradient: 'from-accent to-accent-2' },
-  { id: 'finances',     label: 'Finances',        icon: <DollarSign size={20} />,      gradient: 'from-accent to-accent-2' },
-  { id: 'clients',      label: 'Clients',         icon: <UserRoundPlus size={20} />,   gradient: 'from-accent to-accent-2' },
-  { id: 'utilisateurs', label: 'Utilisateurs',    icon: <UserCog size={20} />,         gradient: 'from-accent to-accent-2' },
+  { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2', path: "/dashboard" },
+  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement" },
+  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel" },
+  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant" },
+  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar" },
+  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino" },
+  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances" },
+  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients" },
+  { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs" },
 ];
 
 const bottomNavItems = navItems.slice(0, 4);
-const moreNavItems   = navItems.slice(4);
+const moreNavItems = navItems.slice(4);
 
 /* ─── ONDULATION COMME BORDURE ─── */
 const WavyEdge: React.FC = () => (
@@ -119,7 +121,7 @@ const Tooltip: React.FC<TooltipProps> = ({ label, children, isActive = false }) 
   return (
     <div
       ref={containerRef}
-      style={{ 
+      style={{
         position: 'relative',
         display: 'inline-flex',
         alignItems: 'center',
@@ -205,8 +207,8 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
           background: isActive
             ? 'var(--color-accent)'
             : hovered
-            ? 'var(--color-surface-2)'
-            : 'transparent',
+              ? 'var(--color-surface-2)'
+              : 'transparent',
           boxShadow: isActive
             ? 'var(--shadow-accent)'
             : 'none',
@@ -233,8 +235,8 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
             color: isActive
               ? '#000000'
               : hovered
-              ? 'var(--color-primary)'
-              : 'var(--color-muted)',
+                ? 'var(--color-primary)'
+                : 'var(--color-muted)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -273,12 +275,16 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
 
 /* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
-  const { state, dispatch } = useHDA();
-  const { activeModule, notifications } = state;
-  const unreadCount = notifications.length;
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const setModule = (module: ModuleType) =>
-    dispatch({ type: 'SET_MODULE', payload: module });
+  const { state } = useHDA();
+
+  const unreadCount = state.notifications.length;
+
+  const setModule = (path: string) => {
+    navigate(path);
+  };
 
   return (
     <>
@@ -305,7 +311,7 @@ export const Sidebar: React.FC = () => {
         {/* ⬇️ LOGO MODIFIÉ AVEC IMAGE PNG */}
         <Tooltip label="HDA Platform">
           <button
-            onClick={() => setModule('dashboard')}
+            onClick={() => navigate('/dashboard')}
             style={{
               marginTop: '2px',
               marginBottom: '2px',
@@ -327,9 +333,9 @@ export const Sidebar: React.FC = () => {
             onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
             onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            <img 
-              src={logo} 
-              alt="HDA Platform" 
+            <img
+              src={logo}
+              alt="HDA Platform"
               style={{
                 width: '100%',
                 height: '100%',
@@ -366,8 +372,8 @@ export const Sidebar: React.FC = () => {
             <NavButton
               key={item.id}
               item={item}
-              isActive={activeModule === item.id}
-              onClick={() => setModule(item.id)}
+              isActive={location.pathname === item.path}
+              onClick={() => navigate(item.path)}
             />
           ))}
         </nav>
@@ -446,12 +452,13 @@ export const Sidebar: React.FC = () => {
 
 /* ─── MOBILE BOTTOM NAV ─── */
 const MobileBottomNav: React.FC = () => {
-  const { state, dispatch } = useHDA();
-  const { activeModule } = state;
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [showMore, setShowMore] = useState(false);
 
-  const setModule = (module: ModuleType) => {
-    dispatch({ type: 'SET_MODULE', payload: module });
+  const setModule = (path: string) => {
+    navigate(path);
     setShowMore(false);
   };
 
@@ -465,7 +472,9 @@ const MobileBottomNav: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [showMore]);
 
-  const isMoreActive = moreNavItems.some(i => i.id === activeModule);
+  const isMoreActive = moreNavItems.some(
+    i => i.path === location.pathname
+  );
 
   return (
     <>
@@ -473,9 +482,9 @@ const MobileBottomNav: React.FC = () => {
         <>
           <div
             className="md:hidden fixed inset-0 z-40"
-            style={{ 
-              backgroundColor: 'rgba(0, 0, 0, 0.8)', 
-              backdropFilter: 'blur(4px)' 
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              backdropFilter: 'blur(4px)'
             }}
             onClick={() => setShowMore(false)}
           />
@@ -516,11 +525,11 @@ const MobileBottomNav: React.FC = () => {
               </div>
               <div style={{ padding: '8px' }}>
                 {moreNavItems.map(item => {
-                  const isActive = activeModule === item.id;
+                  const isActive = location.pathname === item.path;
                   return (
                     <button
                       key={item.id}
-                      onClick={() => setModule(item.id)}
+                      onClick={() => setModule(item.path)}
                       style={{
                         width: '100%',
                         display: 'flex',
@@ -573,11 +582,11 @@ const MobileBottomNav: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '8px' }}>
           {bottomNavItems.map(item => {
-            const isActive = activeModule === item.id;
+            const isActive = location.pathname === item.path;
             return (
               <button
                 key={item.id}
-                onClick={() => setModule(item.id)}
+                onClick={() => setModule(item.path)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
