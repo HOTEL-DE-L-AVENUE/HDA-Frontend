@@ -10,6 +10,7 @@ import { BarPage } from './pages/BarPage';
 import { CasinoPage } from './pages/CasinoPage';
 import { FinancesPage } from './pages/FinancesPage';
 import { UtilisateursPage } from './pages/UtilisateursPage';
+import ClientsPage from './pages/ClientsPage';
 
 const PageRenderer: React.FC = () => {
   const { state } = useHDA();
@@ -23,6 +24,8 @@ const PageRenderer: React.FC = () => {
     case 'casino': return <CasinoPage />;
     case 'finances': return <FinancesPage />;
     case 'utilisateurs': return <UtilisateursPage />;
+    case 'clients': return <ClientsPage />;
+
     default: return <Dashboard />;
   }
 };
