@@ -80,40 +80,46 @@ export const UtilisateursPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-white text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif' }}>Utilisateurs</h2>
-          <p className="text-slate-500 text-sm mt-1">Gestion des accès et permissions</p>
+          <h2 className="text-primary text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif' }}>
+            Utilisateurs
+          </h2>
+          <p className="text-muted text-sm mt-1">Gestion des accès et permissions</p>
         </div>
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-500 to-gray-600 flex items-center justify-center">
-          <Users size={24} className="text-white" />
+        <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center">
+          <Users size={24} className="text-black" />
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Utilisateurs', value: state.users.length, color: 'text-white' },
-          { label: 'Actifs', value: activeCount, color: 'text-emerald-400' },
-          { label: 'Inactifs', value: state.users.length - activeCount, color: 'text-slate-500' },
-          { label: 'Administrateurs', value: adminCount, color: 'text-violet-400' },
+          { label: 'Total Utilisateurs', value: state.users.length, color: 'text-primary' },
+          { label: 'Actifs', value: activeCount, color: 'text-success' },
+          { label: 'Inactifs', value: state.users.length - activeCount, color: 'text-muted' },
+          { label: 'Administrateurs', value: adminCount, color: 'text-accent' },
         ].map(s => (
-          <div key={s.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-5">
-            <p className="text-slate-500 text-xs mb-1">{s.label}</p>
+          <div key={s.label} className="bg-surface border border-base rounded-2xl p-5">
+            <p className="text-muted text-xs mb-1">{s.label}</p>
             <p className={`${s.color} font-bold text-xl`}>{s.value}</p>
           </div>
         ))}
       </div>
 
       {/* Users Table */}
-      <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
-          <h3 className="text-white font-semibold flex items-center gap-2">
-            <Shield size={16} className="text-violet-400" />
+      <div className="bg-surface border border-base rounded-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
+          <h3 className="text-primary font-semibold flex items-center gap-2">
+            <Shield size={16} className="text-accent" />
             Gestion des Accès
           </h3>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <div className="relative flex-1 sm:flex-none">
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." 
-                className="w-full sm:w-48 h-9 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-violet-500/50" />
+              <input 
+                value={search} 
+                onChange={e => setSearch(e.target.value)} 
+                placeholder="Rechercher..." 
+                className="w-full sm:w-48 h-9 pl-9 pr-3 bg-surface-2 border border-base rounded-xl text-primary placeholder-muted text-sm focus:outline-none focus:border-accent/50" 
+              />
             </div>
             <Button icon={<Plus size={16} />} onClick={() => { setEditUser(null); setShowModal(true); }}>
               Ajouter
@@ -121,26 +127,26 @@ export const UtilisateursPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="divide-y divide-slate-800/30">
+        <div className="divide-y divide-base">
           {filtered.map(user => (
-            <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-800/20 transition-colors">
+            <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
               {/* Avatar */}
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                user.role === 'admin' ? 'bg-gradient-to-br from-violet-500 to-purple-600' :
+                user.role === 'admin' ? 'bg-accent' :
                 user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
                 user.role === 'caissier' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
                 'bg-gradient-to-br from-slate-600 to-slate-700'
               }`}>
-                <span className="text-white font-bold text-sm">{user.prenom[0]}{user.nom[0]}</span>
+                <span className="text-black font-bold text-sm">{user.prenom[0]}{user.nom[0]}</span>
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-white font-medium">{user.prenom} {user.nom}</p>
+                  <p className="text-primary font-medium">{user.prenom} {user.nom}</p>
                   <span className="text-sm">{roleIcons[user.role]}</span>
                 </div>
-                <p className="text-slate-500 text-xs">{user.email}</p>
+                <p className="text-muted text-xs">{user.email}</p>
               </div>
 
               {/* Role */}
@@ -151,12 +157,12 @@ export const UtilisateursPage: React.FC = () => {
               {/* Modules */}
               <div className="hidden lg:flex flex-wrap gap-1 max-w-48">
                 {user.module.slice(0, 3).map(m => (
-                  <span key={m} className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-400 border border-slate-700">
+                  <span key={m} className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
                     {moduleLabels[m] || m}
                   </span>
                 ))}
                 {user.module.length > 3 && (
-                  <span className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-400 border border-slate-700">
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
                     +{user.module.length - 3}
                   </span>
                 )}
@@ -171,18 +177,18 @@ export const UtilisateursPage: React.FC = () => {
 
               {/* Last Login */}
               <div className="hidden xl:block text-right">
-                <p className="text-slate-600 text-xs">
+                <p className="text-muted text-xs">
                   {user.lastLogin ? formatDate(user.lastLogin) : 'Jamais'}
                 </p>
               </div>
 
               {/* Actions */}
               <div className="flex gap-2">
-                <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+                <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
                   <Edit2 size={14} />
                 </button>
                 {user.id !== state.currentUser.id && (
-                  <button onClick={() => dispatch({ type: 'DELETE_USER', payload: user.id })} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all">
+                  <button onClick={() => dispatch({ type: 'DELETE_USER', payload: user.id })} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
                     <Trash2 size={14} />
                   </button>
                 )}
@@ -193,21 +199,21 @@ export const UtilisateursPage: React.FC = () => {
       </div>
 
       {/* Role Legend */}
-      <div className="bg-slate-900 border border-slate-800/50 rounded-2xl p-6">
-        <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <Key size={16} className="text-amber-400" />
+      <div className="bg-surface border border-base rounded-2xl p-6">
+        <h3 className="text-primary font-semibold mb-4 flex items-center gap-2">
+          <Key size={16} className="text-accent" />
           Niveaux d'Accès
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {(Object.entries(roleLabels) as [UserRole, string][]).map(([role, label]) => (
-            <div key={role} className="flex items-start gap-3 p-4 rounded-xl bg-slate-800/50 border border-slate-700/30">
+            <div key={role} className="flex items-start gap-3 p-4 rounded-xl bg-surface-2/50 border border-base">
               <span className="text-2xl">{roleIcons[role]}</span>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="text-white font-medium text-sm">{label}</p>
+                  <p className="text-primary font-medium text-sm">{label}</p>
                   <Badge variant={role}>{role}</Badge>
                 </div>
-                <p className="text-slate-500 text-xs">
+                <p className="text-muted text-xs">
                   {role === 'admin' && 'Accès complet à toute la plateforme'}
                   {role === 'manager' && 'Gestion des modules assignés'}
                   {role === 'caissier' && 'Accès aux opérations de caisse'}
@@ -231,7 +237,7 @@ export const UtilisateursPage: React.FC = () => {
           
           <div className="relative">
             <Input label="Mot de passe" type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••••" />
-            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 bottom-3 text-slate-500 hover:text-white">
+            <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 bottom-3 text-muted hover:text-primary">
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
@@ -240,7 +246,7 @@ export const UtilisateursPage: React.FC = () => {
             options={Object.entries(roleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
           <div>
-            <label className="text-slate-400 text-sm font-medium block mb-2">Modules autorisés</label>
+            <label className="text-muted text-sm font-medium block mb-2">Modules autorisés</label>
             <div className="grid grid-cols-3 gap-2">
               {allModules.map(mod => (
                 <button
@@ -248,8 +254,8 @@ export const UtilisateursPage: React.FC = () => {
                   onClick={() => toggleModule(mod)}
                   className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                     form.module.includes(mod)
-                      ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                      : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-300'
+                      ? 'bg-accent-4 text-accent border-accent/40'
+                      : 'bg-surface-2 text-muted border-base hover:text-primary'
                   }`}
                 >
                   {moduleLabels[mod]}
@@ -260,10 +266,10 @@ export const UtilisateursPage: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <button onClick={() => setForm({...form, actif: !form.actif})}
-              className={`w-12 h-6 rounded-full transition-all ${form.actif ? 'bg-emerald-500' : 'bg-slate-700'} relative`}>
+              className={`w-12 h-6 rounded-full transition-all ${form.actif ? 'bg-success' : 'bg-surface-3'} relative`}>
               <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
             </button>
-            <span className="text-slate-400 text-sm">{form.actif ? 'Compte actif' : 'Compte inactif'}</span>
+            <span className="text-muted text-sm">{form.actif ? 'Compte actif' : 'Compte inactif'}</span>
           </div>
 
           <div className="flex gap-3 pt-2">
