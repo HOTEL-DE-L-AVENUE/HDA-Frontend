@@ -1,24 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // ← Ajoutez useRef
 import { useHDA } from '../context/HDAContext';
 import { ModuleType } from '../types';
 import {
-  LayoutDashboard,
-  BedDouble,
-  Hotel,
-  UtensilsCrossed,
-  Wine,
-  Dices,
-  DollarSign,
-  Users,
-  ChevronLeft,
-  ChevronRight,
-  Bell,
-  LogOut,
-  Settings,
-  TrendingUp,
-  X,
-  Menu
+  LayoutDashboard, BedDouble, Hotel, UtensilsCrossed,
+  Wine, Dices, DollarSign, Users, TrendingUp, X, MoreHorizontal,
+  UserCog,
+  UserRoundPlus,
 } from 'lucide-react';
+// ⬇️ IMPORTEZ VOTRE LOGO
+import logo from '../assets/logo_s.png'; // Ajustez le chemin selon votre structure
 
 interface NavItem {
   id: ModuleType;
@@ -29,390 +19,651 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-violet-500 to-purple-600' },
-  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-blue-500 to-cyan-600' },
-  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-indigo-500 to-blue-600' },
-  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-orange-500 to-amber-600' },
-  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-rose-500 to-pink-600' },
-  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-emerald-500 to-green-600' },
-  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-yellow-500 to-orange-500' },
-  { id: 'clients', label: 'Gestion Clients', icon: <Users size={20} />, gradient: 'from-blue-500 to-purple-600' },
-  { id: 'utilisateurs', label: 'Utilisateurs', icon: <Users size={20} />, gradient: 'from-slate-500 to-gray-600' },
+  { id: 'dashboard',    label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2' },
+  { id: 'hebergement',  label: 'Hébergement',     icon: <BedDouble size={20} />,       gradient: 'from-accent to-accent-2' },
+  { id: 'hotel',        label: 'Hôtel',           icon: <Hotel size={20} />,           gradient: 'from-accent to-accent-2' },
+  { id: 'restaurant',   label: 'Restaurant',      icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2' },
+  { id: 'bar',          label: 'Bar & Lounge',    icon: <Wine size={20} />,            gradient: 'from-accent to-accent-2' },
+  { id: 'casino',       label: 'Casino',          icon: <Dices size={20} />,           gradient: 'from-accent to-accent-2' },
+  { id: 'finances',     label: 'Finances',        icon: <DollarSign size={20} />,      gradient: 'from-accent to-accent-2' },
+  { id: 'clients',      label: 'Clients',         icon: <UserRoundPlus size={20} />,   gradient: 'from-accent to-accent-2' },
+  { id: 'utilisateurs', label: 'Utilisateurs',    icon: <UserCog size={20} />,         gradient: 'from-accent to-accent-2' },
 ];
 
+const bottomNavItems = navItems.slice(0, 4);
+const moreNavItems   = navItems.slice(4);
+
+/* ─── ONDULATION COMME BORDURE ─── */
+const WavyEdge: React.FC = () => (
+  <div
+    style={{
+      position: 'absolute',
+      right: '-12px',
+      top: 0,
+      height: '100%',
+      width: '24px',
+      pointerEvents: 'none',
+      zIndex: 30,
+      overflow: 'visible',
+    }}
+  >
+    <svg
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+      }}
+      preserveAspectRatio="none"
+      viewBox="0 0 24 800"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="
+          M12,0
+          C18,40 6,90 12,150
+          C18,210 6,270 12,330
+          C18,390 6,450 12,510
+          C18,570 6,630 12,690
+          C18,740 6,780 12,800
+        "
+        fill="none"
+        stroke="var(--color-border)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="
+          M12,0
+          C18,40 6,90 12,150
+          C18,210 6,270 12,330
+          C18,390 6,450 12,510
+          C18,570 6,630 12,690
+          C18,740 6,780 12,800
+        "
+        fill="none"
+        stroke="var(--color-border)"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ transform: 'translateX(2px)', opacity: 0.3 }}
+      />
+    </svg>
+  </div>
+);
+
+/* ─── TOOLTIP CORRIGÉ AVEC POSITION DYNAMIQUE ─── */
+interface TooltipProps {
+  label: string;
+  children: React.ReactNode;
+  isActive?: boolean;
+}
+
+const Tooltip: React.FC<TooltipProps> = ({ label, children, isActive = false }) => {
+  const [visible, setVisible] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const showTooltip = visible && !isActive;
+
+  const updatePosition = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.top + rect.height / 2,
+        left: rect.right + 12, // 12px d'espace entre le bouton et le tooltip
+      });
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ 
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+      }}
+      onMouseEnter={() => {
+        setVisible(true);
+        updatePosition();
+      }}
+      onMouseLeave={() => {
+        setVisible(false);
+      }}
+    >
+      {children}
+      {showTooltip && (
+        <div
+          style={{
+            position: 'fixed',
+            top: position.top,
+            left: position.left,
+            transform: 'translateY(-50%)',
+            zIndex: 9999,
+            backgroundColor: 'var(--color-surface-2)',
+            color: 'var(--color-primary)',
+            border: '1px solid var(--color-border)',
+            fontSize: '12px',
+            fontWeight: 500,
+            padding: '6px 12px',
+            borderRadius: '8px',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            boxShadow: 'var(--shadow-md)',
+            letterSpacing: '0.01em',
+          }}
+        >
+          <span
+            style={{
+              position: 'absolute',
+              right: '100%',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              borderWidth: '5px',
+              borderStyle: 'solid',
+              borderColor: 'transparent var(--color-border) transparent transparent',
+            }}
+          />
+          {label}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── NAV BUTTON ─── */
+interface NavButtonProps {
+  item: NavItem;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <Tooltip label={item.label} isActive={isActive}>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          position: 'relative',
+          width: '44px',
+          height: '44px',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          outline: 'none',
+          background: isActive
+            ? 'var(--color-accent)'
+            : hovered
+            ? 'var(--color-surface-2)'
+            : 'transparent',
+          boxShadow: isActive
+            ? 'var(--shadow-accent)'
+            : 'none',
+          transform: hovered && !isActive ? 'scale(1.05)' : 'scale(1)',
+        }}
+      >
+        {isActive && (
+          <span
+            style={{
+              position: 'absolute',
+              left: '-10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '3px',
+              height: '22px',
+              borderRadius: '0 3px 3px 0',
+              background: 'var(--color-accent)',
+            }}
+          />
+        )}
+
+        <span
+          style={{
+            color: isActive
+              ? '#000000'
+              : hovered
+              ? 'var(--color-primary)'
+              : 'var(--color-muted)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'color 0.15s ease',
+          }}
+        >
+          {item.icon}
+        </span>
+
+        {item.badge && !isActive && (
+          <span
+            style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '-4px',
+              width: '16px',
+              height: '16px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--color-accent)',
+              color: '#000000',
+              fontSize: '9px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid var(--color-surface)',
+            }}
+          >
+            {item.badge}
+          </span>
+        )}
+      </button>
+    </Tooltip>
+  );
+};
+
+/* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
   const { state, dispatch } = useHDA();
-  const { activeModule, sidebarCollapsed, notifications } = state;
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const { activeModule, notifications } = state;
+  const unreadCount = notifications.length;
 
-  // Détection mobile
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
-        setIsMobileOpen(false);
-      }
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const setModule = (module: ModuleType) =>
+    dispatch({ type: 'SET_MODULE', payload: module });
+
+  return (
+    <>
+      <aside
+        className="hidden md:flex"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          height: '100%',
+          width: '72px',
+          zIndex: 50,
+          flexDirection: 'column',
+          alignItems: 'center',
+          backgroundColor: 'var(--color-surface)',
+          overflow: 'visible',
+          boxShadow: 'var(--shadow-sm)',
+          outline: 'none',
+          borderRight: '1px solid var(--color-border)',
+        }}
+      >
+        <WavyEdge />
+
+        {/* ⬇️ LOGO MODIFIÉ AVEC IMAGE PNG */}
+        <Tooltip label="HDA Platform">
+          <button
+            onClick={() => setModule('dashboard')}
+            style={{
+              marginTop: '2px',
+              marginBottom: '2px',
+              width: '60px',
+              height: '60px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-accent)',
+              transition: 'opacity 0.15s, transform 0.15s',
+              flexShrink: 0,
+              overflow: 'hidden',
+              padding: '2px',
+              background: 'transparent',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            <img 
+              src={logo} 
+              alt="HDA Platform" 
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          </button>
+        </Tooltip>
+
+        <div
+          style={{
+            width: '28px',
+            height: '1px',
+            backgroundColor: 'var(--color-border)',
+            marginBottom: '12px',
+          }}
+        />
+
+        <nav
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '0 8px',
+            overflowY: 'auto',
+            scrollbarWidth: 'none',
+            width: '100%',
+          }}
+        >
+          {navItems.map((item) => (
+            <NavButton
+              key={item.id}
+              item={item}
+              isActive={activeModule === item.id}
+              onClick={() => setModule(item.id)}
+            />
+          ))}
+        </nav>
+
+        <div
+          style={{
+            margin: '8px',
+            padding: '8px 6px',
+            borderRadius: '12px',
+            backgroundColor: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
+            textAlign: 'center',
+            width: '50px',
+          }}
+        >
+          <TrendingUp
+            size={14}
+            style={{ color: 'var(--color-accent)', margin: '0 auto 3px', display: 'block' }}
+          />
+          <div style={{ color: 'var(--color-primary)', fontWeight: 700, fontSize: '11px' }}>
+            +18%
+          </div>
+        </div>
+
+        <Tooltip label={`${state.currentUser.prenom} ${state.currentUser.nom}`}>
+          <div style={{ position: 'relative', marginBottom: '14px', cursor: 'pointer' }}>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '11px',
+                background: 'var(--color-accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: 'var(--shadow-accent)',
+                transition: 'transform 0.15s',
+              }}
+              onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.transform = 'scale(1.05)')}
+              onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.transform = 'scale(1)')}
+            >
+              <span style={{ color: '#000000', fontWeight: 700, fontSize: '12px' }}>
+                {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
+              </span>
+            </div>
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--color-accent)',
+                  color: '#000000',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid var(--color-surface)',
+                }}
+              >
+                {unreadCount}
+              </span>
+            )}
+          </div>
+        </Tooltip>
+      </aside>
+
+      <MobileBottomNav />
+    </>
+  );
+};
+
+/* ─── MOBILE BOTTOM NAV ─── */
+const MobileBottomNav: React.FC = () => {
+  const { state, dispatch } = useHDA();
+  const { activeModule } = state;
+  const [showMore, setShowMore] = useState(false);
 
   const setModule = (module: ModuleType) => {
     dispatch({ type: 'SET_MODULE', payload: module });
-    if (isMobile) {
-      setIsMobileOpen(false);
-    }
+    setShowMore(false);
   };
 
-  const toggleSidebar = () => {
-    if (isMobile) {
-      setIsMobileOpen(!isMobileOpen);
-    } else {
-      dispatch({ type: 'TOGGLE_SIDEBAR' });
-    }
-  };
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('#mobile-bottom-nav')) setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMore]);
 
-  const unreadCount = notifications.length;
+  const isMoreActive = moreNavItems.some(i => i.id === activeModule);
 
-  // Mobile overlay
-  if (isMobile && isMobileOpen) {
-    return (
-      <>
-        {/* Overlay */}
-        <div 
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 transition-opacity duration-300"
-          onClick={() => setIsMobileOpen(false)}
-        />
-        
-        {/* Mobile Sidebar */}
-        <aside className="fixed left-0 top-0 h-full w-[280px] z-50 transition-transform duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col">
-          <MobileSidebarContent 
-            state={state}
-            activeModule={activeModule}
-            sidebarCollapsed={sidebarCollapsed}
-            setModule={setModule}
-            toggleSidebar={toggleSidebar}
-            unreadCount={unreadCount}
-            isMobile={isMobile}
+  return (
+    <>
+      {showMore && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 z-40"
+            style={{ 
+              backgroundColor: 'rgba(0, 0, 0, 0.8)', 
+              backdropFilter: 'blur(4px)' 
+            }}
+            onClick={() => setShowMore(false)}
           />
-        </aside>
-      </>
-    );
-  }
-
-  // Desktop Sidebar
-  return (
-    <>
-      {/* Mobile Menu Button */}
-      {isMobile && !isMobileOpen && (
-        <button
-          onClick={toggleSidebar}
-          className="fixed top-4 left-4 z-50 p-2 rounded-xl bg-white/90 backdrop-blur-sm border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
-        >
-          <Menu size={24} />
-        </button>
+          <div className="md:hidden fixed bottom-20 left-0 right-0 z-50 px-4 pb-2">
+            <div
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <div
+                className="px-4 py-3 flex items-center justify-between"
+                style={{ borderBottom: '1px solid var(--color-border)' }}
+              >
+                <span style={{ color: 'var(--color-primary)', fontSize: '14px', fontWeight: 600 }}>
+                  Plus de modules
+                </span>
+                <button
+                  onClick={() => setShowMore(false)}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--color-surface-2)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--color-muted)',
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div style={{ padding: '8px' }}>
+                {moreNavItems.map(item => {
+                  const isActive = activeModule === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setModule(item.id)}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        backgroundColor: isActive ? 'var(--color-accent-4)' : 'transparent',
+                        color: isActive ? 'var(--color-accent)' : 'var(--color-muted)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: isActive ? 'var(--color-accent)' : 'var(--color-surface-2)',
+                          color: isActive ? '#000000' : 'var(--color-muted)',
+                        }}
+                      >
+                        {item.icon}
+                      </span>
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--color-primary)' : 'var(--color-secondary)' }}>
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Desktop Sidebar */}
-      <aside
-        className={`
-          hidden md:flex fixed left-0 top-0 h-full z-50 transition-all duration-300 ease-in-out
-          flex-col bg-white border-r border-gray-200
-          ${sidebarCollapsed ? 'w-20' : 'w-72'}
-        `}
+      <nav
+        id="mobile-bottom-nav"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50"
+        style={{
+          backgroundColor: 'var(--color-surface)',
+          borderTop: '1px solid var(--color-border)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
       >
-        <DesktopSidebarContent 
-          state={state}
-          activeModule={activeModule}
-          sidebarCollapsed={sidebarCollapsed}
-          setModule={setModule}
-          toggleSidebar={toggleSidebar}
-          unreadCount={unreadCount}
-          isMobile={isMobile}
-        />
-      </aside>
-    </>
-  );
-};
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '8px' }}>
+          {bottomNavItems.map(item => {
+            const isActive = activeModule === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setModule(item.id)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px',
+                  flex: 1,
+                  padding: '4px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <span
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isActive ? 'var(--color-accent)' : 'var(--color-surface-2)',
+                    color: isActive ? '#000000' : 'var(--color-muted)',
+                    boxShadow: isActive ? 'var(--shadow-accent)' : 'none',
+                    transform: isActive ? 'scale(1.06)' : 'scale(1)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {item.icon}
+                </span>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    color: isActive ? 'var(--color-primary)' : 'var(--color-subtle)',
+                  }}
+                >
+                  {item.label.split(' ')[0]}
+                </span>
+              </button>
+            );
+          })}
 
-// Composant pour le contenu desktop
-const DesktopSidebarContent: React.FC<any> = ({
-  state,
-  activeModule,
-  sidebarCollapsed,
-  setModule,
-  toggleSidebar,
-  unreadCount,
-  isMobile
-}) => {
-  return (
-    <>
-      {/* Logo */}
-      <div className={`flex items-center h-20 px-4 border-b border-gray-200 ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-        {!sidebarCollapsed && (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-              <span className="text-white font-black text-lg">H</span>
-            </div>
-            <div>
-              <h1 className="text-gray-900 font-black text-xl tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
-                HDA
-              </h1>
-              <p className="text-gray-500 text-xs font-medium tracking-widest uppercase">Platform</p>
-            </div>
-          </div>
-        )}
-        {sidebarCollapsed && (
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-            <span className="text-white font-black text-lg">H</span>
-          </div>
-        )}
-        <button
-          onClick={toggleSidebar}
-          className={`w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all ${sidebarCollapsed ? 'hidden' : 'flex'}`}
-        >
-          <ChevronLeft size={16} />
-        </button>
-      </div>
-
-      {/* Toggle when collapsed */}
-      {sidebarCollapsed && (
-        <button
-          onClick={toggleSidebar}
-          className="mx-auto mt-2 w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all"
-        >
-          <ChevronRight size={16} />
-        </button>
-      )}
-
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {!sidebarCollapsed && (
-          <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest px-3 mb-3">Navigation</p>
-        )}
-
-        {navItems.map((item) => {
-          const isActive = activeModule === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setModule(item.id)}
-              className={`
-                w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
-                ${isActive
-                  ? 'bg-gray-100 text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }
-                ${sidebarCollapsed ? 'justify-center' : ''}
-                touch-manipulation
-              `}
-              title={sidebarCollapsed ? item.label : ''}
+          <button
+            onClick={() => setShowMore(!showMore)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '2px',
+              flex: 1,
+              padding: '4px',
+              border: 'none',
+              backgroundColor: 'transparent',
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <span
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isMoreActive || showMore ? 'var(--color-accent)' : 'var(--color-surface-2)',
+                color: isMoreActive || showMore ? '#000000' : 'var(--color-muted)',
+                boxShadow: isMoreActive || showMore ? 'var(--shadow-accent)' : 'none',
+                transition: 'all 0.15s',
+              }}
             >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-gradient-to-b from-amber-400 to-orange-500" />
-              )}
-
-              <div className={`
-                w-9 h-9 rounded-lg flex items-center justify-center transition-all flex-shrink-0
-                ${isActive
-                  ? `bg-gradient-to-br ${item.gradient} shadow-lg text-white`
-                  : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700'
-                }
-              `}>
-                {item.icon}
-              </div>
-
-              {!sidebarCollapsed && (
-                <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'text-gray-900' : ''}`}>
-                  {item.label}
-                </span>
-              )}
-
-              {!sidebarCollapsed && item.badge && (
-                <span className="w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Performance Quick View */}
-      {!sidebarCollapsed && (
-        <div className="mx-3 mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={14} className="text-amber-600" />
-            <span className="text-amber-600 text-xs font-semibold uppercase tracking-wide">Performance</span>
-          </div>
-          <div className="text-gray-900 font-bold text-lg">+18.4%</div>
-          <div className="text-gray-500 text-xs">vs mois dernier</div>
-          <div className="mt-2 h-1.5 rounded-full bg-gray-200">
-            <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: '72%' }} />
-          </div>
-        </div>
-      )}
-
-      {/* User Profile */}
-      <div className={`p-3 border-t border-gray-200 ${sidebarCollapsed ? 'flex justify-center' : ''}`}>
-        {!sidebarCollapsed ? (
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-all group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">
-                {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-gray-900 text-sm font-semibold truncate">
-                {state.currentUser.prenom} {state.currentUser.nom}
-              </p>
-              <p className="text-gray-500 text-xs capitalize">{state.currentUser.role}</p>
-            </div>
-            <div className="relative">
-              <Bell size={16} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="relative">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center cursor-pointer">
-              <span className="text-white font-bold text-sm">
-                {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
-              </span>
-            </div>
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  );
-};
-
-// Composant pour le contenu mobile
-const MobileSidebarContent: React.FC<any> = ({
-  state,
-  activeModule,
-  setModule,
-  toggleSidebar,
-  unreadCount
-}) => {
-  return (
-    <>
-      {/* Header avec bouton de fermeture */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-            <span className="text-white font-black text-lg">H</span>
-          </div>
-          <div>
-            <h1 className="text-gray-900 font-black text-xl tracking-tight" style={{ fontFamily: 'Playfair Display, serif' }}>
-              HDA
-            </h1>
-            <p className="text-gray-500 text-xs font-medium tracking-widest uppercase">Platform</p>
-          </div>
-        </div>
-        <button
-          onClick={toggleSidebar}
-          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-all"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
-      {/* Navigation Mobile */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest px-3 mb-3">Navigation</p>
-
-        {navItems.map((item) => {
-          const isActive = activeModule === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setModule(item.id)}
-              className={`
-                w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
-                ${isActive
-                  ? 'bg-gray-100 text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }
-                touch-manipulation
-              `}
-            >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-gradient-to-b from-amber-400 to-orange-500" />
-              )}
-
-              <div className={`
-                w-9 h-9 rounded-lg flex items-center justify-center transition-all flex-shrink-0
-                ${isActive
-                  ? `bg-gradient-to-br ${item.gradient} shadow-lg text-white`
-                  : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-700'
-                }
-              `}>
-                {item.icon}
-              </div>
-
-              <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'text-gray-900' : ''}`}>
-                {item.label}
-              </span>
-
-              {item.badge && (
-                <span className="w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Performance Quick View Mobile */}
-      <div className="mx-3 mb-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingUp size={14} className="text-amber-600" />
-          <span className="text-amber-600 text-xs font-semibold uppercase tracking-wide">Performance</span>
-        </div>
-        <div className="text-gray-900 font-bold text-lg">+18.4%</div>
-        <div className="text-gray-500 text-xs">vs mois dernier</div>
-        <div className="mt-2 h-1.5 rounded-full bg-gray-200">
-          <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: '72%' }} />
-        </div>
-      </div>
-
-      {/* User Profile Mobile */}
-      <div className="p-3 border-t border-gray-200">
-        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-all group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">
-              {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
+              <MoreHorizontal size={20} />
             </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-gray-900 text-sm font-semibold truncate">
-              {state.currentUser.prenom} {state.currentUser.nom}
-            </p>
-            <p className="text-gray-500 text-xs capitalize">{state.currentUser.role}</p>
-          </div>
-          <div className="relative">
-            <Bell size={16} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
-          </div>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 500,
+                color: isMoreActive || showMore ? 'var(--color-primary)' : 'var(--color-subtle)',
+              }}
+            >
+              Plus
+            </span>
+          </button>
         </div>
-      </div>
+      </nav>
     </>
   );
 };
