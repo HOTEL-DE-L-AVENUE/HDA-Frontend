@@ -65,7 +65,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Dashboard } from './pages/Dashboard';
 import { HebergementPage } from './pages/HebergementPage';
-import { HotelPage } from './pages/HotelPage';
+
 import { RestaurantPage } from './pages/RestaurantPage';
 import { BarPage } from './pages/BarPage';
 import { CasinoPage } from './pages/CasinoPage';
@@ -73,6 +73,7 @@ import { FinancesPage } from './pages/FinancesPage';
 import { UtilisateursPage } from './pages/UtilisateursPage';
 import ClientsPage from './pages/ClientsPage';
 import LoginPage from './pages/LoginPage';
+import HotelPage from './pages/HotelPage';
 
 const PageRenderer: React.FC = () => {
   const { state } = useHDA();
@@ -99,7 +100,7 @@ function App() {
       <div className="md:ml-[72px] w-full md:w-[calc(100%-72px)] min-h-screen">
         <Header />
         <main className="p-4 md:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
-          <div className="w-full max-w-full">
+          <div className="w-full max-w-full"> 
             <PageRenderer />
           </div>
         </main>
