@@ -1,70 +1,224 @@
-import React, { useState } from 'react';
-import { Hotel, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import logo from '../assets/logo_s.png'; // Ajustez le chemin selon votre structure
 
-interface LoginPageProps {
-  onLogin: () => void;
+interface LoginFormData {
+  email: string;
+  password: string;
+  rememberMe: boolean;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: '',
+    password: '',
+    rememberMe: false,
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Animation du fond avec particules
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Particules
+    interface Particle {
+      x: number;
+      y: number;
+      radius: number;
+      speedX: number;
+      speedY: number;
+      opacity: number;
+      color: string;
+    }
+
+    const particles: Particle[] = [];
+    const particleCount = Math.min(80, Math.floor((window.innerWidth * window.innerHeight) / 15000));
+
+    const colors = [
+      'rgba(212, 168, 71, ',
+      'rgba(196, 149, 58, ',
+      'rgba(232, 200, 106, ',
+    ];
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: Math.random() * 3 + 1,
+        speedX: (Math.random() - 0.5) * 0.5,
+        speedY: (Math.random() - 0.5) * 0.5,
+        opacity: Math.random() * 0.5 + 0.1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      });
+    }
+
+    let animationId: number;
+
+    const drawParticles = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Dessiner les particules
+      particles.forEach((particle) => {
+        // Mouvement
+        particle.x += particle.speedX;
+        particle.y += particle.speedY;
+
+        // Rebond sur les bords
+        if (particle.x < 0 || particle.x > canvas.width) particle.speedX *= -1;
+        if (particle.y < 0 || particle.y > canvas.height) particle.speedY *= -1;
+
+        // Dessiner la particule
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fillStyle = particle.color + particle.opacity + ')';
+        ctx.fill();
+
+        // Effet de lueur
+        const glow = ctx.createRadialGradient(
+          particle.x, particle.y, 0,
+          particle.x, particle.y, particle.radius * 4
+        );
+        glow.addColorStop(0, particle.color + (particle.opacity * 0.3) + ')');
+        glow.addColorStop(1, particle.color + '0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius * 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Lignes entre particules proches
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < 120) {
+            const opacity = (1 - distance / 120) * 0.15;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(212, 168, 71, ${opacity})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+
+      animationId = requestAnimationFrame(drawParticles);
+    };
+
+    drawParticles();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsLoading(true);
-    
-    // Simuler une connexion
-    setTimeout(() => {
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      localStorage.setItem('token', 'connected');
+      if (formData.rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      setError('Erreur de connexion');
+    } finally {
       setIsLoading(false);
-      onLogin(); // Rediriger vers la page principale
-    }, 800);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Ambient Background Effects */}
+    <div className="min-h-screen bg-bg flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Canvas pour l'animation de particules */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full z-0"
+        style={{ pointerEvents: 'none' }}
+      />
+
+      {/* Overlay pour améliorer la lisibilité */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-b from-bg/80 via-bg/60 to-bg/80" />
+
+      {/* Effets d'ambiance supplémentaires */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-0 left-1/3 w-96 h-96 rounded-full bg-amber-500/5 blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-violet-500/5 blur-3xl" />
-        <div className="absolute top-1/2 left-1/4 w-64 h-64 rounded-full bg-emerald-500/5 blur-3xl" />
-        <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/3 blur-3xl" />
+        <div className="absolute top-0 left-1/3 w-96 h-96 rounded-full bg-accent/5 blur-3xl animate-pulse-slow" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full bg-accent/5 blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-1/2 left-1/4 w-64 h-64 rounded-full bg-accent/5 blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }} />
       </div>
 
       {/* Login Card */}
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-md animate-fade-in">
         {/* Logo et titre */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20">
-            <Hotel size={40} className="text-white" />
+          <div className="w-24 h-24 mx-auto mb-4 flex items-center justify-center">
+            <img 
+              src={logo} 
+              alt="HDA Logo" 
+              className="w-full h-full object-contain drop-shadow-lg hover:scale-105 transition-transform duration-500"
+            />
           </div>
-          <h1 className="text-3xl font-bold text-white" style={{ fontFamily: 'Playfair Display, serif' }}>
-            Authentification
+          <h1 className="text-3xl font-bold text-primary" style={{ fontFamily: 'Playfair Display, serif' }}>
+            Bienvenue
           </h1>
-          <p className="text-slate-500 text-sm mt-2">
-            Gestion hôtelière complète
+          <p className="text-muted text-sm mt-2">
+            Connectez-vous à votre espace de gestion
           </p>
         </div>
 
         {/* Formulaire */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6 md:p-8 shadow-2xl">
+        <div className="bg-surface/80 backdrop-blur-xl border border-base rounded-2xl p-6 md:p-8 shadow-2xl card-gold-hover">
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
+              <label className="block text-sm font-medium text-secondary mb-1.5">
                 Email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail size={18} className="text-slate-500" />
+                  <Mail size={18} className="text-muted" />
                 </div>
                 <input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 pl-10 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
-                  placeholder="admin@finance.com"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="w-full bg-surface-2 border border-base rounded-xl py-2.5 pl-10 pr-4 text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50 transition-all"
+                  placeholder="admin@hda.com"
                   required
                 />
               </div>
@@ -72,41 +226,65 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             {/* Mot de passe */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                Mot de passe
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-secondary">
+                  Mot de passe
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-muted hover:text-primary text-xs transition-colors flex items-center gap-1"
+                >
+                  {showPassword ? 'Masquer' : 'Afficher'}
+                </button>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock size={18} className="text-slate-500" />
+                  <Lock size={18} className="text-muted" />
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-2.5 pl-10 pr-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full bg-surface-2 border border-base rounded-xl py-2.5 pl-10 pr-12 text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50 transition-all"
                   placeholder="••••••••"
                   required
+                  minLength={6}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted hover:text-primary transition-colors"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
+            {/* Erreur */}
+            {error && (
+              <div className="bg-danger-bg border border-danger/30 rounded-xl p-3 text-danger text-sm animate-shake">
+                {error}
+              </div>
+            )}
+
             {/* Options */}
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+              <label className="flex items-center gap-2 text-muted cursor-pointer hover:text-primary transition-colors">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500/50 focus:ring-offset-0"
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onChange={handleChange}
+                  className="w-4 h-4 rounded border-base bg-surface-2 text-accent focus:ring-accent/50 focus:ring-offset-0 transition-colors"
                 />
                 <span>Se souvenir de moi</span>
               </label>
-              <a href="#" className="text-amber-400 hover:text-amber-300 transition-colors">
+              <a 
+                href="#" 
+                className="text-accent hover:text-accent-3 transition-colors"
+              >
                 Mot de passe oublié ?
               </a>
             </div>
@@ -115,25 +293,37 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white font-medium py-2.5 rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-accent text-black font-medium py-2.5 rounded-xl hover:bg-accent-2 transition-all shadow-lg shadow-accent/25 hover:shadow-accent/40 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
             >
               {isLoading ? (
                 <>
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   Connexion en cours...
                 </>
               ) : (
-                'Se connecter'
+                <>
+                  Se connecter
+                </>
               )}
             </button>
 
+            {/* Separator */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-base"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-2 bg-surface text-muted">Accès sécurisé</span>
+              </div>
+            </div>
+
             {/* Version */}
-            <div className="text-center pt-2">
-              <p className="text-slate-500 text-xs">
-                Version 1.0.0
+            <div className="text-center">
+              <p className="text-subtle text-xs">
+                Version 2.0.0
               </p>
             </div>
           </form>
@@ -141,11 +331,54 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         {/* Footer */}
         <div className="text-center mt-6">
-          <p className="text-slate-500 text-sm">
-            © {new Date().getFullYear()} Hôtel de l'avenue. Tous droits réservés.
+          <p className="text-subtle text-sm">
+            © {new Date().getFullYear()} HDA — Hôtel de l'Avenue
           </p>
         </div>
       </div>
+
+      {/* Animations CSS */}
+      <style>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes pulse-slow {
+          0%, 100% {
+            opacity: 0.5;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.1);
+          }
+        }
+        
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out forwards;
+        }
+        
+        .animate-pulse-slow {
+          animation: pulse-slow 4s ease-in-out infinite;
+        }
+        
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
+      `}</style>
     </div>
   );
 };
