@@ -18,12 +18,12 @@ import {
 } from 'lucide-react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency, formatDate } from '../utils/data';
-import { RoomList } from '../components/Hotel/RoomList';
-import { ReservationList } from '../components/Hotel/ReservationList';
-import { EquipmentManager } from '../components/Hotel/EquipmentManager';
-import { MinibarManager } from '../components/Hotel/MinibarManager';
-import { MaintenanceManager } from '../components/Hotel/MaintenanceManager';
-import { HousekeepingManager } from '../components/Hotel/HousekeepingManager';
+import { RoomList } from '../components/Hotel/HotelRoomList';
+import { ReservationList } from '../components/Hotel/HotellReservationList';
+import { EquipmentManager } from '../components/Hotel/HotelEquipmentManager';
+import { MinibarManager } from '../components/Hotel/HotelMinibarManager';
+import { MaintenanceManager } from '../components/Hotel/HotelMaintenanceManager';
+import { HousekeepingManager } from '../components/Hotel/HotelHousekeepingManager';
 import { ClientSearch } from '../components/Hotel/ClientSearch';
 import { RoomFormModal } from '../components/Hotel/Modal/RoomFormModal';
 import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormModal';
