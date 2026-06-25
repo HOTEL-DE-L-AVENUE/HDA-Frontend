@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'; // ← Ajoutez useRef
+// src/components/Sidebar.tsx
+import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
+import AuthService from '../services/authService'; // ← Import du service
 import { ModuleType } from '../types';
 import {
   LayoutDashboard, BedDouble, Hotel, UtensilsCrossed,
@@ -7,8 +9,7 @@ import {
   UserCog,
   UserRoundPlus,
 } from 'lucide-react';
-// ⬇️ IMPORTEZ VOTRE LOGO
-import logo from '../assets/logo_s.png'; // Ajustez le chemin selon votre structure
+import logo from '../assets/logo_s.png';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NavItem {
@@ -113,7 +114,7 @@ const Tooltip: React.FC<TooltipProps> = ({ label, children, isActive = false }) 
       const rect = containerRef.current.getBoundingClientRect();
       setPosition({
         top: rect.top + rect.height / 2,
-        left: rect.right + 12, // 12px d'espace entre le bouton et le tooltip
+        left: rect.right + 12,
       });
     }
   };
@@ -278,13 +279,31 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { state } = useHDA();
+  const { state } = useHDA(); // On garde le contexte pour les notifications
+
+  // Récupération de l'utilisateur connecté via AuthService
+  const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
+
+  // Écoute des changements d'authentification (login/logout)
+  useEffect(() => {
+    const updateUser = () => setCurrentUser(AuthService.getCurrentUser());
+    window.addEventListener('auth-change', updateUser);
+    return () => window.removeEventListener('auth-change', updateUser);
+  }, []);
 
   const unreadCount = state.notifications.length;
 
   const setModule = (path: string) => {
     navigate(path);
   };
+
+  // Préparation de l'affichage de l'avatar et du nom (gère le cas null)
+  const userInitials = currentUser
+    ? `${currentUser.prenom?.[0] || ''}${currentUser.nom?.[0] || 'U'}`
+    : 'U';
+  const userFullName = currentUser
+    ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim()
+    : 'Utilisateur';
 
   return (
     <>
@@ -308,7 +327,7 @@ export const Sidebar: React.FC = () => {
       >
         <WavyEdge />
 
-        {/* ⬇️ LOGO MODIFIÉ AVEC IMAGE PNG */}
+        {/* LOGO */}
         <Tooltip label="HDA Platform">
           <button
             onClick={() => navigate('/dashboard')}
@@ -398,7 +417,8 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        <Tooltip label={`${state.currentUser.prenom} ${state.currentUser.nom}`}>
+        {/* Avatar et nom utilisateur (données provenant de AuthService) */}
+        <Tooltip label={userFullName}>
           <div style={{ position: 'relative', marginBottom: '14px', cursor: 'pointer' }}>
             <div
               style={{
@@ -416,7 +436,7 @@ export const Sidebar: React.FC = () => {
               onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.transform = 'scale(1)')}
             >
               <span style={{ color: '#000000', fontWeight: 700, fontSize: '12px' }}>
-                {state.currentUser.prenom[0]}{state.currentUser.nom[0]}
+                {userInitials}
               </span>
             </div>
             {unreadCount > 0 && (
