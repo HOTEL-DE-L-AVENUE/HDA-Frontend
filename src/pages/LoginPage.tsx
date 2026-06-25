@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import logo from '../assets/logo_s.png';
+import AuthService from '../services/AuthService';
 
 interface LoginFormData {
   email: string;
@@ -146,58 +147,34 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-      
-      const response = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
+      // Appel du service d'authentification
+      const { user } = await AuthService.login(formData.email, formData.password);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erreur de connexion');
+      // Stockage du token géré par AuthService (setAuthData)
+      // On peut éventuellement sauvegarder le rememberMe en localStorage
+      if (formData.rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
       }
 
-      if (data.success) {
-        // Sauvegarder le token
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+      // Mapping des rôles pour le message d'accueil (rôles en minuscules dans user.role)
+      const roleNames: Record<string, string> = {
+        admin: 'Administrateur',
+        manager: 'Manager',
+        receptioniste: 'Réceptionniste',
+        caisse: 'Caissier',
+        water: 'Barman',
+        housekeeping: 'Housekeeping',
+      };
+      const roleLabel = roleNames[user.role] || user.role;
+      const welcomeMessage = `Bienvenue ${roleLabel} ${user.prenom ?? ''} ${user.nom}`;
 
-        if (formData.rememberMe) {
-          localStorage.setItem('rememberMe', 'true');
-        }
+      showToast(welcomeMessage, 'success', 5000);
 
-        // Préparer le message de bienvenue
-        const roleNames: { [key: string]: string } = {
-          'admin': 'Administrateur',
-          'super_admin': 'Super Administrateur',
-          'manager': 'Manager',
-          'receptioniste': 'Réceptionniste',
-          'caisse': 'Caissier',
-          'water': 'Barman',
-          'housekeeping': 'Housekeeping'
-        };
-
-        const roleLabel = roleNames[data.user.role] || data.user.role;
-        const welcomeMessage = `Bienvenue ${roleLabel} ${data.user.prenom} ${data.user.nom}`;
-
-        // Afficher le toast de bienvenue
-        showToast(welcomeMessage, 'success', 5000);
-
-        // Rediriger vers le dashboard
-        navigate('/dashboard');
-      } else {
-        throw new Error(data.error || 'Erreur de connexion');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
+      // Redirection basée sur le rôle via le service
+      const redirectPath = AuthService.getRedirectPath();
+      navigate(redirectPath, { replace: true });
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erreur de connexion';
       setError(errorMessage);
       showToast(errorMessage, 'error', 4000);
     } finally {
