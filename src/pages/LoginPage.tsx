@@ -4,7 +4,7 @@ import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import logo from '../assets/logo_s.png';
-import AuthService from '../services/AuthService';
+import AuthService from '../services/authService';
 
 interface LoginFormData {
   email: string;
