@@ -1,7 +1,9 @@
+// src/pages/LoginPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import logo from '../assets/logo_s.png'; // Ajustez le chemin selon votre structure
+import { useToast } from '../context/ToastContext';
+import logo from '../assets/logo_s.png';
 
 interface LoginFormData {
   email: string;
@@ -11,6 +13,7 @@ interface LoginFormData {
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +25,7 @@ export const LoginPage: React.FC = () => {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Animation du fond avec particules
+  // Animation du fond avec particules (code inchangé)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -37,7 +40,6 @@ export const LoginPage: React.FC = () => {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // Particules
     interface Particle {
       x: number;
       y: number;
@@ -74,23 +76,18 @@ export const LoginPage: React.FC = () => {
     const drawParticles = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Dessiner les particules
       particles.forEach((particle) => {
-        // Mouvement
         particle.x += particle.speedX;
         particle.y += particle.speedY;
 
-        // Rebond sur les bords
         if (particle.x < 0 || particle.x > canvas.width) particle.speedX *= -1;
         if (particle.y < 0 || particle.y > canvas.height) particle.speedY *= -1;
 
-        // Dessiner la particule
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
         ctx.fillStyle = particle.color + particle.opacity + ')';
         ctx.fill();
 
-        // Effet de lueur
         const glow = ctx.createRadialGradient(
           particle.x, particle.y, 0,
           particle.x, particle.y, particle.radius * 4
@@ -103,7 +100,6 @@ export const LoginPage: React.FC = () => {
         ctx.fill();
       });
 
-      // Lignes entre particules proches
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
@@ -143,20 +139,67 @@ export const LoginPage: React.FC = () => {
     }));
   };
 
+  // ===== LOGIN AVEC API REEL =====
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      localStorage.setItem('token', 'connected');
-      if (formData.rememberMe) {
-        localStorage.setItem('rememberMe', 'true');
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erreur de connexion');
       }
-      navigate('/dashboard');
+
+      if (data.success) {
+        // Sauvegarder le token
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        if (formData.rememberMe) {
+          localStorage.setItem('rememberMe', 'true');
+        }
+
+        // Préparer le message de bienvenue
+        const roleNames: { [key: string]: string } = {
+          'admin': 'Administrateur',
+          'super_admin': 'Super Administrateur',
+          'manager': 'Manager',
+          'receptioniste': 'Réceptionniste',
+          'caisse': 'Caissier',
+          'water': 'Barman',
+          'housekeeping': 'Housekeeping'
+        };
+
+        const roleLabel = roleNames[data.user.role] || data.user.role;
+        const welcomeMessage = `Bienvenue ${roleLabel} ${data.user.prenom} ${data.user.nom}`;
+
+        // Afficher le toast de bienvenue
+        showToast(welcomeMessage, 'success', 5000);
+
+        // Rediriger vers le dashboard
+        navigate('/dashboard');
+      } else {
+        throw new Error(data.error || 'Erreur de connexion');
+      }
     } catch (err) {
-      setError('Erreur de connexion');
+      const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
+      setError(errorMessage);
+      showToast(errorMessage, 'error', 4000);
     } finally {
       setIsLoading(false);
     }
