@@ -1,7 +1,9 @@
+// src/components/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { useHDA } from '../context/HDAContext';
 import { Bell, Search, ChevronRight, X, LogOut, User, Settings, ChevronDown } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import AuthService from '../services/authService'; // ← Import du service
+import { useHDA } from '../context/HDAContext'; // Gardé uniquement pour les notifications
 import logo from '../assets/logo_s.png';
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -26,11 +28,22 @@ const NOTIFICATION_COLORS = {
 };
 
 export const Header: React.FC = () => {
+  // On garde le contexte HDA seulement pour les notifications
   const { state, dispatch } = useHDA();
-  const { notifications, currentUser } = state;
+  const { notifications } = state;
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Récupération initiale de l'utilisateur connecté
+  const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
+
+  // Écouter les changements d'authentification (login/logout)
+  useEffect(() => {
+    const updateUser = () => setCurrentUser(AuthService.getCurrentUser());
+    window.addEventListener('auth-change', updateUser);
+    return () => window.removeEventListener('auth-change', updateUser);
+  }, []);
 
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -54,19 +67,21 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Gestion de la déconnexion
+  // Déconnexion via AuthService
   const handleLogout = () => {
-    localStorage.clear();
-
+    AuthService.logout();
     setShowUserMenu(false);
-
-    navigate('/login', { replace: true });
   };
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const timeStr = today.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const currentPage = ROUTE_LABELS[location.pathname] || 'Tableau de Bord';
+
+  // Si pas d'utilisateur connecté (par exemple, après logout ou refresh), on ne rend pas le header
+  if (!currentUser) {
+    return null;
+  }
 
   return (
     <header
