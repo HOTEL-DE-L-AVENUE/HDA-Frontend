@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-import AuthService from "../services/AuthService";
+import AuthService from "../services/authService";
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
