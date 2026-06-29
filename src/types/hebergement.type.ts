@@ -82,6 +82,7 @@ export interface Client {
   adresse: string;
 }
 
+
 // ─── Formulaires ─────────────────────────────────────────────────────────────
 
 export interface ReservationForm {
