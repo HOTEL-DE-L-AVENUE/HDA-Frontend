@@ -1,0 +1,186 @@
+// src/services/equipment.service.ts
+import api from '../lib/api';
+import { Equipment, RoomEquipment } from '../types/hotel.types';
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  count?: number;
+}
+
+export interface EquipmentFormData {
+  code?: string;
+  nom: string;
+  categorie?: string;
+  description?: string;
+}
+
+export interface RoomEquipmentFormData {
+  room_id: number;
+  equipment_id: number;
+  quantite: number;
+  statut?: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
+}
+
+export const equipmentService = {
+  // =============================================
+  // Équipements
+  // =============================================
+  
+  // Récupérer tous les équipements
+  getEquipments: async (filters?: { categorie?: string; nom?: string; code?: string }): Promise<Equipment[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.categorie) params.append('categorie', filters.categorie);
+      if (filters?.nom) params.append('nom', filters.nom);
+      if (filters?.code) params.append('code', filters.code);
+      
+      const url = `/api/equipments${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await api.get<ApiResponse<Equipment[]>>(url);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getEquipments:', error);
+      throw error;
+    }
+  },
+
+  // Récupérer un équipement par ID
+  getEquipmentById: async (id: number): Promise<Equipment> => {
+    try {
+      const response = await api.get<ApiResponse<Equipment>>(`/api/equipments/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getEquipmentById ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Récupérer un équipement par code
+  getEquipmentByCode: async (code: string): Promise<Equipment> => {
+    try {
+      const response = await api.get<ApiResponse<Equipment>>(`/api/equipments/code/${code}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getEquipmentByCode ${code}:`, error);
+      throw error;
+    }
+  },
+
+  // Récupérer les catégories
+  getEquipmentCategories: async (): Promise<string[]> => {
+    try {
+      const response = await api.get<ApiResponse<string[]>>('/api/equipments/categories');
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getEquipmentCategories:', error);
+      throw error;
+    }
+  },
+
+  // Créer un équipement
+  createEquipment: async (data: EquipmentFormData): Promise<Equipment> => {
+    try {
+      const response = await api.post<ApiResponse<Equipment>>('/api/equipments', data);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur createEquipment:', error);
+      throw error;
+    }
+  },
+
+  // Mettre à jour un équipement
+  updateEquipment: async (id: number, data: EquipmentFormData): Promise<Equipment> => {
+    try {
+      const response = await api.put<ApiResponse<Equipment>>(`/api/equipments/${id}`, data);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur updateEquipment ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Supprimer un équipement
+  deleteEquipment: async (id: number): Promise<void> => {
+    try {
+      await api.delete<ApiResponse<void>>(`/api/equipments/${id}`);
+    } catch (error) {
+      console.error(`❌ Erreur deleteEquipment ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Statistiques des équipements
+  getEquipmentStats: async (): Promise<any> => {
+    try {
+      const response = await api.get<ApiResponse<any>>('/api/equipments/stats');
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getEquipmentStats:', error);
+      throw error;
+    }
+  },
+
+  // =============================================
+  // Équipements de chambre (RoomEquipment)
+  // =============================================
+
+  // Récupérer tous les équipements de chambre
+  getRoomEquipments: async (filters?: { room_id?: number; equipment_id?: number }): Promise<RoomEquipment[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.room_id) params.append('room_id', String(filters.room_id));
+      if (filters?.equipment_id) params.append('equipment_id', String(filters.equipment_id));
+      
+      const url = `/api/room-equipments${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await api.get<ApiResponse<RoomEquipment[]>>(url);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getRoomEquipments:', error);
+      throw error;
+    }
+  },
+
+  // Assigner un équipement à une chambre
+  assignEquipment: async (data: RoomEquipmentFormData): Promise<RoomEquipment> => {
+    try {
+      const response = await api.post<ApiResponse<RoomEquipment>>('/api/room-equipments', data);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur assignEquipment:', error);
+      throw error;
+    }
+  },
+
+  // Mettre à jour un équipement de chambre
+  updateRoomEquipment: async (id: number, data: Partial<RoomEquipmentFormData>): Promise<RoomEquipment> => {
+    try {
+      const response = await api.put<ApiResponse<RoomEquipment>>(`/api/room-equipments/${id}`, data);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur updateRoomEquipment ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Supprimer un équipement de chambre
+  deleteRoomEquipment: async (id: number): Promise<void> => {
+    try {
+      await api.delete<ApiResponse<void>>(`/api/room-equipments/${id}`);
+    } catch (error) {
+      console.error(`❌ Erreur deleteRoomEquipment ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Mettre à jour le statut d'un équipement de chambre
+  updateRoomEquipmentStatus: async (id: number, statut: string): Promise<RoomEquipment> => {
+    try {
+      const response = await api.put<ApiResponse<RoomEquipment>>(`/api/room-equipments/${id}/status`, { statut });
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur updateRoomEquipmentStatus ${id}:`, error);
+      throw error;
+    }
+  }
+};
