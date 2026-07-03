@@ -23,11 +23,14 @@ export interface RoomEquipmentFormData {
   statut?: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
 }
 
+// Toutes les routes ci-dessous sont montées sous /api/hebergement (voir README §5.5)
+const BASE_URL = '/api/hebergement';
+
 export const equipmentService = {
   // =============================================
   // Équipements
   // =============================================
-  
+
   // Récupérer tous les équipements
   getEquipments: async (filters?: { categorie?: string; nom?: string; code?: string }): Promise<Equipment[]> => {
     try {
@@ -35,8 +38,8 @@ export const equipmentService = {
       if (filters?.categorie) params.append('categorie', filters.categorie);
       if (filters?.nom) params.append('nom', filters.nom);
       if (filters?.code) params.append('code', filters.code);
-      
-      const url = `/api/equipments${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const url = `${BASE_URL}/equipments${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await api.get<ApiResponse<Equipment[]>>(url);
       return response.data.data;
     } catch (error) {
@@ -48,7 +51,7 @@ export const equipmentService = {
   // Récupérer un équipement par ID
   getEquipmentById: async (id: number): Promise<Equipment> => {
     try {
-      const response = await api.get<ApiResponse<Equipment>>(`/api/equipments/${id}`);
+      const response = await api.get<ApiResponse<Equipment>>(`${BASE_URL}/equipments/${id}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getEquipmentById ${id}:`, error);
@@ -57,9 +60,11 @@ export const equipmentService = {
   },
 
   // Récupérer un équipement par code
+  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
+  // (voir controllers/hebergementController.js -> equipmentController.getByCode)
   getEquipmentByCode: async (code: string): Promise<Equipment> => {
     try {
-      const response = await api.get<ApiResponse<Equipment>>(`/api/equipments/code/${code}`);
+      const response = await api.get<ApiResponse<Equipment>>(`${BASE_URL}/equipments/code/${code}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getEquipmentByCode ${code}:`, error);
@@ -68,9 +73,10 @@ export const equipmentService = {
   },
 
   // Récupérer les catégories
+  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
   getEquipmentCategories: async (): Promise<string[]> => {
     try {
-      const response = await api.get<ApiResponse<string[]>>('/api/equipments/categories');
+      const response = await api.get<ApiResponse<string[]>>(`${BASE_URL}/equipments/categories`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getEquipmentCategories:', error);
@@ -81,7 +87,7 @@ export const equipmentService = {
   // Créer un équipement
   createEquipment: async (data: EquipmentFormData): Promise<Equipment> => {
     try {
-      const response = await api.post<ApiResponse<Equipment>>('/api/equipments', data);
+      const response = await api.post<ApiResponse<Equipment>>(`${BASE_URL}/equipments`, data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur createEquipment:', error);
@@ -92,7 +98,7 @@ export const equipmentService = {
   // Mettre à jour un équipement
   updateEquipment: async (id: number, data: EquipmentFormData): Promise<Equipment> => {
     try {
-      const response = await api.put<ApiResponse<Equipment>>(`/api/equipments/${id}`, data);
+      const response = await api.put<ApiResponse<Equipment>>(`${BASE_URL}/equipments/${id}`, data);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateEquipment ${id}:`, error);
@@ -103,7 +109,7 @@ export const equipmentService = {
   // Supprimer un équipement
   deleteEquipment: async (id: number): Promise<void> => {
     try {
-      await api.delete<ApiResponse<void>>(`/api/equipments/${id}`);
+      await api.delete<ApiResponse<void>>(`${BASE_URL}/equipments/${id}`);
     } catch (error) {
       console.error(`❌ Erreur deleteEquipment ${id}:`, error);
       throw error;
@@ -111,9 +117,10 @@ export const equipmentService = {
   },
 
   // Statistiques des équipements
+  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
   getEquipmentStats: async (): Promise<any> => {
     try {
-      const response = await api.get<ApiResponse<any>>('/api/equipments/stats');
+      const response = await api.get<ApiResponse<any>>(`${BASE_URL}/equipments/stats`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getEquipmentStats:', error);
@@ -131,8 +138,8 @@ export const equipmentService = {
       const params = new URLSearchParams();
       if (filters?.room_id) params.append('room_id', String(filters.room_id));
       if (filters?.equipment_id) params.append('equipment_id', String(filters.equipment_id));
-      
-      const url = `/api/room-equipments${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const url = `${BASE_URL}/room-equipments${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await api.get<ApiResponse<RoomEquipment[]>>(url);
       return response.data.data;
     } catch (error) {
@@ -144,7 +151,7 @@ export const equipmentService = {
   // Assigner un équipement à une chambre
   assignEquipment: async (data: RoomEquipmentFormData): Promise<RoomEquipment> => {
     try {
-      const response = await api.post<ApiResponse<RoomEquipment>>('/api/room-equipments', data);
+      const response = await api.post<ApiResponse<RoomEquipment>>(`${BASE_URL}/room-equipments`, data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur assignEquipment:', error);
@@ -155,7 +162,7 @@ export const equipmentService = {
   // Mettre à jour un équipement de chambre
   updateRoomEquipment: async (id: number, data: Partial<RoomEquipmentFormData>): Promise<RoomEquipment> => {
     try {
-      const response = await api.put<ApiResponse<RoomEquipment>>(`/api/room-equipments/${id}`, data);
+      const response = await api.put<ApiResponse<RoomEquipment>>(`${BASE_URL}/room-equipments/${id}`, data);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateRoomEquipment ${id}:`, error);
@@ -166,7 +173,7 @@ export const equipmentService = {
   // Supprimer un équipement de chambre
   deleteRoomEquipment: async (id: number): Promise<void> => {
     try {
-      await api.delete<ApiResponse<void>>(`/api/room-equipments/${id}`);
+      await api.delete<ApiResponse<void>>(`${BASE_URL}/room-equipments/${id}`);
     } catch (error) {
       console.error(`❌ Erreur deleteRoomEquipment ${id}:`, error);
       throw error;
@@ -174,9 +181,10 @@ export const equipmentService = {
   },
 
   // Mettre à jour le statut d'un équipement de chambre
+  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
   updateRoomEquipmentStatus: async (id: number, statut: string): Promise<RoomEquipment> => {
     try {
-      const response = await api.put<ApiResponse<RoomEquipment>>(`/api/room-equipments/${id}/status`, { statut });
+      const response = await api.put<ApiResponse<RoomEquipment>>(`${BASE_URL}/room-equipments/${id}/status`, { statut });
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateRoomEquipmentStatus ${id}:`, error);
