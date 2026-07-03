@@ -1,6 +1,13 @@
 // src/services/housekeeping.service.ts
+//
+// Les tâches de housekeeping vivent sous le domaine "hébergement" côté backend
+// (routes/hebergementRoutes.js, montées sous /api/hebergement), pas sous
+// /api/housekeeping à la racine. Toutes les URLs ci-dessous ont été corrigées
+// en conséquence (même remarque que pour reservation.service.ts).
 import api from '../lib/api';
 import { HousekeepingTask } from '../types/hotel.types';
+
+const BASE_URL = '/api/hebergement/housekeeping';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -34,8 +41,8 @@ export const housekeepingService = {
       if (filters?.type_tache) params.append('type_tache', filters.type_tache);
       if (filters?.assigned_user_id) params.append('assigned_user_id', String(filters.assigned_user_id));
       if (filters?.planned_at) params.append('planned_at', filters.planned_at);
-      
-      const url = `/api/housekeeping${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const url = `${BASE_URL}${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await api.get<ApiResponse<HousekeepingTask[]>>(url);
       return response.data.data;
     } catch (error) {
@@ -47,7 +54,7 @@ export const housekeepingService = {
   // Récupérer une tâche par ID
   getTaskById: async (id: number): Promise<HousekeepingTask> => {
     try {
-      const response = await api.get<ApiResponse<HousekeepingTask>>(`/api/housekeeping/${id}`);
+      const response = await api.get<ApiResponse<HousekeepingTask>>(`${BASE_URL}/${id}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getTaskById ${id}:`, error);
@@ -58,7 +65,7 @@ export const housekeepingService = {
   // Créer une tâche
   createTask: async (data: HousekeepingFormData): Promise<HousekeepingTask> => {
     try {
-      const response = await api.post<ApiResponse<HousekeepingTask>>('/api/housekeeping', data);
+      const response = await api.post<ApiResponse<HousekeepingTask>>(BASE_URL, data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur createTask:', error);
@@ -69,7 +76,7 @@ export const housekeepingService = {
   // Mettre à jour une tâche
   updateTask: async (id: number, data: Partial<HousekeepingFormData>): Promise<HousekeepingTask> => {
     try {
-      const response = await api.put<ApiResponse<HousekeepingTask>>(`/api/housekeeping/${id}`, data);
+      const response = await api.put<ApiResponse<HousekeepingTask>>(`${BASE_URL}/${id}`, data);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateTask ${id}:`, error);
@@ -80,7 +87,7 @@ export const housekeepingService = {
   // Mettre à jour le statut d'une tâche
   updateTaskStatus: async (id: number, statut: string): Promise<HousekeepingTask> => {
     try {
-      const response = await api.put<ApiResponse<HousekeepingTask>>(`/api/housekeeping/${id}/status`, { statut });
+      const response = await api.put<ApiResponse<HousekeepingTask>>(`${BASE_URL}/${id}/status`, { statut });
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateTaskStatus ${id}:`, error);
@@ -91,7 +98,7 @@ export const housekeepingService = {
   // Supprimer une tâche
   deleteTask: async (id: number): Promise<void> => {
     try {
-      await api.delete<ApiResponse<void>>(`/api/housekeeping/${id}`);
+      await api.delete<ApiResponse<void>>(`${BASE_URL}/${id}`);
     } catch (error) {
       console.error(`❌ Erreur deleteTask ${id}:`, error);
       throw error;
@@ -101,7 +108,7 @@ export const housekeepingService = {
   // Statistiques des tâches
   getTaskStats: async (): Promise<any> => {
     try {
-      const response = await api.get<ApiResponse<any>>('/api/housekeeping/stats');
+      const response = await api.get<ApiResponse<any>>(`${BASE_URL}/stats`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getTaskStats:', error);
