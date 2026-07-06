@@ -100,12 +100,12 @@ class AuthService {
   // --------------------------------------------------
   // Connexion
   // --------------------------------------------------
-  static async login(email: string, password: string): Promise<{ user: User; token: string }> {
+  static async login(email: string, mot_de_passe: string): Promise<{ user: User; token: string }> {
     try {
       console.log("🔐 Tentative de connexion:", { email });
 
-      const response = await api.post("/api/auth/login", { email, password });
-      const data = response.data as ApiResponse<User>;
+      const response = await api.post("/api/auth/login", { email, mot_de_passe });
+      const data = response.data.data as ApiResponse<User>;
 
       if (!data.success || !data.user || !data.token) {
         throw new Error(data.error || data.message || "Échec de la connexion");

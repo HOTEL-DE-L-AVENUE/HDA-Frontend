@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
+import {
+  fetchCasinoBundle,
+  createRoom as apiCreateRoom,
+  createCashier as apiCreateCashier,
+  openSession as apiOpenSession,
+  recordTransaction as apiRecordTransaction,
+  recordChipTransaction as apiRecordChipTransaction,
+  createCard as apiCreateCard,
+  grantCredit as apiGrantCredit,
+} from '../lib/casinoApi';
 import { 
   Dices, 
   TrendingUp, 
@@ -50,6 +60,7 @@ export const CasinoPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [selectedRoom, setSelectedRoom] = useState<CasinoRoom | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   // Données
   const [rooms, setRooms] = useState<CasinoRoom[]>([]);
@@ -86,67 +97,32 @@ export const CasinoPage: React.FC = () => {
 
   // Chargement des données
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    setTimeout(() => {
-      // Clients
-      const mockClients: Client[] = [
-        { id: 1, code_client: 'CL001', nom: 'Rakoto', prenom: 'Jean', telephone: '+261 34 123 4567', email: 'jean@email.com', is_casino_player: true, statut: 'ACTIF' },
-        { id: 2, code_client: 'CL002', nom: 'Rabe', prenom: 'Marie', telephone: '+261 33 987 6543', email: 'marie@email.com', is_casino_player: true, statut: 'ACTIF' },
-        { id: 3, code_client: 'CL003', nom: 'Andrian', prenom: 'Pierre', telephone: '+261 32 456 7890', email: 'pierre@email.com', is_casino_player: false, statut: 'ACTIF' },
-        { id: 4, code_client: 'CL004', nom: 'Razafy', prenom: 'Lala', telephone: '+261 34 789 0123', email: 'lala@email.com', is_casino_player: true, statut: 'ACTIF' },
-      ];
-      setClients(mockClients);
-
-      // Rooms
-      const mockRooms: CasinoRoom[] = [
-        { id: 1, nom: 'Salle Principale', type_salle: 'PRINCIPALE', statut: 'OUVERTE' },
-        { id: 2, nom: 'Salle VIP', type_salle: 'VIP', statut: 'OUVERTE' },
-        { id: 3, nom: 'Salle Poker', type_salle: 'POKER', statut: 'OUVERTE' },
-        { id: 4, nom: 'Salle Machines', type_salle: 'MACHINES', statut: 'FERMEE' },
-      ];
-      setRooms(mockRooms);
-
-      // Cashiers
-      const mockCashiers: CasinoCashier[] = [
-        { id: 1, room_id: 1, nom: 'Caisse 1 - Principale', statut: 'OUVERTE' },
-        { id: 2, room_id: 1, nom: 'Caisse 2 - Principale', statut: 'OUVERTE' },
-        { id: 3, room_id: 2, nom: 'Caisse VIP', statut: 'OUVERTE' },
-        { id: 4, room_id: 3, nom: 'Caisse Poker', statut: 'FERMEE' },
-      ];
-      setCashiers(mockCashiers);
-
-      // Sessions
-      const mockSessions: CasinoSession[] = [
-        { id: 1, cashier_id: 1, user_id: 1, ouverture_at: new Date().toISOString(), fermeture_at: null, fond_initial: 5000, fond_final: null, ecart: null },
-        { id: 2, cashier_id: 2, user_id: 1, ouverture_at: new Date(Date.now() - 3600000).toISOString(), fermeture_at: new Date().toISOString(), fond_initial: 3000, fond_final: 4500, ecart: 1500 },
-      ];
-      setSessions(mockSessions);
-
-      // Cards
-      const mockCards: CasinoCard[] = [
-        { id: 1, client_id: 1, numero_carte: 'CARD-0001', niveau: 'OR', points: 1250 },
-        { id: 2, client_id: 2, numero_carte: 'CARD-0002', niveau: 'ARGENT', points: 450 },
-        { id: 3, client_id: 4, numero_carte: 'CARD-0003', niveau: 'PLATINE', points: 3200 },
-      ];
-      setCards(mockCards);
-
-      // Transactions
-      const mockTransactions: CasinoTransaction[] = [
-        { id: 1, client_id: 1, session_id: 1, type_transaction: 'ACHAT_JETONS', montant: 1000, moyen_paiement: 'ESPECES', created_at: new Date().toISOString() },
-        { id: 2, client_id: 2, session_id: 1, type_transaction: 'GAIN', montant: 2500, moyen_paiement: 'CARTE', created_at: new Date(Date.now() - 3600000).toISOString() },
-        { id: 3, client_id: 1, session_id: 2, type_transaction: 'DEPOT', montant: 5000, moyen_paiement: 'VIREMENT', created_at: new Date(Date.now() - 7200000).toISOString() },
-      ];
-      setTransactions(mockTransactions);
-
-      // Credits
-      const mockCredits: CasinoCredit[] = [
-        { id: 1, client_id: 1, montant_accorde: 5000, encours: 3200, echeance: '2026-07-01', statut: 'ACTIF' },
-        { id: 2, client_id: 2, montant_accorde: 2000, encours: 500, echeance: '2026-06-15', statut: 'ACTIF' },
-      ];
-      setCredits(mockCredits);
-
-      setLoading(false);
-    }, 500);
+    setLoadError(null);
+    fetchCasinoBundle()
+      .then(({ clients, rooms, cashiers, sessions, cards, credits, transactions, chipTransactions }) => {
+        if (cancelled) return;
+        setClients(clients);
+        setRooms(rooms);
+        setCashiers(cashiers);
+        setSessions(sessions);
+        setCards(cards);
+        setCredits(credits);
+        setTransactions(transactions);
+        setChipTransactions(chipTransactions);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Erreur chargement module casino', err);
+        setLoadError("Impossible de charger les données du casino. Réessayez.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Calcul des totaux
@@ -186,71 +162,88 @@ export const CasinoPage: React.FC = () => {
   ];
 
   // Handlers
-  const handleAddRoom = (data: any) => {
-    const newRoom: CasinoRoom = { id: rooms.length + 1, ...data };
-    setRooms([...rooms, newRoom]);
-    alert('Salle créée avec succès !');
+  const handleAddRoom = async (data: any) => {
+    try {
+      const newRoom = await apiCreateRoom(data);
+      setRooms([...rooms, newRoom]);
+      alert('Salle créée avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de la création de la salle.");
+    }
   };
 
-  const handleAddCashier = (data: any) => {
-    const newCashier: CasinoCashier = { id: cashiers.length + 1, ...data };
-    setCashiers([...cashiers, newCashier]);
-    alert('Caisse créée avec succès !');
+  const handleAddCashier = async (data: any) => {
+    try {
+      const newCashier = await apiCreateCashier(data);
+      setCashiers([...cashiers, newCashier]);
+      alert('Caisse créée avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de la création de la caisse.");
+    }
   };
 
-  const handleAddSession = (data: any) => {
-    const newSession: CasinoSession = {
-      id: sessions.length + 1,
-      ...data,
-      ouverture_at: new Date().toISOString(),
-      fermeture_at: null,
-      fond_final: null,
-      ecart: null
-    };
-    setSessions([...sessions, newSession]);
-    alert('Session ouverte avec succès !');
+  const handleAddSession = async (data: any) => {
+    try {
+      // Le formulaire envoie un user_id, mais openSession() ne le transmet pas :
+      // le backend déduit l'agent du token JWT (voir casinoApi.ts).
+      const newSession = await apiOpenSession(data);
+      setSessions([...sessions, newSession]);
+      alert('Session ouverte avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de l'ouverture de session.");
+    }
   };
 
-  const handleAddTransaction = (data: any) => {
-    const newTransaction: CasinoTransaction = {
-      id: transactions.length + 1,
-      ...data,
-      created_at: new Date().toISOString()
-    };
-    setTransactions([...transactions, newTransaction]);
-    alert('Transaction enregistrée avec succès !');
+  const handleAddTransaction = async (data: any) => {
+    try {
+      const newTransaction = await apiRecordTransaction(data);
+      setTransactions([...transactions, newTransaction]);
+      alert('Transaction enregistrée avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de l'enregistrement de la transaction.");
+    }
   };
 
-  const handleAddChipTransaction = (data: any) => {
-    const newChipTransaction: CasinoChipTransaction = {
-      id: chipTransactions.length + 1,
-      ...data,
-      created_at: new Date().toISOString()
-    };
-    setChipTransactions([...chipTransactions, newChipTransaction]);
-    alert('Transaction de jetons enregistrée !');
+  const handleAddChipTransaction = async (data: any) => {
+    try {
+      // Le formulaire propose ACHAT | RACHAT | GAIN | PERTE, mais le backend n'a que
+      // /chips/buy et /chips/sell : recordChipTransaction() route RACHAT vers sell,
+      // et tout le reste (dont GAIN/PERTE, qui n'ont pas de sens pour les jetons) vers buy.
+      const newChipTransaction = await apiRecordChipTransaction(data);
+      setChipTransactions([...chipTransactions, newChipTransaction]);
+      alert('Transaction de jetons enregistrée !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de l'enregistrement de la transaction de jetons.");
+    }
   };
 
-  const handleAddCard = (data: any) => {
-    const newCard: CasinoCard = {
-      id: cards.length + 1,
-      ...data,
-      numero_carte: `CARD-${String(cards.length + 1).padStart(4, '0')}`,
-      points: 0
-    };
-    setCards([...cards, newCard]);
-    alert('Carte de fidélité créée avec succès !');
+  const handleAddCard = async (data: any) => {
+    try {
+      const newCard = await apiCreateCard(data);
+      setCards([...cards, newCard]);
+      alert('Carte de fidélité créée avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de la création de la carte.");
+    }
   };
 
-  const handleAddCredit = (data: any) => {
-    const newCredit: CasinoCredit = {
-      id: credits.length + 1,
-      ...data,
-      encours: data.montant_accorde,
-      statut: 'ACTIF'
-    };
-    setCredits([...credits, newCredit]);
-    alert('Crédit accordé avec succès !');
+  const handleAddCredit = async (data: any) => {
+    try {
+      // Le formulaire envoie montant_accorde ; grantCredit() le convertit en "montant"
+      // pour la route /credits/grant (voir casinoApi.ts).
+      const newCredit = await apiGrantCredit(data);
+      setCredits([...credits, newCredit]);
+      alert('Crédit accordé avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert("Échec de l'octroi du crédit.");
+    }
   };
 
   // Props partagées
@@ -285,6 +278,17 @@ export const CasinoPage: React.FC = () => {
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden p-6">
+      {loadError && (
+        <div className="rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: 'var(--color-danger-bg)', border: '1px solid var(--color-danger)', color: 'var(--color-danger)' }}>
+          {loadError}
+        </div>
+      )}
+      {loading && rooms.length === 0 ? (
+        <div className="rounded-2xl p-12 text-center" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <p className="text-muted">Chargement du module casino…</p>
+        </div>
+      ) : (
+      <>
       {/* Header avec statistiques */}
       <CasinoHeader 
         stats={stats}
@@ -390,6 +394,8 @@ export const CasinoPage: React.FC = () => {
         clients={clients}
         onSubmit={handleAddCredit}
       />
+      </>
+      )}
     </div>
   );
 };
