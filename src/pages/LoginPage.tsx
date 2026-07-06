@@ -8,7 +8,7 @@ import AuthService from '../services/authService';
 
 interface LoginFormData {
   email: string;
-  password: string;
+  mot_de_passe: string;
   rememberMe: boolean;
 }
 
@@ -20,7 +20,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
-    password: '',
+    mot_de_passe: '',
     rememberMe: false,
   });
 
@@ -148,7 +148,7 @@ export const LoginPage: React.FC = () => {
 
     try {
       // Appel du service d'authentification
-      const { user } = await AuthService.login(formData.email, formData.password);
+      const { user } = await AuthService.login(formData.email, formData.mot_de_passe);
 
       // Stockage du token géré par AuthService (setAuthData)
       // On peut éventuellement sauvegarder le rememberMe en localStorage
@@ -264,8 +264,8 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={formData.password}
+                  name="mot_de_passe"
+                  value={formData.mot_de_passe}
                   onChange={handleChange}
                   className="w-full bg-surface-2 border border-base rounded-xl py-2.5 pl-10 pr-12 text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50 transition-all"
                   placeholder="••••••••"
