@@ -112,9 +112,6 @@ export const reservationService = {
   },
 
   // Statistiques des réservations.
-  // ⚠️ Route non documentée / probablement inexistante côté backend
-  // (GET /api/hebergement/reservations/stats). À créer si besoin — voir note
-  // ci-dessous. En attendant, l'appel échouera en 404 plutôt que silencieusement.
   getReservationStats: async (): Promise<any> => {
     try {
       const response = await api.get<ApiResponse<any>>(`${BASE_URL}/stats`);

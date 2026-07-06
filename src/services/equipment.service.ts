@@ -181,7 +181,6 @@ export const equipmentService = {
   },
 
   // Mettre à jour le statut d'un équipement de chambre
-  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
   updateRoomEquipmentStatus: async (id: number, statut: string): Promise<RoomEquipment> => {
     try {
       const response = await api.put<ApiResponse<RoomEquipment>>(`${BASE_URL}/room-equipments/${id}/status`, { statut });

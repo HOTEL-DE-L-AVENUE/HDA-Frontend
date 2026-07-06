@@ -122,5 +122,16 @@ export const roomService = {
       console.error(`❌ Erreur deleteRoom ${roomId}:`, error);
       throw error;
     }
+  },
+
+  // Statistiques agrégées des chambres (total, taux d'occupation, répartitions)
+  getRoomStats: async (): Promise<any> => {
+    try {
+      const response = await api.get<ApiResponse<any>>('/api/hebergement/rooms/stats');
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getRoomStats:', error);
+      throw error;
+    }
   }
 };
