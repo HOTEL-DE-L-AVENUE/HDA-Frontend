@@ -66,7 +66,7 @@ export const ChipTransactionModal: React.FC<ChipTransactionModalProps> = ({
             min={1}
           />
           <Input 
-            label="Valeur unitaire (€)" 
+            label="Valeur unitaire (MGA)" 
             type="number" 
             value={form.valeur_unitaire} 
             onChange={(e) => setForm({...form, valeur_unitaire: Number(e.target.value)})} 

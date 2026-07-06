@@ -79,7 +79,6 @@ export const maintenanceService = {
   },
 
   // Mettre à jour le statut d'une maintenance
-  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
   updateMaintenanceStatus: async (id: number, statut: string): Promise<RoomMaintenance> => {
     try {
       const response = await api.put<ApiResponse<RoomMaintenance>>(`${BASE_URL}/${id}/status`, { statut });
@@ -101,7 +100,6 @@ export const maintenanceService = {
   },
 
   // Statistiques des maintenances
-  // ⚠️ Route custom non couverte par le CRUD générique — à ajouter côté backend
   getMaintenanceStats: async (): Promise<any> => {
     try {
       const response = await api.get<ApiResponse<any>>(`${BASE_URL}/stats`);
