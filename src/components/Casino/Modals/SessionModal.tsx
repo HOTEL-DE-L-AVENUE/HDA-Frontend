@@ -1,58 +1,63 @@
 import React, { useState } from 'react';
-import { Modal, Input, Select, Button } from '../../UI';
-import type { SessionFormData, CasinoCashier } from '../types';
+import { Button } from '../../UI';
+import { ModalShell, FormField, TextInput, SelectInput, ModalActions } from './ModalShell';
+import type { CasinoCashier } from '../types';
 
 interface SessionModalProps {
   isOpen: boolean;
   onClose: () => void;
   cashiers: CasinoCashier[];
-  onSubmit: (data: SessionFormData) => void;
+  onSubmit: (data: { cashier_id: number; fond_initial: number }) => Promise<void> | void;
 }
 
 export const SessionModal: React.FC<SessionModalProps> = ({ isOpen, onClose, cashiers, onSubmit }) => {
-  const [form, setForm] = useState<SessionFormData>({
-    cashier_id: 0,
-    user_id: 0,
-    fond_initial: 0
-  });
+  const [cashierId, setCashierId] = useState<number>(cashiers[0]?.id ?? 0);
+  const [fondInitial, setFondInitial] = useState<number>(0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
-    if (!form.cashier_id || !form.fond_initial) return;
-    onSubmit(form);
-    setForm({ cashier_id: 0, user_id: 0, fond_initial: 0 });
-    onClose();
+  const handleSubmit = async () => {
+    if (!cashierId || fondInitial < 0) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSubmit({ cashier_id: cashierId, fond_initial: fondInitial });
+      setFondInitial(0);
+      onClose();
+    } catch (err: any) {
+      // 409 si une session est déjà ouverte pour cette caisse
+      setError(err?.message || "Impossible d'ouvrir la session.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Ouvrir une Session" size="lg">
-      <div className="space-y-4">
-        <Select 
-          label="Caisse" 
-          value={form.cashier_id.toString()} 
-          onChange={(e) => setForm({...form, cashier_id: Number(e.target.value)})}
-          options={[
-            { value: '0', label: 'Sélectionner une caisse' },
-            ...cashiers.filter(c => c.statut === 'OUVERTE').map(c => ({ 
-              value: c.id.toString(), 
-              label: c.nom 
-            }))
-          ]}
-        />
-        <Input 
-          label="Fond initial (€)" 
-          type="number" 
-          value={form.fond_initial} 
-          onChange={(e) => setForm({...form, fond_initial: Number(e.target.value)})} 
-          placeholder="0.00"
+    <ModalShell isOpen={isOpen} onClose={onClose} title="Ouvrir une session" subtitle="Démarrer une session de caisse">
+      <FormField label="Caisse">
+        <SelectInput value={cashierId} onChange={(e) => setCashierId(Number(e.target.value))}>
+          {cashiers.map((c) => (
+            <option key={c.id} value={c.id}>{c.nom} ({c.code})</option>
+          ))}
+        </SelectInput>
+      </FormField>
+      <FormField label="Fond initial (Ar)" hint="Montant en caisse au démarrage de la session">
+        <TextInput
+          type="number"
           min={0}
+          value={fondInitial}
+          onChange={(e) => setFondInitial(Number(e.target.value))}
         />
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose} className="flex-1">Annuler</Button>
-          <Button onClick={handleSubmit} className="flex-1" disabled={!form.cashier_id || !form.fond_initial}>
-            Ouvrir
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      </FormField>
+      {error && (
+        <p className="text-xs mb-2" style={{ color: 'var(--color-danger)' }}>{error}</p>
+      )}
+      <ModalActions>
+        <Button variant="secondary" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSubmit} disabled={saving || !cashierId}>
+          {saving ? 'Ouverture…' : 'Ouvrir la session'}
+        </Button>
+      </ModalActions>
+    </ModalShell>
   );
 };

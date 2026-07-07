@@ -1,62 +1,71 @@
 import React, { useState } from 'react';
-import { Modal, Input, Select, Button } from '../../UI';
-import type { RoomFormData } from '../types';
+import { Button } from '../../UI';
+import { ModalShell, FormField, TextInput, SelectInput, ModalActions } from './ModalShell';
+import type { CasinoRoom, TypeSalle, StatutSalle } from '../types';
 
 interface RoomModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: RoomFormData) => void;
+  onSubmit: (data: Pick<CasinoRoom, 'code' | 'nom' | 'type_salle' | 'statut'>) => Promise<void> | void;
 }
 
-export const RoomModal: React.FC<RoomModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [form, setForm] = useState<RoomFormData>({
-    nom: '',
-    type_salle: 'PRINCIPALE',
-    statut: 'OUVERTE'
-  });
+const TYPES_SALLE: TypeSalle[] = ['VIP', 'POKER', 'MACHINES', 'TABLE_JEUX', 'AUTRE'];
+const STATUTS: StatutSalle[] = ['OUVERTE', 'FERMEE', 'EN_TRAVAUX'];
 
-  const handleSubmit = () => {
-    if (!form.nom) return;
-    onSubmit(form);
-    setForm({ nom: '', type_salle: 'PRINCIPALE', statut: 'OUVERTE' });
-    onClose();
+export const RoomModal: React.FC<RoomModalProps> = ({ isOpen, onClose, onSubmit }) => {
+  const [code, setCode] = useState('');
+  const [nom, setNom] = useState('');
+  const [typeSalle, setTypeSalle] = useState<TypeSalle>('MACHINES');
+  const [statut, setStatut] = useState<StatutSalle>('OUVERTE');
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setCode('');
+    setNom('');
+    setTypeSalle('MACHINES');
+    setStatut('OUVERTE');
+  };
+
+  const handleSubmit = async () => {
+    if (!code.trim() || !nom.trim()) return;
+    setSaving(true);
+    try {
+      await onSubmit({ code: code.trim(), nom: nom.trim(), type_salle: typeSalle, statut });
+      reset();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Nouvelle Salle" size="lg">
-      <div className="space-y-4">
-        <Input 
-          label="Nom de la salle" 
-          value={form.nom} 
-          onChange={(e) => setForm({...form, nom: e.target.value})} 
-          placeholder="Ex: Salle VIP" 
-        />
-        <Select 
-          label="Type de salle" 
-          value={form.type_salle} 
-          onChange={(e) => setForm({...form, type_salle: e.target.value})}
-          options={[
-            { value: 'PRINCIPALE', label: 'Principale' },
-            { value: 'VIP', label: 'VIP' },
-            { value: 'POKER', label: 'Poker' },
-            { value: 'MACHINES', label: 'Machines à sous' },
-          ]}
-        />
-        <Select 
-          label="Statut" 
-          value={form.statut} 
-          onChange={(e) => setForm({...form, statut: e.target.value as any})}
-          options={[
-            { value: 'OUVERTE', label: 'Ouverte' },
-            { value: 'FERMEE', label: 'Fermée' },
-            { value: 'EN_TRAVAUX', label: 'En travaux' },
-          ]}
-        />
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose} className="flex-1">Annuler</Button>
-          <Button onClick={handleSubmit} className="flex-1" disabled={!form.nom}>Créer</Button>
-        </div>
-      </div>
-    </Modal>
+    <ModalShell isOpen={isOpen} onClose={onClose} title="Nouvelle salle" subtitle="Créer une salle de casino">
+      <FormField label="Code">
+        <TextInput value={code} onChange={(e) => setCode(e.target.value)} placeholder="SALLE-01" />
+      </FormField>
+      <FormField label="Nom">
+        <TextInput value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Salle VIP" />
+      </FormField>
+      <FormField label="Type de salle">
+        <SelectInput value={typeSalle} onChange={(e) => setTypeSalle(e.target.value as TypeSalle)}>
+          {TYPES_SALLE.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </SelectInput>
+      </FormField>
+      <FormField label="Statut">
+        <SelectInput value={statut} onChange={(e) => setStatut(e.target.value as StatutSalle)}>
+          {STATUTS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </SelectInput>
+      </FormField>
+      <ModalActions>
+        <Button variant="secondary" onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSubmit} disabled={saving || !code.trim() || !nom.trim()}>
+          {saving ? 'Création…' : 'Créer la salle'}
+        </Button>
+      </ModalActions>
+    </ModalShell>
   );
 };
