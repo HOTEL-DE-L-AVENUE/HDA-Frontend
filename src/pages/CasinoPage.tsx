@@ -12,6 +12,10 @@ import {
   recordDeposit,
   buyChips,
   sellChips,
+  fetchChips,
+  createChipType as apiCreateChipType,
+  updateChipType as apiUpdateChipType,
+  deleteChipType as apiDeleteChipType,
   quickAddClient as apiQuickAddClient,
   setClientStatus as apiSetClientStatus,
   createIncident as apiCreateIncident,
@@ -34,6 +38,7 @@ import { CasinoTabs } from '../components/Casino/Tabs/CasinoTabs';
 import { OverviewTab } from '../components/Casino/Tabs/OverviewTab';
 import { RoomsTab } from '../components/Casino/Tabs/RoomsTab';
 import { CaisseTab } from '../components/Casino/Tabs/CaisseTab';
+import { ChipsTab } from '../components/Casino/Tabs/ChipsTab';
 import { CardsTab } from '../components/Casino/Tabs/CardsTab';
 import { ClientsTab } from '../components/Casino/Tabs/ClientsTab';
 import { VisitsTab } from '../components/Casino/Tabs/VisitsTab';
@@ -45,6 +50,7 @@ import { SessionModal } from '../components/Casino/Modals/SessionModal';
 import { CloseSessionModal } from '../components/Casino/Modals/CloseSessionModal';
 import { OperationModal, OperationKind } from '../components/Casino/Modals/OperationModal';
 import { ChipModal, ChipOperation } from '../components/Casino/Modals/ChipModal';
+import { ChipTypeModal } from '../components/Casino/Modals/ChipTypeModal';
 import { ClientQuickAddModal } from '../components/Casino/Modals/ClientQuickAddModal';
 import { ClientStatusModal } from '../components/Casino/Modals/ClientStatusModal';
 import { IncidentModal } from '../components/Casino/Modals/IncidentModal';
@@ -58,6 +64,7 @@ import type {
   CasinoCashier,
   CasinoSession,
   ChipType,
+  ChipMovement,
   CasinoCard,
   CasinoCredit,
   DashboardStats,
@@ -78,6 +85,7 @@ export const CasinoPage: React.FC = () => {
   const [cashiers, setCashiers] = useState<CasinoCashier[]>([]);
   const [sessions, setSessions] = useState<CasinoSession[]>([]);
   const [chipTypes, setChipTypes] = useState<ChipType[]>([]);
+  const [chips, setChips] = useState<ChipMovement[]>([]);
   const [cards, setCards] = useState<CasinoCard[]>([]);
   const [credits, setCredits] = useState<CasinoCredit[]>([]);
 
@@ -88,6 +96,9 @@ export const CasinoPage: React.FC = () => {
   const [closingSession, setClosingSession] = useState<CasinoSession | null>(null);
   const [operationKind, setOperationKind] = useState<OperationKind | null>(null);
   const [chipOperation, setChipOperation] = useState<ChipOperation | null>(null);
+  const [chipTypeModal, setChipTypeModal] = useState<{ mode: 'create' | 'edit'; chipType: ChipType | null } | null>(
+    null
+  );
   const [showClientQuickAdd, setShowClientQuickAdd] = useState(false);
   const [statusClient, setStatusClient] = useState<{ id: number; nom: string; prenom?: string } | null>(null);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -99,8 +110,8 @@ export const CasinoPage: React.FC = () => {
   // Chargement des données
   const refreshAll = useCallback(() => {
     setLoadError(null);
-    return Promise.all([fetchCasinoBundle(), fetchSessions()])
-      .then(([bundle, allSessions]) => {
+    return Promise.all([fetchCasinoBundle(), fetchSessions(), fetchChips()])
+      .then(([bundle, allSessions, allChips]) => {
         setDashboard(bundle.dashboard);
         setRooms(bundle.rooms);
         setCashiers(bundle.cashiers);
@@ -108,6 +119,7 @@ export const CasinoPage: React.FC = () => {
         setCards(bundle.cards);
         setCredits(bundle.credits);
         setSessions(allSessions);
+        setChips(allChips);
       })
       .catch((err) => {
         console.error('Erreur chargement module casino', err);
@@ -169,6 +181,24 @@ export const CasinoPage: React.FC = () => {
     refreshAll();
   };
 
+  const handleCreateChipType = async (data: Pick<ChipType, 'code' | 'nom' | 'valeur_nominale' | 'couleur' | 'statut'>) => {
+    const chipType = await apiCreateChipType(data);
+    setChipTypes((prev) => [...prev, chipType]);
+  };
+
+  const handleUpdateChipType = async (
+    id: number,
+    data: Pick<ChipType, 'code' | 'nom' | 'valeur_nominale' | 'couleur' | 'statut'>
+  ) => {
+    const chipType = await apiUpdateChipType(id, data);
+    setChipTypes((prev) => prev.map((ct) => (ct.id === id ? chipType : ct)));
+  };
+
+  const handleDeleteChipType = async (chipType: ChipType) => {
+    await apiDeleteChipType(chipType.id);
+    setChipTypes((prev) => prev.filter((ct) => ct.id !== chipType.id));
+  };
+
   const handleQuickAddClient = async (data: { nom: string; prenom?: string; telephone?: string }) => {
     await apiQuickAddClient(data);
   };
@@ -218,6 +248,7 @@ export const CasinoPage: React.FC = () => {
     cashiers,
     sessions,
     chipTypes,
+    chips,
     cards,
     credits,
     refreshAll,
@@ -231,6 +262,9 @@ export const CasinoPage: React.FC = () => {
     onCloseSession: (session: CasinoSession) => setClosingSession(session),
     onNewOperation: (kind: OperationKind) => setOperationKind(kind),
     onNewChipOperation: (op: ChipOperation) => setChipOperation(op),
+    onNewChipType: () => setChipTypeModal({ mode: 'create', chipType: null }),
+    onEditChipType: (chipType: ChipType) => setChipTypeModal({ mode: 'edit', chipType }),
+    onDeleteChipType: handleDeleteChipType,
     onNewClient: () => setShowClientQuickAdd(true),
     onNewCard: () => setShowCardModal(true),
     onNewCredit: () => setShowCreditModal(true),
@@ -291,6 +325,7 @@ export const CasinoPage: React.FC = () => {
             {activeTab === 'overview' && <OverviewTab {...sharedProps} />}
             {activeTab === 'rooms' && <RoomsTab {...sharedProps} />}
             {activeTab === 'caisse' && <CaisseTab {...sharedProps} />}
+            {activeTab === 'jetons' && <ChipsTab {...sharedProps} />}
             {activeTab === 'cards' && <CardsTab {...sharedProps} />}
             {activeTab === 'clients' && <ClientsTab {...sharedProps} />}
             {activeTab === 'visits' && <VisitsTab {...sharedProps} />}
@@ -336,6 +371,17 @@ export const CasinoPage: React.FC = () => {
             chipTypes={chipTypes}
             operation={chipOperation || 'buy'}
             onSubmit={handleChipOperation}
+          />
+
+          <ChipTypeModal
+            isOpen={!!chipTypeModal}
+            onClose={() => setChipTypeModal(null)}
+            chipType={chipTypeModal?.chipType ?? null}
+            onSubmit={(data) =>
+              chipTypeModal?.mode === 'edit' && chipTypeModal.chipType
+                ? handleUpdateChipType(chipTypeModal.chipType.id, data)
+                : handleCreateChipType(data)
+            }
           />
 
           <ClientQuickAddModal
