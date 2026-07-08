@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dices, Plus } from 'lucide-react';
-import { Button } from '../../UI';
+import { Button } from '../../components/UI';
 
 interface Stat {
   label: string;
@@ -12,14 +12,14 @@ interface CasinoHeaderProps {
   stats: Stat[];
   onNewRoom?: () => void;
   onNewSession?: () => void;
-  onNewOperation?: () => void;
+  onNewTransaction?: () => void;
 }
 
 export const CasinoHeader: React.FC<CasinoHeaderProps> = ({
   stats,
   onNewRoom,
   onNewSession,
-  onNewOperation,
+  onNewTransaction
 }) => {
   return (
     <>
@@ -56,14 +56,14 @@ export const CasinoHeader: React.FC<CasinoHeaderProps> = ({
               Ouvrir caisse
             </Button>
           )}
-          {onNewOperation && (
+          {onNewTransaction && (
             <Button
               icon={<Plus size={16} />}
               variant="secondary"
-              onClick={onNewOperation}
+              onClick={onNewTransaction}
               className="text-sm"
             >
-              Opération
+              Transaction
             </Button>
           )}
           <div
