@@ -1,307 +1,292 @@
-// ============================================================================
-// casino.service.ts — client HTTP pour /api/casino/*
-// Toutes les routes sont protégées par requireAuth (Authorization: Bearer <token>)
-// Utilise l'instance axios centralisée (src/lib/api.ts) : token, refresh 401,
-// timeout et gestion d'erreurs communs à toute l'application.
-// ============================================================================
-
-import api from '../lib/api';
+// =========================================================================
+// Casino — Service API
+// Toutes les routes sont montées sous /api/casino et protégées par
+// requireAuth (Bearer token). Voir CASINO_README.md pour le détail.
+// =========================================================================
 
 import type {
-  CasinoRoom,
-  CasinoCashier,
-  CasinoSession,
+  Room,
+  Cashier,
+  CashSession,
   SessionSummary,
-  SessionTransactionRow,
+  SessionTransaction,
   Client,
-  ClientProfileBundle,
+  ClientFullProfile,
   ClientHistory,
   ClientConsumption,
-  CasinoCard,
-  CasinoClientProfile,
-  CasinoIncident,
+  Incident,
   ChipType,
-  ChipMovement,
+  ChipTransaction,
   CashOperation,
-  CasinoCredit,
+  PlayerCredit,
   CreditRepayment,
   ScoringConfigItem,
-  CasinoScore,
+  Score,
   Visit,
-  DashboardStats,
+  LoyaltyCard,
+  ClientProfile,
+  CasinoDashboard,
   ProduitNetRow,
   EcartCaisseRow,
   EncoursCreditRow,
   FluxASynchroniserRow,
-  MoyenPaiement,
-} from '../components/Casino/types';
+  OpenSessionPayload,
+  CloseSessionPayload,
+  QuickAddClientPayload,
+  CashOperationPayload,
+  ChipMovementPayload,
+  CreditGrantPayload,
+  CreditDrawPayload,
+  CreditRepayPayload,
+  ClientStatutPayload,
+  ScoreDecisionPayload,
+  CheckInPayload,
+  ID,
+} from '../types/casino.types';
 
+import api from '../lib/api';
+import type { AxiosError } from 'axios';
+
+// Base relative à l'instance axios partagée (`api.ts`), qui porte déjà
+// baseURL (VITE_API_URL), le header Authorization (clé 'auth-token') et
+// la logique de refresh automatique sur 401.
 const BASE_URL = '/api/casino';
 
-async function request<T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', data?: unknown): Promise<T> {
-  try {
-    const response = await api.request<T>({
-      url: `${BASE_URL}${path}`,
-      method,
-      data,
-    });
-    return response.data;
-  } catch (error: any) {
-    const message =
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
-      error?.message ||
-      `Erreur API (${error?.response?.status ?? '??'})`;
-    throw new Error(message);
+export class ApiError extends Error {
+  status: number;
+  payload: unknown;
+  constructor(status: number, message: string, payload?: unknown) {
+    super(message);
+    this.status = status;
+    this.payload = payload;
   }
 }
 
-const get = <T>(path: string) => request<T>(path, 'GET');
-const post = <T>(path: string, data?: unknown) => request<T>(path, 'POST', data);
-const put = <T>(path: string, data?: unknown) => request<T>(path, 'PUT', data);
-const del = <T>(path: string) => request<T>(path, 'DELETE');
+async function request<T>(
+  path: string,
+  options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}
+): Promise<T> {
+  try {
+    const res = await api.request<T>({
+      url: `${BASE_URL}${path}`,
+      method: options.method || 'GET',
+      data: options.body,
+    });
 
-const qs = (params: Record<string, string | number | undefined | null>) => {
-  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
-  if (!entries.length) return '';
-  return '?' + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
+    // axios renvoie déjà `undefined`/vide pour un 204, rien à gérer en plus.
+    return res.data;
+  } catch (err) {
+    const axiosErr = err as AxiosError<any>;
+    const status = axiosErr.response?.status ?? 0;
+    const data = axiosErr.response?.data ?? null;
+    const message =
+      (data && (data.message || data.error)) || axiosErr.message || `Erreur API (${status})`;
+    throw new ApiError(status, message, data);
+  }
+}
+
+const get = <T>(path: string) => request<T>(path, { method: 'GET' });
+const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body });
+const put = <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body });
+const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
+
+function qs(params: Record<string, string | number | undefined | null>): string {
+  const usable = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
+  if (!usable.length) return '';
+  const search = new URLSearchParams(usable.map(([k, v]) => [k, String(v)]));
+  return `?${search.toString()}`;
+}
+
+// -------------------------------------------------------------------------
+// Dashboard & consolidation
+// -------------------------------------------------------------------------
+
+export const dashboardApi = {
+  get: () => get<CasinoDashboard>('/dashboard'),
 };
 
-// ---------------------------------------------------------------------------
-// Tableau de bord & rapports
-// ---------------------------------------------------------------------------
+export const reportsApi = {
+  produitNet: (params?: { salle?: string; du?: string; au?: string }) =>
+    get<ProduitNetRow[]>(`/reports/produit-net${qs(params || {})}`),
+  ecartsCaisse: (params?: { salle?: string; session_id?: ID }) =>
+    get<EcartCaisseRow[]>(`/reports/ecarts-caisse${qs(params || {})}`),
+  encoursCredit: () => get<EncoursCreditRow[]>('/reports/encours-credit'),
+  fluxASynchroniser: () => get<FluxASynchroniserRow[]>('/reports/flux-a-synchroniser'),
+};
 
-export const fetchDashboard = () => get<DashboardStats>('/dashboard');
+// -------------------------------------------------------------------------
+// Salles & caisses
+// -------------------------------------------------------------------------
 
-export const fetchProduitNet = (params: { salle?: string; du?: string; au?: string } = {}) =>
-  get<ProduitNetRow[]>(`/reports/produit-net${qs(params)}`);
+export const roomsApi = {
+  list: () => get<Room[]>('/rooms'),
+  get: (id: ID) => get<Room>(`/rooms/${id}`),
+  create: (payload: Partial<Room>) => post<Room>('/rooms', payload),
+  update: (id: ID, payload: Partial<Room>) => put<Room>(`/rooms/${id}`, payload),
+  remove: (id: ID) => del<void>(`/rooms/${id}`),
+};
 
-export const fetchEcartsCaisse = (params: { salle?: string; session_id?: number } = {}) =>
-  get<EcartCaisseRow[]>(`/reports/ecarts-caisse${qs(params)}`);
+export const cashiersApi = {
+  list: (params?: { room_id?: ID }) => get<Cashier[]>(`/cashiers${qs(params || {})}`),
+  get: (id: ID) => get<Cashier>(`/cashiers/${id}`),
+  create: (payload: Partial<Cashier>) => post<Cashier>('/cashiers', payload),
+  update: (id: ID, payload: Partial<Cashier>) => put<Cashier>(`/cashiers/${id}`, payload),
+  remove: (id: ID) => del<void>(`/cashiers/${id}`),
+};
 
-export const fetchEncoursCredit = () => get<EncoursCreditRow[]>('/reports/encours-credit');
-
-export const fetchFluxASynchroniser = () => get<FluxASynchroniserRow[]>('/reports/flux-a-synchroniser');
-
-// ---------------------------------------------------------------------------
-// Salles
-// ---------------------------------------------------------------------------
-
-export const fetchRooms = () => get<CasinoRoom[]>('/rooms');
-export const fetchRoom = (id: number) => get<CasinoRoom>(`/rooms/${id}`);
-export const createRoom = (data: Pick<CasinoRoom, 'code' | 'nom' | 'type_salle' | 'statut'>) =>
-  post<CasinoRoom>('/rooms', data);
-export const updateRoom = (id: number, data: Partial<CasinoRoom>) => put<CasinoRoom>(`/rooms/${id}`, data);
-export const deleteRoom = (id: number) => del<void>(`/rooms/${id}`);
-
-// ---------------------------------------------------------------------------
-// Caisses
-// ---------------------------------------------------------------------------
-
-export const fetchCashiers = () => get<CasinoCashier[]>('/cashiers');
-export const createCashier = (data: Pick<CasinoCashier, 'room_id' | 'code' | 'nom' | 'statut'>) =>
-  post<CasinoCashier>('/cashiers', data);
-export const updateCashier = (id: number, data: Partial<CasinoCashier>) =>
-  put<CasinoCashier>(`/cashiers/${id}`, data);
-export const deleteCashier = (id: number) => del<void>(`/cashiers/${id}`);
-
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // Sessions de caisse
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
-export const fetchActiveSessions = (cashierId?: number) =>
-  get<CasinoSession[]>(`/sessions/active${qs({ cashier_id: cashierId })}`);
+export const sessionsApi = {
+  active: (cashierId?: ID) => get<CashSession[]>(`/sessions/active${qs({ cashier_id: cashierId })}`),
+  open: (payload: OpenSessionPayload) => post<CashSession>('/sessions/open', payload),
+  close: (id: ID, payload: CloseSessionPayload) => post<CashSession>(`/sessions/${id}/close`, payload),
+  summary: (id: ID) => get<SessionSummary>(`/sessions/${id}/summary`),
+  transactions: (id: ID) => get<SessionTransaction[]>(`/sessions/${id}/transactions`),
+  list: () => get<CashSession[]>('/sessions'),
+  get: (id: ID) => get<CashSession>(`/sessions/${id}`),
+};
 
-export const fetchSessions = () => get<CasinoSession[]>('/sessions');
+// -------------------------------------------------------------------------
+// Clients en caisse (sans carte)
+// -------------------------------------------------------------------------
 
-export const openSession = (data: { cashier_id: number; fond_initial: number }) =>
-  post<CasinoSession>('/sessions/open', data);
+export const clientsApi = {
+  search: (q: string) => get<Client[]>(`/clients/search${qs({ q })}`),
+  quickAdd: (payload: QuickAddClientPayload) => post<Client>('/clients/quick-add', payload),
+  profile: (id: ID) => get<ClientFullProfile>(`/clients/${id}/profile`),
+  history: (id: ID) => get<ClientHistory>(`/clients/${id}/history`),
+  consumption: (id: ID) => get<ClientConsumption>(`/clients/${id}/consumption`),
+  incidents: (id: ID) => get<Incident[]>(`/clients/${id}/incidents`),
+};
 
-export const closeSession = (id: number, data: { fond_final_declare: number; commentaire?: string }) =>
-  post<CasinoSession>(`/sessions/${id}/close`, data);
+// -------------------------------------------------------------------------
+// Cartes de fidélité + scan QR
+// -------------------------------------------------------------------------
 
-export const fetchSessionSummary = (id: number) => get<SessionSummary>(`/sessions/${id}/summary`);
+export const cardsApi = {
+  scan: (qrCode: string) =>
+    get<{ card: LoyaltyCard; client: Client; profile: ClientProfile | null }>(
+      `/cards/scan/${encodeURIComponent(qrCode)}`
+    ),
+  byClient: (clientId: ID) => get<LoyaltyCard>(`/cards/by-client/${clientId}`),
+  addPoints: (cardId: ID, points: number) => post<LoyaltyCard>(`/cards/${cardId}/points`, { points }),
+  list: () => get<LoyaltyCard[]>('/cards'),
+  get: (id: ID) => get<LoyaltyCard>(`/cards/${id}`),
+  create: (payload: Partial<LoyaltyCard>) => post<LoyaltyCard>('/cards', payload),
+  update: (id: ID, payload: Partial<LoyaltyCard>) => put<LoyaltyCard>(`/cards/${id}`, payload),
+  remove: (id: ID) => del<void>(`/cards/${id}`),
+};
 
-export const fetchSessionTransactions = (id: number) =>
-  get<SessionTransactionRow[]>(`/sessions/${id}/transactions`);
+// -------------------------------------------------------------------------
+// Antécédents client (statut & incidents)
+// -------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Clients (sélection simple en caisse)
-// ---------------------------------------------------------------------------
+export const clientProfilesApi = {
+  setStatut: (clientId: ID, payload: ClientStatutPayload) =>
+    post<ClientProfile>(`/client-profiles/${clientId}/statut`, payload),
+  list: () => get<ClientProfile[]>('/client-profiles'),
+  create: (payload: Partial<ClientProfile>) => post<ClientProfile>('/client-profiles', payload),
+  update: (id: ID, payload: Partial<ClientProfile>) => put<ClientProfile>(`/client-profiles/${id}`, payload),
+  remove: (id: ID) => del<void>(`/client-profiles/${id}`),
+};
 
-export const searchClients = (query: string) => get<Client[]>(`/clients/search${qs({ q: query })}`);
+export const incidentsApi = {
+  list: (params?: { client_id?: ID; statut?: string }) => get<Incident[]>(`/incidents${qs(params || {})}`),
+  get: (id: ID) => get<Incident>(`/incidents/${id}`),
+  create: (payload: Partial<Incident>) => post<Incident>('/incidents', payload),
+  update: (id: ID, payload: Partial<Incident>) => put<Incident>(`/incidents/${id}`, payload),
+  remove: (id: ID) => del<void>(`/incidents/${id}`),
+};
 
-export const quickAddClient = (data: { nom: string; prenom?: string; telephone?: string }) =>
-  post<Client>('/clients/quick-add', data);
+// -------------------------------------------------------------------------
+// Jetons
+// -------------------------------------------------------------------------
 
-export const fetchClientProfileBundle = (clientId: number) =>
-  get<ClientProfileBundle>(`/clients/${clientId}/profile`);
+export const chipTypesApi = {
+  list: () => get<ChipType[]>('/chip-types'),
+  get: (id: ID) => get<ChipType>(`/chip-types/${id}`),
+  create: (payload: Partial<ChipType>) => post<ChipType>('/chip-types', payload),
+  update: (id: ID, payload: Partial<ChipType>) => put<ChipType>(`/chip-types/${id}`, payload),
+  remove: (id: ID) => del<void>(`/chip-types/${id}`),
+};
 
-export const fetchClientHistory = (clientId: number) => get<ClientHistory>(`/clients/${clientId}/history`);
+export const chipsApi = {
+  buy: (payload: ChipMovementPayload) => post<ChipTransaction>('/chips/buy', payload),
+  sell: (payload: ChipMovementPayload) => post<ChipTransaction>('/chips/sell', payload),
+  byClient: (clientId: ID) => get<ChipTransaction[]>(`/chips/by-client/${clientId}`),
+  list: () => get<ChipTransaction[]>('/chips'),
+};
 
-export const fetchClientConsumption = (clientId: number) =>
-  get<ClientConsumption>(`/clients/${clientId}/consumption`);
+// -------------------------------------------------------------------------
+// Opérations de caisse
+// -------------------------------------------------------------------------
 
-export const fetchClientIncidents = (clientId: number) =>
-  get<CasinoIncident[]>(`/clients/${clientId}/incidents`);
+export const operationsApi = {
+  buyIn: (payload: CashOperationPayload) => post<CashOperation>('/operations/buy-in', payload),
+  cashOut: (payload: CashOperationPayload) => post<CashOperation>('/operations/cash-out', payload),
+  deposit: (payload: CashOperationPayload) => post<CashOperation>('/operations/deposit', payload),
+  list: () => get<CashOperation[]>('/operations'),
+};
 
-// ---------------------------------------------------------------------------
-// Cartes de fidélité
-// ---------------------------------------------------------------------------
-
-export const scanCard = (qrCode: string) =>
-  get<{ card: CasinoCard; client: Client; profile: CasinoClientProfile | null }>(
-    `/cards/scan/${encodeURIComponent(qrCode)}`
-  );
-
-export const fetchCardByClient = (clientId: number) => get<CasinoCard>(`/cards/by-client/${clientId}`);
-
-export const adjustCardPoints = (cardId: number, points: number) =>
-  post<CasinoCard>(`/cards/${cardId}/points`, { points });
-
-export const fetchCards = () => get<CasinoCard[]>('/cards');
-export const createCard = (
-  data: Pick<CasinoCard, 'client_id' | 'numero_carte' | 'qr_code' | 'niveau' | 'plafond_credit' | 'statut' | 'date_emission'>
-) => post<CasinoCard>('/cards', data);
-export const updateCard = (id: number, data: Partial<CasinoCard>) => put<CasinoCard>(`/cards/${id}`, data);
-export const deleteCard = (id: number) => del<void>(`/cards/${id}`);
-
-// ---------------------------------------------------------------------------
-// Antécédents client (statut spécial & incidents)
-// ---------------------------------------------------------------------------
-
-export const setClientStatus = (clientId: number, data: { statut_special: string; motif: string }) =>
-  post<CasinoClientProfile>(`/client-profiles/${clientId}/statut`, data);
-
-export const fetchClientProfiles = () => get<CasinoClientProfile[]>('/client-profiles');
-
-export const fetchIncidents = () => get<CasinoIncident[]>('/incidents');
-export const createIncident = (
-  data: Pick<CasinoIncident, 'client_id' | 'session_id' | 'type' | 'gravite' | 'description' | 'statut'>
-) => post<CasinoIncident>('/incidents', data);
-export const updateIncident = (id: number, data: Partial<CasinoIncident>) =>
-  put<CasinoIncident>(`/incidents/${id}`, data);
-export const deleteIncident = (id: number) => del<void>(`/incidents/${id}`);
-
-// ---------------------------------------------------------------------------
-// Types de jetons
-// ---------------------------------------------------------------------------
-
-export const fetchChipTypes = () => get<ChipType[]>('/chip-types');
-export const createChipType = (data: Pick<ChipType, 'code' | 'nom' | 'valeur_nominale' | 'couleur' | 'statut'>) =>
-  post<ChipType>('/chip-types', data);
-export const updateChipType = (id: number, data: Partial<ChipType>) => put<ChipType>(`/chip-types/${id}`, data);
-export const deleteChipType = (id: number) => del<void>(`/chip-types/${id}`);
-
-// ---------------------------------------------------------------------------
-// Jetons — achat / reprise
-// ---------------------------------------------------------------------------
-
-export interface ChipMoveInput {
-  session_id: number;
-  chip_type_id: number;
-  quantite: number;
-  client_id?: number;
-  client_libre?: string;
-  moyen_paiement: MoyenPaiement;
-}
-
-export const buyChips = (data: ChipMoveInput) => post<ChipMovement>('/chips/buy', data);
-export const sellChips = (data: ChipMoveInput) => post<ChipMovement>('/chips/sell', data);
-export const fetchChipsByClient = (clientId: number) => get<ChipMovement[]>(`/chips/by-client/${clientId}`);
-export const fetchChips = () => get<ChipMovement[]>('/chips');
-
-// ---------------------------------------------------------------------------
-// Opérations de caisse (buy-in / cash-out / dépôt)
-// ---------------------------------------------------------------------------
-
-export interface CashOperationInput {
-  session_id: number;
-  montant: number;
-  moyen_paiement: MoyenPaiement;
-  client_id?: number;
-  client_libre?: string;
-}
-
-export const recordBuyIn = (data: CashOperationInput) => post<CashOperation>('/operations/buy-in', data);
-export const recordCashOut = (data: CashOperationInput) => post<CashOperation>('/operations/cash-out', data);
-export const recordDeposit = (data: CashOperationInput) => post<CashOperation>('/operations/deposit', data);
-export const fetchOperations = () => get<CashOperation[]>('/operations');
-
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // Crédits joueur
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
-export const grantCredit = (data: { client_id: number; montant: number; echeance: string; session_id: number }) =>
-  post<CasinoCredit>('/credits/grant', data);
+export const creditsApi = {
+  grant: (payload: CreditGrantPayload) => post<PlayerCredit>('/credits/grant', payload),
+  draw: (id: ID, payload: CreditDrawPayload) => post<CashOperation>(`/credits/${id}/draw`, payload),
+  repay: (id: ID, payload: CreditRepayPayload) => post<CreditRepayment>(`/credits/${id}/repay`, payload),
+  activeByClient: (clientId: ID) => get<PlayerCredit[]>(`/credits/by-client/${clientId}/active`),
+  list: () => get<PlayerCredit[]>('/credits'),
+  get: (id: ID) => get<PlayerCredit>(`/credits/${id}`),
+};
 
-export const drawCredit = (
-  creditId: number,
-  data: { session_id: number; montant: number; moyen_paiement: MoyenPaiement }
-) => post<CashOperation>(`/credits/${creditId}/draw`, data);
-
-export const repayCredit = (
-  creditId: number,
-  data: { montant: number; moyen_paiement: MoyenPaiement; session_id?: number }
-) => post<CreditRepayment>(`/credits/${creditId}/repay`, data);
-
-export const fetchActiveCreditsByClient = (clientId: number) =>
-  get<CasinoCredit[]>(`/credits/by-client/${clientId}/active`);
-
-export const fetchCredits = () => get<CasinoCredit[]>('/credits');
-
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // Scoring de crédit joueur
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
-export const fetchScoringConfig = () => get<ScoringConfigItem[]>('/scoring/config');
-export const updateScoringConfig = (data: { cle: string; valeur: string }) =>
-  put<ScoringConfigItem>('/scoring/config', data);
+export const scoringApi = {
+  getConfig: () => get<ScoringConfigItem[]>('/scoring/config'),
+  updateConfig: (cle: string, valeur: string) => put<ScoringConfigItem>('/scoring/config', { cle, valeur }),
+  compute: (clientId: ID) => post<Score>(`/scoring/${clientId}/compute`),
+  history: (clientId: ID) => get<Score[]>(`/scoring/${clientId}/history`),
+  decide: (scoreId: ID, payload: ScoreDecisionPayload) => post<Score>(`/scoring/${scoreId}/decision`, payload),
+  list: () => get<Score[]>('/scoring'),
+};
 
-export const computeScore = (clientId: number) => post<CasinoScore>(`/scoring/${clientId}/compute`);
-export const fetchScoreHistory = (clientId: number) => get<CasinoScore[]>(`/scoring/${clientId}/history`);
-export const decideScore = (
-  scoreId: number,
-  data: { decision: 'VALIDEE' | 'CONTESTEE' | 'ANNULEE'; commentaire?: string }
-) => post<CasinoScore>(`/scoring/${scoreId}/decision`, data);
-
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 // Visites de salle
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
-export const checkIn = (
-  data: { room_id: number; qr_code: string } | { room_id: number; client_id: number; entree_via: 'MANUEL' }
-) => post<Visit>('/visits/check-in', data);
+export const visitsApi = {
+  checkIn: (payload: CheckInPayload) => post<Visit>('/visits/check-in', payload),
+  checkOut: (id: ID) => post<Visit>(`/visits/${id}/check-out`),
+  inRoom: (roomId: ID) => get<Visit[]>(`/visits/in-room/${roomId}`),
+  list: () => get<Visit[]>('/visits'),
+};
 
-export const checkOut = (visitId: number) => post<Visit>(`/visits/${visitId}/check-out`);
+// -------------------------------------------------------------------------
+// Export groupé (facilite l'import : `import { casinoApi } from './casino.service'`)
+// -------------------------------------------------------------------------
 
-export const fetchVisitsInRoom = (roomId: number) => get<Visit[]>(`/visits/in-room/${roomId}`);
+export const casinoApi = {
+  dashboard: dashboardApi,
+  reports: reportsApi,
+  rooms: roomsApi,
+  cashiers: cashiersApi,
+  sessions: sessionsApi,
+  clients: clientsApi,
+  cards: cardsApi,
+  clientProfiles: clientProfilesApi,
+  incidents: incidentsApi,
+  chipTypes: chipTypesApi,
+  chips: chipsApi,
+  operations: operationsApi,
+  credits: creditsApi,
+  scoring: scoringApi,
+  visits: visitsApi,
+};
 
-export const fetchVisits = () => get<Visit[]>('/visits');
-
-// ---------------------------------------------------------------------------
-// Chargement groupé pour l'initialisation de la page
-// ---------------------------------------------------------------------------
-
-export interface CasinoBundle {
-  dashboard: DashboardStats;
-  rooms: CasinoRoom[];
-  cashiers: CasinoCashier[];
-  activeSessions: CasinoSession[];
-  chipTypes: ChipType[];
-  cards: CasinoCard[];
-  credits: CasinoCredit[];
-}
-
-export async function fetchCasinoBundle(): Promise<CasinoBundle> {
-  const [dashboard, rooms, cashiers, activeSessions, chipTypes, cards, credits] = await Promise.all([
-    fetchDashboard(),
-    fetchRooms(),
-    fetchCashiers(),
-    fetchActiveSessions(),
-    fetchChipTypes(),
-    fetchCards(),
-    fetchCredits(),
-  ]);
-  return { dashboard, rooms, cashiers, activeSessions, chipTypes, cards, credits };
-}
+export default casinoApi;
