@@ -1,169 +1,227 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
-import type { CasinoSharedProps } from '../shared-props';
+import { Building2, DoorOpen, Wallet, TrendingUp, CreditCard, AlertTriangle, RefreshCw } from 'lucide-react';
 import {
-  fetchProduitNet,
-  fetchEcartsCaisse,
-  fetchEncoursCredit,
-  fetchFluxASynchroniser,
-} from '../../../services/casino.service';
-import type { ProduitNetRow, EcartCaisseRow, EncoursCreditRow, FluxASynchroniserRow } from '../types';
-import { formatCurrency } from '../../../utils/data';
+  SectionCard,
+  Spinner,
+  EmptyState,
+  ErrorBanner,
+  Badge,
+  Button,
+  formatAriary,
+  formatDate,
+  formatDateTime,
+} from '../common';
+import { dashboardApi, reportsApi } from '../../../services/casino.service';
+import type { CasinoDashboard, ProduitNetRow, EcartCaisseRow, EncoursCreditRow, FluxASynchroniserRow } from '../../../types/casino.types';
 
-const Card: React.FC<{ title: string; children: React.ReactNode; action?: React.ReactNode }> = ({ title, children, action }) => (
-  <div className="rounded-2xl p-4 md:p-5 w-full" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-    <div className="flex items-center justify-between mb-3">
-      <h4 className="text-primary font-semibold text-sm">{title}</h4>
-      {action}
-    </div>
-    {children}
-  </div>
-);
-
-export const OverviewTab: React.FC<CasinoSharedProps> = ({ dashboard }) => {
+export const OverviewTab: React.FC = () => {
+  const [dashboard, setDashboard] = useState<CasinoDashboard | null>(null);
   const [produitNet, setProduitNet] = useState<ProduitNetRow[]>([]);
   const [ecarts, setEcarts] = useState<EcartCaisseRow[]>([]);
   const [encours, setEncours] = useState<EncoursCreditRow[]>([]);
   const [flux, setFlux] = useState<FluxASynchroniserRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadReports = () => {
+  async function loadAll() {
     setLoading(true);
-    Promise.all([
-      fetchProduitNet().then(setProduitNet).catch(() => setProduitNet([])),
-      fetchEcartsCaisse().then(setEcarts).catch(() => setEcarts([])),
-      fetchEncoursCredit().then(setEncours).catch(() => setEncours([])),
-      fetchFluxASynchroniser().then(setFlux).catch(() => setFlux([])),
-    ]).finally(() => setLoading(false));
-  };
+    setError(null);
+    try {
+      const [d, pn, ec, en, fl] = await Promise.all([
+        dashboardApi.get(),
+        reportsApi.produitNet(),
+        reportsApi.ecartsCaisse(),
+        reportsApi.encoursCredit(),
+        reportsApi.fluxASynchroniser(),
+      ]);
+      setDashboard(d);
+      setProduitNet(pn);
+      setEcarts(ec);
+      setEncours(en);
+      setFlux(fl);
+    } catch (e: any) {
+      setError(e?.message || 'Erreur de chargement du tableau de bord.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    loadReports();
+    loadAll();
   }, []);
 
+  if (loading) return <Spinner label="Chargement du tableau de bord…" />;
+
   return (
-    <div className="space-y-4">
-      {dashboard && dashboard.incidents_ouverts > 0 && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm flex items-center gap-2"
-          style={{ backgroundColor: 'var(--color-danger-bg)', border: '1px solid var(--color-danger)', color: 'var(--color-danger)' }}
-        >
-          <AlertTriangle size={16} />
-          {dashboard.incidents_ouverts} incident(s) ouvert(s) à traiter.
+    <div className="flex flex-col gap-4 w-full">
+      {error && <ErrorBanner message={error} />}
+
+      {dashboard && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <StatTile icon={<Building2 size={16} />} label="Salles" value={dashboard.salles_total} />
+          <StatTile icon={<DoorOpen size={16} />} label="Salles ouvertes" value={dashboard.salles_ouvertes} />
+          <StatTile icon={<Wallet size={16} />} label="Sessions ouvertes" value={dashboard.sessions_ouvertes} />
+          <StatTile
+            icon={<TrendingUp size={16} />}
+            label="Produit net (jour)"
+            value={formatAriary(dashboard.produit_net_jour)}
+          />
+          <StatTile
+            icon={<CreditCard size={16} />}
+            label="Encours crédit"
+            value={formatAriary(dashboard.encours_credit_total)}
+          />
+          <StatTile
+            icon={<AlertTriangle size={16} />}
+            label="Incidents ouverts"
+            value={dashboard.incidents_ouverts}
+            tone={dashboard.incidents_ouverts > 0 ? 'warning' : undefined}
+          />
         </div>
       )}
 
-      <Card
-        title="Produit net par salle"
-        action={
-          <button onClick={loadReports} className="text-muted hover:text-primary">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-        }
-      >
-        {produitNet.length === 0 ? (
-          <p className="text-muted text-xs">Aucune donnée sur la période.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted text-left">
-                  <th className="py-1 pr-3">Salle</th>
-                  <th className="py-1 pr-3">Jour</th>
-                  <th className="py-1 pr-3">Entrées</th>
-                  <th className="py-1 pr-3">Sorties</th>
-                  <th className="py-1">Produit net</th>
-                </tr>
-              </thead>
-              <tbody>
-                {produitNet.map((row, i) => (
-                  <tr key={i} className="text-primary border-t" style={{ borderColor: 'var(--color-border)' }}>
-                    <td className="py-1.5 pr-3">{row.salle}</td>
-                    <td className="py-1.5 pr-3">{row.jour}</td>
-                    <td className="py-1.5 pr-3">{formatCurrency(row.total_entrees)}</td>
-                    <td className="py-1.5 pr-3">{formatCurrency(row.total_sorties)}</td>
-                    <td className="py-1.5 font-semibold">{formatCurrency(row.produit_net)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      <Card title="Écarts de caisse">
-        {ecarts.length === 0 ? (
-          <p className="text-muted text-xs">Aucun écart enregistré.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted text-left">
-                  <th className="py-1 pr-3">Caisse</th>
-                  <th className="py-1 pr-3">Salle</th>
-                  <th className="py-1 pr-3">Théorique</th>
-                  <th className="py-1 pr-3">Déclaré</th>
-                  <th className="py-1">Écart</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ecarts.map((row) => (
-                  <tr key={row.session_id} className="text-primary border-t" style={{ borderColor: 'var(--color-border)' }}>
-                    <td className="py-1.5 pr-3">{row.caisse}</td>
-                    <td className="py-1.5 pr-3">{row.salle}</td>
-                    <td className="py-1.5 pr-3">{formatCurrency(row.fond_final_theorique)}</td>
-                    <td className="py-1.5 pr-3">{row.fond_final_declare != null ? formatCurrency(row.fond_final_declare) : '—'}</td>
-                    <td
-                      className="py-1.5 font-semibold"
-                      style={{ color: row.ecart && row.ecart !== 0 ? 'var(--color-danger)' : undefined }}
-                    >
-                      {row.ecart != null ? formatCurrency(row.ecart) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Encours de crédit par client">
-          {encours.length === 0 ? (
-            <p className="text-muted text-xs">Aucun encours actif.</p>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <SectionCard title="Produit net par salle / jour">
+          {produitNet.length === 0 ? (
+            <EmptyState label="Aucune donnée sur la période." />
           ) : (
-            <div className="space-y-2">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted text-left">
+                    <th className="py-1.5 pr-2">Salle</th>
+                    <th className="py-1.5 pr-2">Jour</th>
+                    <th className="py-1.5 pr-2 text-right">Entrées</th>
+                    <th className="py-1.5 pr-2 text-right">Sorties</th>
+                    <th className="py-1.5 text-right">Produit net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {produitNet.map((row, idx) => (
+                    <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
+                      <td className="py-1.5 pr-2 text-primary font-medium">{row.salle}</td>
+                      <td className="py-1.5 pr-2 text-muted">{formatDate(row.jour)}</td>
+                      <td className="py-1.5 pr-2 text-right text-muted">{formatAriary(row.total_entrees)}</td>
+                      <td className="py-1.5 pr-2 text-right text-muted">{formatAriary(row.total_sorties)}</td>
+                      <td className="py-1.5 text-right font-semibold" style={{ color: 'var(--color-accent)' }}>
+                        {formatAriary(row.produit_net)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Écarts de caisse (déclaré vs théorique)">
+          {ecarts.length === 0 ? (
+            <EmptyState label="Aucun écart à signaler." />
+          ) : (
+            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+              {ecarts.map((row) => (
+                <div
+                  key={row.session_id}
+                  className="flex items-center justify-between rounded-xl p-2.5 text-xs"
+                  style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                >
+                  <div>
+                    <p className="text-primary font-medium">
+                      {row.caisse} · {row.salle}
+                    </p>
+                    <p className="text-muted">{formatDateTime(row.fermeture_at || row.ouverture_at)}</p>
+                  </div>
+                  <Badge tone={!row.ecart ? 'success' : row.ecart > 0 ? 'info' : 'danger'}>
+                    {row.ecart == null ? '—' : `${row.ecart > 0 ? '+' : ''}${formatAriary(row.ecart)}`}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Encours de crédit joueur">
+          {encours.length === 0 ? (
+            <EmptyState label="Aucun encours en cours." />
+          ) : (
+            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
               {encours.map((row) => (
-                <div key={row.client_id} className="flex items-center justify-between text-xs">
+                <div
+                  key={row.client_id}
+                  className="flex items-center justify-between rounded-xl p-2.5 text-xs"
+                  style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                >
                   <div>
                     <p className="text-primary font-medium">{row.client}</p>
-                    <p className="text-muted">{row.nb_credits_actifs} crédit(s) actif(s) · échéance {row.prochaine_echeance || '—'}</p>
+                    <p className="text-muted">
+                      {row.nb_credits_actifs} crédit(s) actif(s)
+                      {row.prochaine_echeance ? ` · échéance ${formatDate(row.prochaine_echeance)}` : ''}
+                    </p>
                   </div>
-                  <p className="text-primary font-semibold">{formatCurrency(row.encours_total)}</p>
+                  <span className="font-semibold text-primary">{formatAriary(row.encours_total)}</span>
                 </div>
               ))}
             </div>
           )}
-        </Card>
+        </SectionCard>
 
-        <Card title="Flux à synchroniser">
+        <SectionCard
+          title="Flux à synchroniser"
+          action={
+            <Button variant="secondary" icon={<RefreshCw size={14} />} className="text-xs" onClick={loadAll}>
+              Rafraîchir
+            </Button>
+          }
+        >
           {flux.length === 0 ? (
-            <p className="text-muted text-xs">Tout est synchronisé.</p>
+            <EmptyState label="Tout est synchronisé avec le module financier." />
           ) : (
-            <div className="space-y-2">
-              {flux.map((row, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
+            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+              <p className="text-muted text-[11px] mb-1">
+                Écritures casino sans contrepartie encore trouvée dans le module financier global (à réconcilier).
+              </p>
+              {flux.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between rounded-xl p-2.5 text-xs"
+                  style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                >
                   <div>
                     <p className="text-primary font-medium">{row.source} #{row.id}</p>
-                    <p className="text-muted">{row.ref_flux_global} · {row.created_at}</p>
+                    <p className="text-muted font-mono">{row.ref_flux_global}</p>
                   </div>
-                  <p className="text-primary font-semibold">{formatCurrency(row.montant)}</p>
+                  <span className="font-semibold text-primary">{formatAriary(row.montant)}</span>
                 </div>
               ))}
             </div>
           )}
-        </Card>
+        </SectionCard>
       </div>
     </div>
   );
 };
+
+const StatTile: React.FC<{ icon: React.ReactNode; label: string; value: React.ReactNode; tone?: 'warning' }> = ({
+  icon,
+  label,
+  value,
+  tone,
+}) => (
+  <div
+    className="rounded-2xl p-3 md:p-4 flex items-center gap-3 min-w-0"
+    style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+  >
+    <div
+      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+      style={{ background: tone === 'warning' ? 'rgba(245,158,11,0.2)' : 'var(--color-accent)' }}
+    >
+      {icon}
+    </div>
+    <div className="min-w-0">
+      <p className="text-muted text-[10px] md:text-xs truncate">{label}</p>
+      <p className="text-primary font-bold text-sm md:text-lg truncate">{value}</p>
+    </div>
+  </div>
+);
+
+export default OverviewTab;
