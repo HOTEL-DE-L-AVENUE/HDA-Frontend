@@ -175,6 +175,7 @@ export interface ChipType {
   valeur_nominale: number;
   couleur: string;
   statut: StatutChipType;
+  quantite_stock: number;
 }
 
 export interface ChipTransaction {
