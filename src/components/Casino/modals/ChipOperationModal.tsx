@@ -12,6 +12,13 @@ interface ChipOperationModalProps {
   onSuccess: (tx: ChipTransaction) => void;
 }
 
+interface ChipOperationModalProps {
+  sessionId: number;
+  defaultMovement?: 'BUY' | 'SELL';
+  onClose: () => void;
+  onSuccess: (tx: ChipTransaction) => void;
+}
+
 export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
   sessionId,
   defaultMovement = 'BUY',
@@ -46,6 +53,8 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
 
   const selectedType = useMemo(() => chipTypes.find((c) => c.id === chipTypeId), [chipTypes, chipTypeId]);
   const total = selectedType && quantite ? selectedType.valeur_nominale * Number(quantite) : 0;
+  const stockInsuffisant =
+    movement === 'BUY' && selectedType && quantite ? Number(quantite) > selectedType.quantite_stock : false;
 
   async function handleSubmit() {
     const qty = Number(quantite);
@@ -55,6 +64,10 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
     }
     if (!qty || qty <= 0) {
       setError('Quantité invalide.');
+      return;
+    }
+    if (stockInsuffisant) {
+      setError(`Stock insuffisant (disponible : ${selectedType?.quantite_stock}).`);
       return;
     }
     setLoading(true);
@@ -87,7 +100,7 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
           <Button variant="secondary" onClick={onClose}>
             Annuler
           </Button>
-          <Button icon={<CheckCircle2 size={16} />} onClick={handleSubmit} disabled={loading}>
+          <Button icon={<CheckCircle2 size={16} />} onClick={handleSubmit} disabled={loading || stockInsuffisant}>
             {loading ? 'Enregistrement…' : 'Valider'}
           </Button>
         </>
@@ -130,10 +143,13 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
             <Select value={chipTypeId} onChange={(e) => setChipTypeId(Number(e.target.value))}>
               {chipTypes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nom} — {formatAriary(c.valeur_nominale)}
+                  {c.nom} — {formatAriary(c.valeur_nominale)} (stock : {c.quantite_stock})
                 </option>
               ))}
             </Select>
+            {movement === 'BUY' && selectedType && (
+              <p className="text-muted text-[11px] mt-1">Stock disponible : {selectedType.quantite_stock}</p>
+            )}
           </Field>
         )}
 
@@ -145,6 +161,10 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
           <p className="text-sm text-primary font-semibold">
             Montant total : <span style={{ color: 'var(--color-accent)' }}>{formatAriary(total)}</span>
           </p>
+        )}
+
+        {stockInsuffisant && (
+          <ErrorBanner message={`Stock insuffisant pour cette quantité (disponible : ${selectedType?.quantite_stock}).`} />
         )}
 
         <Field label="Moyen de paiement" required>

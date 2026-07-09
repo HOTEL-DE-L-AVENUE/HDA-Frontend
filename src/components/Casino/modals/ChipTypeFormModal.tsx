@@ -18,6 +18,7 @@ export const ChipTypeFormModal: React.FC<ChipTypeFormModalProps> = ({ chipType, 
   const [nom, setNom] = useState(chipType?.nom || '');
   const [valeur, setValeur] = useState(chipType ? String(chipType.valeur_nominale) : '');
   const [couleur, setCouleur] = useState(chipType?.couleur || COLOR_PRESETS[0]);
+  const [quantiteStock, setQuantiteStock] = useState(chipType ? String(chipType.quantite_stock) : '0');
   const [statut, setStatut] = useState<StatutChipType>(chipType?.statut || 'ACTIF');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,14 @@ export const ChipTypeFormModal: React.FC<ChipTypeFormModalProps> = ({ chipType, 
     setLoading(true);
     setError(null);
     try {
-      const payload = { code: code.trim(), nom: nom.trim(), valeur_nominale: Number(valeur), couleur, statut };
+      const payload = {
+        code: code.trim(),
+        nom: nom.trim(),
+        valeur_nominale: Number(valeur),
+        couleur,
+        statut,
+        quantite_stock: Number(quantiteStock) || 0,
+      };
       const result = isEdit ? await chipTypesApi.update(chipType!.id, payload) : await chipTypesApi.create(payload);
       onSuccess(result);
     } catch (e: any) {
@@ -67,6 +75,14 @@ export const ChipTypeFormModal: React.FC<ChipTypeFormModalProps> = ({ chipType, 
         </Field>
         <Field label="Valeur nominale (Ariary)" required>
           <NumberInput value={valeur} onChange={(e) => setValeur(e.target.value)} placeholder="1000" min={1} />
+        </Field>
+        <Field label="Quantité en stock" hint="Nombre de jetons physiquement disponibles pour ce type">
+          <NumberInput
+            value={quantiteStock}
+            onChange={(e) => setQuantiteStock(e.target.value)}
+            placeholder="500"
+            min={0}
+          />
         </Field>
         <Field label="Couleur">
           <div className="flex items-center gap-2 flex-wrap">
