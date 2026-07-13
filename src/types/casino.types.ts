@@ -33,7 +33,7 @@ export type StatutIncident = 'OUVERT' | 'EN_COURS' | 'RESOLU';
 
 export type StatutChipType = 'ACTIF' | 'INACTIF';
 
-export type MoyenPaiement = 'ESPECES' | 'MOBILE_MONEY' | 'CARTE' | 'VIREMENT' | 'AUTRE';
+export type MoyenPaiement = 'ESPECES' | 'MOBILE_MONEY' | 'CARTE' | 'VIREMENT' | 'AUTRE' | 'JETONS';
 
 export type TypeOperationCaisse =
   | 'BUY_IN'
@@ -42,7 +42,9 @@ export type TypeOperationCaisse =
   | 'AVANCE_CREDIT'
   | 'REMBOURSEMENT_CREDIT';
 
-export type TypeMouvementJeton = 'BUY' | 'SELL';
+export type TypeMouvementJeton = 'BUY' | 'SELL' | 'PAIEMENT';
+
+export type ModuleCiblePaiementJetons = 'RESTAURANT' | 'BAR' | 'BOUTIQUE' | 'HEBERGEMENT';
 
 export type StatutCredit = 'ACTIF' | 'EN_RETARD' | 'SOLDE';
 
@@ -175,11 +177,12 @@ export interface ChipType {
   valeur_nominale: number;
   couleur: string;
   statut: StatutChipType;
+  quantite_stock: number;
 }
 
 export interface ChipTransaction {
   id: ID;
-  session_id: ID;
+  session_id: ID | null;
   chip_type_id: ID;
   type_jeton?: ChipType;
   quantite: number;
@@ -188,6 +191,8 @@ export interface ChipTransaction {
   client_libre: string | null;
   moyen_paiement: MoyenPaiement;
   type_mouvement: TypeMouvementJeton;
+  module_cible?: 'CASINO' | ModuleCiblePaiementJetons;
+  reference_commande_id?: ID | null;
   created_at: string;
   ref_flux_global?: string;
 }
@@ -359,6 +364,14 @@ export interface ChipMovementPayload {
   client_id?: ID | null;
   client_libre?: string | null;
   moyen_paiement: MoyenPaiement;
+}
+
+export interface ChipPaymentPayload {
+  client_id: ID;
+  chip_type_id: ID;
+  quantite: number;
+  module_cible: ModuleCiblePaiementJetons;
+  reference_commande_id?: ID;
 }
 
 export interface CreditGrantPayload {

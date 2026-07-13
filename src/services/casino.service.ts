@@ -1,9 +1,11 @@
 // =========================================================================
 // Casino — Service API
 // Toutes les routes sont montées sous /api/casino et protégées par
-// requireAuth (Bearer token). Voir CASINO_README.md pour le détail.
+// requireAuth (Bearer token). Utilise l'instance axios centralisée
+// (src/lib/api.ts) — même pattern que client.service.ts.
 // =========================================================================
 
+import api from '../lib/api';
 import type {
   Room,
   Cashier,
@@ -35,6 +37,7 @@ import type {
   QuickAddClientPayload,
   CashOperationPayload,
   ChipMovementPayload,
+  ChipPaymentPayload,
   CreditGrantPayload,
   CreditDrawPayload,
   CreditRepayPayload,
@@ -44,57 +47,56 @@ import type {
   ID,
 } from '../types/casino.types';
 
-import api from '../lib/api';
-import type { AxiosError } from 'axios';
-
-// Base relative à l'instance axios partagée (`api.ts`), qui porte déjà
-// baseURL (VITE_API_URL), le header Authorization (clé 'auth-token') et
-// la logique de refresh automatique sur 401.
+// L'instance `api` (src/lib/api.ts) porte déjà baseURL = VITE_API_URL,
+// le header Authorization (intercepteur) et le refresh token automatique.
+// On ne préfixe donc que le segment propre au module casino.
 const BASE_URL = '/api/casino';
-
-export class ApiError extends Error {
-  status: number;
-  payload: unknown;
-  constructor(status: number, message: string, payload?: unknown) {
-    super(message);
-    this.status = status;
-    this.payload = payload;
-  }
-}
-
-async function request<T>(
-  path: string,
-  options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}
-): Promise<T> {
-  try {
-    const res = await api.request<T>({
-      url: `${BASE_URL}${path}`,
-      method: options.method || 'GET',
-      data: options.body,
-    });
-
-    // axios renvoie déjà `undefined`/vide pour un 204, rien à gérer en plus.
-    return res.data;
-  } catch (err) {
-    const axiosErr = err as AxiosError<any>;
-    const status = axiosErr.response?.status ?? 0;
-    const data = axiosErr.response?.data ?? null;
-    const message =
-      (data && (data.message || data.error)) || axiosErr.message || `Erreur API (${status})`;
-    throw new ApiError(status, message, data);
-  }
-}
-
-const get = <T>(path: string) => request<T>(path, { method: 'GET' });
-const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body });
-const put = <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body });
-const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
 
 function qs(params: Record<string, string | number | undefined | null>): string {
   const usable = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
   if (!usable.length) return '';
   const search = new URLSearchParams(usable.map(([k, v]) => [k, String(v)]));
   return `?${search.toString()}`;
+}
+
+async function get<T>(path: string): Promise<T> {
+  try {
+    const response = await api.get<T>(`${BASE_URL}${path}`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Erreur GET ${path}:`, error);
+    throw error;
+  }
+}
+
+async function post<T>(path: string, body?: unknown): Promise<T> {
+  try {
+    const response = await api.post<T>(`${BASE_URL}${path}`, body);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Erreur POST ${path}:`, error);
+    throw error;
+  }
+}
+
+async function put<T>(path: string, body?: unknown): Promise<T> {
+  try {
+    const response = await api.put<T>(`${BASE_URL}${path}`, body);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Erreur PUT ${path}:`, error);
+    throw error;
+  }
+}
+
+async function del<T>(path: string): Promise<T> {
+  try {
+    const response = await api.delete<T>(`${BASE_URL}${path}`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Erreur DELETE ${path}:`, error);
+    throw error;
+  }
 }
 
 // -------------------------------------------------------------------------
@@ -215,6 +217,13 @@ export const chipTypesApi = {
 export const chipsApi = {
   buy: (payload: ChipMovementPayload) => post<ChipTransaction>('/chips/buy', payload),
   sell: (payload: ChipMovementPayload) => post<ChipTransaction>('/chips/sell', payload),
+  /**
+   * Paiement en jetons dans un autre département (Restaurant/Bar/Boutique/
+   * Hébergement). N'est pas rattaché à une session de caisse casino ; le
+   * client doit être identifié (traçabilité). Utilisé au checkout d'une
+   * commande dans le module cible.
+   */
+  pay: (payload: ChipPaymentPayload) => post<ChipTransaction>('/chips/pay', payload),
   byClient: (clientId: ID) => get<ChipTransaction[]>(`/chips/by-client/${clientId}`),
   list: () => get<ChipTransaction[]>('/chips'),
 };
