@@ -486,10 +486,20 @@ const MobileBottomNav: React.FC = () => {
     if (!showMore) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('#mobile-bottom-nav')) setShowMore(false);
+      // AJOUT: on vérifie aussi #mobile-more-panel, sinon le mousedown
+      // ferme le menu AVANT que le onClick d'un item ne se déclenche
+      // (le panneau "Plus" n'est pas un descendant de #mobile-bottom-nav)
+      if (
+        !target.closest('#mobile-bottom-nav') &&
+        !target.closest('#mobile-more-panel')
+      ) {
+        setShowMore(false);
+      }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    // AJOUT: 'click' au lieu de 'mousedown' pour laisser le temps
+    // au onClick natif du bouton de s'exécuter avant la fermeture
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, [showMore]);
 
   const isMoreActive = moreNavItems.some(
@@ -508,7 +518,7 @@ const MobileBottomNav: React.FC = () => {
             }}
             onClick={() => setShowMore(false)}
           />
-          <div className="md:hidden fixed bottom-20 left-0 right-0 z-50 px-4 pb-2">
+          <div id="mobile-more-panel" className="md:hidden fixed bottom-20 left-0 right-0 z-50 px-4 pb-2">
             <div
               style={{
                 backgroundColor: 'var(--color-surface)',
