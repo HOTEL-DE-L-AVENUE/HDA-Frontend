@@ -106,6 +106,9 @@ export const CardsCreditsTab: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-primary text-xs font-semibold">{formatAriary(ct.valeur_nominale)}</span>
+                    <Badge tone={ct.quantite_stock <= 0 ? 'danger' : ct.quantite_stock < 20 ? 'warning' : 'neutral'}>
+                      Stock : {ct.quantite_stock}
+                    </Badge>
                     <Badge tone={ct.statut === 'ACTIF' ? 'success' : 'neutral'}>{ct.statut}</Badge>
                     <button
                       onClick={() => setShowChipTypeForm(ct)}

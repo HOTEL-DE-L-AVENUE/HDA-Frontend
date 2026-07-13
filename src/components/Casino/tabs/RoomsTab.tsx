@@ -10,6 +10,7 @@ import {
   LogIn,
   ChevronRight,
   DoorOpen,
+  ArrowRightLeft,
 } from 'lucide-react';
 import {
   SectionCard,
@@ -28,6 +29,8 @@ import { OpenSessionModal, CloseSessionModal } from '../modals/SessionModal';
 import { CashOperationModal } from '../modals/CashOperationModal';
 import { ChipOperationModal } from '../modals/ChipOperationModal';
 import { VisitCheckInModal } from '../modals/VisitCheckInModal';
+import { CaisseTransferModal } from '../modals/CaisseTransferModal';
+import { PendingCaisseTransfers } from '../modals/PendingCaisseTransfers';
 import type { Room, Cashier, CashSession, SessionSummary, SessionTransaction } from '../../../types/casino.types';
 import { TYPE_SALLE_LABELS } from '../../../types/casino.types';
 
@@ -52,6 +55,7 @@ export const RoomsTab: React.FC = () => {
   const [showCashOp, setShowCashOp] = useState<'buy-in' | 'cash-out' | 'deposit' | null>(null);
   const [showChipOp, setShowChipOp] = useState<'BUY' | 'SELL' | null>(null);
   const [showCheckIn, setShowCheckIn] = useState<Room | null>(null);
+  const [showTransfer, setShowTransfer] = useState(false);
 
   async function loadAll() {
     setLoading(true);
@@ -319,7 +323,12 @@ export const RoomsTab: React.FC = () => {
                     <Button variant="secondary" className="text-xs" onClick={() => setShowChipOp('SELL')}>
                       Reprise jetons
                     </Button>
+                    <Button variant="secondary" className="text-xs" icon={<ArrowRightLeft size={14} />} onClick={() => setShowTransfer(true)}>
+                      Transfert inter-caisses
+                    </Button>
                   </div>
+
+                  <PendingCaisseTransfers casinoSessionId={selectedSession.id} onChanged={refreshSessionData} />
 
                   <div>
                     <p className="text-secondary text-xs font-semibold mb-2">Transactions de la session</p>
@@ -421,6 +430,16 @@ export const RoomsTab: React.FC = () => {
       )}
       {showCheckIn && (
         <VisitCheckInModal room={showCheckIn} onClose={() => setShowCheckIn(null)} onSuccess={() => setShowCheckIn(null)} />
+      )}
+      {showTransfer && selectedSession && (
+        <CaisseTransferModal
+          casinoSession={selectedSession}
+          onClose={() => setShowTransfer(false)}
+          onSuccess={() => {
+            setShowTransfer(false);
+            refreshSessionData();
+          }}
+        />
       )}
     </div>
   );
