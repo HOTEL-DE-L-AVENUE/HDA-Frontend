@@ -56,6 +56,7 @@ function computeInitialState(casinoSessionId: number, prefill?: CaisseTransfer) 
  */
 export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casinoSession, prefill, onClose, onSuccess }) => {
   const initial = useMemo(() => computeInitialState(casinoSession.id, prefill), [casinoSession.id, prefill]);
+  const sensVerrouille = !!prefill;
 
   const [sens, setSens] = useState<Sens>(initial.sens);
   const [moduleAutre, setModuleAutre] = useState<ModuleCaisse>(initial.moduleAutre);
@@ -65,6 +66,7 @@ export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casino
   const [sessionAutreId, setSessionAutreId] = useState(initial.sessionAutreId);
   const [montant, setMontant] = useState(initial.montant);
   const [motif, setMotif] = useState(initial.motif);
+  const [soldeTheorique, setSoldeTheorique] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +84,25 @@ export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casino
       }
     })();
   }, [casinoSession.id]);
+
+  useEffect(() => {
+    // Repère indicatif seulement : le backend recalcule et fait foi (il
+    // déduit en plus les transferts déjà EN_ATTENTE sur cette session, ce
+    // que ce résumé ne fait pas). Chargé uniquement quand cette caisse est
+    // la source, puisque c'est le seul cas où le solde peut bloquer l'envoi.
+    if (sens !== 'ENVOI') {
+      setSoldeTheorique(null);
+      return;
+    }
+    (async () => {
+      try {
+        const summary = await sessionsApi.summary(casinoSession.id);
+        setSoldeTheorique(summary.solde_theorique);
+      } catch {
+        setSoldeTheorique(null);
+      }
+    })();
+  }, [sens, casinoSession.id]);
 
   const nonSupporte = !CAISSE_TRANSFER_MODULES_SUPPORTES.includes(moduleAutre);
 
@@ -104,6 +125,11 @@ export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casino
     const idAutreCaisse = moduleAutre === 'CASINO' ? Number(casinoSessionCibleId) : Number(sessionAutreId);
     if (!idAutreCaisse) {
       setError(moduleAutre === 'CASINO' ? "Sélectionnez la caisse casino destinataire/source." : `Renseignez l'id de session ${MODULE_CAISSE_LABELS[moduleAutre]}.`);
+      return;
+    }
+
+    if (sens === 'ENVOI' && soldeTheorique !== null && amount > soldeTheorique) {
+      setError(`Fonds insuffisants en caisse (solde théorique : ${formatAriary(soldeTheorique)}, demandé : ${formatAriary(amount)}).`);
       return;
     }
 
@@ -154,23 +180,29 @@ export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casino
         <Field label="Sens du transfert">
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setSens('ENVOI')}
+              onClick={() => !sensVerrouille && setSens('ENVOI')}
+              disabled={sensVerrouille}
               className="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium"
               style={{
                 backgroundColor: sens === 'ENVOI' ? 'var(--color-accent)' : 'var(--color-bg)',
                 border: '1px solid var(--color-border)',
                 color: sens === 'ENVOI' ? '#000' : 'inherit',
+                opacity: sensVerrouille && sens !== 'ENVOI' ? 0.5 : 1,
+                cursor: sensVerrouille ? 'not-allowed' : 'pointer',
               }}
             >
               <ArrowRightLeft size={16} /> Cette caisse envoie
             </button>
             <button
-              onClick={() => setSens('RECEPTION')}
+              onClick={() => !sensVerrouille && setSens('RECEPTION')}
+              disabled={sensVerrouille}
               className="flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium"
               style={{
                 backgroundColor: sens === 'RECEPTION' ? 'var(--color-accent)' : 'var(--color-bg)',
                 border: '1px solid var(--color-border)',
                 color: sens === 'RECEPTION' ? '#000' : 'inherit',
+                opacity: sensVerrouille && sens !== 'RECEPTION' ? 0.5 : 1,
+                cursor: sensVerrouille ? 'not-allowed' : 'pointer',
               }}
             >
               <ArrowRightLeft size={16} /> Cette caisse reçoit
@@ -178,6 +210,7 @@ export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casino
           </div>
           <p className="text-muted text-[11px] mt-1">
             Caisse casino courante : <strong>#{casinoSession.id}</strong>. « Envoie » = source, « reçoit » = destination.
+            {sensVerrouille && ' Sens verrouillé lors de la reprise d\'un transfert (changer de sens créerait un transfert incohérent avec l\'ancien).'}
           </p>
         </Field>
 
@@ -232,6 +265,15 @@ export const CaisseTransferModal: React.FC<CaisseTransferModalProps> = ({ casino
         <Field label="Montant (Ariary)" required>
           <NumberInput value={montant} onChange={(e) => setMontant(e.target.value)} placeholder="200000" min={1} />
         </Field>
+
+        {sens === 'ENVOI' && soldeTheorique !== null && (
+          <p
+            className={`text-[11px] -mt-2 ${Number(montant) > soldeTheorique ? '' : 'text-muted'}`}
+            style={Number(montant) > soldeTheorique ? { color: '#ef4444' } : undefined}
+          >
+            Solde théorique de la caisse #{casinoSession.id} : {formatAriary(soldeTheorique)}
+          </p>
+        )}
 
         <Field label="Motif">
           <TextArea value={motif} onChange={(e) => setMotif(e.target.value)} placeholder="Appoint pour le service du soir" rows={2} />
