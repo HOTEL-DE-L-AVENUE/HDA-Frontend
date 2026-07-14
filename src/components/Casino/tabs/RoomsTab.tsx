@@ -328,7 +328,7 @@ export const RoomsTab: React.FC = () => {
                     </Button>
                   </div>
 
-                  <PendingCaisseTransfers casinoSessionId={selectedSession.id} onChanged={refreshSessionData} />
+                  <PendingCaisseTransfers casinoSession={selectedSession} onChanged={refreshSessionData} />
 
                   <div>
                     <p className="text-secondary text-xs font-semibold mb-2">Transactions de la session</p>
