@@ -2,15 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Coins, CheckCircle2 } from 'lucide-react';
 import { Modal, Field, NumberInput, Select, Button, ErrorBanner, Spinner, formatAriary } from '../common';
 import { PlayerSelector } from '../PlayerSelector';
-import { chipTypesApi, chipsApi } from '../../../services/casino.service';
+import { chipTypesApi, chipsApi, sessionsApi } from '../../../services/casino.service';
 import type { ChipType, ChipTransaction, MoyenPaiement, SelectedPlayer } from '../../../types/casino.types';
-
-interface ChipOperationModalProps {
-  sessionId: number;
-  defaultMovement?: 'BUY' | 'SELL';
-  onClose: () => void;
-  onSuccess: (tx: ChipTransaction) => void;
-}
 
 interface ChipOperationModalProps {
   sessionId: number;
@@ -33,6 +26,7 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
   const [moyenPaiement, setMoyenPaiement] = useState<MoyenPaiement>('ESPECES');
   const [player, setPlayer] = useState<SelectedPlayer | null>(null);
   const [clientLibre, setClientLibre] = useState('');
+  const [soldeTheorique, setSoldeTheorique] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,10 +45,26 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
     })();
   }, []);
 
+  useEffect(() => {
+    // Nécessaire pour plafonner une reprise de jetons (jetons → cash) au
+    // solde réellement disponible en caisse. Indicatif : le backend
+    // (chipsApi.sell) reste seul juge au moment de l'enregistrement.
+    (async () => {
+      try {
+        const summary = await sessionsApi.summary(sessionId);
+        setSoldeTheorique(summary.solde_theorique);
+      } catch {
+        setSoldeTheorique(null);
+      }
+    })();
+  }, [sessionId]);
+
   const selectedType = useMemo(() => chipTypes.find((c) => c.id === chipTypeId), [chipTypes, chipTypeId]);
   const total = selectedType && quantite ? selectedType.valeur_nominale * Number(quantite) : 0;
   const stockInsuffisant =
     movement === 'BUY' && selectedType && quantite ? Number(quantite) > selectedType.quantite_stock : false;
+  const soldeInsuffisant =
+    movement === 'SELL' && soldeTheorique !== null && total > soldeTheorique;
 
   async function handleSubmit() {
     const qty = Number(quantite);
@@ -68,6 +78,10 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
     }
     if (stockInsuffisant) {
       setError(`Stock insuffisant (disponible : ${selectedType?.quantite_stock}).`);
+      return;
+    }
+    if (soldeInsuffisant) {
+      setError(`Solde de caisse insuffisant pour cette reprise (disponible : ${formatAriary(soldeTheorique)}, demandé : ${formatAriary(total)}).`);
       return;
     }
     setLoading(true);
@@ -100,7 +114,7 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
           <Button variant="secondary" onClick={onClose}>
             Annuler
           </Button>
-          <Button icon={<CheckCircle2 size={16} />} onClick={handleSubmit} disabled={loading || stockInsuffisant}>
+          <Button icon={<CheckCircle2 size={16} />} onClick={handleSubmit} disabled={loading || stockInsuffisant || soldeInsuffisant}>
             {loading ? 'Enregistrement…' : 'Valider'}
           </Button>
         </>
@@ -159,12 +173,25 @@ export const ChipOperationModal: React.FC<ChipOperationModalProps> = ({
 
         {!!total && (
           <p className="text-sm text-primary font-semibold">
-            Montant total : <span style={{ color: 'var(--color-accent)' }}>{formatAriary(total)}</span>
+            Montant total :{' '}
+            <span style={{ color: soldeInsuffisant ? '#ef4444' : 'var(--color-accent)' }}>{formatAriary(total)}</span>
+          </p>
+        )}
+
+        {movement === 'SELL' && soldeTheorique !== null && (
+          <p className={`text-[11px] ${soldeInsuffisant ? '' : 'text-muted'}`} style={soldeInsuffisant ? { color: '#ef4444' } : undefined}>
+            Solde théorique de la caisse : {formatAriary(soldeTheorique)}
           </p>
         )}
 
         {stockInsuffisant && (
           <ErrorBanner message={`Stock insuffisant pour cette quantité (disponible : ${selectedType?.quantite_stock}).`} />
+        )}
+
+        {soldeInsuffisant && (
+          <ErrorBanner
+            message={`Montant supérieur au solde de la caisse (disponible : ${formatAriary(soldeTheorique)}, demandé : ${formatAriary(total)}).`}
+          />
         )}
 
         <Field label="Moyen de paiement" required>
