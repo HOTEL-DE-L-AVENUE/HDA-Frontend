@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { RefreshCw, Link2, ShieldCheck, ArrowRightLeft, Check, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Link2, ShieldCheck, ArrowRightLeft, Check, X, RefreshCcw } from 'lucide-react';
 import {
   SectionCard,
   Spinner,
@@ -13,14 +13,16 @@ import {
   formatAriary,
   formatDateTime,
 } from '../common';
-import { sessionsApi, reportsApi } from '../../../services/casino.service';
+import { sessionsApi, cashiersApi, reportsApi } from '../../../services/casino.service';
 import { caisseTransfersApi } from '../../../services/caisseTransfers.service';
-import type { CashSession, EcartCaisseRow, FluxASynchroniserRow } from '../../../types/casino.types';
+import { CaisseTransferModal } from '../modals/CaisseTransferModal';
+import type { CashSession, Cashier, EcartCaisseRow, FluxASynchroniserRow } from '../../../types/casino.types';
 import type { CaisseTransfer, StatutCaisseTransfer } from '../../../types/caisseTransfers.types';
-import { MODULE_CAISSE_LABELS, STATUT_TRANSFER_LABELS } from '../../../types/caisseTransfers.types';
+import { MODULE_CAISSE_LABELS, STATUT_TRANSFER_LABELS, caisseLabel } from '../../../types/caisseTransfers.types';
 
 export const CaisseTab: React.FC = () => {
   const [sessions, setSessions] = useState<CashSession[]>([]);
+  const [cashiers, setCashiers] = useState<Cashier[]>([]);
   const [ecarts, setEcarts] = useState<EcartCaisseRow[]>([]);
   const [flux, setFlux] = useState<FluxASynchroniserRow[]>([]);
   const [transfers, setTransfers] = useState<CaisseTransfer[]>([]);
@@ -29,18 +31,21 @@ export const CaisseTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingTransferId, setActingTransferId] = useState<number | null>(null);
+  const [proceedingTransfer, setProceedingTransfer] = useState<CaisseTransfer | null>(null);
 
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
-      const [s, ec, fl, tr] = await Promise.all([
+      const [s, cs, ec, fl, tr] = await Promise.all([
         sessionsApi.list(),
+        cashiersApi.list(),
         reportsApi.ecartsCaisse({ salle: salleFilter || undefined }),
         reportsApi.fluxASynchroniser(),
         caisseTransfersApi.list({ statut: transferStatutFilter || undefined, limit: 50 }),
       ]);
       setSessions(s);
+      setCashiers(cs);
       setEcarts(ec);
       setFlux(fl);
       setTransfers(tr);
@@ -55,6 +60,8 @@ export const CaisseTab: React.FC = () => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transferStatutFilter]);
+
+  const cashierCode = (cashierId: number) => cashiers.find((c) => c.id === cashierId)?.code;
 
   async function handleConfirmTransfer(t: CaisseTransfer) {
     setActingTransferId(t.id);
@@ -80,6 +87,25 @@ export const CaisseTab: React.FC = () => {
       setActingTransferId(null);
     }
   }
+
+  async function handleProceedSuccess(created: CaisseTransfer) {
+    const old = proceedingTransfer;
+    setProceedingTransfer(null);
+    if (old) {
+      try {
+        await caisseTransfersApi.reject(old.id, { motif_refus: `Remplacé par le transfert #${created.id}` });
+      } catch {
+        // best effort : cf. PendingCaisseTransfers
+      }
+    }
+    await loadAll();
+  }
+
+  /** Session casino d'origine du transfert en cours de reprise, si encore trouvable. */
+  const proceedingSession = useMemo(
+    () => (proceedingTransfer ? sessions.find((s) => s.id === proceedingTransfer.session_source_id) : undefined),
+    [proceedingTransfer, sessions]
+  );
 
   if (loading) return <Spinner label="Chargement…" />;
 
@@ -152,21 +178,26 @@ export const CaisseTab: React.FC = () => {
             <EmptyState label="Aucune session enregistrée." />
           ) : (
             <div className="flex flex-col gap-2 max-h-96 overflow-y-auto">
-              {sessions.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between rounded-xl p-2.5 text-xs"
-                  style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
-                >
-                  <div>
-                    <p className="text-primary font-medium">Session #{s.id} · caisse {s.cashier_id}</p>
-                    <p className="text-muted">
-                      {formatDateTime(s.ouverture_at)} {s.fermeture_at ? `→ ${formatDateTime(s.fermeture_at)}` : ''}
-                    </p>
+              {sessions.map((s) => {
+                const code = cashierCode(s.cashier_id);
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between rounded-xl p-2.5 text-xs"
+                    style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                  >
+                    <div>
+                      <p className="text-primary font-medium">
+                        Session #{s.id} · {code ? `caisse ${code}` : `caisse #${s.cashier_id}`}
+                      </p>
+                      <p className="text-muted">
+                        {formatDateTime(s.ouverture_at)} {s.fermeture_at ? `→ ${formatDateTime(s.fermeture_at)}` : ''}
+                      </p>
+                    </div>
+                    <Badge tone={s.statut === 'OUVERTE' ? 'success' : 'neutral'}>{s.statut}</Badge>
                   </div>
-                  <Badge tone={s.statut === 'OUVERTE' ? 'success' : 'neutral'}>{s.statut}</Badge>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </SectionCard>
@@ -199,7 +230,12 @@ export const CaisseTab: React.FC = () => {
           ) : (
             <div className="flex flex-col gap-2 max-h-96 overflow-y-auto">
               {transfers.map((t) => {
-                const actionnableIci = t.statut === 'EN_ATTENTE' && t.module_destination === 'CASINO';
+                const entrantIci = t.statut === 'EN_ATTENTE' && t.module_destination === 'CASINO';
+                const sortantIci = t.statut === 'EN_ATTENTE' && t.module_source === 'CASINO';
+                const sourceLabel = caisseLabel(t.module_source, t.session_source_id, t.cashier_source_code, t.cashier_source_nom);
+                const destLabel = caisseLabel(t.module_destination, t.session_destination_id, t.cashier_destination_code, t.cashier_destination_nom);
+                const sessionIntrouvable = sortantIci && !sessions.some((s) => s.id === t.session_source_id);
+
                 return (
                   <div
                     key={t.id}
@@ -208,7 +244,7 @@ export const CaisseTab: React.FC = () => {
                   >
                     <div className="min-w-0">
                       <p className="text-primary font-semibold">
-                        {MODULE_CAISSE_LABELS[t.module_source]} (#{t.session_source_id}) → {MODULE_CAISSE_LABELS[t.module_destination]} (#{t.session_destination_id})
+                        {sourceLabel} → {destLabel}
                       </p>
                       <p className="text-muted">
                         {formatAriary(t.montant)} · {t.motif || 'sans motif'} · {formatDateTime(t.created_at)}
@@ -222,7 +258,7 @@ export const CaisseTab: React.FC = () => {
                       >
                         {STATUT_TRANSFER_LABELS[t.statut]}
                       </Badge>
-                      {actionnableIci && (
+                      {entrantIci && (
                         <>
                           <Button
                             className="text-[11px] py-1"
@@ -231,6 +267,29 @@ export const CaisseTab: React.FC = () => {
                             disabled={actingTransferId === t.id}
                           >
                             Confirmer
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="text-[11px] py-1"
+                            icon={<X size={12} />}
+                            onClick={() => handleRejectTransfer(t)}
+                            disabled={actingTransferId === t.id}
+                          >
+                            Refuser
+                          </Button>
+                        </>
+                      )}
+                      {sortantIci && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            className="text-[11px] py-1"
+                            icon={<RefreshCcw size={12} />}
+                            onClick={() => setProceedingTransfer(t)}
+                            disabled={actingTransferId === t.id || sessionIntrouvable}
+                            title={sessionIntrouvable ? 'Session source introuvable (probablement clôturée)' : undefined}
+                          >
+                            Procéder
                           </Button>
                           <Button
                             variant="secondary"
@@ -290,6 +349,15 @@ export const CaisseTab: React.FC = () => {
           )}
         </SectionCard>
       </div>
+
+      {proceedingTransfer && proceedingSession && (
+        <CaisseTransferModal
+          casinoSession={proceedingSession}
+          prefill={proceedingTransfer}
+          onClose={() => setProceedingTransfer(null)}
+          onSuccess={handleProceedSuccess}
+        />
+      )}
     </div>
   );
 };
