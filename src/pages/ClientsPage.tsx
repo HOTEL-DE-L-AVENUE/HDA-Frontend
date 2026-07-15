@@ -30,10 +30,15 @@ import {
   Building,
   Hash,
   Camera,
-  Plus
+  Plus,
+  Shield,
+  FileCheck,
+  Landmark,
+  Briefcase
 } from 'lucide-react';
 import { useClients } from '../hooks/useClients';
-import { Client, ClientFormData } from '../services/client.service';
+import { Client, ClientFormData, ClientKyc, ClientKycFormData, NiveauRisque } from '../services/client.service';
+import SignaturePad from '../components/SignaturePad';
 import toast from 'react-hot-toast';
 
 const ClientsPage: React.FC = () => {
@@ -45,7 +50,12 @@ const ClientsPage: React.FC = () => {
     searchClients,
     createClient,
     updateClient,
-    deleteClient
+    deleteClient,
+    loadClientWithDetails,
+    loadClientKyc,
+    saveClientKyc,
+    loadClientKycSignature,
+    createClientKycSignature
   } = useClients();
 
   // États
@@ -85,6 +95,38 @@ const ClientsPage: React.FC = () => {
   
   const [formData, setFormData] = useState<ClientFormData>(initialFormData);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Fiche KYC (Know Your Customer) — conformité LBC/FT, uniquement pour les joueurs de casino
+  const initialKycData: ClientKycFormData = {
+    lieu_naissance: '',
+    nationalite: '',
+    profession: '',
+    date_delivrance_piece: '',
+    date_expiration_piece: '',
+    autorite_delivrance: '',
+    source_revenus: '',
+    revenu_mensuel_estime: null,
+    mode_paiement: '',
+    banque: '',
+    doc_piece_identite: false,
+    doc_justificatif_domicile: false,
+    doc_photo_client: false,
+    doc_autre: '',
+    niveau_risque: null,
+    commentaires_risque: '',
+    declaration_client: false,
+    date_verification: '',
+  };
+
+  const [kycData, setKycData] = useState<ClientKycFormData>(initialKycData);
+  const [kycSignature, setKycSignature] = useState<string | null>(null);
+  // Ne devient true que si le client dessine réellement une nouvelle signature dans ce
+  // formulaire (voir handleSignatureChange) — évite de recréer un doublon en base à
+  // chaque simple modification du client si la signature existante n'a pas changé.
+  const [signatureDirty, setSignatureDirty] = useState<boolean>(false);
+  const [isLoadingKyc, setIsLoadingKyc] = useState<boolean>(false);
+  const [viewedKyc, setViewedKyc] = useState<ClientKyc | null>(null);
+  const [viewedSignature, setViewedSignature] = useState<string | null>(null);
 
   // Debounce pour la recherche
   useEffect(() => {
@@ -150,16 +192,40 @@ const ClientsPage: React.FC = () => {
     }
   };
 
+  // Gestionnaire dédié aux champs de la fiche KYC
+  const handleKycInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+
+    setKycData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox'
+        ? checked
+        : (name === 'revenu_mensuel_estime' ? (value === '' ? null : Number(value)) : value)
+    }));
+  };
+
+  // Gestionnaire pour SignaturePad — n'est appelé que lors d'une action réelle de
+  // l'utilisateur (validation ou "refaire la signature"), jamais lors du simple
+  // chargement d'une signature existante depuis le serveur.
+  const handleSignatureChange = (dataUrl: string | null): void => {
+    setKycSignature(dataUrl);
+    setSignatureDirty(true);
+  };
+
   // Ouvrir le modal d'ajout
   const openAddModal = (): void => {
     setEditingClient(null);
     setFormData(initialFormData);
     setFormErrors({});
+    setKycData(initialKycData);
+    setKycSignature(null);
+    setSignatureDirty(false);
     setIsModalOpen(true);
   };
 
   // Ouvrir le modal de modification
-  const openEditModal = (client: Client): void => {
+  const openEditModal = async (client: Client): Promise<void> => {
     setEditingClient(client);
     setFormData({
       code_client: client.code_client || '',
@@ -175,7 +241,46 @@ const ClientsPage: React.FC = () => {
       is_casino_player: client.is_casino_player || false,
     });
     setFormErrors({});
+    setKycData(initialKycData);
+    setKycSignature(null);
+    setSignatureDirty(false);
     setIsModalOpen(true);
+
+    // La fiche KYC est désormais disponible pour tous les clients
+    setIsLoadingKyc(true);
+    try {
+      const [kyc, signature] = await Promise.all([
+        loadClientKyc(client.id),
+        loadClientKycSignature(client.id),
+      ]);
+      if (kyc) {
+        setKycData({
+          lieu_naissance: kyc.lieu_naissance || '',
+          nationalite: kyc.nationalite || '',
+          profession: kyc.profession || '',
+          date_delivrance_piece: kyc.date_delivrance_piece || '',
+          date_expiration_piece: kyc.date_expiration_piece || '',
+          autorite_delivrance: kyc.autorite_delivrance || '',
+          source_revenus: kyc.source_revenus || '',
+          revenu_mensuel_estime: kyc.revenu_mensuel_estime ?? null,
+          mode_paiement: kyc.mode_paiement || '',
+          banque: kyc.banque || '',
+          doc_piece_identite: kyc.doc_piece_identite || false,
+          doc_justificatif_domicile: kyc.doc_justificatif_domicile || false,
+          doc_photo_client: kyc.doc_photo_client || false,
+          doc_autre: kyc.doc_autre || '',
+          niveau_risque: kyc.niveau_risque || null,
+          commentaires_risque: kyc.commentaires_risque || '',
+          declaration_client: kyc.declaration_client || false,
+          date_verification: kyc.date_verification || '',
+        });
+      }
+      setKycSignature(signature);
+    } catch (err) {
+      console.error('❌ Erreur chargement fiche KYC:', err);
+    } finally {
+      setIsLoadingKyc(false);
+    }
   };
 
   // Soumission du formulaire
@@ -190,13 +295,30 @@ const ClientsPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      let client: Client;
       if (editingClient) {
-        await updateClient(editingClient.id, formData);
+        client = await updateClient(editingClient.id, formData);
         toast.success('Client mis à jour avec succès');
       } else {
-        await createClient(formData);
+        client = await createClient(formData);
         toast.success('Client créé avec succès');
       }
+
+      // La fiche KYC est désormais enregistrée pour tous les clients
+      try {
+        await saveClientKyc(client.id, kycData);
+        // On ne crée une nouvelle signature que si le client vient réellement
+        // de signer dans ce formulaire — les signatures précédentes ne sont
+        // jamais recréées ni écrasées.
+        if (kycSignature && signatureDirty) {
+          await createClientKycSignature(client.id, kycSignature);
+          setSignatureDirty(false);
+        }
+      } catch (kycError) {
+        console.error('❌ Erreur enregistrement fiche KYC:', kycError);
+        toast.error('Client enregistré, mais la fiche KYC n\'a pas pu être sauvegardée');
+      }
+
       closeModal();
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Une erreur est survenue';
@@ -229,9 +351,22 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  const handleView = (client: Client): void => {
+  const handleView = async (client: Client): Promise<void> => {
     setSelectedClient(client);
+    setViewedKyc(null);
+    setViewedSignature(null);
     setIsViewModalOpen(true);
+
+    try {
+      const [details, signature] = await Promise.all([
+        loadClientWithDetails(client.id),
+        loadClientKycSignature(client.id),
+      ]);
+      setViewedKyc(details?.kyc || null);
+      setViewedSignature(signature);
+    } catch (err) {
+      console.error('❌ Erreur chargement détails client:', err);
+    }
   };
 
   const closeModal = (): void => {
@@ -239,6 +374,9 @@ const ClientsPage: React.FC = () => {
     setEditingClient(null);
     setFormData(initialFormData);
     setFormErrors({});
+    setKycData(initialKycData);
+    setKycSignature(null);
+    setSignatureDirty(false);
   };
 
   // Génération du QR Code
@@ -918,6 +1056,260 @@ const ClientsPage: React.FC = () => {
                 </div>
               </div>
 
+              <div className="space-y-4 border-t border-base pt-4">
+                <div className="flex items-center gap-2">
+                  <Shield size={18} className="text-accent" />
+                  <h3 className="text-sm font-semibold text-primary">Fiche KYC — Conformité LBC/FT</h3>
+                  {isLoadingKyc && <Loader size={14} className="animate-spin text-muted" />}
+                </div>
+
+                  {/* 1. Informations personnelles */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Lieu de naissance</label>
+                      <input
+                        type="text"
+                        name="lieu_naissance"
+                        value={kycData.lieu_naissance || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                        placeholder="Antananarivo"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Nationalité</label>
+                      <input
+                        type="text"
+                        name="nationalite"
+                        value={kycData.nationalite || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                        placeholder="Malgache"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Profession</label>
+                    <input
+                      type="text"
+                      name="profession"
+                      value={kycData.profession || ''}
+                      onChange={handleKycInputChange}
+                      className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                      disabled={isSubmitting}
+                      placeholder="Entrepreneur"
+                    />
+                  </div>
+
+                  {/* 2. Vérification d'identité (complète type_piece / numero_piece ci-dessus) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Date de délivrance</label>
+                      <input
+                        type="date"
+                        name="date_delivrance_piece"
+                        value={kycData.date_delivrance_piece || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Date d'expiration</label>
+                      <input
+                        type="date"
+                        name="date_expiration_piece"
+                        value={kycData.date_expiration_piece || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Autorité de délivrance</label>
+                      <input
+                        type="text"
+                        name="autorite_delivrance"
+                        value={kycData.autorite_delivrance || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                        placeholder="Ministère de l'Intérieur"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. Informations financières */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Source principale des revenus</label>
+                      <input
+                        type="text"
+                        name="source_revenus"
+                        value={kycData.source_revenus || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                        placeholder="Salaire, activité commerciale..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Revenu mensuel estimé</label>
+                      <input
+                        type="number"
+                        name="revenu_mensuel_estime"
+                        value={kycData.revenu_mensuel_estime ?? ''}
+                        onChange={handleKycInputChange}
+                        min={0}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                        placeholder="Ex: 2000000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Mode de paiement utilisé</label>
+                      <input
+                        type="text"
+                        name="mode_paiement"
+                        value={kycData.mode_paiement || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                        placeholder="Espèces, carte, virement..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Banque / Institution financière</label>
+                      <input
+                        type="text"
+                        name="banque"
+                        value={kycData.banque || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Documents justificatifs */}
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-2">Documents justificatifs</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="doc_piece_identite"
+                          checked={kycData.doc_piece_identite}
+                          onChange={handleKycInputChange}
+                          className="w-4 h-4 rounded border-base text-accent focus:ring-accent"
+                          disabled={isSubmitting}
+                        />
+                        <span>Copie pièce d'identité</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="doc_justificatif_domicile"
+                          checked={kycData.doc_justificatif_domicile}
+                          onChange={handleKycInputChange}
+                          className="w-4 h-4 rounded border-base text-accent focus:ring-accent"
+                          disabled={isSubmitting}
+                        />
+                        <span>Justificatif de domicile</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="doc_photo_client"
+                          checked={kycData.doc_photo_client}
+                          onChange={handleKycInputChange}
+                          className="w-4 h-4 rounded border-base text-accent focus:ring-accent"
+                          disabled={isSubmitting}
+                        />
+                        <span>Photo du client</span>
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      name="doc_autre"
+                      value={kycData.doc_autre || ''}
+                      onChange={handleKycInputChange}
+                      className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition text-sm"
+                      disabled={isSubmitting}
+                      placeholder="Autre document (préciser)"
+                    />
+                  </div>
+
+                  {/* 5. Évaluation du risque */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Niveau de risque</label>
+                      <select
+                        name="niveau_risque"
+                        value={kycData.niveau_risque || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                      >
+                        <option value="">Sélectionner</option>
+                        <option value="FAIBLE">Faible</option>
+                        <option value="MOYEN">Moyen</option>
+                        <option value="ELEVE">Élevé</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary mb-1">Date de vérification</label>
+                      <input
+                        type="date"
+                        name="date_verification"
+                        value={kycData.date_verification || ''}
+                        onChange={handleKycInputChange}
+                        className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-secondary mb-1">Commentaires sur l'évaluation du risque</label>
+                    <textarea
+                      name="commentaires_risque"
+                      value={kycData.commentaires_risque || ''}
+                      onChange={handleKycInputChange}
+                      rows={2}
+                      className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  {/* 6. Déclaration du client */}
+                  <label className="flex items-start gap-2 text-sm text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="declaration_client"
+                      checked={kycData.declaration_client}
+                      onChange={handleKycInputChange}
+                      className="w-4 h-4 mt-0.5 rounded border-base text-accent focus:ring-accent"
+                      disabled={isSubmitting}
+                    />
+                    <span>Le client certifie que les informations fournies sont exactes et complètes.</span>
+                  </label>
+
+                  {/* Signature électronique du client */}
+                  <SignaturePad
+                    value={kycSignature}
+                    onChange={handleSignatureChange}
+                    disabled={isSubmitting}
+                    label="Signature électronique du client"
+                  />
+                </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t border-base">
                 <button
                   type="button"
@@ -1060,6 +1452,75 @@ const ClientsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-muted border-b border-base pb-2 flex items-center gap-2">
+                  <Shield size={16} />
+                  Fiche KYC — Conformité LBC/FT
+                </h4>
+                {!viewedKyc ? (
+                  <p className="text-sm text-muted italic">Aucune fiche KYC renseignée pour ce client.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-2">
+                      {viewedKyc.nationalite && (
+                        <p className="flex items-center gap-2 text-secondary">
+                          <User size={16} className="text-muted" />
+                          Nationalité : {viewedKyc.nationalite}
+                        </p>
+                      )}
+                      {viewedKyc.profession && (
+                        <p className="flex items-center gap-2 text-secondary">
+                          <Briefcase size={16} className="text-muted" />
+                          {viewedKyc.profession}
+                        </p>
+                      )}
+                      {viewedKyc.banque && (
+                        <p className="flex items-center gap-2 text-secondary">
+                          <Landmark size={16} className="text-muted" />
+                          {viewedKyc.banque}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {viewedKyc.niveau_risque && (
+                        <p className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-muted" />
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            viewedKyc.niveau_risque === 'ELEVE' ? 'bg-danger/20 text-danger' :
+                            viewedKyc.niveau_risque === 'MOYEN' ? 'bg-warning/20 text-warning' :
+                            'bg-success-bg text-success'
+                          }`}>
+                            Risque {viewedKyc.niveau_risque === 'FAIBLE' ? 'faible' : viewedKyc.niveau_risque === 'MOYEN' ? 'moyen' : 'élevé'}
+                          </span>
+                        </p>
+                      )}
+                      <p className="flex items-center gap-2 text-secondary">
+                        <FileCheck size={16} className="text-muted" />
+                        {[
+                          viewedKyc.doc_piece_identite && "Pièce d'identité",
+                          viewedKyc.doc_justificatif_domicile && 'Justif. domicile',
+                          viewedKyc.doc_photo_client && 'Photo',
+                        ].filter(Boolean).join(', ') || 'Aucun document renseigné'}
+                      </p>
+                      {viewedKyc.date_verification && (
+                        <p className="flex items-center gap-2 text-secondary">
+                          <Calendar size={16} className="text-muted" />
+                          Vérifié le {new Date(viewedKyc.date_verification).toLocaleDateString('fr-FR')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {viewedSignature && (
+                  <div>
+                    <p className="text-xs text-muted mb-1">Signature du client</p>
+                    <div className="border border-base rounded-lg bg-white p-2 flex items-center justify-center" style={{ height: 120 }}>
+                      <img src={viewedSignature} alt="Signature du client" className="max-h-full" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-base flex-wrap">
