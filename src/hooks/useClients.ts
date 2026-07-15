@@ -1,6 +1,9 @@
 // src/hooks/useClients.ts
 import { useState, useEffect, useCallback } from 'react';
-import { clientService, Client, ClientFormData } from '../services/client.service';
+import {
+  clientService, Client, ClientFormData,
+  ClientKyc, ClientKycFormData, ClientWithDetails,
+} from '../services/client.service';
 
 export const useClients = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -82,6 +85,76 @@ export const useClients = () => {
     }
   }, [loadClients]);
 
+  // Récupérer un client avec solde + fiche KYC (vue détaillée)
+  const loadClientWithDetails = useCallback(async (id: number): Promise<ClientWithDetails | null> => {
+    try {
+      setError(null);
+      return await clientService.getClientWithDetails(id);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors du chargement de la fiche client');
+      console.error('❌ loadClientWithDetails error:', err);
+      throw err;
+    }
+  }, []);
+
+  // Récupérer la fiche KYC d'un client (retourne null si non encore renseignée)
+  const loadClientKyc = useCallback(async (id: number): Promise<ClientKyc | null> => {
+    try {
+      setError(null);
+      return await clientService.getClientKyc(id);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors du chargement de la fiche KYC');
+      console.error('❌ loadClientKyc error:', err);
+      throw err;
+    }
+  }, []);
+
+  // Créer ou mettre à jour la fiche KYC d'un client
+  const saveClientKyc = useCallback(async (id: number, data: ClientKycFormData) => {
+    try {
+      setError(null);
+      return await clientService.saveClientKyc(id, data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement de la fiche KYC');
+      console.error('❌ saveClientKyc error:', err);
+      throw err;
+    }
+  }, []);
+
+  // Récupérer la dernière signature électronique liée à la déclaration KYC
+  const loadClientKycSignature = useCallback(async (id: number): Promise<string | null> => {
+    try {
+      setError(null);
+      return await clientService.getClientKycSignature(id);
+    } catch (err: any) {
+      console.error('❌ loadClientKycSignature error:', err);
+      throw err;
+    }
+  }, []);
+
+  // Récupérer l'historique complet des signatures KYC d'un client
+  const loadClientKycSignatureHistory = useCallback(async (id: number) => {
+    try {
+      setError(null);
+      return await clientService.getClientKycSignatureHistory(id);
+    } catch (err: any) {
+      console.error('❌ loadClientKycSignatureHistory error:', err);
+      throw err;
+    }
+  }, []);
+
+  // Enregistrer une NOUVELLE signature électronique (append-only, ne remplace jamais la précédente)
+  const createClientKycSignature = useCallback(async (id: number, signatureData: string) => {
+    try {
+      setError(null);
+      return await clientService.createClientKycSignature(id, signatureData);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement de la signature');
+      console.error('❌ createClientKycSignature error:', err);
+      throw err;
+    }
+  }, []);
+
   useEffect(() => {
     loadClients();
   }, [loadClients]);
@@ -94,6 +167,12 @@ export const useClients = () => {
     searchClients,
     createClient,
     updateClient,
-    deleteClient
+    deleteClient,
+    loadClientWithDetails,
+    loadClientKyc,
+    saveClientKyc,
+    loadClientKycSignature,
+    loadClientKycSignatureHistory,
+    createClientKycSignature,
   };
 };
