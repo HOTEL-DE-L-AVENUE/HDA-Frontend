@@ -12,6 +12,7 @@ import { RoomsTab } from '../components/Casino/tabs/RoomsTab';
 import { CardsCreditsTab } from '../components/Casino/tabs/CardsCreditsTab';
 import { ClientsTab } from '../components/Casino/tabs/ClientsTab';
 import { CaisseTab } from '../components/Casino/tabs/CaisseTab';
+import { GameTablesTab } from '../components/Casino/tabs/GameTablesTab';
 // Onglet Stock existant (module casino) — conservé tel quel, non réécrit ici.
 // import { StockTab } from '../components/Casino/tabs/';
 
@@ -63,6 +64,7 @@ export const CasinoPage: React.FC = () => {
 
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'rooms' && <RoomsTab />}
+      {activeTab === 'tables-jeu' && <GameTablesTab />}
       {activeTab === 'cards' && <CardsCreditsTab />}
       {activeTab === 'clients' && <ClientsTab />}
       {/* {activeTab === 'stock' && <StockTab />} */}
