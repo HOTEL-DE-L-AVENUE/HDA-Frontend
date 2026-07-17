@@ -20,11 +20,32 @@ import type { Room, Cashier, CashSession } from '../../../types/casino.types';
 import type { TableJeu } from '../../../types/casinoTablesJeu.types';
 import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
 
-/** Temps restant (ms) avant que la prolongation redevienne disponible ; <= 0 = disponible. */
-function remainingMs(table: TableJeu, now: number): number {
-  const reference = table.derniere_prolongation_at || table.created_at;
-  const expiry = new Date(reference).getTime() + table.duree_prolongation_minutes * 60000;
-  return expiry - now;
+type PhaseMinuteur = 'JEU_SIMPLE' | 'PROLONGATION';
+
+interface EtatMinuteur {
+  remainingMs: number;
+  phase: PhaseMinuteur;
+  disponible: boolean;
+}
+
+/**
+ * Deux temps distincts :
+ *  - Tant qu'aucune prolongation n'a encore été faite : phase JEU_SIMPLE,
+ *    référence = created_at, durée = duree_jeu_simple_minutes. À expiration :
+ *    label "Temps de jeu terminé", bouton Prolongation affiché pour la 1ère fois.
+ *  - Dès qu'au moins une prolongation existe : phase PROLONGATION,
+ *    référence = derniere_prolongation_at, durée = duree_prolongation_minutes.
+ *    À expiration : label "Timeout Pour la Prolongation".
+ */
+function etatMinuteur(table: TableJeu, now: number): EtatMinuteur {
+  const enPhaseSimple = !table.derniere_prolongation_at;
+  const reference = enPhaseSimple
+    ? (table.derniere_ouverture_at || table.created_at)
+    : table.derniere_prolongation_at!;
+  const dureeMinutes = enPhaseSimple ? table.duree_jeu_simple_minutes : table.duree_prolongation_minutes;
+  const expiry = new Date(reference).getTime() + dureeMinutes * 60000;
+  const remaining = expiry - now;
+  return { remainingMs: remaining, phase: enPhaseSimple ? 'JEU_SIMPLE' : 'PROLONGATION', disponible: remaining <= 0 };
 }
 
 function formatCountdown(ms: number): string {
@@ -69,7 +90,6 @@ export const GameTablesTab: React.FC = () => {
 
   async function loadTables(roomId: number) {
     const t = await tablesJeuApi.list({ room_id: roomId });
-    console.log('Loaded tables for room', roomId, t);
     setTables(t);
   }
 
@@ -247,8 +267,7 @@ export const GameTablesTab: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-2">
                   {tables.map((table) => {
-                    const remaining = remainingMs(table, now);
-                    const prolongationDisponible = remaining <= 0;
+                    const minuteur = etatMinuteur(table, now);
 
                     return (
                       <div
@@ -262,10 +281,10 @@ export const GameTablesTab: React.FC = () => {
                             <Badge tone={table.statut === 'OUVERTE' ? 'success' : table.statut === 'ARCHIVEE' ? 'warning' : 'neutral'}>
                               {table.statut}
                             </Badge>
-                            {table.statut === 'OUVERTE' && prolongationDisponible && (
+                            {table.statut === 'OUVERTE' && minuteur.disponible && (
                               <Badge tone="danger">
                                 <AlertTriangle size={11} className="inline mr-1" />
-                                Timeout Pour la Prolongation
+                                {minuteur.phase === 'JEU_SIMPLE' ? 'Temps de jeu terminé' : 'Timeout Pour la Prolongation'}
                               </Badge>
                             )}
                           </div>
@@ -316,11 +335,12 @@ export const GameTablesTab: React.FC = () => {
                                 Recave
                               </Button>
 
-                              {/* Prolongation : masqué/inactif tant que le timer n'est pas écoulé */}
-                              {table.statut === 'OUVERTE' && !prolongationDisponible ? (
+                              {/* Prolongation : masqué/inactif tant que le temps de jeu simple (1ère fois)
+                                  ou le temps de la prolongation en cours n'est pas écoulé */}
+                              {table.statut === 'OUVERTE' && !minuteur.disponible ? (
                                 <Badge tone="neutral">
                                   <Clock size={11} className="inline mr-1" />
-                                  {formatCountdown(remaining)}
+                                  {formatCountdown(minuteur.remainingMs)}
                                 </Badge>
                               ) : (
                                 <Button
