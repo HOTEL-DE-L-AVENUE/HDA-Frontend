@@ -107,6 +107,53 @@ export interface PourboirePayload {
   type_pourboire: TypePourboire;
 }
 
+export interface JoueurActif {
+  id: ID;
+  joueur: string;
+  client_id: ID | null;
+  entree_at: string;
+  minutes_ecoulees: number;
+}
+
+export interface TempsJeuSession {
+  table_jeu_id: ID;
+  table_numero: string;
+  type_jeu: TypeJeu;
+  entree_at: string;
+  sortie_at: string | null;
+  minutes: number;
+  en_cours: boolean;
+}
+
+export interface TempsJeuParType {
+  type_jeu: TypeJeu;
+  minutes: number;
+  nb_sessions: number;
+}
+
+export interface TempsJeuJoueur {
+  client_id: ID;
+  date: string | null;
+  total_minutes: number;
+  /** Type de jeu cumulant le plus de minutes ; `null` si aucune présence enregistrée. */
+  type_jeu_prefere: TypeJeu | null;
+  par_type_jeu: TempsJeuParType[];
+  sessions: TempsJeuSession[];
+}
+
+export interface TempsJeuJourTable {
+  table_jeu_id: ID;
+  table_numero: string;
+  minutes: number;
+  nb_sessions: number;
+}
+
+export interface TempsJeuJour {
+  date: string;
+  total_minutes: number;
+  par_table: TempsJeuJourTable[];
+}
+
 export interface FeuilleTableLigne {
   joueur: string;
   numero_adherent: string | null;

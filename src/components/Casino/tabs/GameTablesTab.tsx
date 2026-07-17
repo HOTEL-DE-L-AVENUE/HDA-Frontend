@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Unlock, LockKeyhole, Coins, RefreshCw, FileText, Clock, AlertTriangle, Archive, ArchiveRestore } from 'lucide-react';
+import { Plus, Pencil, Trash2, Unlock, LockKeyhole, Coins, RefreshCw, FileText, Clock, AlertTriangle, Archive, ArchiveRestore, Users, LogOut, Timer } from 'lucide-react';
 import {
   SectionCard,
   Spinner,
@@ -8,16 +8,17 @@ import {
   Badge,
   Button,
   Select,
+  formatDateTime,
 } from '../common';
 import { roomsApi, cashiersApi, sessionsApi } from '../../../services/casino.service';
-import { tablesJeuApi } from '../../../services/casinoTablesJeu.service';
+import { tablesJeuApi, tableVisitApi, tempsJeuApi } from '../../../services/casinoTablesJeu.service';
 import { TableFormModal } from '../modals/TableFormModal';
 import { CaveModal } from '../modals/CaveModal';
 import { ProlongationModal } from '../modals/ProlongationModal';
 import { PourboireModal } from '../modals/PourboireModal';
 import { FeuilleTableModal } from '../modals/FeuilleTableModal';
 import type { Room, Cashier, CashSession } from '../../../types/casino.types';
-import type { TableJeu } from '../../../types/casinoTablesJeu.types';
+import type { TableJeu, JoueurActif, TempsJeuJour } from '../../../types/casinoTablesJeu.types';
 import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
 
 type PhaseMinuteur = 'JEU_SIMPLE' | 'PROLONGATION';
@@ -55,6 +56,13 @@ function formatCountdown(ms: number): string {
   return `${mm}:${ss}`;
 }
 
+/** Formate un nombre de minutes en "1h 32min" (ou "45min" si < 1h). */
+function formatMinutes(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  return h > 0 ? `${h}h ${m.toString().padStart(2, '0')}min` : `${m}min`;
+}
+
 export const GameTablesTab: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [cashiers, setCashiers] = useState<Cashier[]>([]);
@@ -63,6 +71,10 @@ export const GameTablesTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [tempsJeuJour, setTempsJeuJour] = useState<TempsJeuJour | null>(null);
+  const [expandedJoueursTableId, setExpandedJoueursTableId] = useState<number | null>(null);
+  const [joueursActifs, setJoueursActifs] = useState<JoueurActif[]>([]);
+  const [joueursLoading, setJoueursLoading] = useState(false);
 
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [selectedCashierId, setSelectedCashierId] = useState<number | null>(null);
@@ -93,11 +105,52 @@ export const GameTablesTab: React.FC = () => {
     setTables(t);
   }
 
+  async function loadTempsJeuJour() {
+    try {
+      setTempsJeuJour(await tempsJeuApi.parJour());
+    } catch {
+      // Non bloquant : un échec de ce rapport ne doit pas empêcher d'utiliser l'onglet.
+      setTempsJeuJour(null);
+    }
+  }
+
+  async function loadJoueursActifs(tableId: number) {
+    setJoueursLoading(true);
+    try {
+      setJoueursActifs(await tablesJeuApi.joueursActifs(tableId));
+    } catch (e: any) {
+      setError(e?.message || 'Erreur de chargement des joueurs actifs.');
+    } finally {
+      setJoueursLoading(false);
+    }
+  }
+
+  function toggleJoueursActifs(tableId: number) {
+    if (expandedJoueursTableId === tableId) {
+      setExpandedJoueursTableId(null);
+      setJoueursActifs([]);
+    } else {
+      setExpandedJoueursTableId(tableId);
+      loadJoueursActifs(tableId);
+    }
+  }
+
+  async function handleTerminerJoueur(visitId: number, tableId: number) {
+    try {
+      await tableVisitApi.terminer(visitId);
+      await loadJoueursActifs(tableId);
+      await loadTempsJeuJour();
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || 'Erreur lors de la clôture de la présence.');
+    }
+  }
+
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
       await loadRoomsAndSessions();
+      await loadTempsJeuJour();
     } catch (e: any) {
       setError(e?.message || 'Erreur de chargement des salles.');
     } finally {
@@ -147,6 +200,11 @@ export const GameTablesTab: React.FC = () => {
     try {
       await tablesJeuApi.fermer(table.id);
       if (selectedRoomId) await loadTables(selectedRoomId);
+      await loadTempsJeuJour(); // la fermeture clôture aussi les présences ouvertes de la table
+      if (expandedJoueursTableId === table.id) {
+        setExpandedJoueursTableId(null);
+        setJoueursActifs([]);
+      }
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || 'Erreur lors de la fermeture.');
     } finally {
@@ -199,6 +257,17 @@ export const GameTablesTab: React.FC = () => {
   return (
     <div className="flex flex-col gap-4 w-full">
       {error && <ErrorBanner message={error} />}
+
+      {tempsJeuJour && tempsJeuJour.total_minutes > 0 && (
+        <div
+          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
+          style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+        >
+          <Timer size={14} className="text-muted" />
+          <span className="text-muted">Temps de jeu total aujourd'hui (toutes tables) :</span>
+          <span className="text-primary font-semibold">{formatMinutes(tempsJeuJour.total_minutes)}</span>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[280px_1fr] gap-4">
         {/* Colonne salles */}
@@ -270,8 +339,8 @@ export const GameTablesTab: React.FC = () => {
                     const minuteur = etatMinuteur(table, now);
 
                     return (
+                      <React.Fragment key={table.id}>
                       <div
-                        key={table.id}
                         className="flex items-center justify-between gap-2 rounded-xl p-3 flex-wrap"
                         style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
                       >
@@ -357,6 +426,14 @@ export const GameTablesTab: React.FC = () => {
                               <Button
                                 variant="secondary"
                                 className="text-[11px] py-1"
+                                icon={<Users size={12} />}
+                                onClick={() => toggleJoueursActifs(table.id)}
+                              >
+                                Joueurs
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                className="text-[11px] py-1"
                                 icon={<FileText size={12} />}
                                 onClick={() => setFeuilleTarget(table)}
                               >
@@ -402,6 +479,45 @@ export const GameTablesTab: React.FC = () => {
                           )}
                         </div>
                       </div>
+
+                      {expandedJoueursTableId === table.id && (
+                        <div
+                          className="rounded-xl p-3 flex flex-col gap-2 -mt-1"
+                          style={{ backgroundColor: 'var(--color-bg)', border: '1px dashed var(--color-border)' }}
+                        >
+                          <p className="text-primary text-xs font-semibold">Joueurs actuellement présents — {table.numero}</p>
+                          {joueursLoading ? (
+                            <Spinner label="Chargement…" />
+                          ) : joueursActifs.length === 0 ? (
+                            <EmptyState label="Aucun joueur présent enregistré sur cette table." />
+                          ) : (
+                            joueursActifs.map((j) => (
+                              <div
+                                key={j.id}
+                                className="flex items-center justify-between text-xs rounded-lg p-2"
+                                style={{ backgroundColor: 'var(--color-surface, transparent)', border: '1px solid var(--color-border)' }}
+                              >
+                                <div>
+                                  <p className="text-primary font-medium">{j.joueur}</p>
+                                  <p className="text-muted">Arrivé à {formatDateTime(j.entree_at)}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge tone="info">{formatMinutes(j.minutes_ecoulees)}</Badge>
+                                  <Button
+                                    variant="secondary"
+                                    className="text-[11px] py-1"
+                                    icon={<LogOut size={12} />}
+                                    onClick={() => handleTerminerJoueur(j.id, table.id)}
+                                  >
+                                    Terminer
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -431,8 +547,11 @@ export const GameTablesTab: React.FC = () => {
           isRecave={caveTarget.isRecave}
           onClose={() => setCaveTarget(null)}
           onSuccess={() => {
+            const closedTableId = caveTarget.table.id;
             setCaveTarget(null);
             if (selectedRoomId) loadTables(selectedRoomId);
+            loadTempsJeuJour();
+            if (expandedJoueursTableId === closedTableId) loadJoueursActifs(closedTableId);
           }}
         />
       )}
