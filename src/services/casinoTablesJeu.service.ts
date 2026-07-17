@@ -13,6 +13,9 @@ import type {
   ProlongationPayload,
   TablePourboire,
   PourboirePayload,
+  JoueurActif,
+  TempsJeuJoueur,
+  TempsJeuJour,
   FeuilleTable,
 } from '../types/casinoTablesJeu.types';
 
@@ -73,6 +76,20 @@ export const tablesJeuApi = {
 
   feuille: (tableId: ID, params?: { date?: string }) =>
     get<FeuilleTable>(`/tables-jeu/${tableId}/feuille${qs(params || {})}`),
+
+  // Présence par table (nécessaire pour totaliser le temps de jeu)
+  joueursActifs: (tableId: ID) => get<JoueurActif[]>(`/tables-jeu/${tableId}/joueurs-actifs`),
+};
+
+export const tableVisitApi = {
+  terminer: (visitId: ID) => post<{ id: ID; sortie_at: string }>(`/table-visits/${visitId}/terminer`),
+};
+
+export const tempsJeuApi = {
+  parJoueur: (clientId: ID, params?: { date?: string }) =>
+    get<TempsJeuJoueur>(`/reports/temps-jeu-joueur/${clientId}${qs(params || {})}`),
+  parJour: (params?: { date?: string }) =>
+    get<TempsJeuJour>(`/reports/temps-jeu-jour${qs(params || {})}`),
 };
 
 export const tableCaveSignatureApi = {

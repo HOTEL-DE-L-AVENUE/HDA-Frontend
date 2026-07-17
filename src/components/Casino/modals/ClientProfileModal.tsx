@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, History, Utensils, AlertTriangle, IdCard, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, History, Utensils, AlertTriangle, IdCard, CheckCircle2, Clock3, Dice5 } from 'lucide-react';
 import {
   Modal,
   SectionCard,
@@ -19,6 +19,7 @@ import {
 import { ScoringPanel } from '../ScoringPanel';
 import { IncidentModal } from '../modals/IncidentModal';
 import { clientsApi, clientProfilesApi, creditsApi } from '../../../services/casino.service';
+import { tempsJeuApi } from '../../../services/casinoTablesJeu.service';
 import type {
   ClientFullProfile,
   ClientHistory,
@@ -28,8 +29,10 @@ import type {
   StatutSpecialClient,
 } from '../../../types/casino.types';
 import { STATUT_SPECIAL_LABELS, NIVEAU_CARTE_LABELS } from '../../../types/casino.types';
+import type { TempsJeuJoueur } from '../../../types/casinoTablesJeu.types';
+import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
 
-type TabKey = 'profil' | 'historique' | 'consommation' | 'incidents' | 'scoring';
+type TabKey = 'profil' | 'historique' | 'consommation' | 'incidents' | 'scoring' | 'jeu';
 
 interface ClientProfileModalProps {
   clientId: number;
@@ -43,6 +46,7 @@ export const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ clientId
   const [consumption, setConsumption] = useState<ClientConsumption | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [activeCredits, setActiveCredits] = useState<PlayerCredit[]>([]);
+  const [tempsJeu, setTempsJeu] = useState<TempsJeuJoueur | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -64,6 +68,15 @@ export const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ clientId
       setConsumption(c);
       setIncidents(inc);
       setActiveCredits(credits);
+
+      // Séparé du Promise.all principal : un client sans historique de tables
+      // de jeu (aucune présence enregistrée) ne doit pas faire échouer tout
+      // le chargement de la fiche.
+      try {
+        setTempsJeu(await tempsJeuApi.parJoueur(clientId));
+      } catch {
+        setTempsJeu(null);
+      }
     } catch (e: any) {
       setError(e?.message || 'Erreur de chargement de la fiche client.');
     } finally {
@@ -81,6 +94,7 @@ export const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ clientId
     { key: 'historique', label: 'Historique', icon: <History size={14} /> },
     { key: 'consommation', label: 'F&B / Bar', icon: <Utensils size={14} /> },
     { key: 'incidents', label: 'Incidents', icon: <AlertTriangle size={14} /> },
+    { key: 'jeu', label: 'Temps de jeu', icon: <Clock3 size={14} /> },
     { key: 'scoring', label: 'Scoring', icon: <ShieldAlert size={14} /> },
   ];
 
@@ -294,6 +308,70 @@ export const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ clientId
             </SectionCard>
           )}
 
+          {tab === 'jeu' && (
+            <div className="flex flex-col gap-3">
+              {!tempsJeu || tempsJeu.sessions.length === 0 ? (
+                <EmptyState label="Aucune présence enregistrée sur une table de jeu pour ce client." />
+              ) : (
+                <>
+                  <SectionCard title="Cumul">
+                    <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-muted text-xs">Temps de jeu total</p>
+                        <p className="text-primary text-lg font-semibold">{formatMinutes(tempsJeu.total_minutes)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted text-xs">Type de jeu préféré</p>
+                        <p className="text-primary">
+                          {tempsJeu.type_jeu_prefere ? (
+                            <Badge tone="accent">
+                              <Dice5 size={12} className="inline mr-1" />
+                              {TYPE_JEU_LABELS[tempsJeu.type_jeu_prefere]}
+                            </Badge>
+                          ) : (
+                            '—'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard title="Répartition par type de jeu">
+                    <div className="flex flex-wrap gap-2">
+                      {tempsJeu.par_type_jeu.map((t) => (
+                        <Badge key={t.type_jeu} tone="neutral">
+                          {TYPE_JEU_LABELS[t.type_jeu]} · {formatMinutes(t.minutes)} · {t.nb_sessions} session(s)
+                        </Badge>
+                      ))}
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard title="Sessions récentes">
+                    <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                      {[...tempsJeu.sessions].reverse().map((s, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs rounded-lg p-2"
+                          style={{ backgroundColor: 'var(--color-bg)' }}
+                        >
+                          <div>
+                            <p className="text-primary font-medium">
+                              {s.table_numero} · {TYPE_JEU_LABELS[s.type_jeu]}
+                            </p>
+                            <p className="text-muted">
+                              {formatDateTime(s.entree_at)} → {s.sortie_at ? formatDateTime(s.sortie_at) : 'en cours'}
+                            </p>
+                          </div>
+                          <Badge tone={s.en_cours ? 'success' : 'neutral'}>{formatMinutes(s.minutes)}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                </>
+              )}
+            </div>
+          )}
+
           {tab === 'scoring' && <ScoringPanel clientId={clientId} />}
         </div>
       )}
@@ -311,6 +389,16 @@ export const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ clientId
     </Modal>
   );
 };
+
+// -------------------------------------------------------------------------
+// Formate un nombre de minutes en "1h 32min" (ou "45min" si < 1h)
+// -------------------------------------------------------------------------
+
+function formatMinutes(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  return h > 0 ? `${h}h ${m.toString().padStart(2, '0')}min` : `${m}min`;
+}
 
 // -------------------------------------------------------------------------
 // Formulaire de décision humaine explicite sur le statut spécial
