@@ -18,6 +18,15 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
   const [numero, setNumero] = useState(table?.numero || '');
   const [typeJeu, setTypeJeu] = useState<TypeJeu>(table?.type_jeu || 'POKER');
   const [caveMinimum, setCaveMinimum] = useState<string>(table ? String(table.cave_minimum) : '');
+  const [salaireHoraireCroupier, setSalaireHoraireCroupier] = useState<string>(
+    table ? String(table.salaire_horaire_croupier) : ''
+  );
+  const [dureeJeuSimple, setDureeJeuSimple] = useState<string>(
+    table ? String(table.duree_jeu_simple_minutes) : '120'
+  );
+  const [dureeProlongation, setDureeProlongation] = useState<string>(
+    table ? String(table.duree_prolongation_minutes) : '60'
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,10 +40,33 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
       setError('La cave minimum doit être un montant positif.');
       return;
     }
+    const salaire = Number(salaireHoraireCroupier);
+    if (!salaire || salaire <= 0) {
+      setError('Le salaire horaire du croupier doit être un montant positif.');
+      return;
+    }
+    const duree = Number(dureeProlongation);
+    if (!duree || duree <= 0) {
+      setError('La durée de prolongation doit être positive (en minutes).');
+      return;
+    }
+    const dureeSimple = Number(dureeJeuSimple);
+    if (!dureeSimple || dureeSimple <= 0) {
+      setError('Le temps de jeu simple doit être positif (en minutes).');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const payload = { room_id: room.id, numero: numero.trim(), type_jeu: typeJeu, cave_minimum: min };
+      const payload = {
+        room_id: room.id,
+        numero: numero.trim(),
+        type_jeu: typeJeu,
+        cave_minimum: min,
+        salaire_horaire_croupier: salaire,
+        duree_jeu_simple_minutes: dureeSimple,
+        duree_prolongation_minutes: duree,
+      };
       if (isEdit && table) {
         await tablesJeuApi.update(table.id, payload);
       } else {
@@ -82,14 +114,47 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
         </Field>
 
         <Field label="Cave minimum (Ariary)" required>
+          <NumberInput value={caveMinimum} onChange={(e) => setCaveMinimum(e.target.value)} placeholder="100000" min={1} />
+          <p className="text-muted text-[11px] mt-1">
+            Montant requis pour la cave initiale d'un joueur. Les recaves n'ont pas de minimum.
+          </p>
+        </Field>
+
+        <Field label="Salaire horaire croupier (Ar)" required>
           <NumberInput
-            value={caveMinimum}
-            onChange={(e) => setCaveMinimum(e.target.value)}
-            placeholder="100000"
+            value={salaireHoraireCroupier}
+            onChange={(e) => setSalaireHoraireCroupier(e.target.value)}
+            placeholder="15000"
             min={1}
           />
           <p className="text-muted text-[11px] mt-1">
-            Montant requis pour la cave initiale d'un joueur. Les recaves ne sont pas soumises à ce minimum.
+            Montant à charge du joueur pour chaque prolongation accordée.
+          </p>
+        </Field>
+
+        <Field label="Temps de jeu simple, sans prolongation (min)" required>
+          <NumberInput
+            value={dureeJeuSimple}
+            onChange={(e) => setDureeJeuSimple(e.target.value)}
+            placeholder="120"
+            min={1}
+          />
+          <p className="text-muted text-[11px] mt-1">
+            Décompté dès la création de la table. À la fin de ce temps : label « Temps de jeu terminé » et
+            affichage du bouton « Prolongation » pour la première fois.
+          </p>
+        </Field>
+
+        <Field label="Durée d'une prolongation (min)" required>
+          <NumberInput
+            value={dureeProlongation}
+            onChange={(e) => setDureeProlongation(e.target.value)}
+            placeholder="60"
+            min={1}
+          />
+          <p className="text-muted text-[11px] mt-1">
+            Une fois une prolongation accordée, ce temps se décompte à son tour ; à la fin : label « Timeout Pour
+            la Prolongation » et le bouton redevient disponible pour une prolongation suivante.
           </p>
         </Field>
       </div>
