@@ -26,10 +26,14 @@ export interface TableJeu {
   cave_minimum: number;
   /** Ariary/heure, à charge du joueur lors d'une prolongation. */
   salaire_horaire_croupier: number;
-  /** Durée d'une période avant que le bouton Prolongation redevienne actif. */
+  /** Temps de jeu simple, sans prolongation, décompté depuis created_at. À expiration : bouton Prolongation affiché pour la 1ère fois. */
+  duree_jeu_simple_minutes: number;
+  /** Durée d'UNE prolongation, décomptée depuis derniere_prolongation_at. */
   duree_prolongation_minutes: number;
   /** Référence du timer : NULL tant qu'aucune prolongation n'a été faite (référence = created_at). */
   derniere_prolongation_at: string | null;
+  /** Référence de la phase "jeu simple" : remise à jour à chaque ouverture, remise à NULL n'arrive jamais (fallback created_at si jamais ouverte via /ouvrir). */
+  derniere_ouverture_at: string | null;
   statut: StatutTableJeu;
   /** true si la table a au moins une cave, prolongation ou pourboire — la suppression est alors bloquée en base (FK), utiliser "Archiver". */
   a_historique: boolean;
@@ -128,7 +132,8 @@ export interface FeuilleProlongationLigne {
 export interface FeuilleTable {
   table: {
     id: ID; numero: string; type_jeu: TypeJeu; cave_minimum: number;
-    salaire_horaire_croupier: number; salle: string;
+    salaire_horaire_croupier: number; duree_jeu_simple_minutes: number;
+    duree_prolongation_minutes: number; salle: string;
   };
   date: string;
   lignes: FeuilleTableLigne[];

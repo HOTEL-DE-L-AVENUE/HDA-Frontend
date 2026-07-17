@@ -33,7 +33,11 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
   return (
     <Modal
       title={`Feuille de table — ${table.numero}`}
-      subtitle={feuille?.date}
+      subtitle={
+        feuille
+          ? `${feuille.date} · jeu simple ${feuille.table.duree_jeu_simple_minutes} min · prolongation ${feuille.table.duree_prolongation_minutes} min`
+          : undefined
+      }
       onClose={onClose}
       footer={
         <>
