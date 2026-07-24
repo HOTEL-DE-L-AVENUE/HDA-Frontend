@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { Printer } from 'lucide-react';
 import { Modal, Spinner, ErrorBanner, Badge, Button, formatAriary, formatDateTime } from '../common';
 import { tablesJeuApi } from '../../../services/casinoTablesJeu.service';
+import { chipTypesApi } from '../../../services/casino.service'; // AJOUT v1.2 : jetons réels pour la fiche Poker Night Kamoula
 import type { TableJeu, FeuilleTable } from '../../../types/casinoTablesJeu.types';
+import type { ChipType } from '../../../types/casino.types';
 import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
 
 interface FeuilleTableModalProps {
@@ -19,9 +21,6 @@ function padArray<T>(arr: T[], min: number): (T | null)[] {
   return [...arr, ...Array(min - arr.length).fill(null)];
 }
 
-// AJOUT v1.1 : valeurs de jetons pour les tableaux vierges de la fiche Poker Night Kamoula
-const VALEURS_JETONS = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000];
-
 const printTh: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', textAlign: 'left', background: '#eee', fontSize: '9px' };
 const printTd: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', fontSize: '9px', height: 20 };
 const printCellHeader: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', fontWeight: 700, background: '#eee', width: '25%', fontSize: '10px' };
@@ -29,6 +28,7 @@ const printCellValue: React.CSSProperties = { border: '1px solid #000', padding:
 
 export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, date, onClose }) => {
   const [feuille, setFeuille] = useState<FeuilleTable | null>(null);
+  const [chipTypes, setChipTypes] = useState<ChipType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,8 +37,12 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
       setLoading(true);
       setError(null);
       try {
-        const f = await tablesJeuApi.feuille(table.id, { date });
+        const [f, ct] = await Promise.all([
+          tablesJeuApi.feuille(table.id, { date }),
+          chipTypesApi.list(),
+        ]);
         setFeuille(f);
+        setChipTypes([...ct].sort((a, b) => a.valeur_nominale - b.valeur_nominale));
       } catch (e: any) {
         setError(e?.message || 'Erreur de chargement de la feuille de table.');
       } finally {
@@ -401,9 +405,9 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
                 </tr>
               </thead>
               <tbody>
-                {VALEURS_JETONS.map((v) => (
-                  <tr key={`pn1-${v}`}>
-                    <td style={printTd}>{v.toLocaleString('fr-FR')}</td>
+                {chipTypes.map((ct) => (
+                  <tr key={`pn1-${ct.id}`}>
+                    <td style={printTd}>({ct.nom}) {ct.valeur_nominale.toLocaleString('fr-FR')}</td>
                     <td style={printTd}>&nbsp;</td>
                     <td style={printTd}>&nbsp;</td>
                     <td style={printTd}>&nbsp;</td>
@@ -433,9 +437,9 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
                 </tr>
               </thead>
               <tbody>
-                {VALEURS_JETONS.map((v) => (
-                  <tr key={`pn2-${v}`}>
-                    <td style={printTd}>{v.toLocaleString('fr-FR')}</td>
+                {chipTypes.map((ct) => (
+                  <tr key={`pn2-${ct.id}`}>
+                    <td style={printTd}>({ct.nom}) {ct.valeur_nominale.toLocaleString('fr-FR')}</td>
                     <td style={printTd}>&nbsp;</td>
                     <td style={printTd}>&nbsp;</td>
                     <td style={printTd}>&nbsp;</td>
