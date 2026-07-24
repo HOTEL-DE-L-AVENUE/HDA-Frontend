@@ -1,14 +1,31 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Printer } from 'lucide-react';
 import { Modal, Spinner, ErrorBanner, Badge, Button, formatAriary, formatDateTime } from '../common';
 import { tablesJeuApi } from '../../../services/casinoTablesJeu.service';
 import type { TableJeu, FeuilleTable } from '../../../types/casinoTablesJeu.types';
+import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
 
 interface FeuilleTableModalProps {
   table: TableJeu;
   date?: string; // YYYY-MM-DD, défaut aujourd'hui
   onClose: () => void;
 }
+
+/** Complète un tableau avec des lignes vides (null) jusqu'à `min` — pour reproduire
+ *  les lignes pré-imprimées vierges de la fiche papier (à remplir à la main si besoin). */
+function padArray<T>(arr: T[], min: number): (T | null)[] {
+  if (arr.length >= min) return arr;
+  return [...arr, ...Array(min - arr.length).fill(null)];
+}
+
+// AJOUT v1.1 : valeurs de jetons pour les tableaux vierges de la fiche Poker Night Kamoula
+const VALEURS_JETONS = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000];
+
+const printTh: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', textAlign: 'left', background: '#eee', fontSize: '9px' };
+const printTd: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', fontSize: '9px', height: 20 };
+const printCellHeader: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', fontWeight: 700, background: '#eee', width: '25%', fontSize: '10px' };
+const printCellValue: React.CSSProperties = { border: '1px solid #000', padding: '3px 4px', width: '25%', fontSize: '10px' };
 
 export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, date, onClose }) => {
   const [feuille, setFeuille] = useState<FeuilleTable | null>(null);
@@ -29,6 +46,11 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
       }
     })();
   }, [table.id, date]);
+
+  // Lignes vierges façon fiche papier : 20 caves, 8 prolongations, à compléter au stylo
+  // si la fiche est imprimée avant la fin du service.
+  const paddedLignes = feuille ? padArray(feuille.lignes, 20) : [];
+  const paddedProlongations = feuille ? padArray(feuille.prolongations, 8) : [];
 
   return (
     <Modal
@@ -55,7 +77,8 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
       ) : error ? (
         <ErrorBanner message={error} />
       ) : !feuille ? null : (
-        <div className="flex flex-col gap-5">
+        <>
+        <div className="flex flex-col gap-5 print:hidden">
           {/* Caves / recaves */}
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
@@ -88,9 +111,18 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
                       </Badge>
                     </td>
                     <td className="py-1.5 text-center">
-                      <Badge tone={l.signature_presente ? 'success' : 'danger'}>
-                        {l.signature_presente ? '✓' : 'Manquante'}
-                      </Badge>
+                      {l.signature_data ? (
+                        <img
+                          src={l.signature_data}
+                          alt="Signature"
+                          className="inline-block h-6 max-w-[80px] object-contain"
+                          style={{ filter: 'invert(0)' }}
+                        />
+                      ) : (
+                        <Badge tone={l.signature_presente ? 'success' : 'danger'}>
+                          {l.signature_presente ? '✓' : 'Manquante'}
+                        </Badge>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -131,9 +163,17 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
                         </Badge>
                       </td>
                       <td className="py-1.5 text-center">
-                        <Badge tone={p.signature_presente ? 'success' : 'danger'}>
-                          {p.signature_presente ? '✓' : 'Manquante'}
-                        </Badge>
+                        {p.signature_data ? (
+                          <img
+                            src={p.signature_data}
+                            alt="Signature"
+                            className="inline-block h-6 max-w-[80px] object-contain"
+                          />
+                        ) : (
+                          <Badge tone={p.signature_presente ? 'success' : 'danger'}>
+                            {p.signature_presente ? '✓' : 'Manquante'}
+                          </Badge>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -168,6 +208,253 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
             <TotalStat label="TOTAL POURBOIRES" value={formatAriary(feuille.pourboires.total)} highlight />
           </div>
         </div>
+
+        {/* Bloc imprimable uniquement — masqué à l'écran, affiché au print.
+            Rendu via portail vers document.body : la Modal a un panneau interne en
+            overflow-y-auto à hauteur limitée, donc un bloc absolute resté à l'intérieur
+            se fait couper (les signatures en bas de fiche disparaissaient). */}
+        {createPortal(
+        <div className="hidden print:block text-black feuille-print-area">
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              .feuille-print-area, .feuille-print-area * { visibility: visible; }
+              .feuille-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+              @page { size: A4; margin: 12mm; }
+            }
+          `}</style>
+
+          <h1 style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
+            FICHE DE TABLE — {feuille.table.numero}
+          </h1>
+          <p style={{ textAlign: 'center', fontSize: 11, marginBottom: 10 }}>
+            {TYPE_JEU_LABELS[feuille.table.type_jeu]} · Salle {feuille.table.salle}
+          </p>
+
+          {/* En-tête */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+            <tbody>
+              <tr>
+                <td style={printCellHeader}>DATE</td>
+                <td style={printCellValue}>{feuille.date}</td>
+                <td style={printCellHeader}>CAVE MINIMUM</td>
+                <td style={printCellValue}>{formatAriary(feuille.table.cave_minimum)}</td>
+              </tr>
+              <tr>
+                <td style={printCellHeader}>DUREE JEU SIMPLE</td>
+                <td style={printCellValue}>{feuille.table.duree_jeu_simple_minutes} min</td>
+                <td style={printCellHeader}>DUREE PROLONGATION</td>
+                <td style={printCellValue}>{feuille.table.duree_prolongation_minutes} min</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Caves / recaves */}
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={printTh}>Heure arrivée</th>
+                <th style={printTh}>Joueur</th>
+                <th style={printTh}>N° adhérent</th>
+                <th style={printTh}>Heure</th>
+                <th style={printTh}>N° cave</th>
+                <th style={printTh}>Montant cave</th>
+                <th style={printTh}>Total joueur</th>
+                <th style={printTh}>Payé</th>
+                <th style={{ ...printTh, width: 90 }}>Signature</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paddedLignes.map((l, idx) => (
+                <tr key={idx}>
+                  <td style={printTd}>{l?.heure_arrivee || ''}</td>
+                  <td style={printTd}>{l?.joueur || ''}</td>
+                  <td style={printTd}>{l?.numero_adherent || ''}</td>
+                  <td style={printTd}>{l?.heure || ''}</td>
+                  <td style={printTd}>{l ? l.numero_cave : ''}</td>
+                  <td style={{ ...printTd, textAlign: 'right' }}>{l ? formatAriary(l.montant_cave) : ''}</td>
+                  <td style={{ ...printTd, textAlign: 'right' }}>{l ? formatAriary(l.montant_total_joueur) : ''}</td>
+                  <td style={{ ...printTd, textAlign: 'center' }}>
+                    {l ? (l.statut_paiement === 'PAYE' ? (l.moyen_paiement || 'Payé') : 'Non payé') : ''}
+                  </td>
+                  <td style={{ ...printTd, textAlign: 'center' }}>
+                    {l?.signature_data ? (
+                      <img src={l.signature_data} alt="" style={{ height: 16, maxWidth: 80, objectFit: 'contain' }} />
+                    ) : (
+                      ''
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Prolongations */}
+          <p style={{ fontSize: 11, fontWeight: 700, margin: '10px 0 4px' }}>PROLONGATIONS</p>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={printTh}>Heure</th>
+                <th style={printTh}>Joueur</th>
+                <th style={printTh}>Montant</th>
+                <th style={printTh}>Payé</th>
+                <th style={{ ...printTh, width: 90 }}>Signature</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paddedProlongations.map((p, idx) => (
+                <tr key={idx}>
+                  <td style={printTd}>{p ? formatDateTime(p.heure) : ''}</td>
+                  <td style={printTd}>{p?.joueur || ''}</td>
+                  <td style={{ ...printTd, textAlign: 'right' }}>{p ? formatAriary(p.montant) : ''}</td>
+                  <td style={{ ...printTd, textAlign: 'center' }}>
+                    {p ? (p.statut_paiement === 'PAYE' ? (p.moyen_paiement || 'Payé') : 'Non payé') : ''}
+                  </td>
+                  <td style={{ ...printTd, textAlign: 'center' }}>
+                    {p?.signature_data ? (
+                      <img src={p.signature_data} alt="" style={{ height: 16, maxWidth: 80, objectFit: 'contain' }} />
+                    ) : (
+                      ''
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pourboires */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
+            <tbody>
+              <tr>
+                <td style={printCellHeader}>POURBOIRES — JETONS</td>
+                <td style={printCellValue}>{formatAriary(feuille.pourboires.total_jetons)}</td>
+                <td style={printCellHeader}>POURBOIRES — ESPECES</td>
+                <td style={printCellValue}>{formatAriary(feuille.pourboires.total_especes)}</td>
+                <td style={printCellHeader}>TOTAL POURBOIRES</td>
+                <td style={printCellValue}>{formatAriary(feuille.pourboires.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Totaux */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
+            <tbody>
+              <tr>
+                <td style={printCellHeader}>TOTAL CASHING EN JETONS</td>
+                <td style={printCellValue}>{formatAriary(feuille.totaux.total_cashing_jetons)}</td>
+                <td style={printCellHeader}>TOTAL CAVES CAVEES</td>
+                <td style={printCellValue}>{formatAriary(feuille.totaux.total_caves_encaissees)}</td>
+              </tr>
+              <tr>
+                <td style={printCellHeader}>MONTANT PAYE — ESPECES</td>
+                <td style={printCellValue}>{formatAriary(feuille.totaux.montant_paye_especes)}</td>
+                <td style={printCellHeader}>MONTANT PAYE — TPE</td>
+                <td style={printCellValue}>{formatAriary(feuille.totaux.montant_paye_tpe)}</td>
+              </tr>
+              <tr>
+                <td style={printCellHeader}>RESTE A PAYER (non payé)</td>
+                <td style={printCellValue}>{formatAriary(feuille.totaux.montant_non_paye)}</td>
+                <td style={printCellHeader}>TOTAL PROLONGATION</td>
+                <td style={printCellValue}>{formatAriary(feuille.totaux.total_prolongation)}</td>
+              </tr>
+              {/* Non suivi côté données → champs vierges à remplir à la main, comme demandé */}
+              <tr>
+                <td style={printCellHeader}>TOTAL BON RESTAURANT</td>
+                <td style={printCellValue}>&nbsp;</td>
+                <td style={printCellHeader}>TOTAL OFFERT</td>
+                <td style={printCellValue}>&nbsp;</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Signatures finales */}
+          <table style={{ width: '100%', marginTop: 28 }}>
+            <tbody>
+              <tr>
+                <td style={{ width: '50%', fontSize: 10, paddingTop: 24 }}>
+                  SIGNATURE CROUPIER
+                  <div style={{ marginTop: 24, borderTop: '1px solid #000', width: '80%' }} />
+                </td>
+                <td style={{ width: '50%', fontSize: 10, paddingTop: 24 }}>
+                  SIGNATURE RESPONSABLE
+                  <div style={{ marginTop: 24, borderTop: '1px solid #000', width: '80%' }} />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* AJOUT v1.1 : page "Fiche Poker Night Kamoula" — deux tableaux vierges de dénombrement des jetons */}
+          <div style={{ pageBreakBefore: 'always', marginTop: 20 }}>
+            <h1 style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, marginBottom: 10 }}>
+              FICHE POKER NIGHT KAMOULA
+            </h1>
+
+            {/* Tableau 1 : total de la veille / valeur départ / total fermeture — vierge, à remplir à la main */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4 }}>
+              <thead>
+                <tr>
+                  <th style={printTh}>VALEURS DES JETONS</th>
+                  <th style={printTh}>TOTAL DE LA VEILLE</th>
+                  <th style={printTh}>VALEUR</th>
+                  <th style={printTh}>VALEUR DEPART</th>
+                  <th style={printTh}>TOTAL FERMETURE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {VALEURS_JETONS.map((v) => (
+                  <tr key={`pn1-${v}`}>
+                    <td style={printTd}>{v.toLocaleString('fr-FR')}</td>
+                    <td style={printTd}>&nbsp;</td>
+                    <td style={printTd}>&nbsp;</td>
+                    <td style={printTd}>&nbsp;</td>
+                    <td style={printTd}>&nbsp;</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{ ...printTd, fontWeight: 700, textAlign: 'center' }} colSpan={5}>
+                    TOTAL
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <p style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, margin: '6px 0' }}>
+              TOTAL DES PRELEVEMENTS
+            </p>
+
+            {/* Tableau 2 : nombre de jetons / valeur totale — vierge, à remplir à la main */}
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={printTh}>VALEURS DES JETONS</th>
+                  <th style={printTh}>&nbsp;</th>
+                  <th style={printTh}>NOMBRE DE JETONS</th>
+                  <th style={printTh}>VALEUR TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {VALEURS_JETONS.map((v) => (
+                  <tr key={`pn2-${v}`}>
+                    <td style={printTd}>{v.toLocaleString('fr-FR')}</td>
+                    <td style={printTd}>&nbsp;</td>
+                    <td style={printTd}>&nbsp;</td>
+                    <td style={printTd}>&nbsp;</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{ ...printTd, fontWeight: 700 }} colSpan={2}>
+                    TOTAL DES PRELEVEMENTS
+                  </td>
+                  <td style={printTd}>&nbsp;</td>
+                  <td style={printTd}>&nbsp;</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>,
+        document.body
+        )}
+        </>
       )}
     </Modal>
   );
