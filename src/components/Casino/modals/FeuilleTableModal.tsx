@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer } from 'lucide-react';
+import { Printer, Download } from 'lucide-react';
 import { Modal, Spinner, ErrorBanner, Badge, Button, formatAriary, formatDateTime } from '../common';
 import { tablesJeuApi } from '../../../services/casinoTablesJeu.service';
 import { chipTypesApi } from '../../../services/casino.service'; // AJOUT v1.2 : jetons réels pour la fiche Poker Night Kamoula
@@ -31,6 +31,8 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
   const [chipTypes, setChipTypes] = useState<ChipType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const printAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -56,6 +58,62 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
   const paddedLignes = feuille ? padArray(feuille.lignes, 20) : [];
   const paddedProlongations = feuille ? padArray(feuille.prolongations, 8) : [];
 
+  // Génère un PDF à partir du bloc imprimable existant (celui utilisé pour window.print()),
+  // sans passer par la boîte de dialogue d'impression du navigateur.
+  const handleSavePdf = async () => {
+    if (!printAreaRef.current || !feuille) return;
+    setGeneratingPdf(true);
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      const canvas = await html2canvas(printAreaRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        // Le bloc est masqué à l'écran (classe "hidden print:block") : on le rend
+        // visible uniquement dans le DOM cloné utilisé par html2canvas, sans toucher
+        // à l'affichage réel de la page.
+        onclone: (clonedDoc) => {
+          const cloneEl = clonedDoc.querySelector('.feuille-print-area') as HTMLElement | null;
+          if (cloneEl) {
+            cloneEl.classList.remove('hidden');
+            cloneEl.style.display = 'block';
+          }
+        },
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`feuille-table-${feuille.table.numero}-${feuille.date}.pdf`);
+    } catch (e) {
+      console.error('Erreur lors de la génération du PDF', e);
+      setError('Erreur lors de la génération du PDF.');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
   return (
     <Modal
       title={`Feuille de table — ${table.numero}`}
@@ -69,6 +127,13 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
         <>
           <Button variant="secondary" onClick={onClose}>
             Fermer
+          </Button>
+          <Button
+            icon={<Download size={16} />}
+            onClick={handleSavePdf}
+            disabled={!feuille || generatingPdf}
+          >
+            {generatingPdf ? 'Génération…' : 'Enregistrer PDF'}
           </Button>
           <Button icon={<Printer size={16} />} onClick={() => window.print()} disabled={!feuille}>
             Imprimer
@@ -218,7 +283,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
             overflow-y-auto à hauteur limitée, donc un bloc absolute resté à l'intérieur
             se fait couper (les signatures en bas de fiche disparaissaient). */}
         {createPortal(
-        <div className="hidden print:block text-black feuille-print-area">
+        <div ref={printAreaRef} className="hidden print:block text-black feuille-print-area">
           <style>{`
             @media print {
               body * { visibility: hidden; }
