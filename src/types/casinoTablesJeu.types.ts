@@ -155,6 +155,8 @@ export interface TempsJeuJour {
 }
 
 export interface FeuilleTableLigne {
+  /** ID de la cave/recave — nécessaire pour retrouver la signature via tableCaveSignatureApi si besoin. */
+  cave_id: ID;
   joueur: string;
   numero_adherent: string | null;
   heure_arrivee: string;
@@ -165,15 +167,21 @@ export interface FeuilleTableLigne {
   statut_paiement: StatutPaiementCave;
   moyen_paiement: MoyenPaiement | null;
   signature_presente: boolean;
+  /** Image de la signature (data URL base64, ex. "data:image/png;base64,...") si signée, sinon `null`. */
+  signature_data: string | null;
 }
 
 export interface FeuilleProlongationLigne {
+  /** ID de la prolongation — nécessaire pour retrouver la signature via tableProlongationSignatureApi si besoin. */
+  prolongation_id: ID;
   joueur: string;
   heure: string;
   montant: number;
   statut_paiement: StatutPaiementCave;
   moyen_paiement: MoyenPaiement | null;
   signature_presente: boolean;
+  /** Image de la signature (data URL base64) si signée, sinon `null`. */
+  signature_data: string | null;
 }
 
 export interface FeuilleTable {
