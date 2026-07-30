@@ -1,39 +1,13 @@
-// ─── Métier (aligné sur la BDD) ──────────────────────────────────────────────
+// ─── Métier (aligné sur la BDD) ──────────────────────────────
 
 /** Correspond à products (type_produit = PRODUIT_FINI, source_module = BAR) */
 export interface BarProduct {
-  id: string;
+  id: number;
   nom: string;
   ingredients: string;
-  prix: number;           // prix_vente
-  categorie: string;      // categories.nom
-  alcool: boolean;        // champ UI dérivé de la catégorie
-}
-
-/** Correspond à orders + order_items (source_module = 'BAR') */
-export interface BarOrder {
-  id: number;
-  client_id?: number;
-  source_module: 'BAR';
-  montant_total: number;
-  statut: 'EN_ATTENTE' | 'SERVI' | 'ANNULE';
-  created_at: string;
-  items: BarOrderItem[];
-}
-
-export interface BarOrderItem {
-  id: number;
-  order_id: number;
-  product_id: number;
-  quantite: number;
-  prix_unitaire: number;
-}
-
-/** Données agrégées pour les meilleures ventes (calculé côté API) */
-export interface BestSeller {
-  nom: string;
-  ventes: number;
-  montant: string;   // pré-formaté
+  prix: number;
+  categorie: string;
+  alcool: boolean;
 }
 
 /** Solde caisse du module bar (issu de financial_transactions + module = 'bar') */
@@ -41,4 +15,49 @@ export interface BarCaisseStats {
   solde: number;
   entrees: number;
   sorties: number;
+}
+
+/** Données agrégées pour les meilleures ventes */
+export interface BestSeller {
+  nom: string;
+  ventes: number;
+  montant: string;
+}
+
+// ==================== BAR LOUNGE ====================
+
+export interface BarTable {
+  id: number;
+  numero: string;
+  capacite: number;
+  statut: 'LIBRE' | 'OCCUPEE' | 'RESERVEE' | 'EN_COURS';
+}
+
+export interface BarCashier {
+  id: number;
+  nom: string;
+  statut: 'OUVERTE' | 'FERMEE';
+  current_session?: BarSession;
+}
+
+export interface BarSession {
+  id: number;
+  cashier_id: number;
+  user_id?: number;
+  ouverture_at: string;
+  fermeture_at?: string;
+  fond_initial: number;
+  fond_final?: number;
+  ecart?: number;
+}
+
+export interface BarStockItem {
+  id: number;
+  product_id: number;
+  location_id: number;
+  quantite: number;
+  unite: string;
+  product_nom: string;
+  product_categorie: string;
+  location_nom: string;
 }
