@@ -6,9 +6,10 @@ interface Props {
   cocktails: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string }>;
   onStockUpdate?: () => void;
+  onAddToOrder?: (cocktail: BarProduct) => boolean | void | Promise<void>;
 }
 
-export const CocktailMenu: React.FC<Props> = ({ cocktails, stockMap, onStockUpdate }) => {
+export const CocktailMenu: React.FC<Props> = ({ cocktails, stockMap, onStockUpdate, onAddToOrder }) => {
   if (cocktails.length === 0) {
     return (
       <div className="space-y-4">
@@ -30,6 +31,7 @@ export const CocktailMenu: React.FC<Props> = ({ cocktails, stockMap, onStockUpda
             cocktail={cocktail}
             stock={stockMap?.[cocktail.id]}
             onStockUpdate={onStockUpdate}
+            onAddToOrder={onAddToOrder}
           />
         ))}
       </div>

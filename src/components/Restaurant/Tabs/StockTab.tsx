@@ -123,7 +123,7 @@ export const StockTab: React.FC = () => {
 const StockPanel: React.FC = () => {
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<number | null>(null);
-  const [typeFilter, setTypeFilter] = useState<string>('MATIERE_PREMIERE');
+  const [typeFilter, setTypeFilter] = useState<string>('');
   const [stocks, setStocks] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [movements, setMovements] = useState<any[]>([]);
@@ -161,9 +161,11 @@ const StockPanel: React.FC = () => {
       restaurantService.getUnits(),
       restaurantService.getCategories().catch(() => ({ success: false, data: [] })),
     ]).then(([loc, un, cat]) => {
-      if (loc.success) {
+if (loc.success) {
         setLocations(loc.data);
-        if (loc.data.length > 0) setSelectedLoc(loc.data[0].id);
+        const restaurantLocation = loc.data.find((location: StockLocation) => location.nom.toLowerCase().includes('restaurant'));
+        if (restaurantLocation) setSelectedLoc(restaurantLocation.id);
+        else if (loc.data.length > 0) setSelectedLoc(loc.data[0].id);
       }
       if (un.success) {
         setUnits(un.data);
@@ -567,7 +569,7 @@ const AchatsPanel: React.FC = () => {
     setLoading(true);
     Promise.all([
       restaurantService.getSuppliers(),
-      restaurantService.getProducts({ type_produit: 'MATIERE_PREMIERE' }),
+      restaurantService.getProducts({ actif: true }),
       restaurantService.getStockLocations(),
       restaurantService.getPurchases(),
     ]).then(([sup, prod, loc, pur]) => {

@@ -4,6 +4,7 @@ import { ModuleType, StockItem } from '../types';
 import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from '../components/UI';
 import BarTransactionsCard from './Bar/BarTransactionsCard';
 import { formatCurrency } from '../utils/data';
+import api from '../lib/api';
 import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle } from 'lucide-react';
 
 interface StockManagerProps {
@@ -34,27 +35,28 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backendStock, setBackendStock] = useState<BackendStockItem[]>([]);
-  const apiBase = 'http://localhost:4000/api/bar/stock';
+    const apiBase = '/api/bar/stock';
 
   const isBar = module === 'bar';
+
+  const getErrorMessage = (err: unknown) => {
+    if (typeof err === 'object' && err !== null && 'response' in err) {
+      const response = (err as { response?: { data?: { error?: { message?: string } } } }).response;
+      return response?.data?.error?.message || 'Erreur réseau';
+    }
+    return err instanceof Error ? err.message : 'Erreur de connexion';
+  };
 
   const refetchStock = async () => {
     if (!isBar) return;
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('auth-token') || sessionStorage.getItem('auth-token');
-      const res = await fetch('http://localhost:4000/api/bar/stock', {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setBackendStock(data.data || data);
+      const response = await api.get(apiBase);
+      const payload = response.data?.data ?? response.data;
+      setBackendStock(Array.isArray(payload) ? payload : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur de connexion');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -72,9 +74,9 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         quantite: bs.quantite ?? 0,
         unite: bs.unite || 'unités',
         prixUnitaire: bs.prix ?? 0,
-        seuilMinimum: 5,
+        seuilMinimum: bs.seuil_minimum ?? 5,
         fournisseur: '',
-        status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= 5 ? 'faible' : 'disponible',
+        status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
         module: 'bar' as ModuleType,
         createdAt: '',
         updatedAt: '',
@@ -93,58 +95,59 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     return 'disponible';
   };
 
-   const handleSubmit = async () => {
-     if (!form.nom) return;
-     const status = computeStatus(form.quantite, form.seuilMinimum);
+  const handleSubmit = async () => {
+    if (!form.nom.trim()) return;
+    const status = computeStatus(form.quantite, form.seuilMinimum);
 
-     if (isBar) {
-       try {
-if (editItem && editItem.id) {
-            const { data: updated } = await fetch(`${apiBase}/${editItem.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-              body: JSON.stringify({ nom: form.nom, categorie: form.categorie, quantite: form.quantite, prix: form.prixUnitaire, unite: form.unite || 'unités', seuil_minimum: form.seuilMinimum || 5 }),
-            }).then(r => r.json());
-            setBackendStock(prev => prev.map(bs =>
-              String(bs.id) === editItem.id
-                ? { ...bs, nom: form.nom, categorie: form.categorie, quantite: form.quantite, prix: form.prixUnitaire, unite: form.unite || 'unités', seuil_minimum: form.seuilMinimum || 5 }
-                : bs
-            ));
-          } else {
-            const res = await fetch(apiBase, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-              body: JSON.stringify({ nom: form.nom, categorie: form.categorie, quantite: form.quantite, prix: form.prixUnitaire, unite: form.unite || 'unités', seuil_minimum: form.seuilMinimum || 5 }),
-            });
-            const created = await res.json();
-            const item = created.data || created;
-            setBackendStock(prev => [...prev, {
-              id: item.id,
-              quantite: item.quantite ?? form.quantite,
-              seuil_minimum: (item.seuil_minimum ?? form.seuilMinimum) || 5,
-              unite: item.unite || form.unite || 'unités',
-              nom: form.nom,
-              categorie: form.categorie,
-              prix: form.prixUnitaire,
-            }]);
-          }
-       } catch (err) {
-         setError(err instanceof Error ? err.message : 'Erreur');
-       }
-     } else {
-       if (editItem) {
-         dispatch({ type: 'UPDATE_STOCK_ITEM', payload: {
-           ...editItem, ...form, status, updatedAt: new Date().toISOString()
-         }});
-       } else {
-         dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
-       }
-     }
+    if (isBar) {
+      setLoading(true);
+      setError(null);
+      try {
+        const prixValue = Number(form.prixUnitaire);
+        const payload = {
+          nom: form.nom.trim(),
+          categorie: form.categorie || 'Bar',
+          quantite: Number(form.quantite) || 0,
+          prix: Number.isFinite(prixValue) ? prixValue : 0,
+          prixUnitaire: Number.isFinite(prixValue) ? prixValue : 0,
+          price: Number.isFinite(prixValue) ? prixValue : 0,
+          unite: form.unite.trim() || 'unités',
+          seuil_minimum: Number(form.seuilMinimum) || 5,
+          seuilMinimum: Number(form.seuilMinimum) || 5,
+          ingredients: '',
+          alcool: true,
+        };
 
-     setShowModal(false);
-     setEditItem(null);
-     setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
-   };
+        if (editItem && editItem.id) {
+          await api.put(`${apiBase}/${editItem.id}`, payload);
+        } else {
+          await api.post(apiBase, payload);
+        }
+
+        await refetchStock();
+        setShowModal(false);
+        setEditItem(null);
+        setForm({ nom: '', categorie: categories[0] || 'Bar', quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
+      } catch (err) {
+        setError(getErrorMessage(err));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (editItem) {
+      dispatch({ type: 'UPDATE_STOCK_ITEM', payload: {
+        ...editItem, ...form, status, updatedAt: new Date().toISOString()
+      }});
+    } else {
+      dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
+    }
+
+    setShowModal(false);
+    setEditItem(null);
+    setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
+  };
 
 const openEdit = (item: StockItem) => {
   setEditItem(item);
@@ -186,11 +189,15 @@ const openEdit = (item: StockItem) => {
         </button>
         <button onClick={async () => {
           if (isBar) {
+            setLoading(true);
+            setError(null);
             try {
-              await fetch(`${apiBase}/${item.id}`, { method: 'DELETE' });
+              await api.delete(`${apiBase}/${item.id}`);
               await refetchStock();
             } catch (err) {
-              setError(err instanceof Error ? err.message : 'Erreur');
+              setError(getErrorMessage(err));
+            } finally {
+              setLoading(false);
             }
           } else {
             dispatch({ type: 'DELETE_STOCK_ITEM', payload: item.id });
