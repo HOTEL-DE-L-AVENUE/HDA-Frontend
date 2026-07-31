@@ -1,16 +1,20 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/data';
-import { BarCaisseStats } from '../../types/bar.type';
+import type { BarCommande } from '../../types/bar.type';
 
 interface Props {
-  stats: BarCaisseStats;
+  commandes: BarCommande[];
+  stockMap: Record<number, { quantite: number; unite: string }>;
 }
 
-export const BarStats: React.FC<Props> = ({ stats }) => {
+export const BarStats: React.FC<Props> = ({ commandes, stockMap }) => {
+  const revenu = commandes.reduce((total, commande) => total + Number(commande.total || 0), 0);
+  const commandesActives = commandes.filter((commande) => commande.statut !== 'Servie').length;
+  const stockFaible = Object.values(stockMap).filter((stock) => Number(stock.quantite) <= 5).length;
   const items = [
-    { label: 'Revenu Bar', value: formatCurrency(stats.solde),    className: 'text-primary' },
-    { label: 'Entrées',    value: formatCurrency(stats.entrees),  className: 'text-success' },
-    { label: 'Sorties',    value: formatCurrency(stats.sorties),  className: 'text-danger'  },
+    { label: 'Revenu des commandes', value: formatCurrency(revenu), className: 'text-primary' },
+    { label: 'Commandes actives', value: String(commandesActives), className: 'text-success' },
+    { label: 'Produits à réapprovisionner', value: String(stockFaible), className: stockFaible > 0 ? 'text-danger' : 'text-success' },
   ];
 
   return (

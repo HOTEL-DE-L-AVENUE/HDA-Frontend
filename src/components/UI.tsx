@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { formatCurrency } from '../utils/data';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -106,6 +107,17 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -115,13 +127,19 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     xl: 'max-w-4xl'
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full ${sizeClasses[size]} bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`relative w-full ${sizeClasses[size]} bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl`}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/50">
           <h3 className="text-white font-semibold text-lg">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
           >
@@ -130,7 +148,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         </div>
         <div className="p-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -253,20 +272,13 @@ interface CaisseCardProps {
 export const CaisseCard: React.FC<CaisseCardProps> = ({ 
   solde, entrees, sorties, title = 'Caisse', gradient = 'from-amber-500 to-orange-500'
 }) => (
+  
+
+ 
   <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-    <div className={`p-4 bg-gradient-to-r ${gradient}`}>
-      <p className="text-white/80 text-sm font-medium">{title}</p>
-      <p className="text-white text-3xl font-black mt-1">{formatCurrency(solde)}</p>
-    </div>
-    <div className="grid grid-cols-2 divide-x divide-slate-800/50">
-      <div className="p-4">
-        <p className="text-slate-500 text-xs mb-1">Entrées</p>
-        <p className="text-emerald-400 font-bold">{formatCurrency(entrees)}</p>
-      </div>
-      <div className="p-4">
-        <p className="text-slate-500 text-xs mb-1">Sorties</p>
-        <p className="text-red-400 font-bold">{formatCurrency(sorties)}</p>
-      </div>
-    </div>
+  
+
   </div>
+
+  
 );
