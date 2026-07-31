@@ -24,6 +24,22 @@ export interface BestSeller {
   montant: string;
 }
 
+export interface BarCommandeItem {
+  product_id?: number;
+  nom: string;
+  quantite: number;
+  prix: number;
+}
+
+export interface BarCommande {
+  id: number;
+  client: string;
+  table: number;
+  statut: 'En attente' | 'En préparation' | 'Servie';
+  total: number;
+  items: BarCommandeItem[];
+}
+
 // ==================== BAR LOUNGE ====================
 
 export interface BarTable {

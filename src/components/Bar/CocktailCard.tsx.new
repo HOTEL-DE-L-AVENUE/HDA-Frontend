@@ -8,10 +8,10 @@ interface Props {
   cocktail: BarProduct;
   stock?: { quantite: number; unite: string };
   onStockUpdate?: () => void;
-  onAddToOrder?: (cocktail: BarProduct) => boolean | void | Promise<void>;
+  onCreateCommande?: (cocktail: BarProduct) => void | Promise<void>;
 }
 
-export const CocktailCard: React.FC<Props> = ({ cocktail, stock, onStockUpdate, onAddToOrder }) => {
+export const CocktailCard: React.FC<Props> = ({ cocktail, stock, onStockUpdate, onCreateCommande }) => {
   const [adding, setAdding] = useState(false);
   const [lastTx, setLastTx] = useState<{ quantite: number; montant: number; created_at: string } | null>(null);
   const { showToast } = useToast();
@@ -57,7 +57,7 @@ export const CocktailCard: React.FC<Props> = ({ cocktail, stock, onStockUpdate, 
     }
   };
 
-  const handleAddToCurrentOrder = async () => {
+  const handleCreateCommande = async () => {
     if (adding) return;
     if (!stock || stock.quantite <= 0) {
       showToast('Rupture de stock', 'error');
@@ -78,15 +78,11 @@ export const CocktailCard: React.FC<Props> = ({ cocktail, stock, onStockUpdate, 
       });
       await barService.updateBarStock(cocktail.id, { quantite: stock.quantite - 1 });
 
-      if (onAddToOrder) {
-        const added = await onAddToOrder(cocktail);
-        if (!added) {
-          showToast('Créez d’abord une commande', 'error');
-          return;
-        }
+      if (onCreateCommande) {
+        await onCreateCommande(cocktail);
       }
 
-      showToast(`${cocktail.nom} ajouté à la commande`, 'success');
+      showToast(`${cocktail.nom} ajouté à la nouvelle commande`, 'success');
       if (onStockUpdate) onStockUpdate();
     } catch (err) {
       showToast('Erreur lors de l\'ajout', 'error');
@@ -112,7 +108,21 @@ export const CocktailCard: React.FC<Props> = ({ cocktail, stock, onStockUpdate, 
         <h4 className="text-primary font-semibold mb-2">{cocktail.nom}</h4>
         <p className="text-muted text-xs mb-4 leading-relaxed">{cocktail.ingredients}</p>
 
-   
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-accent font-bold text-lg">{formatCurrency(cocktail.prix)}</span>
+          <button
+            onClick={handleAdd}
+            disabled={adding || (stock && stock.quantite <= 0)}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg transition-all
+              ${stock && stock.quantite <= 0
+                ? 'bg-slate-400 cursor-not-allowed'
+                : 'bg-accent hover:bg-accent/50 active:scale-95'
+              }`}
+            aria-label={`Ajouter ${cocktail.nom}`}
+          >
+            {adding ? '...' : '+'}
+          </button>
+        </div>
 
         {stock && (
           <div className="mt-3 pt-3 border-t border-base">
@@ -135,9 +145,25 @@ export const CocktailCard: React.FC<Props> = ({ cocktail, stock, onStockUpdate, 
           </div>
         )}
 
-   
+        {lastTx && (
+          <div className="mt-2 pt-2 border-t border-base/50 text-xs text-slate-500 flex items-center justify-between">
+            <span>Dernière commande : <span className="text-white font-medium">{lastTx.quantite}x</span></span>
+            <span className="text-accent font-semibold">{formatCurrency(lastTx.montant)}</span>
+          </div>
+        )}
       </div>
 
+      <button
+        onClick={handleCreateCommande}
+        disabled={adding || (stock && stock.quantite <= 0)}
+        className={`w-full rounded-xl px-3 py-2 text-sm font-medium text-white transition-all whitespace-nowrap
+          ${stock && stock.quantite <= 0
+            ? 'bg-slate-400 cursor-not-allowed'
+            : 'bg-slate-800 hover:bg-slate-700'
+          }`}
+      >
+        {adding ? 'Traitement...' : 'Nouvelle commande'}
+      </button>
     </div>
   );
 };

@@ -1,9 +1,10 @@
 import type { BarProduct, BestSeller } from '../types/bar.type';
 
 export const BAR_TABS = [
-  { id: 'bar',    label: 'Bar & Cocktails' },
-  { id: 'stock',  label: 'Stock'           },
-  { id: 'caisse', label: 'Caisse'          },
+  { id: 'bar',       label: 'Bar & Cocktails' },
+  { id: 'commandes', label: 'Commandes'       },
+  { id: 'stock',     label: 'Stock'           },
+  { id: 'caisse',    label: 'Caisse'          },
 ] as const;
 
 export type BarTabId = typeof BAR_TABS[number]['id'];
@@ -26,3 +27,9 @@ export const BEST_SELLERS: BestSeller[] = [
 ];
 
 export const BEST_SELLERS_MAX_VENTES = 50;
+
+export const BAR_COMMANDES_ACTIONS = {
+  newOrderLabel: 'Nouvelle commande',
+  emptyTitle: 'Aucune commande active',
+  emptyDescription: 'Créez une commande avec un client et une table pour commencer.',
+} as const;
