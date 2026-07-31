@@ -35,6 +35,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<BarCommande['items']>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [commandeSearchTerm, setCommandeSearchTerm] = useState('');
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -263,6 +264,15 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
     printWindow.focus();
     printWindow.print();
   };
+
+  const formatCommandeDate = (value?: string) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('fr-FR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
   const columns = [
     {
       key: 'table',
@@ -300,6 +310,11 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       ),
     },
     {
+      key: 'date',
+      label: 'Date',
+      render: (commande: BarCommande) => <span className="text-sm text-slate-300">{formatCommandeDate(commande.created_at)}</span>,
+    },
+    {
       key: 'montant',
       label: 'Montant',
       render: (commande: BarCommande) => <span className="font-semibold text-accent">{formatCurrency(commande.total)}</span>,
@@ -327,7 +342,20 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
     },
   ];
 
-  const data = commandes.map((commande) => ({ ...commande, id: String(commande.id) }));
+  const filteredCommandes = commandes.filter((commande) => {
+    const query = commandeSearchTerm.trim().toLocaleLowerCase('fr-FR');
+    if (!query) return true;
+
+    const searchableValue = [
+      commande.client,
+      tables.find((tableItem) => tableItem.id === commande.table)?.numero || String(commande.table),
+      formatCommandeDate(commande.created_at),
+      ...commande.items.map((item) => item.nom),
+    ].join(' ').toLocaleLowerCase('fr-FR');
+
+    return searchableValue.includes(query);
+  });
+  const data = filteredCommandes.map((commande) => ({ ...commande, id: String(commande.id) }));
   const totalCommandes = commandes.reduce((sum, commande) => sum + commande.total, 0);
   const commandesEnAttente = commandes.filter((commande) => commande.statut === 'En attente').length;
   const filteredCocktails = cocktails.filter((cocktail) => {
@@ -553,11 +581,19 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       <div className="rounded-2xl overflow-hidden border border-base bg-surface">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base px-3 py-3 sm:px-6 sm:py-4">
           <h3 className="text-primary font-semibold">Liste des commandes</h3>
+          <Input
+            value={commandeSearchTerm}
+            onChange={(event) => setCommandeSearchTerm(event.target.value)}
+            placeholder="Rechercher client, table, article..."
+            className="mt-3 w-full sm:mt-0 sm:max-w-xs"
+          />
         </div>
 
-        {commandes.length === 0 ? (
+        {data.length === 0 ? (
           <div className="p-8 text-center text-slate-500">
-            {BAR_COMMANDES_ACTIONS.emptyTitle}. {BAR_COMMANDES_ACTIONS.emptyDescription}
+            {commandes.length === 0
+              ? `${BAR_COMMANDES_ACTIONS.emptyTitle}. ${BAR_COMMANDES_ACTIONS.emptyDescription}`
+              : 'Aucune commande ne correspond à votre recherche.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -566,6 +602,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
                 <tr>
                   <th className="px-4 py-3 font-medium">Table</th>
                   <th className="px-4 py-3 font-medium">Articles</th>
+                  <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Montant</th>
                   <th className="px-4 py-3 font-medium">Statut</th>
                   <th className="px-4 py-3 font-medium text-right">Actions</th>
@@ -578,7 +615,8 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
                     <td className="px-4 py-3">{columns[1].render(commande as unknown as BarCommande)}</td>
                     <td className="px-4 py-3">{columns[2].render(commande as unknown as BarCommande)}</td>
                     <td className="px-4 py-3">{columns[3].render(commande as unknown as BarCommande)}</td>
-                    <td className="px-4 py-3 text-right">{columns[4].render(commande as unknown as BarCommande)}</td>
+                    <td className="px-4 py-3">{columns[4].render(commande as unknown as BarCommande)}</td>
+                    <td className="px-4 py-3 text-right">{columns[5].render(commande as unknown as BarCommande)}</td>
                   </tr>
                 ))}
               </tbody>

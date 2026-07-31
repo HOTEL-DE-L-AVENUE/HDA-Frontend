@@ -38,6 +38,7 @@ export interface BarCommande {
   statut: 'En attente' | 'En préparation' | 'Servie';
   total: number;
   items: BarCommandeItem[];
+  created_at?: string;
 }
 
 // ==================== BAR LOUNGE ====================
