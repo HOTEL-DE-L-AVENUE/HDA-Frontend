@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
 import { useHDA } from '../context/HDAContext';
 import barService from '../services/bar.service';
@@ -13,6 +14,8 @@ import { BarTabs } from '../components/Bar/BarTabs';
 import { BarTabId, BEST_SELLERS, BEST_SELLERS_MAX_VENTES } from '../data/Bar.data';
 import { CocktailMenu } from '../components/Bar/CocktailMenu';
 import { BestSellers } from '../components/Bar/BestSellers';
+import { BarCommandeView } from '../components/Bar/BarCommande';
+import type { BarCommande } from '../types/bar.type';
 
 export const BarPage: React.FC = () => {
   const { getModuleCaisseSolde } = useHDA();
@@ -21,17 +24,93 @@ export const BarPage: React.FC = () => {
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
+  const [commandes, setCommandes] = useState<BarCommande[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadOrders = async () => {
+    try {
+      const data = await barService.getBarOrders();
+      setCommandes(Array.isArray(data) ? data.map((order) => ({
+        id: order.id,
+        client: order.client,
+        table: order.table,
+        statut: order.statut === 'EN_ATTENTE' ? 'En attente' : (order.statut as BarCommande['statut']),
+        total: Number(order.total || 0),
+        items: order.items || [],
+      })) : []);
+    } catch (error) {
+      console.error('Erreur chargement commandes bar:', error);
+      setError('Lâ€™API bar nâ€™est pas accessible. VÃ©rifiez que le backend tourne sur le port 4000.');
+    }
+  };
+
+  const handleCreateCommande = async ({ client, table, items }: { client: string; table: number; items: BarCommande['items'] }) => {
+    try {
+      const normalizedItems = items.map((item) => ({
+        product_id: item.product_id,
+        nom: item.nom,
+        quantite: Number(item.quantite) || 1,
+        prix: Number(item.prix) || 0,
+        prix_unitaire: Number(item.prix) || 0,
+      }));
+
+      const createdOrder = await barService.createBarOrder({ client, table, items: normalizedItems });
+      if (createdOrder) {
+        await loadOrders();
+      }
+    } catch (error) {
+      console.error('Erreur crÃ©ation commande bar:', error);
+      setError("La commande bar n'a pas pu être créée.");
+      throw error;
+    }
+  };
+
+  const handleDeleteCommande = async (id: number) => {
+    try {
+      await barService.deleteBarOrder(id);
+      await loadOrders();
+    } catch (error) {
+      console.error('Erreur suppression commande bar:', error);
+      setError("La commande bar n'a pas pu être supprimée.");
+      throw error;
+    }
+  };
+  const handleAddItemToCommande = (cocktail: BarProduct): boolean => {
+    if (commandes.length === 0) {
+      return false;
+    }
+
+    setCommandes((prev) => {
+      const currentCommande = prev[0];
+      const normalizedPrice = Number(cocktail.prix) || 0;
+      const existingItem = currentCommande.items.find((item) => item.nom === cocktail.nom);
+      const updatedItems = existingItem
+        ? currentCommande.items.map((item) =>
+            item.nom === cocktail.nom
+              ? { ...item, quantite: item.quantite + 1, prix: normalizedPrice }
+              : item
+          )
+        : [...currentCommande.items, { nom: cocktail.nom, quantite: 1, prix: normalizedPrice }];
+
+      const total = updatedItems.reduce((sum, item) => sum + Number(item.prix || 0) * item.quantite, 0);
+      const updatedCommande = { ...currentCommande, items: updatedItems, total };
+      return [updatedCommande];
+    });
+
+    return true;
+  };
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [cocktailsRes, stockRes] = await Promise.all([
         barService.getBarProducts(),
         barService.getBarStock(),
       ]);
-      const cocktails = cocktailsRes.data || cocktailsRes;
-      const stock = stockRes.data || stockRes;
+      const cocktails = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
+      const stock = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: BarStockItem[] }).data;
       if (Array.isArray(cocktails)) setCocktails(cocktails as BarProduct[]);
       if (Array.isArray(stock)) {
         const map: Record<number, { quantite: number; unite: string }> = {};
@@ -42,12 +121,16 @@ export const BarPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Erreur chargement bar:', err);
+      setError('Lâ€™API bar nâ€™est pas accessible. VÃ©rifiez que le backend tourne sur le port 4000.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    void fetchData();
+    void loadOrders();
+  }, []);
 
   if (loading) {
     return (
@@ -61,15 +144,26 @@ export const BarPage: React.FC = () => {
     <div className="space-y-6">
       <BarHeader />
 
+      {error && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
       <BarStats stats={{ solde, entrees, sorties }} />
 
       <BarTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === 'bar' && (
         <div className="space-y-6">
-          <CocktailMenu cocktails={cocktails} stockMap={stockMap} onStockUpdate={fetchData} />
+          <CocktailMenu cocktails={cocktails} stockMap={stockMap} onStockUpdate={fetchData} onAddToOrder={handleAddItemToCommande} />
           <BestSellers sellers={BEST_SELLERS} />
         </div>
+      )}
+
+      {activeTab === 'commandes' && (
+        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} cocktails={cocktails} />
       )}
 
       {activeTab === 'stock' && (
