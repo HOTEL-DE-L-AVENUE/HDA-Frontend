@@ -33,6 +33,7 @@ export const BarPage: React.FC = () => {
         table: order.table,
         statut: order.statut === 'EN_ATTENTE' ? 'En attente' : (order.statut as BarCommande['statut']),
         total: Number(order.total || 0),
+        created_at: order.created_at,
         items: order.items || [],
       })) : []);
     } catch (error) {
