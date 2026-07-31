@@ -140,6 +140,9 @@ export const updateProduct = (id: number, data: Partial<{
 }>) =>
   api.put(`/api/restaurant/products/${id}`, data).then(res => res.data);
 
+export const deleteProduct = (id: number) =>
+  api.delete(`/api/restaurant/products/${id}`).then(res => res.data);
+
 
 
 // ==================== FOURNISSEURS ====================

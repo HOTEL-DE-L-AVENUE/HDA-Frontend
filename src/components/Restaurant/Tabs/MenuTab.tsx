@@ -19,7 +19,10 @@ export const MenuTab: React.FC<MenuTabProps> = ({
   onEditProduct,
   onDeleteProduct
 }) => {
-  const menuProducts = products.filter(p => p.type_produit === 'PRODUIT_FINI');
+  // Services and drinks are sellable menu items too; only raw material is excluded.
+  const menuProducts = products.filter(p =>
+    ['PRODUIT_FINI', 'BOISSON', 'SERVICE'].includes(p.type_produit)
+  );
 
   const columns = [
     { key: 'nom', label: 'Nom', render: (p: Product) => (

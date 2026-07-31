@@ -4,13 +4,15 @@ import { formatCurrency } from '../../utils/data';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
-import { Plus, XCircle } from 'lucide-react';
+import { Plus, Printer, XCircle } from 'lucide-react';
+import { clientService, type Client } from '../../services/client.service';
 
 interface Props {
   commandes: BarCommande[];
   onCreateCommande?: (commande: { client: string; table: number; items: BarCommande['items'] }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
   cocktails?: BarProduct[];
+  stockMap?: Record<number, { quantite: number; unite: string }>;
 }
 
 const statusClasses: Record<BarCommande['statut'], { label: string; variant: string }> = {
@@ -19,8 +21,15 @@ const statusClasses: Record<BarCommande['statut'], { label: string; variant: str
   Servie: { label: 'Servie', variant: 'success' },
 };
 
-export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, onDeleteCommande, cocktails = [] }) => {
+export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, onDeleteCommande, cocktails = [], stockMap = {} }) => {
   const [client, setClient] = useState('');
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
+  const [newClientNom, setNewClientNom] = useState('');
+  const [newClientPrenom, setNewClientPrenom] = useState('');
+  const [newClientTelephone, setNewClientTelephone] = useState('');
+  const [isSavingClient, setIsSavingClient] = useState(false);
   const [table, setTable] = useState('');
   const [tables, setTables] = useState<BarTable[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,6 +62,10 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
     setSearchTerm('');
     setIsCreatingTable(false);
     setNewTableNumber('');
+    setIsCreatingClient(false);
+    setNewClientNom('');
+    setNewClientPrenom('');
+    setNewClientTelephone('');
     setFeedback(null);
     setIsModalOpen(false);
   };
@@ -65,7 +78,12 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
     setFeedback(null);
     setIsCreatingTable(tables.length === 0);
     setNewTableNumber('');
+    setIsCreatingClient(false);
+    setNewClientNom('');
+    setNewClientPrenom('');
+    setNewClientTelephone('');
     setIsModalOpen(true);
+    void loadClients();
   };
 
   const handleCloseModal = () => {
@@ -132,6 +150,16 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       return;
     }
 
+    const unavailableItem = selectedItems.find((item) => {
+      const available = stockMap[item.product_id || 0]?.quantite;
+      return !Number.isFinite(available) || Number(item.quantite) > available;
+    });
+    if (unavailableItem) {
+      const available = stockMap[unavailableItem.product_id || 0]?.quantite || 0;
+      setFeedback({ type: 'error', message: 'Stock insuffisant pour ' + unavailableItem.nom + '. Disponible : ' + available + '.' });
+      return;
+    }
+
     try {
       await onCreateCommande?.({
         client: clientNom,
@@ -140,23 +168,100 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       });
       resetModal();
     } catch (error) {
-      console.error('Erreur cr�ation commande bar:', error);
-      setFeedback({ type: 'error', message: "La commande n'a pas pu �tre cr��e. V�rifiez les donn�es puis r�essayez." });
+      console.error('Erreur création commande bar:', error);
+      setFeedback({ type: 'error', message: "La commande n'a pas pu être créée. Vérifiez les données puis réessayez." });
+    }
+  };
+
+  const loadClients = async () => {
+    try {
+      setIsLoadingClients(true);
+      const data = await clientService.getClients();
+      setClients(data.sort((firstClient, secondClient) => {
+        const firstName = `${firstClient.nom} ${firstClient.prenom || ''}`.trim();
+        const secondName = `${secondClient.nom} ${secondClient.prenom || ''}`.trim();
+        return firstName.localeCompare(secondName, 'fr');
+      }));
+    } catch (error) {
+      console.error('Erreur chargement clients:', error);
+      setFeedback({ type: 'error', message: 'La liste des clients n’a pas pu être chargée.' });
+    } finally {
+      setIsLoadingClients(false);
+    }
+  };
+
+  const handleCreateClient = async () => {
+    const nom = newClientNom.trim();
+    const prenom = newClientPrenom.trim();
+    const telephone = newClientTelephone.trim();
+
+    if (!nom) {
+      setFeedback({ type: 'error', message: 'Le nom du client est requis.' });
+      return;
+    }
+
+    try {
+      setIsSavingClient(true);
+      const createdClient = await clientService.createClient({
+        nom,
+        prenom: prenom || undefined,
+        telephone: telephone || undefined,
+        statut: 'ACTIF',
+      });
+      const clientName = `${createdClient.nom}${createdClient.prenom ? ` ${createdClient.prenom}` : ''}`;
+      setClients((currentClients) => [...currentClients, createdClient].sort((firstClient, secondClient) => {
+        const firstName = `${firstClient.nom} ${firstClient.prenom || ''}`.trim();
+        const secondName = `${secondClient.nom} ${secondClient.prenom || ''}`.trim();
+        return firstName.localeCompare(secondName, 'fr');
+      }));
+      setClient(clientName);
+      setNewClientNom('');
+      setNewClientPrenom('');
+      setNewClientTelephone('');
+      setIsCreatingClient(false);
+      setFeedback({ type: 'success', message: 'Client ajouté et sélectionné.' });
+    } catch (error) {
+      console.error('Erreur création client bar:', error);
+      setFeedback({ type: 'error', message: 'Le client n’a pas pu être ajouté.' });
+    } finally {
+      setIsSavingClient(false);
     }
   };
 
   const handleDeleteCommande = async (commande: BarCommande) => {
-    if (!window.confirm(`Supprimer d�finitivement la commande #${commande.id} ?`)) return;
+    if (!window.confirm(`Supprimer définitivement la commande #${commande.id} ?`)) return;
 
     try {
       setDeletingId(commande.id);
       await onDeleteCommande?.(commande.id);
     } catch (error) {
       console.error('Erreur suppression commande bar:', error);
-      setFeedback({ type: 'error', message: "La commande n'a pas pu �tre supprim�e." });
+      setFeedback({ type: 'error', message: "La commande n'a pas pu être supprimée." });
     } finally {
       setDeletingId(null);
     }
+  };
+  const escapePrintHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+  } as Record<string, string>)[char] || char);
+
+  const handlePrintCommande = (commande: BarCommande) => {
+    const printWindow = window.open('', '_blank', 'width=720,height=640');
+    if (!printWindow) {
+      setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
+      return;
+    }
+
+    const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
+    const items = commande.items.map((item) => `
+      <tr><td>${escapePrintHtml(item.nom)}</td><td class="number">${item.quantite}</td><td class="number">${formatCurrency(item.prix)}</td><td class="number">${formatCurrency(item.prix * item.quantite)}</td></tr>`).join('');
+
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Commande #${commande.id}</title><style>
+      body { font-family: Arial, sans-serif; color: #111; margin: 32px; } h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 4px 0; } table { width: 100%; border-collapse: collapse; margin-top: 24px; } th, td { padding: 9px 4px; border-bottom: 1px solid #ddd; text-align: left; } .number { text-align: right; } .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 16px; } .muted { color: #555; font-size: 12px; } @media print { body { margin: 12px; } }
+    </style></head><body><h1>Commande Bar #${commande.id}</h1><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
   const columns = [
     {
@@ -213,6 +318,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       render: (commande: BarCommande) => (
         <div className="flex gap-2">
           <Button size="sm" variant="secondary" onClick={() => setDetailCommande(commande)}>Detail</Button>
+          <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
           <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id}>
             {deletingId === commande.id ? 'Suppression...' : 'Supprimer'}
           </Button>
@@ -307,12 +413,44 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
             )}
           </div>
 
-          <Input
-            label="Client"
-            value={client}
-            onChange={(event) => setClient(event.target.value)}
-            placeholder="Nom du client"
-          />
+          <div className="flex items-end gap-3">
+            <Select
+              label="Client"
+              value={client}
+              onChange={(event) => setClient(event.target.value)}
+              options={[
+                { value: '', label: isLoadingClients ? 'Chargement des clients...' : 'Sélectionner un client' },
+                ...clients.map((clientItem) => ({
+                  value: `${clientItem.nom}${clientItem.prenom ? ` ${clientItem.prenom}` : ''}`,
+                  label: `${clientItem.nom}${clientItem.prenom ? ` ${clientItem.prenom}` : ''}${clientItem.code_client ? ` (${clientItem.code_client})` : ''}`,
+                })),
+              ]}
+              disabled={isLoadingClients}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => { setIsCreatingClient((current) => !current); setFeedback(null); }}
+            >
+              <Plus size={16} />
+              Nouveau client
+            </Button>
+          </div>
+
+          {isCreatingClient && (
+            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3 space-y-3">
+              <p className="text-sm font-medium text-slate-300">Ajouter un nouveau client</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input label="Nom" value={newClientNom} onChange={(event) => setNewClientNom(event.target.value)} placeholder="Nom" />
+                <Input label="Prénom" value={newClientPrenom} onChange={(event) => setNewClientPrenom(event.target.value)} placeholder="Prénom" />
+              </div>
+              <Input label="Téléphone" value={newClientTelephone} onChange={(event) => setNewClientTelephone(event.target.value)} placeholder="Téléphone" />
+              <Button type="button" size="sm" onClick={() => void handleCreateClient()} disabled={isSavingClient}>
+                {isSavingClient ? 'Ajout en cours...' : 'Ajouter le client'}
+              </Button>
+            </div>
+          )}
 
           <div className="rounded-xl border border-base bg-surface-2 p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
