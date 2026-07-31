@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
-import { useHDA } from '../context/HDAContext';
 import barService from '../services/bar.service';
 import { BarProduct, BarStockItem } from '../types/bar.type';
 
@@ -11,16 +10,14 @@ import { BarStats } from '../components/Bar/BarStats';
 import { BarTabs } from '../components/Bar/BarTabs';
 
 // ─── Data & types ────────────────────────────────────────
-import { BarTabId, BEST_SELLERS, BEST_SELLERS_MAX_VENTES } from '../data/Bar.data';
+import { BarTabId } from '../data/Bar.data';
 import { CocktailMenu } from '../components/Bar/CocktailMenu';
 import { BestSellers } from '../components/Bar/BestSellers';
 import { BarCommandeView } from '../components/Bar/BarCommande';
 import type { BarCommande } from '../types/bar.type';
 
 export const BarPage: React.FC = () => {
-  const { getModuleCaisseSolde } = useHDA();
   const [activeTab, setActiveTab] = useState<BarTabId>('bar');
-  const { solde, entrees, sorties } = getModuleCaisseSolde('bar');
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
@@ -56,11 +53,11 @@ export const BarPage: React.FC = () => {
 
       const createdOrder = await barService.createBarOrder({ client, table, items: normalizedItems });
       if (createdOrder) {
-        await loadOrders();
+        await Promise.all([loadOrders(), fetchData()]);
       }
     } catch (error) {
       console.error('Erreur création commande bar:', error);
-      setError("La commande bar n'a pas pu �tre cr��e.");
+      setError("La commande bar n'a pas pu être créée.");
       throw error;
     }
   };
@@ -71,7 +68,7 @@ export const BarPage: React.FC = () => {
       await loadOrders();
     } catch (error) {
       console.error('Erreur suppression commande bar:', error);
-      setError("La commande bar n'a pas pu �tre supprim�e.");
+      setError("La commande bar n'a pas pu être supprimée.");
       throw error;
     }
   };
@@ -151,19 +148,19 @@ export const BarPage: React.FC = () => {
         </div>
       )}
 
-      <BarStats stats={{ solde, entrees, sorties }} />
+      <BarStats commandes={commandes} stockMap={stockMap} />
 
       <BarTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === 'bar' && (
         <div className="space-y-6">
           <CocktailMenu cocktails={cocktails} stockMap={stockMap} onStockUpdate={fetchData} onAddToOrder={handleAddItemToCommande} />
-          <BestSellers sellers={BEST_SELLERS} />
+          <BestSellers commandes={commandes} />
         </div>
       )}
 
       {activeTab === 'commandes' && (
-        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} cocktails={cocktails} />
+        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} cocktails={cocktails} stockMap={stockMap} />
       )}
 
       {activeTab === 'stock' && (

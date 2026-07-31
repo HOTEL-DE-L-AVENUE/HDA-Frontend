@@ -109,6 +109,15 @@ export const RestaurantPage: React.FC = () => {
         items: [{ id: 2, order_id: 2, product_id: 5, quantite: 1, prix_unitaire: 185 }],
       },
     ]);
+
+    // The restaurant menu must reflect the persisted catalogue, not the
+    // temporary sample data above.
+    Promise.all([restaurantService.getProducts(), restaurantService.getCategories()])
+      .then(([productsRes, categoriesRes]) => {
+        if (productsRes.success) setProducts(productsRes.data as Product[]);
+        if (categoriesRes.success) setCategories(categoriesRes.data as Category[]);
+      })
+      .catch(error => console.error('Erreur lors du chargement du catalogue restaurant', error));
   }, []);
 
   // ---------- Handlers Tables (API) ----------
@@ -188,15 +197,16 @@ export const RestaurantPage: React.FC = () => {
   };
 
   // Produits (mock)
-  const handleAddProduct = (formData: any) => {
-    const newProduct: Product = {
-      ...formData,
-      id: products.length + 1,
-      code: `PROD-${Date.now()}`,
-      prix_achat: 0,
-    };
-    setProducts([...products, newProduct]);
-    setShowProductModal(false);
+  const handleAddProduct = async (formData: any) => {
+    try {
+      const res = await restaurantService.createProduct({ ...formData, prix_achat: 0 });
+      if (!res.success) throw new Error(res.message || 'Création du produit impossible.');
+      setProducts(prev => [...prev, res.data as Product]);
+      setShowProductModal(false);
+    } catch (error) {
+      console.error('Erreur création produit', error);
+      alert('Impossible d’ajouter ce plat. Veuillez réessayer.');
+    }
   };
 
   const handleEditProduct = (product: Product) => {
@@ -204,17 +214,29 @@ export const RestaurantPage: React.FC = () => {
     setShowProductModal(true);
   };
 
-  const handleUpdateProduct = (formData: any) => {
-    if (editingProduct) {
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...formData } : p));
+  const handleUpdateProduct = async (formData: any) => {
+    if (!editingProduct) return;
+    try {
+      const res = await restaurantService.updateProduct(editingProduct.id, formData);
+      if (!res.success) throw new Error(res.message || 'Modification du produit impossible.');
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? res.data as Product : p));
       setEditingProduct(null);
+      setShowProductModal(false);
+    } catch (error) {
+      console.error('Erreur modification produit', error);
+      alert('Impossible de modifier ce plat. Veuillez réessayer.');
     }
-    setShowProductModal(false);
   };
 
-  const handleDeleteProduct = (id: number) => {
+  const handleDeleteProduct = async (id: number) => {
     if (window.confirm('Supprimer ce produit ?')) {
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, actif: false } : p));
+      try {
+        await restaurantService.deleteProduct(id);
+        setProducts(prev => prev.filter(p => p.id !== id));
+      } catch (error) {
+        console.error('Erreur suppression produit', error);
+        alert('Impossible de supprimer ce plat car il est peut-être déjà utilisé.');
+      }
     }
   };
 
@@ -312,7 +334,7 @@ export const RestaurantPage: React.FC = () => {
             onSelectTable={handleSelectTable}
           />
         )}
-        {activeTab === 'stock' && <StockTab products={products} />}
+        {activeTab === 'stock' && <StockTab />}
         {activeTab === 'caisse' && (
           <CaisseTab orders={orders} onPayment={handlePayment} />
         )}
