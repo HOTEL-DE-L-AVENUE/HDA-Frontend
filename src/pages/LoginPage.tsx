@@ -8,7 +8,7 @@ import AuthService from '../services/authService';
 
 interface LoginFormData {
   email: string;
-  mot_de_passe: string;
+  password: string;
   rememberMe: boolean;
 }
 
@@ -20,13 +20,14 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
-    mot_de_passe: '',
+    password: '',
     rememberMe: false,
   });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const warningShownRef = useRef(false);
 
-  // Animation du fond avec particules (code inchangé)
+  // Animation du fond avec particules
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -132,6 +133,106 @@ export const LoginPage: React.FC = () => {
     };
   }, []);
 
+  // ===== DÉTECTION DE PERFORMANCE FIABLE =====
+  useEffect(() => {
+    const detectDevicePerformance = () => {
+      // Ne pas afficher si déjà affiché
+      if (warningShownRef.current) return;
+      
+      // 1. Récupérer les informations matérielles
+      const cores = navigator.hardwareConcurrency || 4;
+      const memory = (navigator as any).deviceMemory || 4; // RAM en GB (si disponible)
+      
+      // 2. Benchmark léger
+      const start = performance.now();
+      let sum = 0;
+      for (let i = 0; i < 1_000_000; i++) {
+        sum += Math.sqrt(i) * Math.sin(i);
+      }
+      const elapsed = performance.now() - start;
+      void sum;
+      
+      // 3. Calcul du score de performance (0-100)
+      let score = 0;
+      let details = [];
+      
+      // Score basé sur le nombre de cœurs
+      if (cores >= 8) {
+        score += 35;
+        details.push('8+ cœurs');
+      } else if (cores >= 4) {
+        score += 25;
+        details.push('4 cœurs');
+      } else if (cores >= 2) {
+        score += 15;
+        details.push('2 cœurs');
+      } else {
+        score += 5;
+        details.push('1 cœur');
+      }
+      
+      // Score basé sur la RAM
+      if (memory >= 16) {
+        score += 30;
+        details.push('16+ GB RAM');
+      } else if (memory >= 8) {
+        score += 20;
+        details.push('8 GB RAM');
+      } else if (memory >= 4) {
+        score += 10;
+        details.push('4 GB RAM');
+      } else {
+        score += 5;
+        details.push('Moins de 4 GB RAM');
+      }
+      
+      // Score basé sur le benchmark
+      // Temps de référence pour une machine rapide : < 30ms
+      if (elapsed < 20) {
+        score += 35;
+        details.push('Très rapide');
+      } else if (elapsed < 35) {
+        score += 25;
+        details.push('Rapide');
+      } else if (elapsed < 50) {
+        score += 15;
+        details.push('Moyen');
+      } else {
+        score += 5;
+        details.push('Lent');
+      }
+      
+      // Seuil de performance : 50/100 = machine lente
+      const isSlow = score < 50;
+      
+      console.log(`[Perf Check] Score: ${score}/100 | Cœurs: ${cores} | RAM: ${memory}GB | Benchmark: ${elapsed.toFixed(1)}ms | ${isSlow ? '🐢 LENT' : '🚀 RAPIDE'}`);
+      console.log(`[Perf Check] Détails: ${details.join(' | ')}`);
+
+      // Marquer comme affiché pour ne pas répéter
+      warningShownRef.current = true;
+
+      // ===== AFFICHER LE MESSAGE APPROPRIÉ =====
+      if (isSlow) {
+        // ⚠️ Machine lente - Message d'avertissement
+        showToast(
+          `⚠️ Performances limitées détectées (${score}/100). Certaines animations peuvent être ralenties.`,
+          'warning',
+          5000
+        );
+      } else {
+        // ✅ Machine rapide - Message de succès
+        showToast(
+          `✅ Performances optimales détectées (${score}/100) - L'application fonctionnera parfaitement.`,
+          'success',
+          3000
+        );
+      }
+    };
+
+    const timeoutId = setTimeout(detectDevicePerformance, 500);
+    return () => clearTimeout(timeoutId);
+  }, [showToast]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -147,16 +248,12 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Appel du service d'authentification
-      const { user } = await AuthService.login(formData.email, formData.mot_de_passe);
+      const { user } = await AuthService.login(formData.email, formData.password);
 
-      // Stockage du token géré par AuthService (setAuthData)
-      // On peut éventuellement sauvegarder le rememberMe en localStorage
       if (formData.rememberMe) {
         localStorage.setItem('rememberMe', 'true');
       }
 
-      // Mapping des rôles pour le message d'accueil (rôles en minuscules dans user.role)
       const roleNames: Record<string, string> = {
         admin: 'Administrateur',
         manager: 'Manager',
@@ -170,7 +267,6 @@ export const LoginPage: React.FC = () => {
 
       showToast(welcomeMessage, 'success', 5000);
 
-      // Redirection basée sur le rôle via le service
       const redirectPath = AuthService.getRedirectPath();
       navigate(redirectPath, { replace: true });
     } catch (err: any) {
@@ -264,8 +360,8 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  name="mot_de_passe"
-                  value={formData.mot_de_passe}
+                  name="password"
+                  value={formData.password}
                   onChange={handleChange}
                   className="w-full bg-surface-2 border border-base rounded-xl py-2.5 pl-10 pr-12 text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/50 transition-all"
                   placeholder="••••••••"
