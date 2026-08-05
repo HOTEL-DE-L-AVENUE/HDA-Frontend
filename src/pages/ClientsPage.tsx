@@ -396,6 +396,604 @@ const ClientsPage: React.FC = () => {
     setIsQRModalOpen(true);
 
     setTimeout(() => {
+      generateQRCodeImage(jsonString, client);
+    }, 100);
+  };
+
+  const generateQRCodeImage = (data: string, client: Client) => {
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const size = 200;
+    const cellSize = 4;
+    const margin = 20;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const qrMatrix = generateSimpleQRMatrix(data);
+    
+    const startX = (canvas.width - size) / 2;
+    const startY = (canvas.height - size) / 2;
+
+    for (let row = 0; row < qrMatrix.length; row++) {
+      for (let col = 0; col < qrMatrix[row].length; col++) {
+        if (qrMatrix[row][col] === 1) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(
+            startX + col * cellSize + margin,
+            startY + row * cellSize + margin,
+            cellSize,
+            cellSize
+          );
+        }
+      }
+    }
+
+    ctx.fillStyle = '#000000';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Client: ${client.prenom || ''} ${client.nom}`.trim(), canvas.width / 2, canvas.height - 10);
+  };
+
+  const generateSimpleQRMatrix = (data: string): number[][] => {
+    const matrix: number[][] = [];
+    const size = 45;
+    
+    for (let i = 0; i < size; i++) {
+      matrix[i] = [];
+      for (let j = 0; j < size; j++) {
+        const hash = data.split('').reduce((acc, char, index) => {
+          return acc + char.charCodeAt(0) * (index + 1);
+        }, 0);
+        
+        const val = (i * j + hash) % 3;
+        matrix[i][j] = val === 0 ? 1 : 0;
+      }
+    }
+    
+    return matrix;
+  };
+
+  const copyQRData = () => {
+    if (qrCodeData) {
+      navigator.clipboard.writeText(qrCodeData);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Format carte de visite standard : 89 x 51 mm (≈ 3.5 x 2 po), rendu à 300 dpi.
+  const CARD_WIDTH_MM = 89;
+  const CARD_HEIGHT_MM = 51;
+  const CARD_WIDTH_PX = 1050;
+  const CARD_HEIGHT_PX = 600;
+
+  // Compose la carte client (QR + infos) dans un canvas hors-écran, aux dimensions
+  // exactes d'une carte de visite — réutilisé pour le téléchargement ET l'impression,
+  // pour garantir que les deux rendus soient identiques et correctement proportionnés.
+  const renderClientCard = (client: Client, qrData: string): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    canvas.width = CARD_WIDTH_PX;
+    canvas.height = CARD_HEIGHT_PX;
+    const ctx = canvas.getContext('2d')!;
+
+    // Fond + bordure
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#dddddd';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+    // Bandeau d'en-tête
+    ctx.fillStyle = '#111111';
+    ctx.fillRect(0, 0, canvas.width, 90);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 34px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('CARTE CLIENT', 40, 45);
+
+    // QR code à gauche
+    const qrMatrix = generateSimpleQRMatrix(qrData);
+    const qrSize = 380;
+    const qrX = 40;
+    const qrY = 150;
+    const cell = qrSize / qrMatrix.length;
+    ctx.fillStyle = '#000000';
+    for (let row = 0; row < qrMatrix.length; row++) {
+      for (let col = 0; col < qrMatrix[row].length; col++) {
+        if (qrMatrix[row][col] === 1) {
+          ctx.fillRect(qrX + col * cell, qrY + row * cell, cell, cell);
+        }
+      }
+    }
+
+    // Informations client à droite du QR
+    const infoX = qrX + qrSize + 50;
+    let infoY = 190;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#111111';
+    ctx.font = 'bold 38px Arial';
+    ctx.fillText(`${client.prenom || ''} ${client.nom}`.trim(), infoX, infoY);
+
+    ctx.font = '25px Arial';
+    ctx.fillStyle = '#444444';
+    infoY += 55;
+    ctx.fillText(client.code_client ? `Code : ${client.code_client}` : `ID : #${client.id}`, infoX, infoY);
+
+    if (client.telephone) {
+      infoY += 42;
+      ctx.fillText(client.telephone, infoX, infoY);
+    }
+    if (client.email) {
+      infoY += 42;
+      ctx.font = '21px Arial';
+      ctx.fillText(client.email, infoX, infoY);
+    }
+
+    return canvas;
+  };
+
+  const downloadQRCode = () => {
+    if (!selectedClient || !qrCodeData) return;
+    const card = renderClientCard(selectedClient, qrCodeData);
+    const link = document.createElement('a');
+    link.download = `carte-client-${selectedClient.code_client || selectedClient.id}.png`;
+    link.href = card.toDataURL('image/png');
+    link.click();
+  };
+
+  const printQRCode = () => {
+    if (!selectedClient || !qrCodeData) return;
+    const card = renderClientCard(selectedClient, qrCodeData);
+    const dataUrl = card.toDataURL('image/png');
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Carte Client</title>
+          <style>
+            @page { size: ${CARD_WIDTH_MM}mm ${CARD_HEIGHT_MM}mm; margin: 0; }
+            html, body { margin: 0; padding: 0; }
+            img { width: ${CARD_WIDTH_MM}mm; height: ${CARD_HEIGHT_MM}mm; display: block; }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    // On attend le chargement complet (image incluse) avant de déclencher l'impression,
+    // pour ne pas imprimer une page encore vide.
+    printWindow.onload = () => printWindow.print();
+  };
+
+  const getStatusBadge = (status: string = 'ACTIF'): JSX.Element => {
+    const statusMap: Record<string, { color: string; icon: JSX.Element; label: string }> = {
+      ACTIF: { 
+        color: 'bg-success-bg text-success border-success/30', 
+        icon: <CheckCircle size={12} />,
+        label: 'Actif'
+      },
+      INACTIF: { 
+        color: 'bg-surface-2 text-muted border-base', 
+        icon: <XCircle size={12} />,
+        label: 'Inactif'
+      },
+      BLOCKED: { 
+        color: 'bg-danger-bg text-danger border-danger/30', 
+        icon: <XCircle size={12} />,
+        label: 'Bloqué'
+      }
+    };
+    
+    const config = statusMap[status] || statusMap.ACTIF;
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${config.color}`}>
+        {config.icon}
+        {config.label}
+      </span>
+    );
+  };
+
+  // Statistiques
+  const stats = {
+    total: clients.length,
+    actifs: clients.filter(c => c.statut === 'ACTIF').length,
+    inactifs: clients.filter(c => c.statut === 'INACTIF').length,
+    blocked: clients.filter(c => c.statut === 'BLOCKED').length,
+    casino: clients.filter(c => c.is_casino_player).length,
+  };
+
+  // Affichage du chargement
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader size={40} className="animate-spin text-accent" />
+        <span className="ml-3 text-muted">Chargement des clients...</span>
+      </div>
+    );
+  }
+
+  // Affichage de l'erreur
+  if (error) {
+    return (
+      <div className="bg-danger/10 border border-danger/20 rounded-lg p-6 text-danger text-center">
+        <AlertCircle size={40} className="mx-auto mb-3" />
+        <p className="text-lg font-medium">{error}</p>
+        <button 
+          onClick={() => loadClient  Briefcase
+} from 'lucide-react';
+import { useClients } from '../hooks/useClients';
+import { Client, ClientFormData, ClientKyc, ClientKycFormData, NiveauRisque } from '../services/client.service';
+import SignaturePad from '../components/SignaturePad';
+import toast from 'react-hot-toast';
+
+const ClientsPage: React.FC = () => {
+  const { 
+    clients, 
+    loading, 
+    error, 
+    loadClients,
+    searchClients,
+    createClient,
+    updateClient,
+    deleteClient,
+    loadClientWithDetails,
+    loadClientKyc,
+    saveClientKyc,
+    loadClientKycSignature,
+    createClientKycSignature
+  } = useClients();
+
+  // États
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
+  const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>('tous');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [qrCodeData, setQrCodeData] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const itemsPerPage: number = 5;
+
+  // Formulaire
+  const initialFormData: ClientFormData = {
+    nom: '',
+    prenom: '',
+    email: '',
+    telephone: '',
+    adresse: '',
+    date_naissance: '',
+    type_piece: '',
+    numero_piece: '',
+    statut: 'ACTIF',
+    is_casino_player: false,
+    code_client: ''
+  };
+  
+  const [formData, setFormData] = useState<ClientFormData>(initialFormData);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Fiche KYC (Know Your Customer) — conformité LBC/FT, uniquement pour les joueurs de casino
+  const initialKycData: ClientKycFormData = {
+    lieu_naissance: '',
+    nationalite: '',
+    profession: '',
+    date_delivrance_piece: '',
+    date_expiration_piece: '',
+    autorite_delivrance: '',
+    source_revenus: '',
+    revenu_mensuel_estime: null,
+    mode_paiement: '',
+    banque: '',
+    doc_piece_identite: false,
+    doc_justificatif_domicile: false,
+    doc_photo_client: false,
+    doc_autre: '',
+    niveau_risque: null,
+    commentaires_risque: '',
+    declaration_client: false,
+    date_verification: '',
+  };
+
+  const [kycData, setKycData] = useState<ClientKycFormData>(initialKycData);
+  const [kycSignature, setKycSignature] = useState<string | null>(null);
+  // Ne devient true que si le client dessine réellement une nouvelle signature dans ce
+  // formulaire (voir handleSignatureChange) — évite de recréer un doublon en base à
+  // chaque simple modification du client si la signature existante n'a pas changé.
+  const [signatureDirty, setSignatureDirty] = useState<boolean>(false);
+  const [isLoadingKyc, setIsLoadingKyc] = useState<boolean>(false);
+  const [viewedKyc, setViewedKyc] = useState<ClientKyc | null>(null);
+  const [viewedSignature, setViewedSignature] = useState<string | null>(null);
+
+  // Debounce pour la recherche
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm) {
+        searchClients(searchTerm);
+      } else {
+        loadClients();
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, searchClients, loadClients]);
+
+  // Filtrer les clients
+  const getFilteredClients = (): Client[] => {
+    let filtered = clients;
+    
+    if (filterStatus !== 'tous') {
+      filtered = filtered.filter(client => 
+        client.statut?.toLowerCase() === filterStatus
+      );
+    }
+    
+    return filtered;
+  };
+
+  const filteredClients: Client[] = getFilteredClients();
+  const totalPages: number = Math.ceil(filteredClients.length / itemsPerPage);
+  const startIndex: number = (currentPage - 1) * itemsPerPage;
+  const paginatedClients: Client[] = filteredClients.slice(startIndex, startIndex + itemsPerPage);
+
+  // Validation du formulaire
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (!formData.nom?.trim()) {
+      errors.nom = 'Le nom est requis';
+    }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Email invalide';
+    }
+    if (formData.telephone && !/^[0-9+\s-]{8,}$/.test(formData.telephone)) {
+      errors.telephone = 'Téléphone invalide';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Gestionnaires d'événements
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    if (formErrors[name]) {
+      setFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  // Gestionnaire dédié aux champs de la fiche KYC
+  const handleKycInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+
+    setKycData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox'
+        ? checked
+        : (name === 'revenu_mensuel_estime' ? (value === '' ? null : Number(value)) : value)
+    }));
+  };
+
+  // Gestionnaire pour SignaturePad — n'est appelé que lors d'une action réelle de
+  // l'utilisateur (validation ou "refaire la signature"), jamais lors du simple
+  // chargement d'une signature existante depuis le serveur.
+  const handleSignatureChange = (dataUrl: string | null): void => {
+    setKycSignature(dataUrl);
+    setSignatureDirty(true);
+  };
+
+  // Ouvrir le modal d'ajout
+  const openAddModal = (): void => {
+    setEditingClient(null);
+    setFormData(initialFormData);
+    setFormErrors({});
+    setKycData(initialKycData);
+    setKycSignature(null);
+    setSignatureDirty(false);
+    setIsModalOpen(true);
+  };
+
+  // Ouvrir le modal de modification
+  const openEditModal = async (client: Client): Promise<void> => {
+    setEditingClient(client);
+    setFormData({
+      code_client: client.code_client || '',
+      nom: client.nom,
+      prenom: client.prenom || '',
+      email: client.email || '',
+      telephone: client.telephone || '',
+      adresse: client.adresse || '',
+      date_naissance: client.date_naissance || '',
+      type_piece: client.type_piece || '',
+      numero_piece: client.numero_piece || '',
+      statut: client.statut || 'ACTIF',
+      is_casino_player: client.is_casino_player || false,
+    });
+    setFormErrors({});
+    setKycData(initialKycData);
+    setKycSignature(null);
+    setSignatureDirty(false);
+    setIsModalOpen(true);
+
+    // La fiche KYC est désormais disponible pour tous les clients
+    setIsLoadingKyc(true);
+    try {
+      const [kyc, signature] = await Promise.all([
+        loadClientKyc(client.id),
+        loadClientKycSignature(client.id),
+      ]);
+      if (kyc) {
+        setKycData({
+          lieu_naissance: kyc.lieu_naissance || '',
+          nationalite: kyc.nationalite || '',
+          profession: kyc.profession || '',
+          date_delivrance_piece: kyc.date_delivrance_piece || '',
+          date_expiration_piece: kyc.date_expiration_piece || '',
+          autorite_delivrance: kyc.autorite_delivrance || '',
+          source_revenus: kyc.source_revenus || '',
+          revenu_mensuel_estime: kyc.revenu_mensuel_estime ?? null,
+          mode_paiement: kyc.mode_paiement || '',
+          banque: kyc.banque || '',
+          doc_piece_identite: kyc.doc_piece_identite || false,
+          doc_justificatif_domicile: kyc.doc_justificatif_domicile || false,
+          doc_photo_client: kyc.doc_photo_client || false,
+          doc_autre: kyc.doc_autre || '',
+          niveau_risque: kyc.niveau_risque || null,
+          commentaires_risque: kyc.commentaires_risque || '',
+          declaration_client: kyc.declaration_client || false,
+          date_verification: kyc.date_verification || '',
+        });
+      }
+      setKycSignature(signature);
+    } catch (err) {
+      console.error('❌ Erreur chargement fiche KYC:', err);
+    } finally {
+      setIsLoadingKyc(false);
+    }
+  };
+
+  // Soumission du formulaire
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      toast.error('Veuillez corriger les erreurs du formulaire');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      let client: Client;
+      if (editingClient) {
+        client = await updateClient(editingClient.id, formData);
+        toast.success('Client mis à jour avec succès');
+      } else {
+        client = await createClient(formData);
+        toast.success('Client créé avec succès');
+      }
+
+      // La fiche KYC est désormais enregistrée pour tous les clients
+      try {
+        await saveClientKyc(client.id, kycData);
+        // On ne crée une nouvelle signature que si le client vient réellement
+        // de signer dans ce formulaire — les signatures précédentes ne sont
+        // jamais recréées ni écrasées.
+        if (kycSignature && signatureDirty) {
+          await createClientKycSignature(client.id, kycSignature);
+          setSignatureDirty(false);
+        }
+      } catch (kycError) {
+        console.error('❌ Erreur enregistrement fiche KYC:', kycError);
+        toast.error('Client enregistré, mais la fiche KYC n\'a pas pu être sauvegardée');
+      }
+
+      closeModal();
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Une erreur est survenue';
+      toast.error(errorMessage);
+      console.error('❌ Erreur:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = (client: Client): void => {
+    setClientToDelete(client);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!clientToDelete) return;
+    
+    setIsProcessing(true);
+    try {
+      await deleteClient(clientToDelete.id);
+      toast.success('Client supprimé avec succès');
+      setIsDeleteModalOpen(false);
+      setClientToDelete(null);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Erreur lors de la suppression';
+      toast.error(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleView = async (client: Client): Promise<void> => {
+    setSelectedClient(client);
+    setViewedKyc(null);
+    setViewedSignature(null);
+    setIsViewModalOpen(true);
+
+    try {
+      const [details, signature] = await Promise.all([
+        loadClientWithDetails(client.id),
+        loadClientKycSignature(client.id),
+      ]);
+      setViewedKyc(details?.kyc || null);
+      setViewedSignature(signature);
+    } catch (err) {
+      console.error('❌ Erreur chargement détails client:', err);
+    }
+  };
+
+  const closeModal = (): void => {
+    setIsModalOpen(false);
+    setEditingClient(null);
+    setFormData(initialFormData);
+    setFormErrors({});
+    setKycData(initialKycData);
+    setKycSignature(null);
+    setSignatureDirty(false);
+  };
+
+  // Génération du QR Code
+  const generateQRCode = (client: Client) => {
+    const clientData = {
+      id: client.id,
+      name: `${client.prenom} ${client.nom}`,
+      email: client.email,
+      phone: client.telephone,
+      code: client.code_client,
+      status: client.statut,
+    };
+
+    const jsonString = JSON.stringify(clientData);
+    setQrCodeData(jsonString);
+    setSelectedClient(client);
+    setIsQRModalOpen(true);
+
+    setTimeout(() => {
       generateQRCodeImage(jsonString);
     }, 100);
   };
