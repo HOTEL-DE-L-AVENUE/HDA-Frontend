@@ -102,6 +102,150 @@ export const clientService = {
     }
   },
 
+  // Recherche multi-critères (nom, prénom, code_client, téléphone, email)
+  searchClients: async (term: string, limit?: number): Promise<Client[]> => {
+    try {
+      const params = new URLSearchParams({ q: term });
+      if (limit) params.append('limit', String(limit));
+      const response = await api.get<ApiResponse<Client[]>>(`/api/clients/search?${params.toString()}`);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur searchClients:', error);
+      throw error;
+    }
+  },
+
+  // Récupérer un client par ID
+  getClientById: async (id: number): Promise<Client> => {
+    try {
+      const response = await api.get<ApiResponse<Client>>(`/api/clients/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getClientById ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Récupérer un client avec son solde et sa fiche KYC
+  getClientWithDetails: async (id: number): Promise<ClientWithDetails> => {
+    try {
+      const response = await api.get<ApiResponse<ClientWithDetails>>(`/api/clients/${id}/full`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getClientWithDetails ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Créer un client
+  createClient: async (data: ClientFormData): Promise<Client> => {
+    try {
+      const response = await api.post<ApiResponse<Client>>('/api/clients', data);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur createClient:', error);
+      throw error;
+    }
+  },
+
+  // Mettre à jour un client
+  updateClient: async (id: number, data: ClientFormData): Promise<Client> => {
+    try {
+      const response = await api.put<ApiResponse<Client>>(`/api/clients/${id}`, data);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur updateClient ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Supprimer un client
+  deleteClient: async (id: number): Promise<void> => {
+    try {
+      await api.delete<ApiResponse<void>>(`/api/clients/${id}`);
+    } catch (error) {
+      console.error(`❌ Erreur deleteClient ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Récupérer la fiche KYC d'un client
+  getClientKyc: async (id: number): Promise<ClientKyc | null> => {
+    try {
+      const response = await api.get<ApiResponse<ClientKyc | null>>(`/api/clients/${id}/kyc`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getClientKyc ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Créer ou mettre à jour la fiche KYC d'un client (upsert)
+  saveClientKyc: async (id: number, data: ClientKycFormData): Promise<ClientKyc> => {
+    try {
+      const response = await api.put<ApiResponse<ClientKyc>>(`/api/clients/${id}/kyc`, data);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur saveClientKyc ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Dernière signature électronique liée à la déclaration KYC (ou null si aucune)
+  getClientKycSignature: async (id: number): Promise<string | null> => {
+    try {
+      const response = await api.get<ApiResponse<{ signature_data: string } | null>>(`/api/clients/${id}/kyc/signature`);
+      return response.data.data?.signature_data || null;
+    } catch (error) {
+      console.error(`❌ Erreur getClientKycSignature ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Historique complet des signatures KYC de ce client (du plus récent au plus ancien)
+  getClientKycSignatureHistory: async (id: number): Promise<{ signature_data: string; signed_at: string }[]> => {
+    try {
+      const response = await api.get<ApiResponse<{ signature_data: string; signed_at: string }[]>>(`/api/clients/${id}/kyc/signature/history`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getClientKycSignatureHistory ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Enregistre une NOUVELLE signature (ne remplace jamais une signature précédente)
+  createClientKycSignature: async (id: number, signatureData: string): Promise<void> => {
+    try {
+      await api.post<ApiResponse<unknown>>(`/api/clients/${id}/kyc/signature`, { signature_data: signatureData });
+    } catch (error) {
+      console.error(`❌ Erreur createClientKycSignature ${id}:`, error);
+      throw error;
+    }
+  }
+};  success: boolean;
+  data: T;
+  message?: string;
+  count?: number;
+}
+
+export const clientService = {
+  // Récupérer tous les clients
+  getClients: async (filters?: { nom?: string; statut?: string; is_casino_player?: boolean }): Promise<Client[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.nom) params.append('nom', filters.nom);
+      if (filters?.statut) params.append('statut', filters.statut);
+      if (filters?.is_casino_player !== undefined) params.append('is_casino_player', String(filters.is_casino_player));
+      
+      const url = `/api/clients${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await api.get<ApiResponse<Client[]>>(url);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getClients:', error);
+      throw error;
+    }
+  },
+
   // Récupérer un client par ID
   getClientById: async (id: number): Promise<Client> => {
     try {
