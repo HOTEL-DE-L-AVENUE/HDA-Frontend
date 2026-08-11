@@ -182,7 +182,6 @@ export const Header: React.FC = () => {
                 className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2"
                 style={{
                   backgroundColor: 'var(--color-accent)',
-                  ringColor: 'var(--color-surface)',
                 }}
               />
             )}

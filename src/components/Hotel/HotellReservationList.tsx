@@ -22,7 +22,10 @@ import { useRooms } from '../../hooks/useRooms';
 import { toast } from 'react-hot-toast';
 
 interface ReservationListProps {
+  reservations?: Reservation[];
   onEdit?: (reservation: Reservation) => void;
+  onCancel?: (reservationId: number) => void;
+  onDelete?: (reservationId: number) => void;
 }
 
 export const ReservationList: React.FC<ReservationListProps> = ({ onEdit }) => {

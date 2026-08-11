@@ -24,8 +24,10 @@ import { useRooms } from '../../hooks/useRooms';
 import { roomTypeService } from '../../services/room.service';
 
 interface RoomListProps {
+  rooms?: Room[];
   onEdit?: (room: Room) => void;
   onDelete?: (roomId: number) => void;
+  onStatusChange?: (roomId: number, newStatus: string) => void;
 }
 
 export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete }) => {

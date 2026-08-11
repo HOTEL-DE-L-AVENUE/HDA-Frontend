@@ -13,7 +13,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
   }
 
   // Vérification optionnelle des rôles
-  if (allowedRoles && !AuthService.hasRole(allowedRoles)) {
+  if (allowedRoles && !AuthService.hasRole(allowedRoles as any)) {
     return <Navigate to="/dashboard" replace />; // ou une page "accès interdit"
   }
 

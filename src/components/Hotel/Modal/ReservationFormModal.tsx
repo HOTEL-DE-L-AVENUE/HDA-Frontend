@@ -115,7 +115,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     setSelectedRoom(room || null);
     setFormData({ ...formData, room_id: roomId });
     
-    calculateTotal(room, formData.date_arrivee, formData.date_depart);
+    calculateTotal(room as any, formData.date_arrivee, formData.date_depart);
   };
 
   const handleClientChange = (clientId: number) => {
@@ -229,7 +229,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         newErrors.date_depart = 'La date de départ doit être après la date d\'arrivée';
       }
     }
-    if (formData.montant_total !== undefined && formData.montant_total < 0) {
+    if (formData.montant_total !== undefined && formData.montant_total !== null && Number(formData.montant_total) < 0) {
       newErrors.montant_total = 'Le montant ne peut pas être négatif';
     }
 
@@ -349,7 +349,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
             <div className="mb-4 p-3.5 rounded-xl bg-gradient-to-r from-accent-4 to-accent-5 border border-accent/20">
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-accent-600 flex items-center justify-center text-white font-bold text-base shadow-soft-sm">
-                  {selectedClient.prenom?.[0]}{selectedClient.nom[0]}
+                  {selectedClient.prenom?.[0]}{selectedClient.nom?.[0] || 'C'}
                 </div>
                 <div className="flex-1">
                   <p className="text-primary font-semibold text-sm">
