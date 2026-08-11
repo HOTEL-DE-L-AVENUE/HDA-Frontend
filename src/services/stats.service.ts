@@ -47,8 +47,20 @@ export const statsService = {
   // Récupérer les statistiques du minibar
   async getMinibarStats(): Promise<MinibarStats> {
     try {
-      const response = await api.get('/api/minibars/stats');
-      return response.data.data;
+      // Note: Minibar stats endpoint doesn't exist on backend
+      // This service method relies on error fallback
+      const response = await api.get('/api/hebergement/room-minibar');
+      const items = response.data.data || [];
+      const uniqueRooms = new Set(items.map((i: any) => i.room_id));
+      const alerts = items.filter((i: any) => i.quantite <= (i.seuil_alerte || 1)).length;
+      
+      return {
+        totalItems: items.length,
+        totalRoomsEquipped: uniqueRooms.size,
+        alerts: alerts,
+        totalConsumptions: 0,
+        monthlyConsumptions: 0
+      };
     } catch (error) {
       console.error('❌ Erreur getMinibarStats:', error);
       return {
