@@ -33,7 +33,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         category_id: editingProduct.category_id,
         prix_vente: editingProduct.prix_vente,
         unite: editingProduct.unite,
-        type_produit: editingProduct.type_produit,
+        type_produit: (editingProduct.type_produit || 'PRODUIT_FINI') as any,
         actif: editingProduct.actif
       });
     } else {
@@ -66,7 +66,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           ]}
         />
         <Input 
-          label="Prix de vente (€)" 
+          label="Prix de vente (MGA)" 
           type="number" 
           value={form.prix_vente} 
           onChange={(e) => setForm({...form, prix_vente: Number(e.target.value)})} 

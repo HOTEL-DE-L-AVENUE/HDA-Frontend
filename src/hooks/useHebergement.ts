@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { INITIAL_CLIENTS, INITIAL_EQUIPMENTS, INITIAL_HOUSEKEEPING, INITIAL_MAINTENANCES, INITIAL_RESERVATIONS, INITIAL_ROOM_EQUIPMENTS, INITIAL_ROOM_TYPES, INITIAL_ROOMS } from '../data/Hebergement.data';
 import { Client, ClientForm, Equipment, EquipmentForm, HousekeepingForm, HousekeepingTask, MaintenanceForm, Reservation, ReservationForm, Room, RoomEquipment, RoomForm, RoomMaintenance, RoomType } from '../types/hebergement.type';
+import { roomService, roomTypeService } from '../services/room.service';
+import { reservationService } from '../services/reservation.service';
+import { equipmentService } from '../services/equipment.service';
+import { clientService } from '../services/client.service';
 
 // ─── Valeurs par défaut des formulaires ──────────────────────────────────────
 
@@ -27,14 +31,49 @@ const DEFAULT_CLIENT_FORM: ClientForm = {
 
 export function useHebergement() {
   // ── Données ──────────────────────────────────────────────────────────────
-  const [roomTypes]    = useState<RoomType[]>(INITIAL_ROOM_TYPES);
-  const [clients,       setClients]       = useState<Client[]>(INITIAL_CLIENTS);
-  const [equipments]                      = useState<Equipment[]>(INITIAL_EQUIPMENTS);
-  const [rooms,         setRooms]         = useState<Room[]>(INITIAL_ROOMS);
-  const [reservations,  setReservations]  = useState<Reservation[]>(INITIAL_RESERVATIONS);
-  const [roomEquipments,setRoomEquipments]= useState<RoomEquipment[]>(INITIAL_ROOM_EQUIPMENTS);
+  const [roomTypes,         setRoomTypes]     = useState<RoomType[]>(INITIAL_ROOM_TYPES);
+  const [clients,           setClients]       = useState<Client[]>(INITIAL_CLIENTS);
+  const [equipments,        setEquipments]    = useState<Equipment[]>(INITIAL_EQUIPMENTS);
+  const [rooms,             setRooms]         = useState<Room[]>(INITIAL_ROOMS);
+  const [reservations,      setReservations]  = useState<Reservation[]>(INITIAL_RESERVATIONS);
+  const [roomEquipments,    setRoomEquipments]= useState<RoomEquipment[]>(INITIAL_ROOM_EQUIPMENTS);
   const [housekeepingTasks, setHousekeepingTasks] = useState<HousekeepingTask[]>(INITIAL_HOUSEKEEPING);
-  const [maintenances,  setMaintenances]  = useState<RoomMaintenance[]>(INITIAL_MAINTENANCES);
+  const [maintenances,      setMaintenances]  = useState<RoomMaintenance[]>(INITIAL_MAINTENANCES);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  // ── Chargement depuis l'API ────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [roomsData, reservationsData, roomTypesData, clientsData, equipmentsData, roomEquipmentsData] = await Promise.all([
+        roomService.getRooms().catch(() => null),
+        reservationService.getReservations().catch(() => null),
+        roomTypeService.getRoomTypes().catch(() => null),
+        clientService.getClients().catch(() => null),
+        equipmentService.getEquipments().catch(() => null),
+        equipmentService.getRoomEquipments().catch(() => null),
+      ]);
+
+      if (Array.isArray(roomsData) && roomsData.length > 0) setRooms(roomsData as Room[]);
+      if (Array.isArray(reservationsData) && reservationsData.length > 0) setReservations(reservationsData as Reservation[]);
+      if (Array.isArray(roomTypesData) && roomTypesData.length > 0) setRoomTypes(roomTypesData as RoomType[]);
+      if (Array.isArray(clientsData) && clientsData.length > 0) setClients(clientsData as unknown as Client[]);
+      if (Array.isArray(equipmentsData) && equipmentsData.length > 0) setEquipments(equipmentsData as Equipment[]);
+      if (Array.isArray(roomEquipmentsData) && roomEquipmentsData.length > 0) setRoomEquipments(roomEquipmentsData as RoomEquipment[]);
+    } catch (err: any) {
+      console.warn('Fallback aux données locales d’hébergement:', err);
+      setError('Mode hors-ligne / Données locales');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   // ── UI ───────────────────────────────────────────────────────────────────
   const [activeTab,   setActiveTab]   = useState('reservations');
@@ -59,40 +98,50 @@ export function useHebergement() {
   const [clientForm,       setClientForm]       = useState<ClientForm>(DEFAULT_CLIENT_FORM);
 
   // ── Handlers : réservations ───────────────────────────────────────────────
-  const handleCheckIn = (reservation: Reservation) => {
-    setReservations(prev => prev.map(r =>
-      r.id === reservation.id ? { ...r, statut: 'EN_COURS' } : r
-    ));
-    setRooms(prev => prev.map(r =>
-      r.id === reservation.room_id ? { ...r, statut: 'OCCUPEE' } : r
-    ));
-  };
-
-  const handleCheckOut = (reservation: Reservation) => {
-    setReservations(prev => prev.map(r =>
-      r.id === reservation.id ? { ...r, statut: 'TERMINEE' } : r
-    ));
-    setRooms(prev => prev.map(r =>
-      r.id === reservation.room_id ? { ...r, statut: 'LIBRE' } : r
-    ));
-  };
-
-  const handleCancelReservation = (id: number) => {
-    if (window.confirm('Annuler cette réservation ?')) {
-      setReservations(prev => prev.map(r =>
-        r.id === id ? { ...r, statut: 'ANNULEE' } : r
-      ));
+  const handleCheckIn = async (reservation: Reservation) => {
+    try {
+      await reservationService.updateReservationStatus(reservation.id, 'EN_COURS');
+      await roomService.updateRoomStatus(reservation.room_id, 'OCCUPEE');
+      await fetchData();
+    } catch (err) {
+      setReservations(prev => prev.map(r => r.id === reservation.id ? { ...r, statut: 'EN_COURS' } : r));
+      setRooms(prev => prev.map(r => r.id === reservation.room_id ? { ...r, statut: 'OCCUPEE' } : r));
     }
   };
 
-  const handleSaveReservation = () => {
-    const newReservation: Reservation = {
-      ...reservationForm,
-      id: Date.now(),
-    };
-    setReservations(prev => [...prev, newReservation]);
-    setShowReservationModal(false);
-    setReservationForm(DEFAULT_RESERVATION_FORM);
+  const handleCheckOut = async (reservation: Reservation) => {
+    try {
+      await reservationService.updateReservationStatus(reservation.id, 'TERMINEE');
+      await roomService.updateRoomStatus(reservation.room_id, 'LIBRE');
+      await fetchData();
+    } catch (err) {
+      setReservations(prev => prev.map(r => r.id === reservation.id ? { ...r, statut: 'TERMINEE' } : r));
+      setRooms(prev => prev.map(r => r.id === reservation.room_id ? { ...r, statut: 'LIBRE' } : r));
+    }
+  };
+
+  const handleCancelReservation = async (id: number) => {
+    if (window.confirm('Annuler cette réservation ?')) {
+      try {
+        await reservationService.updateReservationStatus(id, 'ANNULEE');
+        await fetchData();
+      } catch (err) {
+        setReservations(prev => prev.map(r => r.id === id ? { ...r, statut: 'ANNULEE' } : r));
+      }
+    }
+  };
+
+  const handleSaveReservation = async () => {
+    try {
+      await reservationService.createReservation(reservationForm);
+      await fetchData();
+    } catch (err) {
+      const newReservation: Reservation = { ...reservationForm, id: Date.now() };
+      setReservations(prev => [...prev, newReservation]);
+    } finally {
+      setShowReservationModal(false);
+      setReservationForm(DEFAULT_RESERVATION_FORM);
+    }
   };
 
   // ── Handlers : chambres ───────────────────────────────────────────────────
@@ -108,21 +157,36 @@ export function useHebergement() {
     setShowRoomModal(true);
   };
 
-  const handleDeleteRoom = (id: number) => {
+  const handleDeleteRoom = async (id: number) => {
     if (window.confirm('Supprimer cette chambre ?')) {
-      setRooms(prev => prev.filter(r => r.id !== id));
+      try {
+        await roomService.deleteRoom(id);
+        await fetchData();
+      } catch (err) {
+        setRooms(prev => prev.filter(r => r.id !== id));
+      }
     }
   };
 
-  const handleSaveRoom = () => {
-    if (editingId) {
-      setRooms(prev => prev.map(r => r.id === editingId ? { ...r, ...roomForm } : r));
-    } else {
-      setRooms(prev => [...prev, { ...roomForm, id: Date.now() }]);
+  const handleSaveRoom = async () => {
+    try {
+      if (editingId) {
+        await roomService.updateRoom(editingId, roomForm);
+      } else {
+        await roomService.createRoom(roomForm);
+      }
+      await fetchData();
+    } catch (err) {
+      if (editingId) {
+        setRooms(prev => prev.map(r => r.id === editingId ? { ...r, ...roomForm } : r));
+      } else {
+        setRooms(prev => [...prev, { ...roomForm, id: Date.now() }]);
+      }
+    } finally {
+      setShowRoomModal(false);
+      setEditingId(null);
+      setRoomForm(DEFAULT_ROOM_FORM);
     }
-    setShowRoomModal(false);
-    setEditingId(null);
-    setRoomForm(DEFAULT_ROOM_FORM);
   };
 
   const openNewRoomModal = () => {
@@ -143,21 +207,36 @@ export function useHebergement() {
     setShowEquipmentModal(true);
   };
 
-  const handleDeleteRoomEquipment = (id: number) => {
+  const handleDeleteRoomEquipment = async (id: number) => {
     if (window.confirm('Supprimer cet équipement de la chambre ?')) {
-      setRoomEquipments(prev => prev.filter(re => re.id !== id));
+      try {
+        await equipmentService.deleteRoomEquipment(id);
+        await fetchData();
+      } catch (err) {
+        setRoomEquipments(prev => prev.filter(re => re.id !== id));
+      }
     }
   };
 
-  const handleSaveEquipment = () => {
-    if (editingId) {
-      setRoomEquipments(prev => prev.map(re => re.id === editingId ? { ...re, ...equipmentForm } : re));
-    } else {
-      setRoomEquipments(prev => [...prev, { ...equipmentForm, id: Date.now() }]);
+  const handleSaveEquipment = async () => {
+    try {
+      if (editingId) {
+        await equipmentService.updateRoomEquipment(editingId, equipmentForm);
+      } else {
+        await equipmentService.assignEquipment(equipmentForm);
+      }
+      await fetchData();
+    } catch (err) {
+      if (editingId) {
+        setRoomEquipments(prev => prev.map(re => re.id === editingId ? { ...re, ...equipmentForm } : re));
+      } else {
+        setRoomEquipments(prev => [...prev, { ...equipmentForm, id: Date.now() }]);
+      }
+    } finally {
+      setShowEquipmentModal(false);
+      setEditingId(null);
+      setEquipmentForm(DEFAULT_EQUIPMENT_FORM);
     }
-    setShowEquipmentModal(false);
-    setEditingId(null);
-    setEquipmentForm(DEFAULT_EQUIPMENT_FORM);
   };
 
   const openNewEquipmentModal = () => {
@@ -236,15 +315,21 @@ export function useHebergement() {
   };
 
   // ── Handlers : client ─────────────────────────────────────────────────────
-  const handleSaveClient = () => {
-    const newClient: Client = {
-      ...clientForm,
-      id: Date.now(),
-      code_client: `CL${String(clients.length + 1).padStart(3, '0')}`,
-    };
-    setClients(prev => [...prev, newClient]);
-    setShowClientModal(false);
-    setClientForm(DEFAULT_CLIENT_FORM);
+  const handleSaveClient = async () => {
+    try {
+      await clientService.createClient(clientForm);
+      await fetchData();
+    } catch (err) {
+      const newClient: Client = {
+        ...clientForm,
+        id: Date.now(),
+        code_client: `CL${String(clients.length + 1).padStart(3, '0')}`,
+      };
+      setClients(prev => [...prev, newClient]);
+    } finally {
+      setShowClientModal(false);
+      setClientForm(DEFAULT_CLIENT_FORM);
+    }
   };
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -259,6 +344,7 @@ export function useHebergement() {
     // données
     roomTypes, clients, equipments, rooms, reservations,
     roomEquipments, housekeepingTasks, maintenances,
+    loading, error, refetch: fetchData,
     // UI
     activeTab, setActiveTab,
     searchQuery, setSearchQuery,

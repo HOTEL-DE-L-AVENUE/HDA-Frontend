@@ -41,7 +41,7 @@ export const TableModal: React.FC<TableModalProps> = ({ isOpen, onClose, onSubmi
         <Select 
           label="Statut initial" 
           value={form.statut} 
-          onChange={(e) => setForm({...form, statut: e.target.value as 'LIBRE' | 'HORS_SERVICE'})}
+          onChange={(e) => setForm({...form, statut: e.target.value as any})}
           options={[
             { value: 'LIBRE', label: 'Libre' },
             { value: 'HORS_SERVICE', label: 'Hors service' },

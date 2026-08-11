@@ -165,7 +165,7 @@ export const FinancesPage: React.FC = () => {
             <BarChart data={barData} barSize={20}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
               <XAxis dataKey="name" tick={{ fill: '#aaaaaa', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#aaaaaa', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k€`} />
+              <YAxis tick={{ fill: '#aaaaaa', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k MGA`} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="entrees" fill="#4ade80" radius={[3, 3, 0, 0]} name="entrees" />
               <Bar dataKey="sorties" fill="#f87171" radius={[3, 3, 0, 0]} name="sorties" />

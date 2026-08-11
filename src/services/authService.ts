@@ -171,7 +171,7 @@ class AuthService {
   // --------------------------------------------------
   static async getProfile(): Promise<User> {
     try {
-      const response = await api.get("/api/auth/profile");
+      const response = await api.get("/api/auth/me");
       const data = response.data as ApiResponse<User>;
       if (!data.success || !data.user) {
         throw new Error(data.message || "Profil non trouvé");

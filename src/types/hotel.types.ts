@@ -21,6 +21,7 @@ export interface Room {
   capacite: number | null;
   prix_nuit: number | null;
   statut: 'LIBRE' | 'OCCUPEE' | 'RESERVEE' | 'NETTOYAGE' | 'MAINTENANCE' | 'HORS_SERVICE';
+  etage: number;
   room_type?: RoomType;
   created_at?: string;
   updated_at?: string;
@@ -330,6 +331,7 @@ export interface RoomFormData {
   capacite: number | null;
   prix_nuit: number | null;
   statut: Room['statut'];
+  etage: number;
 }
 
 export interface MinibarItemFormData {

@@ -51,7 +51,7 @@ interface TableProps<T> {
   className?: string;
 }
 
-export function DataTable<T extends { id: string }>({ data, columns, title, className }: TableProps<T>) {
+export function DataTable<T extends { id: string | number }>({ data, columns, title, className }: TableProps<T>) {
   return (
     <div className={`bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden ${className}`}>
       {title && (
