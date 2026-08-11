@@ -160,9 +160,10 @@ export const clientService = {
   },
 
   // Supprimer un client
-  deleteClient: async (id: number): Promise<void> => {
+  deleteClient: async (id: number): Promise<{ deleted: boolean; deactivated: boolean; relatedCount?: number }> => {
     try {
-      await api.delete<ApiResponse<void>>(`/api/clients/${id}`);
+      const response = await api.delete<ApiResponse<{ deleted: boolean; deactivated: boolean; relatedCount?: number }>>(`/api/clients/${id}`);
+      return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur deleteClient ${id}:`, error);
       throw error;

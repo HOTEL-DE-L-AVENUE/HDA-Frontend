@@ -339,8 +339,14 @@ const ClientsPage: React.FC = () => {
     
     setIsProcessing(true);
     try {
-      await deleteClient(clientToDelete.id);
-      toast.success('Client supprimé avec succès');
+      const result = await deleteClient(clientToDelete.id);
+      
+      if (result.deleted) {
+        toast.success('Client supprimé définitivement');
+      } else if (result.deactivated) {
+        toast.success(`Client désactivé (${result.relatedCount} enregistrements liés conservés)`);
+      }
+      
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
     } catch (error: any) {
