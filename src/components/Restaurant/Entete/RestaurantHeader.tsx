@@ -1,6 +1,5 @@
 import React from 'react';
-import { UtensilsCrossed, Plus } from 'lucide-react';
-import { Button } from '../../UI';
+import { UtensilsCrossed } from 'lucide-react';
 
 interface Stat {
   label: string;
@@ -10,10 +9,9 @@ interface Stat {
 
 interface RestaurantHeaderProps {
   stats: Stat[];
-  onNewOrder?: () => void;
 }
 
-export const RestaurantHeader: React.FC<RestaurantHeaderProps> = ({ stats, onNewOrder }) => {
+export const RestaurantHeader: React.FC<RestaurantHeaderProps> = ({ stats }) => {
   return (
     <>
       {/* Titre */}
@@ -30,15 +28,6 @@ export const RestaurantHeader: React.FC<RestaurantHeaderProps> = ({ stats, onNew
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {onNewOrder && (
-            <Button 
-              icon={<Plus size={16} />} 
-              onClick={onNewOrder}
-              className="text-sm"
-            >
-              Nouvelle commande
-            </Button>
-          )}
           <div 
             className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{
