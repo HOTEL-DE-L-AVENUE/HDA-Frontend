@@ -39,6 +39,8 @@ import { HousekeepingManager } from '../components/Hotel/HotelHousekeepingManage
 import { ClientSearch } from '../components/Hotel/ClientSearch';
 import { RoomFormModal } from '../components/Hotel/Modal/RoomFormModal';
 import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormModal';
+import { useRooms } from '../hooks/useRooms';
+import { useReservations } from '../hooks/useReservations';
 import { Room, Reservation } from '../types/hotel.types';
 import { Button } from '../components/UI';
 
@@ -59,24 +61,6 @@ const tabs: Tab[] = [
   { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
 ];
 
-// Données mockées pour le développement
-const mockRooms: Room[] = [
-  { id: 1, room_type_id: 1, numero: '101', capacite: 2, prix_nuit: 250000, statut: 'LIBRE' },
-  { id: 2, room_type_id: 1, numero: '102', capacite: 2, prix_nuit: 250000, statut: 'OCCUPEE' },
-  { id: 3, room_type_id: 2, numero: '103', capacite: 3, prix_nuit: 350000, statut: 'RESERVEE' },
-  { id: 4, room_type_id: 2, numero: '104', capacite: 3, prix_nuit: 350000, statut: 'LIBRE' },
-  { id: 5, room_type_id: 3, numero: '105', capacite: 4, prix_nuit: 500000, statut: 'OCCUPEE' },
-];
-
-const mockReservations: Reservation[] = [
-  { id: 1, client_id: 1, room_id: 1, date_arrivee: '2026-06-25', date_depart: '2026-06-28', montant_total: 750000, statut: 'CONFIRMEE' },
-  { id: 2, client_id: 2, room_id: 3, date_arrivee: '2026-06-26', date_depart: '2026-06-30', montant_total: 1400000, statut: 'EN_ATTENTE' },
-];
-
-const mockClients = [
-  { id: 1, code_client: 'CLT001', nom: 'Rakoto', prenom: 'Jean', telephone: '0321234567', email: 'jean@email.com', statut: 'ACTIF', is_casino_player: false },
-  { id: 2, code_client: 'CLT002', nom: 'Rabe', prenom: 'Marie', telephone: '0337654321', email: 'marie@email.com', statut: 'ACTIF', is_casino_player: true },
-];
 
 // Composant pour les statistiques responsive
 const StatsCard: React.FC<{
@@ -142,46 +126,37 @@ const TabButton: React.FC<{
 // Composant principal
 const HotelPage: React.FC = () => {
   const context = useHDA();
-  
-  if (!context) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh] p-4">
-        <div className="text-center">
-          <div className="text-4xl mb-3">⚠️</div>
-          <p className="text-danger font-medium">Erreur de chargement du contexte</p>
-          <p className="text-muted text-sm mt-2">Veuillez réessayer</p>
-        </div>
-      </div>
-    );
-  }
 
   const { 
     getModuleCaisseSolde, 
-    rooms: contextRooms = [], 
-    reservations: contextReservations = [], 
-    clients: contextClients = [], 
-    equipments = [], 
-    roomEquipments = [], 
-    maintenanceTasks = [], 
-    housekeepingTasks = [], 
-    minibarItems = [], 
-    products = [], 
-    loadHotelData 
-  } = (context || {}) as any;
-  
+  } = context;
+
+  const {
+    rooms,
+    loading: roomsLoading,
+    error: roomsError,
+    refresh: refreshRooms,
+  } = useRooms();
+
+  const {
+    reservations,
+    loading: reservationsLoading,
+    error: reservationsError,
+    loadReservations,
+  } = useReservations();
+
   const [activeTab, setActiveTab] = useState('chambres');
   const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  
-  // Utiliser les données du contexte ou les données mockées
-  const rooms = contextRooms.length > 0 ? contextRooms : mockRooms;
-  const reservations = contextReservations.length > 0 ? contextReservations : mockReservations;
-  const clients = contextClients.length > 0 ? contextClients : mockClients;
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
+
+  const roomsData = Array.isArray(rooms) ? rooms : [];
+  const reservationsData = Array.isArray(reservations) ? reservations : [];
 
   // Récupérer les données de caisse
   let caisseData = { solde: 0, entrees: 0, sorties: 0 };
@@ -200,35 +175,32 @@ const HotelPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        if (typeof loadHotelData === 'function') {
-          await loadHotelData();
-        }
-      } catch (error) {
+        await Promise.all([refreshRooms(), loadReservations()]);
+      } catch (error: any) {
         console.error('Erreur lors du chargement des données:', error);
-        setError('Impossible de charger les données. Veuillez réessayer.');
+        setError(error?.response?.data?.message || 'Impossible de charger les données. Veuillez réessayer.');
       } finally {
         setIsLoading(false);
       }
     };
-    loadData();
-  }, [loadHotelData]);
+    void loadData();
+  }, [refreshRooms, loadReservations]);
 
   // Statistiques sécurisées
-  const safeRooms = Array.isArray(rooms) ? rooms : [];
-  const safeReservations = Array.isArray(reservations) ? reservations : [];
-  const safeClients = Array.isArray(clients) ? clients : [];
-  const safeEquipments = Array.isArray(equipments) ? equipments : [];
-  const safeRoomEquipments = Array.isArray(roomEquipments) ? roomEquipments : [];
-  const safeMaintenanceTasks = Array.isArray(maintenanceTasks) ? maintenanceTasks : [];
-  const safeHousekeepingTasks = Array.isArray(housekeepingTasks) ? housekeepingTasks : [];
-  const safeMinibarItems = Array.isArray(minibarItems) ? minibarItems : [];
-  const safeProducts = Array.isArray(products) ? products : [];
+  const safeRooms = roomsData;
+  const safeReservations = reservationsData;
+  const safeEquipments: any[] = [];
+  const safeRoomEquipments: any[] = [];
+  const safeMaintenanceTasks: any[] = [];
+  const safeHousekeepingTasks: any[] = [];
+  const safeMinibarItems: any[] = [];
+  const safeProducts: any[] = [];
 
   const totalRooms = safeRooms.length;
   const occupiedRooms = safeRooms.filter(r => r?.statut === 'OCCUPEE').length;
   const availableRooms = safeRooms.filter(r => r?.statut === 'LIBRE').length;
   const activeReservations = safeReservations.filter(r => r?.statut === 'CONFIRMEE').length;
-  const maintenanceCount = safeMaintenanceTasks.filter(t => t?.statut === 'OUVERT').length;
+  const maintenanceCount = 0;
 
   if (isLoading) {
     return (
@@ -341,28 +313,22 @@ const HotelPage: React.FC = () => {
         {activeTab === 'chambres' && (
           <div className="overflow-x-auto">
             <RoomList 
-              rooms={safeRooms}
               onEdit={(room) => {
                 setSelectedRoom(room);
                 setIsRoomModalOpen(true);
               }}
-              onStatusChange={(roomId: number, newStatus: string) => {
-                console.log(`Changer statut de la chambre ${roomId} vers ${newStatus}`);
-              }}
+              refreshTrigger={dataRefreshKey}
             />
           </div>
         )}
         {activeTab === 'reservations' && (
           <div className="overflow-x-auto">
             <ReservationList 
-              reservations={safeReservations}
               onEdit={(res) => {
                 setSelectedReservation(res);
                 setIsReservationModalOpen(true);
               }}
-              onCancel={(resId: number) => {
-                console.log(`Annuler la réservation ${resId}`);
-              }}
+              refreshTrigger={dataRefreshKey}
             />
           </div>
         )}
@@ -421,7 +387,7 @@ const HotelPage: React.FC = () => {
         }}
         initialData={selectedRoom}
         onSuccess={() => {
-          if (loadHotelData) loadHotelData();
+          setDataRefreshKey((prev) => prev + 1);
           setIsRoomModalOpen(false);
           setSelectedRoom(null);
         }}
@@ -435,7 +401,7 @@ const HotelPage: React.FC = () => {
         }}
         initialData={selectedReservation}
         onSuccess={() => {
-          if (loadHotelData) loadHotelData();
+          setDataRefreshKey((prev) => prev + 1);
           setIsReservationModalOpen(false);
           setSelectedReservation(null);
         }}
