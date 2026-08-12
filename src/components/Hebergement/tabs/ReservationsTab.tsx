@@ -16,7 +16,7 @@ interface Props {
 export const ReservationsTab: React.FC<Props> = ({
   reservations, onNew, onCheckIn, onCheckOut, onCancel,
 }) => {
-  const columns = [
+  const columns: any[] = [
     {
       key: 'client', label: 'Client',
       render: (r: Reservation) => (
@@ -71,6 +71,11 @@ export const ReservationsTab: React.FC<Props> = ({
     },
   ];
 
+  const tableData = reservations.map((r) => ({
+    ...r,
+    id: String(r.id),
+  }));
+
   return (
     <div
       className="rounded-2xl overflow-hidden w-full"
@@ -86,7 +91,7 @@ export const ReservationsTab: React.FC<Props> = ({
         </Button>
       </div>
       <div className="overflow-x-auto">
-        <DataTable data={reservations} columns={columns} />
+        <DataTable data={tableData} columns={columns} />
       </div>
     </div>
   );

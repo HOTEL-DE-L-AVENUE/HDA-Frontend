@@ -1,6 +1,6 @@
 // ==================== TYPES GLOBAUX ====================
 
-export type ModuleType = 'hebergement' | 'hotel' | 'restaurant' | 'bar' | 'casino' | 'finances' | 'utilisateurs' | 'dashboard';
+export type ModuleType = 'hebergement' | 'hotel' | 'restaurant' | 'bar' | 'casino' | 'finances' | 'utilisateurs' | 'dashboard' | 'clients';
 
 export type UserRole = 'admin' | 'manager' | 'caissier' | 'stock_manager' | 'viewer';
 

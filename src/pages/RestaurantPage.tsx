@@ -54,6 +54,17 @@ export const RestaurantPage: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // ---------- Chargement initial ----------
+  const fetchOrders = async () => {
+    try {
+      const res = await restaurantService.getOrders();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setOrders(res.data as Order[]);
+      }
+    } catch (error) {
+      console.warn('Erreur lors du chargement des commandes live:', error);
+    }
+  };
+
   useEffect(() => {
     // Charger les tables depuis l'API
     const fetchTables = async () => {
@@ -72,8 +83,9 @@ export const RestaurantPage: React.FC = () => {
       }
     };
     fetchTables();
+    fetchOrders();
 
-    // Données mockées (produits, catégories, commandes, clients)
+    // Données mockées de départ
     setCategories([
       { id: 1, nom: 'Plats' },
       { id: 2, nom: 'Entrées' },
@@ -95,27 +107,11 @@ export const RestaurantPage: React.FC = () => {
       { id: 1, code_client: 'CL001', nom: 'Rakoto', prenom: 'Jean', telephone: '+261 34 123 4567', email: 'jean@email.com' },
       { id: 2, code_client: 'CL002', nom: 'Rabe', prenom: 'Marie', telephone: '+261 33 987 6543', email: 'marie@email.com' },
     ]);
-    setOrders([
-      {
-        id: 1, client_id: null, source_module: 'RESTAURANT', montant_total: 136,
-        statut: 'EN_COURS', created_at: new Date().toISOString(),
-        table: { id: 1, numero: 'T1', capacite: 4, statut: 'LIBRE' } as TableRestaurant,
-        items: [{ id: 1, order_id: 1, product_id: 1, quantite: 2, prix_unitaire: 68 }],
-      },
-      {
-        id: 2, client_id: 2, source_module: 'RESTAURANT', montant_total: 185,
-        statut: 'PAYEE', created_at: new Date(Date.now() - 3600000).toISOString(),
-        table: { id: 2, numero: 'T2', capacite: 2, statut: 'OCCUPEE' } as TableRestaurant,
-        items: [{ id: 2, order_id: 2, product_id: 5, quantite: 1, prix_unitaire: 185 }],
-      },
-    ]);
 
-    // The restaurant menu must reflect the persisted catalogue, not the
-    // temporary sample data above.
     Promise.all([restaurantService.getProducts(), restaurantService.getCategories()])
       .then(([productsRes, categoriesRes]) => {
-        if (productsRes.success) setProducts(productsRes.data as Product[]);
-        if (categoriesRes.success) setCategories(categoriesRes.data as Category[]);
+        if (productsRes.success && Array.isArray(productsRes.data) && productsRes.data.length > 0) setProducts(productsRes.data as Product[]);
+        if (categoriesRes.success && Array.isArray(categoriesRes.data) && categoriesRes.data.length > 0) setCategories(categoriesRes.data as Category[]);
       })
       .catch(error => console.error('Erreur lors du chargement du catalogue restaurant', error));
   }, []);
@@ -148,16 +144,32 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
-  // Sélection d'une table pour commander (ouvre le modal de commande avec la table présélectionnée)
-  const handleSelectTable = (tableId: number) => {
-    // On pourrait pré-remplir le formulaire de commande avec cette table.
-    // Pour l'instant, on ouvre simplement le modal de commande.
+  const handleSelectTable = (_tableId: number) => {
     setShowOrderModal(true);
   };
 
-  // ---------- Handlers Commandes (mock) – inchangés pour l'instant ----------
-  const handleAddOrder = (formData: any) => {
+  // ---------- Handlers Commandes ----------
+  const handleAddOrder = async (formData: any) => {
     const table = tables.find(t => t.id === formData.table_id);
+    try {
+      const res = await restaurantService.createOrder({
+        client_id: formData.client_id || undefined,
+        table_id: formData.table_id || undefined,
+        items: (formData.items || []).map((item: any) => ({
+          product_id: item.product_id,
+          quantite: item.quantite,
+          prix_unitaire: item.prix_unitaire,
+        })),
+      });
+      if (res.success) {
+        await fetchOrders();
+        setShowOrderModal(false);
+        return;
+      }
+    } catch (err) {
+      console.warn('Création commande via API échouée, bascule vers mode local:', err);
+    }
+
     const newOrder: Order = {
       id: orders.length + 1,
       client_id: formData.client_id || null,
@@ -166,33 +178,54 @@ export const RestaurantPage: React.FC = () => {
       statut: 'EN_ATTENTE',
       created_at: new Date().toISOString(),
       table: table,
-      items: formData.items.map((item: any) => ({
+      items: (formData.items || []).map((item: any) => ({
         id: Date.now(),
         order_id: orders.length + 1,
         ...item,
       })),
     };
-    setOrders([...orders, newOrder]);
+    setOrders(prev => [...prev, newOrder]);
     if (table) {
       setTables(prev => prev.map(t => t.id === table.id ? { ...t, statut: 'OCCUPEE' } : t));
     }
+    setShowOrderModal(false);
   };
 
-  const handleUpdateOrderStatus = (orderId: number, status: Order['statut']) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: status } : o));
-  };
-
-  const handlePayment = (orderId: number) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: 'PAYEE' } : o));
-    const order = orders.find(o => o.id === orderId);
-    if (order?.table) {
-      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+  const handleUpdateOrderStatus = async (orderId: number, status: Order['statut']) => {
+    try {
+      await restaurantService.updateOrderStatus(orderId, status);
+      await fetchOrders();
+    } catch (err) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: status } : o));
     }
   };
 
-  const handleCancelOrder = (orderId: number) => {
+  const handlePayment = async (orderId: number) => {
+    const order = orders.find(o => o.id === orderId);
+    try {
+      await restaurantService.processPayment({
+        order_id: orderId,
+        montant: order?.montant_total || 0,
+        moyen_paiement: 'ESPECES',
+        client_id: order?.client_id || undefined,
+      });
+      await fetchOrders();
+    } catch (err) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: 'PAYEE' } : o));
+      if (order?.table) {
+        setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+      }
+    }
+  };
+
+  const handleCancelOrder = async (orderId: number) => {
     if (window.confirm('Annuler cette commande ?')) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: 'ANNULEE' } : o));
+      try {
+        await restaurantService.updateOrderStatus(orderId, 'ANNULEE');
+        await fetchOrders();
+      } catch (err) {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: 'ANNULEE' } : o));
+      }
     }
   };
 

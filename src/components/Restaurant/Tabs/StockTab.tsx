@@ -572,11 +572,11 @@ const AchatsPanel: React.FC = () => {
       restaurantService.getProducts({ actif: true }),
       restaurantService.getStockLocations(),
       restaurantService.getPurchases(),
-    ]).then(([sup, prod, loc, pur]) => {
-      if (sup.success) setSuppliers(sup.data);
-      if (prod.success) setProducts(prod.data);
-      if (loc.success) setLocations(loc.data);
-      if (pur.success) setPurchases(pur.data);
+    ]).then(([sup, prod, loc, pur]: any[]) => {
+      setSuppliers(sup?.data || sup || []);
+      setProducts(prod?.data || prod || []);
+      setLocations(loc?.data || loc || []);
+      setPurchases(pur?.data || pur || []);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
@@ -868,10 +868,10 @@ const RecettesPanel: React.FC = () => {
       restaurantService.getAllRecipes(),
       restaurantService.getProducts({ type_produit: 'PRODUIT_FINI', actif: true }),
       restaurantService.getProducts({ type_produit: 'MATIERE_PREMIERE', actif: true }),
-    ]).then(([rec, fin, raw]) => {
-      if (rec.success) setRecipes(rec.data);
-      if (fin.success) setFinishedProducts(fin.data);
-      if (raw.success) setRawProducts(raw.data);
+    ]).then(([rec, fin, raw]: any[]) => {
+      setRecipes(rec?.data || rec || []);
+      setFinishedProducts(fin?.data || fin || []);
+      setRawProducts(raw?.data || raw || []);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 

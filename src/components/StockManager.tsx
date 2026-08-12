@@ -279,7 +279,7 @@ const openEdit = (item: StockItem) => {
                 <Input label="Unité" value={form.unite} onChange={e => setForm({...form, unite: e.target.value})} placeholder="kg, pièce, litre..." />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Prix unitaire (€)" type="number" value={form.prixUnitaire} onChange={e => setForm({...form, prixUnitaire: Number(e.target.value)})} />
+                <Input label="Prix unitaire (MGA)" type="number" value={form.prixUnitaire} onChange={e => setForm({...form, prixUnitaire: Number(e.target.value)})} />
                 <Input label="Seuil minimum" type="number" value={form.seuilMinimum} onChange={e => setForm({...form, seuilMinimum: Number(e.target.value)})} />
               </div>
               <Input label="Fournisseur (optionnel)" value={form.fournisseur} onChange={e => setForm({...form, fournisseur: e.target.value})} />
@@ -351,7 +351,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
               </button>
             ))}
           </div>
-          <Input label="Montant (€)" type="number" value={form.montant} onChange={e => setForm({...form, montant: Number(e.target.value)})} placeholder="0.00" />
+          <Input label="Montant (MGA)" type="number" value={form.montant} onChange={e => setForm({...form, montant: Number(e.target.value)})} placeholder="0.00" />
           <Input label="Description" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Description de la transaction..." />
           <Select label="Cat&eacute;gorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
           <div className="flex gap-3 pt-2">

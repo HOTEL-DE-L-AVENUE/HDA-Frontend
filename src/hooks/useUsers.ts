@@ -14,8 +14,8 @@ export const useUsers = () => {
       setLoading(true);
       const response = await api.get('/api/users');
       setUsers(response.data.data);
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
     }
