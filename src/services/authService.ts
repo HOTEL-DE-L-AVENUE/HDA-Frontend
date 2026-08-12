@@ -43,12 +43,15 @@ const validatePassword = (password: string | null | undefined): PasswordValidati
 // ----------------------------------------------------------------------
 export interface User {
   id: number;
+  id_admin?: number; // Backend field name
   nom: string;
   prenom?: string;
   email: string;
   role: UserRoleType;
   actif: boolean;
+  statut?: string; // Backend field name ('actif' | 'inactif')
   created_at?: string;
+  date_creation?: string; // Backend field name
   updated_at?: string;
 }
 
@@ -112,10 +115,21 @@ class AuthService {
       }
 
       const user = data.user;
-      this.setAuthData(user, data.token, data.refreshToken);
+      // Map backend field names to frontend interface
+      const mappedUser = {
+        id: user.id_admin || user.id,
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+        role: user.role,
+        actif: user.statut === 'actif' || user.actif,
+        created_at: user.date_creation || user.created_at,
+        updated_at: user.updated_at,
+      };
+      this.setAuthData(mappedUser, data.token, data.refreshToken);
 
-      console.log("✅ Connexion réussie:", { email: user.email, role: user.role });
-      return { user, token: data.token };
+      console.log("✅ Connexion réussie:", { email: mappedUser.email, role: mappedUser.role });
+      return { user: mappedUser, token: data.token };
     } catch (error: any) {
       console.error("❌ Erreur de connexion:", error.message);
       throw this.handleError(error, "Erreur lors de la connexion");
@@ -223,7 +237,18 @@ class AuthService {
     try {
       const data = SecureStorage.getItem("user-data");
       if (!data) return null;
-      return JSON.parse(data) as User;
+      const user = JSON.parse(data) as User;
+      // Map backend field names to frontend interface
+      return {
+        id: user.id_admin || user.id,
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+        role: user.role,
+        actif: user.statut === 'actif' || user.actif,
+        created_at: user.date_creation || user.created_at,
+        updated_at: user.updated_at,
+      };
     } catch {
       return null;
     }

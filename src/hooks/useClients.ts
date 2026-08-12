@@ -57,8 +57,17 @@ export const useClients = () => {
   const deleteClient = useCallback(async (id: number) => {
     try {
       setError(null);
-      await clientService.deleteClient(id);
-      setClients(prev => prev.filter(client => client.id !== id));
+      const result = await clientService.deleteClient(id);
+      
+      if (result.deleted) {
+        // Hard delete - remove from list
+        setClients(prev => prev.filter(client => client.id !== id));
+      } else if (result.deactivated) {
+        // Soft delete - update status to INACTIF
+        setClients(prev => prev.map(client => 
+          client.id === id ? { ...client, statut: 'INACTIF' as const } : client
+        ));
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la suppression');
       console.error('❌ deleteClient error:', err);

@@ -66,10 +66,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       setLoading(true);
       setError(null);
       
-      const [allItemsResponse, statsResponse] = await Promise.all([
-        minibarService.getAll(),
-        minibarService.getStats().catch(() => ({ data: { total_produits: 0, chambres_equipees: 0 } })),
-      ]);
+      const allItemsResponse = await minibarService.getAll();
 
       // Transformer les données pour correspondre au type MinibarItem
       const formattedItems: MinibarItem[] = (allItemsResponse.data || []).map((item: any) => {
@@ -95,9 +92,12 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       });
 
       setItems(formattedItems);
+      
+      // Calculate stats client-side
+      const uniqueRooms = new Set(formattedItems.map(i => i.room_id));
       setStats({
-        totalProduits: statsResponse.data?.total_produits || formattedItems.length,
-        chambresEquipees: statsResponse.data?.chambres_equipees || new Set(formattedItems.map(i => i.room_id)).size,
+        totalProduits: formattedItems.length,
+        chambresEquipees: uniqueRooms.size,
       });
 
       // Si une chambre est sélectionnée, charger ses consommations
