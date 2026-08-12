@@ -191,41 +191,59 @@ export const RestaurantPage: React.FC = () => {
     setShowOrderModal(false);
   };
 
-  const handleUpdateOrderStatus = async (orderId: number, status: Order['statut']) => {
+  const handleUpdateOrderStatus = async (orderId: number | string, status: Order['statut']) => {
+    const numericId = Number(orderId);
     try {
-      await restaurantService.updateOrderStatus(orderId, status);
-      await fetchOrders();
+      const res = await restaurantService.updateOrderStatus(numericId, status);
+      if (res && res.success) {
+        await fetchOrders();
+        return;
+      }
     } catch (err) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: status } : o));
+      console.warn('API update status échoué, bascule vers mode local:', err);
     }
+    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: status } : o));
   };
 
-  const handlePayment = async (orderId: number) => {
-    const order = orders.find(o => o.id === orderId);
+  const handlePayment = async (orderId: number | string) => {
+    const numericId = Number(orderId);
+    const order = orders.find(o => o.id === numericId);
     try {
-      await restaurantService.processPayment({
-        order_id: orderId,
+      const res = await restaurantService.processPayment({
+        order_id: numericId,
         montant: order?.montant_total || 0,
         moyen_paiement: 'ESPECES',
         client_id: order?.client_id || undefined,
       });
-      await fetchOrders();
-    } catch (err) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: 'PAYEE' } : o));
-      if (order?.table) {
-        setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+      if (res && res.success) {
+        await fetchOrders();
+        return;
       }
+    } catch (err) {
+      console.warn('API payment échoué, bascule vers mode local:', err);
+    }
+    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: 'PAYEE' } : o));
+    if (order?.table) {
+      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
   };
 
-  const handleCancelOrder = async (orderId: number) => {
-    if (window.confirm('Annuler cette commande ?')) {
-      try {
-        await restaurantService.updateOrderStatus(orderId, 'ANNULEE');
+  const handleCancelOrder = async (orderId: number | string) => {
+    if (!window.confirm('Annuler cette commande ?')) return;
+    const numericId = Number(orderId);
+    try {
+      const res = await restaurantService.updateOrderStatus(numericId, 'ANNULEE');
+      if (res && res.success) {
         await fetchOrders();
-      } catch (err) {
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, statut: 'ANNULEE' } : o));
+        return;
       }
+    } catch (err) {
+      console.warn('API cancel échoué, bascule vers mode local:', err);
+    }
+    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: 'ANNULEE' } : o));
+    const order = orders.find(o => o.id === numericId);
+    if (order?.table) {
+      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
   };
 
@@ -286,7 +304,7 @@ export const RestaurantPage: React.FC = () => {
   };
 
   // ---------- Statistiques ----------
-  const stats = [
+  const stats: any[] = [
     { label: 'Total Commandes', value: orders.length, icon: <ShoppingCart size={20} className="text-black" /> },
     { label: 'En Cours', value: orders.filter(o => o.statut === 'EN_COURS' || o.statut === 'EN_ATTENTE').length, icon: <Clock size={20} className="text-black" /> },
     { label: 'Payées', value: orders.filter(o => o.statut === 'PAYEE').length, icon: <CheckCircle size={20} className="text-black" /> },
