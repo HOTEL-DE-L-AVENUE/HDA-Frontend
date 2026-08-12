@@ -12,6 +12,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { ToastProvider } from "./context/ToastContext";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
 
 function App() {
   return (
@@ -33,6 +35,8 @@ function App() {
               <Route path="/finances" element={<FinancesPage />} />
               <Route path="/utilisateurs" element={<UtilisateursPage />} />
               <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>
 

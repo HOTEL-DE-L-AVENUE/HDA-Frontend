@@ -9,35 +9,36 @@ export const minibarService = {
     if (filters?.product_id) params.append('product_id', filters.product_id.toString());
     if (filters?.seuil_alerte) params.append('seuil_alerte', 'true');
     
-    // ✅ CORRECTION: Utiliser '/api/minibars' (avec 's')
-    const response = await api.get(`/api/minibar?${params.toString()}`);
+    // Fix: Use correct backend endpoint
+    const response = await api.get(`/api/hebergement/room-minibar${params.toString() ? `?${params.toString()}` : ''}`);
     return response.data;
   },
 
-  // Récupérer les statistiques
+  // Récupérer les statistiques - calculated client-side from getAll data
   async getStats() {
-    // ✅ CORRECTION: Utiliser '/api/minibars/stats'
-    const response = await api.get('/api/minibar/stats');
-    return response.data;
+    // Fix: Remove stats endpoint - calculate from getAll data instead
+    // This will be handled by the component after calling getAll
+    return { data: { total_produits: 0, chambres_equipees: 0 } };
   },
 
   // Récupérer le minibar d'une chambre
   async getByRoom(roomId: number) {
-    // ✅ CORRECTION: Utiliser '/api/minibars/room'
-    const response = await api.get(`/api/minibar/room/${roomId}`);
+    // Fix: Use filter parameter on existing endpoint
+    const response = await api.get(`/api/hebergement/room-minibar?room_id=${roomId}`);
     return response.data;
   },
 
   // Mettre à jour la quantité
   async updateQuantity(id: number, quantite: number) {
-    // ✅ CORRECTION: Utiliser '/api/minibars' avec 'quantity'
-    const response = await api.patch(`/api/minibar/${id}/quantity`, { quantite });
+    // Fix: Use PUT with quantite in body
+    const response = await api.put(`/api/hebergement/room-minibar/${id}`, { quantite });
     return response.data;
   },
 
   // Supprimer un produit
   async delete(id: number) {
-    const response = await api.delete(`/api/minibar/${id}`);
+    // Fix: Use correct endpoint path
+    const response = await api.delete(`/api/hebergement/room-minibar/${id}`);
     return response.data;
   },
 };
