@@ -37,7 +37,7 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders, onPayment }) => {
           <div className="rounded-xl p-4 border" style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
             <p className="text-muted text-xs">Moyenne / commande</p>
             <p className="text-secondary font-bold text-xl">
-              {orders.length > 0 ? formatCurrency(totalCA / orders.length) : '0 €'}
+              {orders.length > 0 ? formatCurrency(totalCA / orders.length) : '0 MGA'}
             </p>
           </div>
         </div>

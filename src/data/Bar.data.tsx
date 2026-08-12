@@ -22,9 +22,9 @@ export const COCKTAIL_MENU: BarProduct[] = [
 ];
 
 export const BEST_SELLERS: BestSeller[] = [
-  { nom: 'Whisky 18Y', ventes: 42, montant: '7 560 €' },
-  { nom: 'HDA Signature', ventes: 38, montant: '1 824 €' },
-  { nom: 'Champagne Rosé', ventes: 29, montant: '2 755 €' },
+  { nom: 'Whisky 18Y', ventes: 42, montant: '7 560 MGA' },
+  { nom: 'HDA Signature', ventes: 38, montant: '1 824 MGA' },
+  { nom: 'Champagne Rosé', ventes: 29, montant: '2 755 MGA' },
 ];
 
 export const BEST_SELLERS_MAX_VENTES = 50;

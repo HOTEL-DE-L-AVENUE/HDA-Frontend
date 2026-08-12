@@ -45,7 +45,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const caisseTransfersApi = {
-  list: (params?: ListCaisseTransfersParams) => get<CaisseTransfer[]>(qs(params || {})),
+  list: (params?: ListCaisseTransfersParams) => get<CaisseTransfer[]>(qs((params || {}) as Record<string, string | number | undefined | null>)),
   get: (id: ID) => get<CaisseTransfer>(`/${id}`),
   create: (payload: CreateCaisseTransferPayload) => post<CaisseTransfer>('/', payload),
   confirm: (id: ID) => post<CaisseTransfer>(`/${id}/confirm`),

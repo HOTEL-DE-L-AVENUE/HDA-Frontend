@@ -167,7 +167,7 @@ const HotelPage: React.FC = () => {
     minibarItems = [], 
     products = [], 
     loadHotelData 
-  } = context;
+  } = (context || {}) as any;
   
   const [activeTab, setActiveTab] = useState('chambres');
   const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
@@ -346,7 +346,7 @@ const HotelPage: React.FC = () => {
                 setSelectedRoom(room);
                 setIsRoomModalOpen(true);
               }}
-              onStatusChange={(roomId, newStatus) => {
+              onStatusChange={(roomId: number, newStatus: string) => {
                 console.log(`Changer statut de la chambre ${roomId} vers ${newStatus}`);
               }}
             />
@@ -360,7 +360,7 @@ const HotelPage: React.FC = () => {
                 setSelectedReservation(res);
                 setIsReservationModalOpen(true);
               }}
-              onCancel={(resId) => {
+              onCancel={(resId: number) => {
                 console.log(`Annuler la réservation ${resId}`);
               }}
             />
@@ -378,35 +378,35 @@ const HotelPage: React.FC = () => {
         {activeTab === 'equipements' && (
           <div className="overflow-x-auto">
             <EquipmentManager 
-              equipments={safeEquipments}
-              roomEquipments={safeRoomEquipments}
-              rooms={safeRooms}
+              equipments={safeEquipments as any}
+              roomEquipments={safeRoomEquipments as any}
+              rooms={safeRooms as any}
             />
           </div>
         )}
         {activeTab === 'maintenance' && (
           <div className="overflow-x-auto">
             <MaintenanceManager 
-              tasks={safeMaintenanceTasks}
-              equipments={safeEquipments}
-              rooms={safeRooms}
+              tasks={safeMaintenanceTasks as any}
+              equipments={safeEquipments as any}
+              rooms={safeRooms as any}
             />
           </div>
         )}
         {activeTab === 'housekeeping' && (
           <div className="overflow-x-auto">
             <HousekeepingManager 
-              tasks={safeHousekeepingTasks}
-              rooms={safeRooms}
+              tasks={safeHousekeepingTasks as any}
+              rooms={safeRooms as any}
             />
           </div>
         )}
         {activeTab === 'minibar' && (
           <div className="overflow-x-auto">
             <MinibarManager 
-              items={safeMinibarItems}
-              rooms={safeRooms}
-              products={safeProducts}
+              items={safeMinibarItems as any}
+              rooms={safeRooms as any}
+              products={safeProducts as any}
             />
           </div>
         )}
@@ -420,8 +420,8 @@ const HotelPage: React.FC = () => {
           setSelectedRoom(null);
         }}
         initialData={selectedRoom}
-        onSave={(data) => {
-          console.log('Sauvegarder la chambre:', data);
+        onSuccess={() => {
+          if (loadHotelData) loadHotelData();
           setIsRoomModalOpen(false);
           setSelectedRoom(null);
         }}
@@ -434,10 +434,8 @@ const HotelPage: React.FC = () => {
           setSelectedReservation(null);
         }}
         initialData={selectedReservation}
-        rooms={safeRooms}
-        clients={safeClients}
-        onSave={(data) => {
-          console.log('Sauvegarder la réservation:', data);
+        onSuccess={() => {
+          if (loadHotelData) loadHotelData();
           setIsReservationModalOpen(false);
           setSelectedReservation(null);
         }}

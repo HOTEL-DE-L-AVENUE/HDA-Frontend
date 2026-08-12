@@ -77,14 +77,14 @@ export const ClientSearch: React.FC<ClientSearchProps> = ({
   };
 
   // Ouvrir le modal de modification
-  const handleEditClick = (client: Client) => {
+  const handleEditClick = (client: any) => {
     setClientToEdit(client);
     setEditFormData({
       nom: client.nom || '',
       prenom: client.prenom || '',
       telephone: client.telephone || '',
       email: client.email || '',
-      statut: client.statut || 'ACTIF',
+      statut: (client.statut as any) || 'ACTIF',
       is_casino_player: client.is_casino_player || false
     });
     setEditModalOpen(true);
@@ -120,7 +120,7 @@ export const ClientSearch: React.FC<ClientSearchProps> = ({
       
       // Appeler onEdit si fourni
       if (onEdit) {
-        onEdit({ ...clientToEdit, ...updatedData });
+        onEdit({ ...clientToEdit, ...updatedData } as any);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Erreur lors de la modification');

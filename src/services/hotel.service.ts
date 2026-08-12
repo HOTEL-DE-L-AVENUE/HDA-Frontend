@@ -54,11 +54,9 @@ function roomToChambre(room: Room & { room_type?: { nom?: string } }): Chambre {
     type: room.room_type?.nom ?? String((room as any).room_type_id ?? ''),
     prix: (room as any).prix_nuit,
     status: (room as any).statut,
-    // ⚠️ Il n'existe pas de colonne `etage` dans la table `rooms` : ce champ
-    // n'est pas persisté côté backend. Valeur fixée à 0 tant qu'aucune
-    // migration ne l'ajoute au schéma.
-    etage: 0,
-    capacite: room.capacite,
+    // Utilise la valeur réelle de etage depuis le backend après migration
+    etage: (room as any).etage ?? 0,
+    capacite: room.capacite ?? 0,
     created_at: (room as any).created_at,
     updated_at: (room as any).updated_at,
   };
@@ -81,11 +79,11 @@ async function chambreToRoomPayload(data: Partial<Chambre>): Promise<Partial<Roo
   if (data.capacite !== undefined) payload.capacite = data.capacite;
   if (data.prix !== undefined) (payload as any).prix_nuit = data.prix;
   if (data.status !== undefined) (payload as any).statut = data.status;
+  if (data.etage !== undefined) (payload as any).etage = data.etage;
   if (data.type !== undefined) {
     const roomTypeId = await resolveRoomTypeId(data.type);
     if (roomTypeId !== undefined) (payload as any).room_type_id = roomTypeId;
   }
-  // data.etage est ignoré : aucune colonne correspondante côté backend.
   return payload;
 }
 

@@ -38,35 +38,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // Restaurer la session depuis localStorage
-    const savedToken = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    
-    if (savedToken && savedUser) {
-      try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error('Error restoring session:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+    const syncAuth = () => {
+      const savedToken = localStorage.getItem('auth-token') || sessionStorage.getItem('auth-token') || localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user-data') || sessionStorage.getItem('user-data') || localStorage.getItem('user');
+
+      if (savedToken && savedUser) {
+        try {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUser));
+        } catch (error) {
+          console.error('Error restoring session:', error);
+          localStorage.removeItem('auth-token');
+          localStorage.removeItem('user-data');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken(null);
+          setUser(null);
+        }
+      } else {
+        setToken(null);
+        setUser(null);
       }
-    }
+    };
+
+    syncAuth();
+    window.addEventListener('auth-change', syncAuth);
+    return () => window.removeEventListener('auth-change', syncAuth);
   }, []);
 
   const login = (newToken: string, newUser: User) => {
     setToken(newToken);
     setUser(newUser);
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
+    localStorage.setItem('auth-token', newToken);
+    localStorage.setItem('user-data', JSON.stringify(newUser));
+    window.dispatchEvent(new Event('auth-change'));
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
+    localStorage.removeItem('auth-token');
+    localStorage.removeItem('user-data');
+    sessionStorage.removeItem('auth-token');
+    sessionStorage.removeItem('user-data');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('refresh-token');
     localStorage.removeItem('rememberMe');
+    window.dispatchEvent(new Event('auth-change'));
   };
 
   return (
