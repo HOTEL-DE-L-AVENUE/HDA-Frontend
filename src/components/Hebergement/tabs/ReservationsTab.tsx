@@ -49,25 +49,38 @@ export const ReservationsTab: React.FC<Props> = ({
     {
       key: 'statut', label: 'Statut',
       render: (r: Reservation) => {
-        const s = STATUTS_RESERVATION[r.statut] ?? STATUTS_RESERVATION.CONFIRMEE;
+        const rawStatus = r.statut || 'EN_COURS';
+        const formattedKey = rawStatus.toUpperCase().replace(/\s+/g, '_');
+        
+        const s = STATUTS_RESERVATION[formattedKey] || STATUTS_RESERVATION[rawStatus] || { label: 'En cours', variant: 'warning' };
         return <Badge variant={s.variant as any}>{s.label}</Badge>;
       },
     },
     {
       key: 'actions', label: '',
-      render: (r: Reservation) => (
-        <div className="flex gap-2">
-          {r.statut === 'CONFIRMEE' && (
-            <Button size="sm" variant="secondary" onClick={() => onCheckIn(r)}>Check-in</Button>
-          )}
-          {r.statut === 'EN_COURS' && (
-            <Button size="sm" variant="secondary" onClick={() => onCheckOut(r)}>Check-out</Button>
-          )}
-          <Button size="sm" variant="danger" onClick={() => onCancel(r.id)}>
-            <X size={14} />
-          </Button>
-        </div>
-      ),
+      render: (r: Reservation) => {
+        const statusNormalized = (r.statut || '').toUpperCase().replace(/\s+/g, '_');
+        const isEnCours = statusNormalized === 'EN_COURS';
+        const isConfirmee = statusNormalized === 'CONFIRMEE';
+
+        return (
+          <div className="flex gap-2">
+            {/* Si CONFIRMEE -> Bouton Check-in */}
+            {isConfirmee && (
+              <Button size="sm" variant="secondary" onClick={() => onCheckIn(r)}>Check-in</Button>
+            )}
+
+            {/* Si EN_COURS -> Bouton Check-out */}
+            {isEnCours && (
+              <Button size="sm" variant="secondary" onClick={() => onCheckOut(r)}>Check-out</Button>
+            )}
+
+            <Button size="sm" variant="danger" onClick={() => onCancel(r.id)}>
+              <X size={14} />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
