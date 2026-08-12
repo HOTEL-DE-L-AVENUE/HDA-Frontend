@@ -5,14 +5,14 @@ import { Client, ReservationForm, Room } from '../../../types/hebergement.type';
 import { formatCurrency } from '../../../utils/data';
 
 interface Props {
-  isOpen:  boolean;
-  onClose: () => void;
-  form:    ReservationForm;
+  isOpen:   boolean;
+  onClose:  () => void;
+  form:     ReservationForm;
   onChange: (form: ReservationForm) => void;
-  onSave:  () => void;
+  onSave:   () => void;
   onNewClient: () => void;
-  clients: Client[];
-  rooms:   Room[];
+  clients:  Client[];
+  rooms:    Room[];
 }
 
 export const ReservationModal: React.FC<Props> = ({
@@ -58,8 +58,8 @@ export const ReservationModal: React.FC<Props> = ({
         value={form.statut}
         onChange={(e) => onChange({ ...form, statut: e.target.value as ReservationForm['statut'] })}
         options={[
-          { value: 'CONFIRMEE', label: 'Confirmée' },
           { value: 'EN_COURS',  label: 'En cours'  },
+          { value: 'CONFIRMEE', label: 'Confirmée' },
         ]}
       />
       <div className="flex flex-col sm:flex-row gap-3 pt-2">

@@ -10,8 +10,8 @@ export const TABS = [
   { id: 'equipements',  label: 'Équipements',  icon: <Settings size={16} /> },
   { id: 'housekeeping', label: 'Ménage',        icon: <Settings size={16} /> },
   { id: 'maintenance',  label: 'Maintenance',  icon: <Wrench size={16} /> },
-  { id: 'stock',        label: 'Stock',         icon: <Package size={16} /> },
-  { id: 'caisse',       label: 'Caisse',        icon: <DollarSign size={16} /> },
+  { id: 'stock',        label: 'Stock',        icon: <Package size={16} /> },
+  { id: 'caisse',       label: 'Caisse',       icon: <DollarSign size={16} /> },
 ];
 
 // ─── Status maps ─────────────────────────────────────────────────────────────
@@ -25,11 +25,14 @@ export const STATUTS_ROOM: Record<Room['statut'], { label: string; variant: stri
   HORS_SERVICE: { label: 'Hors service', variant: 'danger'    },
 };
 
-export const STATUTS_RESERVATION: Record<Reservation['statut'], { label: string; variant: string }> = {
+export const STATUTS_RESERVATION: Record<string, { label: string; variant: string }> = {
   CONFIRMEE: { label: 'Confirmée', variant: 'success'   },
   EN_COURS:  { label: 'En cours',  variant: 'warning'   },
   TERMINEE:  { label: 'Terminée',  variant: 'secondary' },
   ANNULEE:   { label: 'Annulée',   variant: 'danger'    },
+  // Tolérances pour prévenir les décalages de clés
+  'Confirmée': { label: 'Confirmée', variant: 'success' },
+  'En cours':  { label: 'En cours',  variant: 'warning' },
 };
 
 export const STATUTS_EQUIPMENT: Record<RoomEquipment['statut'], { label: string; variant: string }> = {

@@ -399,7 +399,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       </div>
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle Commande" size="lg">
-        <form onSubmit={handleAjouterCommande} className="space-y-4">
+        <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
           <Select
             label="Table"
             value={table}
@@ -410,16 +410,16 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
             ]}
           />
 
-          <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3">
-            <div className="flex items-center justify-between gap-3">
+          <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <p className="text-sm font-medium text-slate-300">Créer une table si besoin</p>
-              <Button type="button" size="sm" variant="secondary" onClick={() => setIsCreatingTable((prev) => !prev)}>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setIsCreatingTable((prev) => !prev)} className="w-full sm:w-auto">
                 {isCreatingTable ? 'Fermer' : 'Nouvelle table'}
               </Button>
             </div>
 
             {(isCreatingTable || tables.length === 0) && (
-              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-[1fr_auto]">
                 <Input
                   label="Nom de table"
                   value={newTableNumber}
@@ -435,13 +435,13 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
             )}
 
             {feedback && (
-              <p className={`mt-2 text-sm ${feedback.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+              <p className={`text-xs sm:text-sm ${feedback.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
                 {feedback.message}
               </p>
             )}
           </div>
 
-          <div className="flex items-end gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
             <Select
               label="Client"
               value={client}
@@ -457,9 +457,9 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
               className="flex-1"
             />
             <Button
-              type="button"
               variant="secondary"
               onClick={() => { setIsCreatingClient((current) => !current); setFeedback(null); }}
+              className="w-full sm:w-auto"
             >
               <Plus size={16} />
               Nouveau client
@@ -469,25 +469,25 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
           {isCreatingClient && (
             <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3 space-y-3">
               <p className="text-sm font-medium text-slate-300">Ajouter un nouveau client</p>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                 <Input label="Nom" value={newClientNom} onChange={(event) => setNewClientNom(event.target.value)} placeholder="Nom" />
                 <Input label="Prénom" value={newClientPrenom} onChange={(event) => setNewClientPrenom(event.target.value)} placeholder="Prénom" />
               </div>
               <Input label="Téléphone" value={newClientTelephone} onChange={(event) => setNewClientTelephone(event.target.value)} placeholder="Téléphone" />
-              <Button type="button" size="sm" onClick={() => void handleCreateClient()} disabled={isSavingClient}>
+              <Button type="button" size="sm" onClick={() => void handleCreateClient()} disabled={isSavingClient} className="w-full">
                 {isSavingClient ? 'Ajout en cours...' : 'Ajouter le client'}
               </Button>
             </div>
           )}
 
-          <div className="rounded-xl border border-base bg-surface-2 p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="rounded-xl border border-base bg-surface-2 p-3 sm:p-4">
+            <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <p className="text-sm font-medium text-slate-300">Menus</p>
               <Input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Rechercher un article"
-                className="max-w-[220px]"
+                className="w-full sm:max-w-xs text-xs sm:text-sm"
               />
             </div>
             <div className="max-h-64 space-y-2 overflow-y-auto">
@@ -579,49 +579,72 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
         )}
       </Modal>
       <div className="rounded-2xl overflow-hidden border border-base bg-surface">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base px-3 py-3 sm:px-6 sm:py-4">
-          <h3 className="text-primary font-semibold">Liste des commandes</h3>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base px-3 py-3 sm:px-6 sm:py-4 gap-3">
+          <h3 className="text-primary font-semibold text-base sm:text-lg">Liste des commandes</h3>
           <Input
             value={commandeSearchTerm}
             onChange={(event) => setCommandeSearchTerm(event.target.value)}
-            placeholder="Rechercher client, table, article..."
-            className="mt-3 w-full sm:mt-0 sm:max-w-xs"
+            placeholder="Rechercher client, table..."
+            className="w-full sm:max-w-xs text-xs sm:text-sm"
           />
         </div>
 
         {data.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
+          <div className="p-6 sm:p-8 text-center text-slate-500 text-sm">
             {commandes.length === 0
               ? `${BAR_COMMANDES_ACTIONS.emptyTitle}. ${BAR_COMMANDES_ACTIONS.emptyDescription}`
               : 'Aucune commande ne correspond à votre recherche.'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-surface-2 text-slate-400">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Table</th>
-                  <th className="px-4 py-3 font-medium">Articles</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Montant</th>
-                  <th className="px-4 py-3 font-medium">Statut</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((commande) => (
-                  <tr key={commande.id} className="border-t border-base">
-                    <td className="px-4 py-3">{columns[0].render(commande as unknown as BarCommande)}</td>
-                    <td className="px-4 py-3">{columns[1].render(commande as unknown as BarCommande)}</td>
-                    <td className="px-4 py-3">{columns[2].render(commande as unknown as BarCommande)}</td>
-                    <td className="px-4 py-3">{columns[3].render(commande as unknown as BarCommande)}</td>
-                    <td className="px-4 py-3">{columns[4].render(commande as unknown as BarCommande)}</td>
-                    <td className="px-4 py-3 text-right">{columns[5].render(commande as unknown as BarCommande)}</td>
+          <>
+            {/* Vue mobile - Cartes */}
+            <div className="block sm:hidden space-y-3 p-3">
+              {data.map((commande) => (
+                <div key={commande.id} className="rounded-lg border border-base bg-surface-2 p-3 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
+                      {columns[0].render(commande as unknown as BarCommande)}
+                    </div>
+                    <span className="flex-shrink-0">{columns[3].render(commande as unknown as BarCommande)}</span>
+                  </div>
+                  <div className="text-slate-400">{columns[1].render(commande as unknown as BarCommande)}</div>
+                  <div className="flex items-center justify-between pt-2 border-t border-base">
+                    <div className="text-slate-400">{columns[2].render(commande as unknown as BarCommande)}</div>
+                    {columns[4].render(commande as unknown as BarCommande)}
+                  </div>
+                  <div className="flex gap-1 pt-2 border-t border-base">{columns[5].render(commande as unknown as BarCommande)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Vue desktop - Tableau */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-surface-2 text-slate-400 text-xs">
+                  <tr>
+                    <th className="px-3 py-3 font-medium">Table</th>
+                    <th className="px-3 py-3 font-medium">Articles</th>
+                    <th className="px-3 py-3 font-medium">Date</th>
+                    <th className="px-3 py-3 font-medium">Montant</th>
+                    <th className="px-3 py-3 font-medium">Statut</th>
+                    <th className="px-3 py-3 font-medium text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {data.map((commande) => (
+                    <tr key={commande.id} className="border-t border-base hover:bg-surface-2/50 transition">
+                      <td className="px-3 py-3">{columns[0].render(commande as unknown as BarCommande)}</td>
+                      <td className="px-3 py-3">{columns[1].render(commande as unknown as BarCommande)}</td>
+                      <td className="px-3 py-3">{columns[2].render(commande as unknown as BarCommande)}</td>
+                      <td className="px-3 py-3">{columns[3].render(commande as unknown as BarCommande)}</td>
+                      <td className="px-3 py-3">{columns[4].render(commande as unknown as BarCommande)}</td>
+                      <td className="px-3 py-3 text-right"><div className="flex gap-1 justify-end">{columns[5].render(commande as unknown as BarCommande)}</div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
