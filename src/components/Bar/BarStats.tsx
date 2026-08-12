@@ -18,11 +18,11 @@ export const BarStats: React.FC<Props> = ({ commandes, stockMap }) => {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
       {items.map(item => (
-        <div key={item.label} className="bg-surface border border-base rounded-2xl p-5">
+        <div key={item.label} className="bg-surface border border-base rounded-2xl p-4 sm:p-5">
           <p className="text-muted text-xs mb-1">{item.label}</p>
-          <p className={`${item.className} font-bold text-xl`}>{item.value}</p>
+          <p className={`${item.className} font-bold text-lg sm:text-xl`}>{item.value}</p>
         </div>
       ))}
     </div>

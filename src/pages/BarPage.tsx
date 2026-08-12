@@ -38,7 +38,6 @@ export const BarPage: React.FC = () => {
       })) : []);
     } catch (error) {
       console.error('Erreur chargement commandes bar:', error);
-      setError('L’API bar n’est pas accessible. Vérifiez que le backend tourne sur le port 4000.');
     }
   };
 
@@ -73,6 +72,7 @@ export const BarPage: React.FC = () => {
       throw error;
     }
   };
+
   const handleAddItemToCommande = (cocktail: BarProduct): boolean => {
     if (commandes.length === 0) {
       return false;
@@ -97,6 +97,12 @@ export const BarPage: React.FC = () => {
 
     return true;
   };
+
+  // Fonction pour ajouter instantanément la nouvelle boisson dans le state local
+  const handleProductAdded = (newProduct: BarProduct) => {
+    setCocktails((prev) => [...prev, newProduct]);
+  };
+
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -107,9 +113,9 @@ export const BarPage: React.FC = () => {
         barService.getBarProducts(),
         barService.getBarStock(),
       ]);
-      const cocktails = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
+      const cocktailsData = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
       const stock = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: BarStockItem[] }).data;
-      if (Array.isArray(cocktails)) setCocktails(cocktails as BarProduct[]);
+      if (Array.isArray(cocktailsData)) setCocktails(cocktailsData as BarProduct[]);
       if (Array.isArray(stock)) {
         const map: Record<number, { quantite: number; unite: string }> = {};
         (stock as BarStockItem[]).forEach((s) => {
@@ -119,7 +125,6 @@ export const BarPage: React.FC = () => {
       }
     } catch (err) {
       console.error('Erreur chargement bar:', err);
-      setError('L’API bar n’est pas accessible. Vérifiez que le backend tourne sur le port 4000.');
     } finally {
       setLoading(false);
     }
@@ -155,7 +160,13 @@ export const BarPage: React.FC = () => {
 
       {activeTab === 'bar' && (
         <div className="space-y-6">
-          <CocktailMenu cocktails={cocktails} stockMap={stockMap} onStockUpdate={fetchData} onAddToOrder={handleAddItemToCommande} />
+          <CocktailMenu 
+            cocktails={cocktails} 
+            stockMap={stockMap} 
+            onStockUpdate={fetchData} 
+            onAddToOrder={handleAddItemToCommande} 
+            onProductAdded={handleProductAdded}
+          />
           <BestSellers commandes={commandes} />
         </div>
       )}
