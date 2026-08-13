@@ -14,6 +14,7 @@ export interface Room {
   capacite: number;
   prix_nuit: number;
   statut: 'LIBRE' | 'OCCUPEE' | 'RESERVEE' | 'NETTOYAGE' | 'MAINTENANCE' | 'HORS_SERVICE';
+  etage: number;
   room_type?: RoomType;
 }
 
@@ -99,6 +100,7 @@ export interface RoomForm {
   capacite: number;
   prix_nuit: number;
   statut: 'LIBRE' | 'OCCUPEE' | 'RESERVEE' | 'NETTOYAGE' | 'MAINTENANCE' | 'HORS_SERVICE';
+  etage: number;
 }
 
 export interface EquipmentForm {

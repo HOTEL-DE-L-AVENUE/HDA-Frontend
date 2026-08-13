@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { INITIAL_CLIENTS, INITIAL_EQUIPMENTS, INITIAL_HOUSEKEEPING, INITIAL_MAINTENANCES, INITIAL_RESERVATIONS, INITIAL_ROOM_EQUIPMENTS, INITIAL_ROOM_TYPES, INITIAL_ROOMS } from '../data/Hebergement.data';
 import { Client, ClientForm, Equipment, EquipmentForm, HousekeepingForm, HousekeepingTask, MaintenanceForm, Reservation, ReservationForm, Room, RoomEquipment, RoomForm, RoomMaintenance, RoomType } from '../types/hebergement.type';
 import { roomService, roomTypeService } from '../services/room.service';
 import { reservationService } from '../services/reservation.service';
 import { equipmentService } from '../services/equipment.service';
 import { clientService } from '../services/client.service';
+import { housekeepingService } from '../services/housekeeping.service';
+import { maintenanceService } from '../services/maintenance.service';
 
 // ─── Valeurs par défaut des formulaires ──────────────────────────────────────
 
@@ -12,7 +13,7 @@ const DEFAULT_RESERVATION_FORM: ReservationForm = {
   client_id: 0, room_id: 0, date_arrivee: '', date_depart: '', montant_total: 0, statut: 'CONFIRMEE',
 };
 const DEFAULT_ROOM_FORM: RoomForm = {
-  room_type_id: 0, numero: '', capacite: 2, prix_nuit: 0, statut: 'LIBRE',
+  room_type_id: 0, numero: '', capacite: 2, prix_nuit: 0, statut: 'LIBRE', etage: 0,
 };
 const DEFAULT_EQUIPMENT_FORM: EquipmentForm = {
   room_id: 0, equipment_id: 0, quantite: 1, statut: 'BON',
@@ -31,14 +32,14 @@ const DEFAULT_CLIENT_FORM: ClientForm = {
 
 export function useHebergement() {
   // ── Données ──────────────────────────────────────────────────────────────
-  const [roomTypes,         setRoomTypes]     = useState<RoomType[]>(INITIAL_ROOM_TYPES);
-  const [clients,           setClients]       = useState<Client[]>(INITIAL_CLIENTS);
-  const [equipments,        setEquipments]    = useState<Equipment[]>(INITIAL_EQUIPMENTS);
-  const [rooms,             setRooms]         = useState<Room[]>(INITIAL_ROOMS);
-  const [reservations,      setReservations]  = useState<Reservation[]>(INITIAL_RESERVATIONS);
-  const [roomEquipments,    setRoomEquipments]= useState<RoomEquipment[]>(INITIAL_ROOM_EQUIPMENTS);
-  const [housekeepingTasks, setHousekeepingTasks] = useState<HousekeepingTask[]>(INITIAL_HOUSEKEEPING);
-  const [maintenances,      setMaintenances]  = useState<RoomMaintenance[]>(INITIAL_MAINTENANCES);
+  const [roomTypes,         setRoomTypes]     = useState<RoomType[]>([]);
+  const [clients,           setClients]       = useState<Client[]>([]);
+  const [equipments,        setEquipments]    = useState<Equipment[]>([]);
+  const [rooms,             setRooms]         = useState<Room[]>([]);
+  const [reservations,      setReservations]  = useState<Reservation[]>([]);
+  const [roomEquipments,    setRoomEquipments]= useState<RoomEquipment[]>([]);
+  const [housekeepingTasks, setHousekeepingTasks] = useState<HousekeepingTask[]>([]);
+  const [maintenances,      setMaintenances]  = useState<RoomMaintenance[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
@@ -48,24 +49,28 @@ export function useHebergement() {
     setLoading(true);
     setError(null);
     try {
-      const [roomsData, reservationsData, roomTypesData, clientsData, equipmentsData, roomEquipmentsData] = await Promise.all([
-        roomService.getRooms().catch(() => null),
-        reservationService.getReservations().catch(() => null),
-        roomTypeService.getRoomTypes().catch(() => null),
-        clientService.getClients().catch(() => null),
-        equipmentService.getEquipments().catch(() => null),
-        equipmentService.getRoomEquipments().catch(() => null),
+      const [roomsData, reservationsData, roomTypesData, clientsData, equipmentsData, roomEquipmentsData, housekeepingData, maintenancesData] = await Promise.all([
+        roomService.getRooms().catch(() => []),
+        reservationService.getReservations().catch(() => []),
+        roomTypeService.getRoomTypes().catch(() => []),
+        clientService.getClients().catch(() => []),
+        equipmentService.getEquipments().catch(() => []),
+        equipmentService.getRoomEquipments().catch(() => []),
+        housekeepingService.getTasks().catch(() => []),
+        maintenanceService.getMaintenances().catch(() => []),
       ]);
 
-      if (Array.isArray(roomsData) && roomsData.length > 0) setRooms(roomsData as Room[]);
-      if (Array.isArray(reservationsData) && reservationsData.length > 0) setReservations(reservationsData as Reservation[]);
-      if (Array.isArray(roomTypesData) && roomTypesData.length > 0) setRoomTypes(roomTypesData as RoomType[]);
-      if (Array.isArray(clientsData) && clientsData.length > 0) setClients(clientsData as unknown as Client[]);
-      if (Array.isArray(equipmentsData) && equipmentsData.length > 0) setEquipments(equipmentsData as Equipment[]);
-      if (Array.isArray(roomEquipmentsData) && roomEquipmentsData.length > 0) setRoomEquipments(roomEquipmentsData as RoomEquipment[]);
+      setRooms(Array.isArray(roomsData) ? roomsData as Room[] : []);
+      setReservations(Array.isArray(reservationsData) ? reservationsData as Reservation[] : []);
+      setRoomTypes(Array.isArray(roomTypesData) ? roomTypesData as RoomType[] : []);
+      setClients(Array.isArray(clientsData) ? clientsData as Client[] : []);
+      setEquipments(Array.isArray(equipmentsData) ? equipmentsData as Equipment[] : []);
+      setRoomEquipments(Array.isArray(roomEquipmentsData) ? roomEquipmentsData as RoomEquipment[] : []);
+      setHousekeepingTasks(Array.isArray(housekeepingData) ? housekeepingData as HousekeepingTask[] : []);
+      setMaintenances(Array.isArray(maintenancesData) ? maintenancesData as RoomMaintenance[] : []);
     } catch (err: any) {
-      console.warn('Fallback aux données locales d’hébergement:', err);
-      setError('Mode hors-ligne / Données locales');
+      console.error('Erreur lors du chargement des données d’hébergement :', err);
+      setError('Erreur lors du chargement des données d’hébergement.');
     } finally {
       setLoading(false);
     }
@@ -100,23 +105,28 @@ export function useHebergement() {
   // ── Handlers : réservations ───────────────────────────────────────────────
   const handleCheckIn = async (reservation: Reservation) => {
     try {
+      await reservationService.checkIn(reservation.id);
       await reservationService.updateReservationStatus(reservation.id, 'EN_COURS');
-      await roomService.updateRoomStatus(reservation.room_id, 'OCCUPEE');
       await fetchData();
-    } catch (err) {
-      setReservations(prev => prev.map(r => r.id === reservation.id ? { ...r, statut: 'EN_COURS' } : r));
-      setRooms(prev => prev.map(r => r.id === reservation.room_id ? { ...r, statut: 'OCCUPEE' } : r));
+    } catch (err: any) {
+      console.error('Erreur lors du check-in :', err);
+      setError('Impossible de valider le check-in.');
     }
   };
 
   const handleCheckOut = async (reservation: Reservation) => {
     try {
+      const stays = await reservationService.getStays({ reservation_id: reservation.id });
+      const stay = stays.find((s) => s.reservation_id === reservation.id && !s.checkout_at);
+      if (!stay) {
+        throw new Error('Séjour introuvable pour cette réservation');
+      }
+      await reservationService.checkOut(stay.id);
       await reservationService.updateReservationStatus(reservation.id, 'TERMINEE');
-      await roomService.updateRoomStatus(reservation.room_id, 'LIBRE');
       await fetchData();
-    } catch (err) {
-      setReservations(prev => prev.map(r => r.id === reservation.id ? { ...r, statut: 'TERMINEE' } : r));
-      setRooms(prev => prev.map(r => r.id === reservation.room_id ? { ...r, statut: 'LIBRE' } : r));
+    } catch (err: any) {
+      console.error('Erreur lors du check-out :', err);
+      setError('Impossible de valider le check-out.');
     }
   };
 
@@ -153,6 +163,7 @@ export function useHebergement() {
       capacite: room.capacite,
       prix_nuit: room.prix_nuit,
       statut: room.statut,
+      etage: room.etage,
     });
     setShowRoomModal(true);
   };
@@ -246,32 +257,51 @@ export function useHebergement() {
   };
 
   // ── Handlers : housekeeping ───────────────────────────────────────────────
-  const handleStartTask = (id: number) => {
-    setHousekeepingTasks(prev => prev.map(t => t.id === id ? { ...t, statut: 'EN_COURS' } : t));
-  };
-
-  const handleCompleteTask = (id: number) => {
-    setHousekeepingTasks(prev => prev.map(t =>
-      t.id === id ? { ...t, statut: 'TERMINE', completed_at: new Date().toISOString() } : t
-    ));
-  };
-
-  const handleDeleteTask = (id: number) => {
-    if (window.confirm('Supprimer cette tâche ?')) {
-      setHousekeepingTasks(prev => prev.filter(t => t.id !== id));
+  const handleStartTask = async (id: number) => {
+    try {
+      await housekeepingService.updateTaskStatus(id, 'EN_COURS');
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erreur lors du démarrage de la tâche de ménage :', err);
+      setError('Impossible de démarrer la tâche de ménage.');
     }
   };
 
-  const handleSaveHousekeeping = () => {
-    const newTask: HousekeepingTask = {
-      ...housekeepingForm,
-      id: Date.now(),
-      statut: 'A_FAIRE',
-      completed_at: '',
-    };
-    setHousekeepingTasks(prev => [...prev, newTask]);
-    setShowHousekeepingModal(false);
-    setHousekeepingForm(DEFAULT_HOUSEKEEPING_FORM);
+  const handleCompleteTask = async (id: number) => {
+    try {
+      await housekeepingService.updateTaskStatus(id, 'TERMINE');
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erreur lors de la finition de la tâche de ménage :', err);
+      setError('Impossible de terminer la tâche de ménage.');
+    }
+  };
+
+  const handleDeleteTask = async (id: number) => {
+    if (!window.confirm('Supprimer cette tâche ?')) return;
+    try {
+      await housekeepingService.deleteTask(id);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erreur lors de la suppression de la tâche de ménage :', err);
+      setError('Impossible de supprimer la tâche de ménage.');
+    }
+  };
+
+  const handleSaveHousekeeping = async () => {
+    try {
+      await housekeepingService.createTask({
+        ...housekeepingForm,
+        statut: 'A_FAIRE',
+      });
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erreur lors de la création de la tâche de ménage :', err);
+      setError('Impossible de créer la tâche de ménage.');
+    } finally {
+      setShowHousekeepingModal(false);
+      setHousekeepingForm(DEFAULT_HOUSEKEEPING_FORM);
+    }
   };
 
   const openNewHousekeepingModal = () => {

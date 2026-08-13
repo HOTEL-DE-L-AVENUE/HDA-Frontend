@@ -83,10 +83,10 @@ export const INITIAL_EQUIPMENTS: Equipment[] = [
 ];
 
 export const INITIAL_ROOMS: Room[] = [
-  { id: 1, room_type_id: 1, numero: '101', capacite: 2, prix_nuit: 150000,  statut: 'LIBRE'    },
-  { id: 2, room_type_id: 1, numero: '102', capacite: 2, prix_nuit: 150000,  statut: 'OCCUPEE'  },
-  { id: 3, room_type_id: 2, numero: '201', capacite: 3, prix_nuit: 250000,  statut: 'LIBRE'    },
-  { id: 4, room_type_id: 3, numero: '301', capacite: 4, prix_nuit: 450000,  statut: 'RESERVEE' },
+  { id: 1, room_type_id: 1, numero: '101', capacite: 2, prix_nuit: 150000,  statut: 'LIBRE',    etage: 1 },
+  { id: 2, room_type_id: 1, numero: '102', capacite: 2, prix_nuit: 150000,  statut: 'OCCUPEE',  etage: 1 },
+  { id: 3, room_type_id: 2, numero: '201', capacite: 3, prix_nuit: 250000,  statut: 'LIBRE',    etage: 2 },
+  { id: 4, room_type_id: 3, numero: '301', capacite: 4, prix_nuit: 450000,  statut: 'RESERVEE', etage: 3 },
 ];
 
 export const INITIAL_RESERVATIONS: Reservation[] = [
