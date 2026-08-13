@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge, Button, DataTable } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, XCircle } from 'lucide-react';
+import { Plus, XCircle, Pencil } from 'lucide-react';
 import type { Order } from '../types';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
@@ -19,6 +19,7 @@ interface CommandesTabProps {
   onPayment: (orderId: number) => void;
   onCancel: (orderId: number) => void;
   onNewOrder: () => void;
+  onEditOrder: (order: Order) => void; // Ajout de la prop pour modifier
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
@@ -27,7 +28,8 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onUpdateStatus,
   onPayment,
   onCancel,
-  onNewOrder
+  onNewOrder,
+  onEditOrder
 }) => {
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => (
@@ -62,7 +64,14 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
       <span className="text-subtle text-xs">{formatDate(order.created_at)}</span>
     )},
     { key: 'actions', label: '', render: (order: Order) => (
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
+        {/* Bouton Modifier (disponible par exemple si la commande est EN_ATTENTE ou EN_COURS) */}
+        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
+          <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
+            <Pencil size={14} />
+          </Button>
+        )}
+
         {order.statut === 'EN_ATTENTE' && (
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'EN_COURS')}>Démarrer</Button>
         )}
@@ -74,8 +83,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
         )}
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="danger" onClick={() => onCancel(order.id)}>
-            <XCircle size={14} />
-          </Button>
+            <XCircle size={14} />         </Button>
         )}
       </div>
     )},

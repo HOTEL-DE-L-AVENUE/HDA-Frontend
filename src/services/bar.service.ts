@@ -66,8 +66,17 @@ export const getBarCashierStatus = () => get<BarCashier[]>('/cashier-status');
 
 export const getBarProducts = () => get<BarProduct[]>('/products');
 export const getBarProductById = (id: number) => get<BarProduct>(`/products/${id}`);
-export const createBarProduct = (data: { nom: string; ingredients: string; prix: number; categorie: string; alcool: boolean }) =>
-  post<BarProduct>('/products', data);
+
+export const createBarProduct = (data: { 
+  nom: string; 
+  categorie: string; 
+  prix: number; 
+  alcool: boolean; 
+  quantite: number; 
+  seuil_minimum: number; 
+  unite: string; 
+}) => post<BarProduct>('/products', data);
+
 export const updateBarProduct = (id: number, data: Partial<BarProduct>) =>
   put<BarProduct>(`/products/${id}`, data);
 export const deleteBarProduct = (id: number) => remove<null>(`/products/${id}`);
