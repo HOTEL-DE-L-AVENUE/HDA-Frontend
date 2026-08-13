@@ -50,6 +50,13 @@ export const RoomModal: React.FC<Props> = ({
           value={form.prix_nuit}
           onChange={(e) => onChange({ ...form, prix_nuit: Number(e.target.value) })}
         />
+        <Input
+          label="Étage"
+          type="number"
+          min="0"
+          value={form.etage}
+          onChange={(e) => onChange({ ...form, etage: Number(e.target.value) })}
+        />
       </div>
       <Select
         label="Statut"

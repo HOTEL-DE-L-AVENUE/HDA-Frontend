@@ -28,9 +28,10 @@ interface RoomListProps {
   onEdit?: (room: Room) => void;
   onDelete?: (roomId: number) => void;
   onStatusChange?: (roomId: number, newStatus: string) => void;
+  refreshTrigger?: number;
 }
 
-export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete }) => {
+export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTrigger }) => {
   const {
     rooms,
     loading,
@@ -102,6 +103,12 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete }) => {
     reservee: rooms.filter(r => r.statut === 'RESERVEE').length,
     maintenance: rooms.filter(r => r.statut === 'MAINTENANCE').length,
   };
+
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      refresh();
+    }
+  }, [refresh, refreshTrigger]);
 
   // Gestion du changement de statut
   const handleStatusChange = async (roomId: number, newStatus: string) => {
