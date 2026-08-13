@@ -23,7 +23,7 @@ interface BackendStockItem {
 }
 
 export const StockManager: React.FC<StockManagerProps> = ({ module, categories }) => {
-  const { state, dispatch, getModuleStock } = useHDA();
+  const { state, dispatch, getModuleStock, addNotification } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [search, setSearch] = useState('');
@@ -125,6 +125,24 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         }
 
         await refetchStock();
+        
+        // Check if stock is low and add notification
+        if (form.quantite <= 3) {
+          addNotification(
+            'error',
+            `Stock critique: ${form.nom} (${form.quantite} ${form.unite})`,
+            'Bar',
+            '/bar?tab=stock'
+          );
+        } else if (form.quantite <= 5) {
+          addNotification(
+            'warning',
+            `Stock faible: ${form.nom} (${form.quantite} ${form.unite})`,
+            'Bar',
+            '/bar?tab=stock'
+          );
+        }
+        
         setShowModal(false);
         setEditItem(null);
         setForm({ nom: '', categorie: categories[0] || 'Bar', quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
@@ -140,8 +158,42 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
       dispatch({ type: 'UPDATE_STOCK_ITEM', payload: {
         ...editItem, ...form, status, updatedAt: new Date().toISOString()
       }});
+      
+      // Check if updated stock is low and add notification
+      if (form.quantite <= 3) {
+        addNotification(
+          'error',
+          `Stock critique: ${form.nom} (${form.quantite} ${form.unite})`,
+          module === 'bar' ? 'Bar' : 'Restaurant',
+          `/${module}?tab=stock`
+        );
+      } else if (form.quantite <= 5) {
+        addNotification(
+          'warning',
+          `Stock faible: ${form.nom} (${form.quantite} ${form.unite})`,
+          module === 'bar' ? 'Bar' : 'Restaurant',
+          `/${module}?tab=stock`
+        );
+      }
     } else {
       dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
+      
+      // Check if new stock is low and add notification
+      if (form.quantite <= 3) {
+        addNotification(
+          'error',
+          `Stock critique: ${form.nom} (${form.quantite} ${form.unite})`,
+          module === 'bar' ? 'Bar' : 'Restaurant',
+          `/${module}?tab=stock`
+        );
+      } else if (form.quantite <= 5) {
+        addNotification(
+          'warning',
+          `Stock faible: ${form.nom} (${form.quantite} ${form.unite})`,
+          module === 'bar' ? 'Bar' : 'Restaurant',
+          `/${module}?tab=stock`
+        );
+      }
     }
 
     setShowModal(false);
