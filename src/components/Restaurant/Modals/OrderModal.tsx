@@ -67,6 +67,26 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     }
   };
 
+  const handleDecreaseItem = (productId: number) => {
+    const existingItem = form.items.find(i => i.product_id === productId);
+    if (!existingItem) return;
+
+    if (existingItem.quantite > 1) {
+      setForm({
+        ...form,
+        items: form.items.map(i => 
+          i.product_id === productId ? { ...i, quantite: i.quantite - 1 } : i
+        )
+      });
+    } else {
+      // Si la quantité passe à 0, on retire l'article de la liste
+      setForm({
+        ...form,
+        items: form.items.filter(i => i.product_id !== productId)
+      });
+    }
+  };
+
   const handleRemoveItem = (index: number) => {
     setForm({
       ...form,
@@ -143,17 +163,40 @@ export const OrderModal: React.FC<OrderModalProps> = ({
           <div className="rounded-xl p-4 border border-border" style={{ backgroundColor: 'var(--color-surface-2)' }}>
             <p className="text-secondary text-sm font-medium mb-2">Articles</p>
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {products.filter(p => p.type_produit === 'PRODUIT_FINI' && p.actif).map((product) => (
-                <div key={product.id} className="flex items-center justify-between p-2 hover:bg-surface-3 rounded-lg gap-2">
-                  <span className="text-secondary text-sm min-w-0 flex-1 truncate">{product.nom}</span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-accent text-sm whitespace-nowrap">{formatCurrency(product.prix_vente)}</span>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => handleAddItem(product)}>
-                      +
-                    </Button>
+              {products.filter(p => p.type_produit === 'PRODUIT_FINI' && p.actif).map((product) => {
+                const existingItem = form.items.find(i => i.product_id === product.id);
+                const currentQty = existingItem ? existingItem.quantite : 0;
+
+                return (
+                  <div key={product.id} className="flex items-center justify-between p-2 hover:bg-surface-3 rounded-lg gap-2">
+                    <span className="text-secondary text-sm min-w-0 flex-1 truncate">{product.nom}</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-accent text-sm whitespace-nowrap">{formatCurrency(product.prix_vente)}</span>
+                      
+                      {/* Affichage du bouton - et de la quantité seulement si elle est > 0 */}
+                      {currentQty > 0 && (
+                        <>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="secondary" 
+                            onClick={() => handleDecreaseItem(product.id)}
+                          >
+                            -
+                          </Button>
+                          <span className="text-secondary text-sm font-semibold w-6 text-center">
+                            {currentQty}
+                          </span>
+                        </>
+                      )}
+
+                      <Button type="button" size="sm" variant="secondary" onClick={() => handleAddItem(product)}>
+                        +
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

@@ -35,7 +35,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backendStock, setBackendStock] = useState<BackendStockItem[]>([]);
-    const apiBase = '/api/bar/stock';
+  const apiBase = '/api/bar/stock';
 
   const isBar = module === 'bar';
 
@@ -126,7 +126,6 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
 
         await refetchStock();
         
-        // Check if stock is low and add notification
         if (form.quantite <= 3) {
           addNotification(
             'error',
@@ -159,7 +158,6 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         ...editItem, ...form, status, updatedAt: new Date().toISOString()
       }});
       
-      // Check if updated stock is low and add notification
       if (form.quantite <= 3) {
         addNotification(
           'error',
@@ -178,7 +176,6 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     } else {
       dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
       
-      // Check if new stock is low and add notification
       if (form.quantite <= 3) {
         addNotification(
           'error',
@@ -201,11 +198,11 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
   };
 
-const openEdit = (item: StockItem) => {
-  setEditItem(item);
-  setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 5, fournisseur: item.fournisseur || '' });
-  setShowModal(true);
-};
+  const openEdit = (item: StockItem) => {
+    setEditItem(item);
+    setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 5, fournisseur: item.fournisseur || '' });
+    setShowModal(true);
+  };
 
   const totalValue = items.reduce((sum, i) => sum + (i.quantite * i.prixUnitaire), 0);
   const alerts = items.filter(i => i.status !== 'disponible').length;
@@ -279,7 +276,6 @@ const openEdit = (item: StockItem) => {
 
       {!loading && !error && (
         <>
-          {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { label: 'Produits', value: items.length, color: 'text-white', sub: 'articles total' },
@@ -295,7 +291,6 @@ const openEdit = (item: StockItem) => {
             ))}
           </div>
 
-          {/* Table */}
           <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
               <h3 className="text-white font-semibold flex items-center gap-2">
@@ -321,7 +316,6 @@ const openEdit = (item: StockItem) => {
             <DataTable data={filtered} columns={columns} />
           </div>
 
-          {/* Modal */}
           <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? 'Modifier l\'article' : 'Ajouter un article'}>
             <div className="space-y-4">
               <Input label="Nom du produit" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} placeholder="Ex: Filet de Boeuf" />
@@ -343,8 +337,8 @@ const openEdit = (item: StockItem) => {
           </Modal>
          </>
        )}
-     </div>
-   );
+    </div>
+  );
 };
 
 interface CaisseManagerProps {
@@ -361,6 +355,36 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   const { solde, entrees, sorties } = getModuleCaisseSolde(module);
 
+  const isBar = module === 'bar';
+  const transactionTitle = isBar ? "Transactions Bar" : "Transactions Restaurant";
+
+  // Récupération des commandes payées avec extraction sécurisée du montant
+  const restaurantOrders = (state.orders || state.commandes || []).filter(
+    (o: any) => (o.module === 'restaurant' || !o.module) && (o.statut === 'Payée' || o.status === 'payee' || o.status === 'payée')
+  );
+
+  const orderTransactions = restaurantOrders.map((o: any) => ({
+    type: 'entree',
+    montant: o.montant || o.total || o.price || o.prix || 0,
+    description: `Encaissement ${o.table ? 'Table ' + o.table : 'Commande'}`,
+    categorie: 'Ventes Restaurant',
+    userName: o.userName || 'Caisse',
+    heure: o.heure || o.createdAt || new Date().toISOString()
+  }));
+
+  // Exclure les données factices/par défaut du state initial
+  const dummyDescriptions = ['Service dîner gala', 'Déjeuner groupe - 15 couverts', 'Approvisionnement fruits de mer'];
+  const manualTransactions = (state.transactions || []).filter((t: any) => 
+    t.module === 'restaurant' && !dummyDescriptions.includes(t.description)
+  );
+
+  // Combinaison et tri pour afficher les plus récents en premier (pile/file descendants)
+  const allRestaurantTransactions = [...orderTransactions, ...manualTransactions].sort((a: any, b: any) => {
+    const dateA = new Date(a.heure || a.createdAt || 0).getTime();
+    const dateB = new Date(b.heure || b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
+
   const handleSubmit = () => {
     if (!form.description || !form.montant) return;
     dispatch({
@@ -371,6 +395,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         userId: state.currentUser.id,
         userName: `${state.currentUser.prenom} ${state.currentUser.nom}`,
         module,
+        heure: new Date().toISOString(),
       }
     });
     setShowModal(false);
@@ -382,8 +407,40 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       {/* Caisse Card */}
       <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
 
-      {/* Transactions */}
-      <BarTransactionsCard title="Transactions Bar" />
+      {/* Transactions adaptées au module */}
+      {isBar ? (
+        <BarTransactionsCard title={transactionTitle} />
+      ) : (
+        <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-800/50 flex items-center justify-between">
+            <h3 className="text-white font-semibold">{transactionTitle}</h3>
+          </div>
+          <div className="divide-y divide-slate-800/50">
+            {allRestaurantTransactions.length > 0 ? (
+              allRestaurantTransactions.map((t: any, index: number) => (
+                <div key={index} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${t.type === 'entree' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                      {t.type === 'entree' ? '↗' : '↙'}
+                    </div>
+                    <div>
+                      <p className="text-white font-medium text-sm">{t.description}</p>
+                      <p className="text-slate-500 text-xs">{t.categorie} • {t.userName || 'Système'} {t.heure ? `• ${t.heure}` : ''}</p>
+                    </div>
+                  </div>
+                  <span className={`font-semibold text-sm ${t.type === 'entree' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {t.type === 'entree' ? '+' : '-'} {formatCurrency(t.montant)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="p-6 text-center text-slate-500">
+                <p className="text-sm">Aucune transaction pour le moment.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nouvelle Transaction">
@@ -399,13 +456,13 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                     : 'bg-slate-800 text-slate-400 hover:text-white'
                 }`}
               >
-                {type === 'entree' ? '+ Entr&eacute;e' : '- Sortie'}
+                {type === 'entree' ? '+ Entrée' : '- Sortie'}
               </button>
             ))}
           </div>
           <Input label="Montant (MGA)" type="number" value={form.montant} onChange={e => setForm({...form, montant: Number(e.target.value)})} placeholder="0.00" />
           <Input label="Description" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Description de la transaction..." />
-          <Select label="Cat&eacute;gorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
+          <Select label="Catégorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Annuler</Button>
             <Button onClick={handleSubmit} className="flex-1">Enregistrer</Button>

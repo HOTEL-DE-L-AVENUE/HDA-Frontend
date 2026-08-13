@@ -101,7 +101,7 @@ export const RestaurantPage: React.FC = () => {
       { id: 4, category_id: 2, code: 'PROD-004', nom: 'Foie Gras Poêlé', unite: 'PIECE', prix_achat: 18, prix_vente: 38, actif: true, type_produit: 'PRODUIT_FINI' },
       { id: 5, category_id: 6, code: 'PROD-005', nom: 'Menu Dégustation 7 plats', unite: 'PORTION', prix_achat: 85, prix_vente: 185, actif: true, type_produit: 'PRODUIT_FINI' },
       { id: 101, category_id: 1, code: 'ING-001', nom: 'Bœuf', unite: 'KG', prix_achat: 12, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' },
-      { id: 102, category_id: 1, code: 'ING-002', nom: 'Homard', unite: 'KG', prix_achat: 25, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' },
+      { id: 102, category_id: 1, code: 'Homard', nom: 'Homard', unite: 'KG', prix_achat: 25, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' },
     ]);
     setClients([
       { id: 1, code_client: 'CL001', nom: 'Rakoto', prenom: 'Jean', telephone: '+261 34 123 4567', email: 'jean@email.com' },
@@ -208,6 +208,8 @@ export const RestaurantPage: React.FC = () => {
   const handlePayment = async (orderId: number | string) => {
     const numericId = Number(orderId);
     const order = orders.find(o => o.id === numericId);
+
+    // 1. Appel API
     try {
       const res = await restaurantService.processPayment({
         order_id: numericId,
@@ -217,14 +219,31 @@ export const RestaurantPage: React.FC = () => {
       });
       if (res && res.success) {
         await fetchOrders();
-        return;
       }
     } catch (err) {
       console.warn('API payment échoué, bascule vers mode local:', err);
     }
+
+    // 2. Mise à jour de l'état local
     setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: 'PAYEE' } : o));
     if (order?.table) {
       setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+    }
+
+    // 3. Enregistrement dans le HDAContext (Caisse)
+    if (order) {
+      dispatch({
+        type: 'ADD_TRANSACTION',
+        payload: {
+          type: 'entree',
+          montant: order.montant_total || 0,
+          description: `Encaissement Commande #${order.id} ${order.table?.numero ? '(Table ' + order.table.numero + ')' : ''}`,
+          categorie: 'Ventes Restaurant',
+          module: 'restaurant',
+          userName: state.currentUser ? `${state.currentUser.prenom} ${state.currentUser.nom}` : 'Caisse',
+          heure: new Date().toISOString()
+        }
+      });
     }
   };
 

@@ -19,7 +19,7 @@ interface CommandesTabProps {
   onPayment: (orderId: number) => void;
   onCancel: (orderId: number) => void;
   onNewOrder: () => void;
-  onEditOrder: (order: Order) => void; // Ajout de la prop pour modifier
+  onEditOrder: (order: Order) => void;
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
@@ -65,7 +65,6 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     )},
     { key: 'actions', label: '', render: (order: Order) => (
       <div className="flex items-center gap-2">
-        {/* Bouton Modifier (disponible par exemple si la commande est EN_ATTENTE ou EN_COURS) */}
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
             <Pencil size={14} />
@@ -83,13 +82,22 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
         )}
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="danger" onClick={() => onCancel(order.id)}>
-            <XCircle size={14} />         </Button>
+            <XCircle size={14} />
+          </Button>
         )}
       </div>
     )},
   ];
 
-  const data = orders.map(order => ({ ...order, id: String(order.id) }));
+  // Tri des commandes : les plus récentes (plus grandes dates/IDs) en premier
+  const sortedOrders = [...orders].sort((a, b) => {
+    const timeA = new Date(a.created_at || 0).getTime();
+    const timeB = new Date(b.created_at || 0).getTime();
+    if (timeA !== timeB) return timeB - timeA; // Tri par date décroissante
+    return Number(b.id) - Number(a.id); // Fallback par ID décroissant
+  });
+
+  const data = sortedOrders.map(order => ({ ...order, id: String(order.id) }));
 
   return (
     <div className="rounded-2xl overflow-hidden w-full" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
