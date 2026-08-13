@@ -26,18 +26,22 @@ export const CocktailMenu: React.FC<Props> = ({
   const [isSaving, setIsSaving] = useState(false);
   const { showToast } = useToast();
 
-  // États du formulaire de création de boisson
+  // Nouveaux états du formulaire (Remplacement des ingrédients par le stock)
   const [nom, setNom] = useState('');
   const [categorie, setCategorie] = useState('Alcools');
   const [prix, setPrix] = useState('');
-  const [ingredients, setIngredients] = useState('');
+  const [quantite, setQuantite] = useState('');
+  const [seuilMinimum, setSeuilMinimum] = useState('5');
+  const [unite, setUnite] = useState('unités');
   const [alcool, setAlcool] = useState(true);
 
   const handleOpenModal = () => {
     setNom('');
     setCategorie('Alcools');
     setPrix('');
-    setIngredients('');
+    setQuantite('');
+    setSeuilMinimum('5');
+    setUnite('unités');
     setAlcool(true);
     setIsModalOpen(true);
   };
@@ -46,25 +50,38 @@ export const CocktailMenu: React.FC<Props> = ({
     e.preventDefault();
     const trimmedNom = nom.trim();
     const parsedPrix = Number(prix);
+    const parsedQuantite = Number(quantite);
+    const parsedSeuil = Number(seuilMinimum);
 
     if (!trimmedNom || Number.isNaN(parsedPrix) || parsedPrix <= 0) {
       showToast('Veuillez renseigner un nom et un prix valide.', 'error');
       return;
     }
 
+    if (Number.isNaN(parsedQuantite) || parsedQuantite < 0) {
+      showToast('Veuillez renseigner un stock initial valide.', 'error');
+      return;
+    }
+
     try {
       setIsSaving(true);
+      // Envoi des données avec le stock lié pour correspondre au backend Bar & Lounge
       const created = await barService.createBarProduct({
         nom: trimmedNom,
         categorie,
         prix: parsedPrix,
-        ingredients: ingredients.trim() || 'N/A',
         alcool,
+        quantite: parsedQuantite,
+        seuil_minimum: parsedSeuil,
+        unite: unite.trim() || 'unités',
       });
 
-      showToast('Boisson ajoutée avec succès', 'success');
+      showToast('Boisson et stock ajoutés avec succès', 'success');
       if (onProductAdded) {
         onProductAdded(created);
+      }
+      if (onStockUpdate) {
+        onStockUpdate(); // Actualise l'état global du stock
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -124,7 +141,7 @@ export const CocktailMenu: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Modal d'ajout de boisson */}
+      {/* Modal d'ajout de boisson avec gestion du stock intégrée */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Ajouter une nouvelle boisson" size="md">
         <form onSubmit={handleCreateProduct} className="space-y-4">
           <Input
@@ -152,12 +169,32 @@ export const CocktailMenu: React.FC<Props> = ({
             onChange={(e) => setPrix(e.target.value)}
             placeholder="Ex: 4000"
           />
+
+          {/* CHAMPS DE STOCK REMPLAÇANT LES INGRÉDIENTS */}
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Stock initial"
+              type="number"
+              value={quantite}
+              onChange={(e) => setQuantite(e.target.value)}
+              placeholder="Ex: 50"
+            />
+            <Input
+              label="Seuil d'alerte min."
+              type="number"
+              value={seuilMinimum}
+              onChange={(e) => setSeuilMinimum(e.target.value)}
+              placeholder="Ex: 5"
+            />
+          </div>
+
           <Input
-            label="Ingrédients"
-            value={ingredients}
-            onChange={(e) => setIngredients(e.target.value)}
-            placeholder="Ex: Rhum, menthe, citron..."
+            label="Unité (ex: bouteilles, portions, verres)"
+            value={unite}
+            onChange={(e) => setUnite(e.target.value)}
+            placeholder="Ex: bouteilles"
           />
+
           <Select
             label="Contient de l'alcool ?"
             value={alcool ? 'oui' : 'non'}
