@@ -4,24 +4,40 @@ import { formatCurrency } from '../../utils/data';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
-import { Plus, Printer, XCircle } from 'lucide-react';
+import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
 
 interface Props {
   commandes: BarCommande[];
   onCreateCommande?: (commande: { client: string; table: number; items: BarCommande['items'] }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
+  onUpdateStatut?: (id: number, statut: BarCommande['statut']) => Promise<void> | void;
   cocktails?: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string }>;
 }
 
-const statusClasses: Record<BarCommande['statut'], { label: string; variant: string }> = {
+const statusClasses: Record<string, { label: string; variant: string }> = {
   'En attente': { label: 'En attente', variant: 'warning' },
   'En préparation': { label: 'En préparation', variant: 'info' },
-  Servie: { label: 'Servie', variant: 'success' },
+  'Servie': { label: 'Servie', variant: 'success' },
+  'Encaissée': { label: 'Encaissée', variant: 'accent' },
 };
 
-export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, onDeleteCommande, cocktails = [], stockMap = {} }) => {
+export const BarCommandeView: React.FC<Props> = ({ 
+  commandes, 
+  onCreateCommande, 
+  onDeleteCommande, 
+  onUpdateStatut, 
+  cocktails = [], 
+  stockMap = {} 
+}) => {
+  // État local pour refléter les modifications de statut immédiatement sur l'interface
+  const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
+
+  useEffect(() => {
+    setLocalCommandes(commandes);
+  }, [commandes]);
+
   const [client, setClient] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
@@ -39,14 +55,14 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [detailCommande, setDetailCommande] = useState<BarCommande | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const loadTables = async () => {
     try {
       const data = await barService.getBarTables();
-      const tables = Array.isArray(data) ? data : (data as { data?: BarTable[] }).data ?? [];
-      setTables(tables);
+      const tablesList = Array.isArray(data) ? data : (data as { data?: BarTable[] }).data ?? [];
+      setTables(tablesList);
     } catch (error) {
       console.error('Erreur chargement tables bar:', error);
     }
@@ -119,9 +135,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
 
   const handleCreateTable = async (event?: React.FormEvent | React.MouseEvent<HTMLButtonElement>) => {
     event?.preventDefault();
-
     const numero = newTableNumber.trim();
-
     if (!numero) {
       setFeedback({ type: 'error', message: 'Renseignez un nom de table.' });
       return;
@@ -143,7 +157,6 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
 
   const handleAjouterCommande = async (event: React.FormEvent) => {
     event.preventDefault();
-
     const clientNom = client.trim();
     const tableNumber = Number(table);
 
@@ -235,11 +248,38 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
     try {
       setDeletingId(commande.id);
       await onDeleteCommande?.(commande.id);
+      setFeedback({ type: 'success', message: 'Commande supprimée avec succès.' });
     } catch (error) {
       console.error('Erreur suppression commande bar:', error);
       setFeedback({ type: 'error', message: "La commande n'a pas pu être supprimée." });
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleStatusChange = async (commandeId: number, nouveauStatut: BarCommande['statut']) => {
+    try {
+      setUpdatingId(commandeId);
+
+      if (onUpdateStatut) {
+        await onUpdateStatut(commandeId, nouveauStatut);
+      } else {
+        await (barService as any).updateCommande?.(commandeId, { statut: nouveauStatut }) 
+          || await (barService as any).updateStatut?.(commandeId, nouveauStatut);
+      }
+
+      // Mise à jour instantanée de l'état local pour rafraîchir l'écran tout de suite
+      setLocalCommandes((prev) =>
+        prev.map((cmd) => (cmd.id === commandeId ? { ...cmd, statut: nouveauStatut } : cmd))
+      );
+
+      setFeedback({ type: 'success', message: 'Statut de la commande mis à jour avec succès.' });
+    } catch (error: any) {
+      console.error('Erreur mise à jour statut commande bar:', error);
+      const errorMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || "Le statut n'a pas pu être mis à jour.";
+      setFeedback({ type: 'error', message: errorMsg });
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -331,19 +371,54 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
     {
       key: 'actions',
       label: '',
-      render: (commande: BarCommande) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setDetailCommande(commande)}>Detail</Button>
-          <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
-          <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id}>
-            {deletingId === commande.id ? 'Suppression...' : 'Supprimer'}
-          </Button>
-        </div>
-      ),
+      render: (commande: BarCommande) => {
+        const isUpdating = updatingId === commande.id;
+        return (
+          <>
+            {commande.statut === 'En attente' && (
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                icon={<ChefHat size={14} />} 
+                onClick={() => void handleStatusChange(commande.id, 'En préparation')}
+                disabled={isUpdating}
+              >
+                {isUpdating ? '...' : 'Démarrer'}
+              </Button>
+            )}
+            {commande.statut === 'En préparation' && (
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                icon={<CheckCircle2 size={14} />} 
+                onClick={() => void handleStatusChange(commande.id, 'Servie')}
+                disabled={isUpdating}
+              >
+                {isUpdating ? '...' : 'Servir'}
+              </Button>
+            )}
+            {commande.statut === 'Servie' && (
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                icon={<DollarSign size={14} />} 
+                onClick={() => void handleStatusChange(commande.id, 'Encaissée' as BarCommande['statut'])}
+                disabled={isUpdating}
+              >
+                {isUpdating ? '...' : 'Encaisser'}
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
+            <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id}>
+              {deletingId === commande.id ? '...' : 'Supprimer'}
+            </Button>
+          </>
+        );
+      },
     },
   ];
 
-  const filteredCommandes = commandes.filter((commande) => {
+  const filteredCommandes = localCommandes.filter((commande) => {
     const query = commandeSearchTerm.trim().toLocaleLowerCase('fr-FR');
     if (!query) return true;
 
@@ -356,9 +431,11 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
 
     return searchableValue.includes(query);
   });
-  const data = filteredCommandes.map((commande) => ({ ...commande, id: String(commande.id) }));
-  const totalCommandes = commandes.reduce((sum, commande) => sum + commande.total, 0);
-  const commandesEnAttente = commandes.filter((commande) => commande.statut === 'En attente').length;
+  
+  const data = filteredCommandes;
+
+  const totalCommandes = localCommandes.reduce((sum, commande) => sum + commande.total, 0);
+  const commandesEnAttente = localCommandes.filter((commande) => commande.statut === 'En attente').length;
   const filteredCocktails = cocktails.filter((cocktail) => {
     const value = searchTerm.trim().toLowerCase();
     if (!value) return true;
@@ -367,6 +444,13 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
 
   return (
     <div className="space-y-4">
+      {feedback && (
+        <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+          <span>{feedback.message}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="text-xs opacity-80 hover:opacity-100">✕</button>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-base bg-surface p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -375,7 +459,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-sm text-accent">
-              {commandes.length} commande{commandes.length > 1 ? 's' : ''} active{commandes.length > 1 ? 's' : ''}
+              {localCommandes.length} commande{localCommandes.length > 1 ? 's' : ''} active{localCommandes.length > 1 ? 's' : ''}
             </div>
             <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
               {BAR_COMMANDES_ACTIONS.newOrderLabel}
@@ -387,7 +471,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-base bg-surface p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Commandes actives</p>
-          <p className="mt-2 text-2xl font-semibold text-primary">{commandes.length}</p>
+          <p className="mt-2 text-2xl font-semibold text-primary">{localCommandes.length}</p>
         </div>
         <div className="rounded-2xl border border-base bg-surface p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">En attente</p>
@@ -400,7 +484,6 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       </div>
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle Commande" size="lg">
-        {/* Ajout de max-h-[75vh] et overflow-y-auto pour permettre le défilement et rendre le bouton accessible */}
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4 max-h-[75vh] overflow-y-auto pr-2">
           <Select
             label="Table"
@@ -434,12 +517,6 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
                   </Button>
                 </div>
               </div>
-            )}
-
-            {feedback && (
-              <p className={`text-xs sm:text-sm ${feedback.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
-                {feedback.message}
-              </p>
             )}
           </div>
 
@@ -560,27 +637,6 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
         </form>
       </Modal>
 
-      <Modal isOpen={detailCommande !== null} onClose={() => setDetailCommande(null)} title="Detail de la commande" size="md">
-        {detailCommande && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><p className="text-slate-500">Client</p><p className="font-medium text-primary">{detailCommande.client}</p></div>
-              <div><p className="text-slate-500">Table</p><p className="font-medium text-primary">{tables.find((tableItem) => tableItem.id === detailCommande.table)?.numero || `Table ${detailCommande.table}`}</p></div>
-            </div>
-            <div className="rounded-xl border border-base bg-surface-2 p-3">
-              <p className="mb-2 text-sm font-medium text-slate-300">Articles</p>
-              <div className="space-y-2">
-                {detailCommande.items.map((item, index) => (
-                  <div key={`${detailCommande.id}-${index}`} className="flex justify-between text-sm"><span>{item.nom} x {item.quantite}</span><span className="text-accent">{formatCurrency(item.prix * item.quantite)}</span></div>
-                ))}
-              </div>
-              <div className="mt-3 flex justify-between border-t border-base pt-3 font-semibold"><span>Total</span><span className="text-accent">{formatCurrency(detailCommande.total)}</span></div>
-            </div>
-            <Button className="w-full" variant="secondary" onClick={() => setDetailCommande(null)}>Fermer</Button>
-          </div>
-        )}
-      </Modal>
-
       <div className="rounded-2xl overflow-hidden border border-base bg-surface">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base px-3 py-3 sm:px-6 sm:py-4 gap-3">
           <h3 className="text-primary font-semibold text-base sm:text-lg">Liste des commandes</h3>
@@ -594,7 +650,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
 
         {data.length === 0 ? (
           <div className="p-6 sm:p-8 text-center text-slate-500 text-sm">
-            {commandes.length === 0
+            {localCommandes.length === 0
               ? `${BAR_COMMANDES_ACTIONS.emptyTitle}. ${BAR_COMMANDES_ACTIONS.emptyDescription}`
               : 'Aucune commande ne correspond à votre recherche.'}
           </div>
@@ -606,16 +662,16 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
                 <div key={commande.id} className="rounded-lg border border-base bg-surface-2 p-3 space-y-2 text-xs">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 flex-1 min-w-0">
-                      {columns[0].render(commande as unknown as BarCommande)}
+                      {columns[0].render(commande)}
                     </div>
-                    <span className="flex-shrink-0">{columns[3].render(commande as unknown as BarCommande)}</span>
+                    <span className="flex-shrink-0">{columns[3].render(commande)}</span>
                   </div>
-                  <div className="text-slate-400">{columns[1].render(commande as unknown as BarCommande)}</div>
+                  <div className="text-slate-400">{columns[1].render(commande)}</div>
                   <div className="flex items-center justify-between pt-2 border-t border-base">
-                    <div className="text-slate-400">{columns[2].render(commande as unknown as BarCommande)}</div>
-                    {columns[4].render(commande as unknown as BarCommande)}
+                    <div className="text-slate-400">{columns[2].render(commande)}</div>
+                    {columns[4].render(commande)}
                   </div>
-                  <div className="flex gap-1 pt-2 border-t border-base">{columns[5].render(commande as unknown as BarCommande)}</div>
+                  <div className="flex gap-1 pt-2 border-t border-base">{columns[5].render(commande)}</div>
                 </div>
               ))}
             </div>
@@ -636,12 +692,16 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
                 <tbody>
                   {data.map((commande) => (
                     <tr key={commande.id} className="border-t border-base hover:bg-surface-2/50 transition">
-                      <td className="px-3 py-3">{columns[0].render(commande as unknown as BarCommande)}</td>
-                      <td className="px-3 py-3">{columns[1].render(commande as unknown as BarCommande)}</td>
-                      <td className="px-3 py-3">{columns[2].render(commande as unknown as BarCommande)}</td>
-                      <td className="px-3 py-3">{columns[3].render(commande as unknown as BarCommande)}</td>
-                      <td className="px-3 py-3">{columns[4].render(commande as unknown as BarCommande)}</td>
-                      <td className="px-3 py-3 text-right"><div className="flex gap-1 justify-end">{columns[5].render(commande as unknown as BarCommande)}</div></td>
+                      <td className="px-3 py-3">{columns[0].render(commande)}</td>
+                      <td className="px-3 py-3">{columns[1].render(commande)}</td>
+                      <td className="px-3 py-3">{columns[2].render(commande)}</td>
+                      <td className="px-3 py-3">{columns[3].render(commande)}</td>
+                      <td className="px-3 py-3">{columns[4].render(commande)}</td>
+                      <td className="px-3 py-3 text-right">
+                        <div className="flex gap-1 justify-end">
+                          {columns[5].render(commande)}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
