@@ -2,11 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MinibarItem, MinibarConsumption, Room } from '../../types/hotel.types';
 import { formatCurrency, formatDate } from '../../utils/data';
-import { Plus, Minus, ShoppingCart, Trash2, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, Trash2, RefreshCw, AlertTriangle, Loader2, Package, X, ArrowRight } from 'lucide-react';
 import { ConsumptionModal } from './Modal/ConsumptionModal';
+import { StockTransferModal } from './Modal/StockTransferModal';
 import { Product } from '../../types/product.types';
 import { minibarService } from '../../services/minibar.service';
 import { consumptionService } from '../../services/consumption.service';
+import { Modal } from '../Modal';
 
 interface MinibarManagerProps {
   rooms: Room[];
@@ -23,12 +25,17 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
 }) => {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isConsumptionModalOpen, setIsConsumptionModalOpen] = useState(false);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+  const [isStockTransferModalOpen, setIsStockTransferModalOpen] = useState(false);
   const [items, setItems] = useState<MinibarItem[]>([]);
   const [consumptions, setConsumptions] = useState<MinibarConsumption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingConsumptions, setLoadingConsumptions] = useState(false);
   const [stats, setStats] = useState({ totalProduits: 0, chambresEquipees: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [selectedProductToAdd, setSelectedProductToAdd] = useState<number | ''>('');
+  const [quantityToAdd, setQuantityToAdd] = useState(1);
+  const [alertThresholdToAdd, setAlertThresholdToAdd] = useState(1);
 
   // Charger les consommations d'une chambre
   const loadRoomConsumptions = useCallback(async (roomId: number) => {
@@ -118,6 +125,29 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
   useEffect(() => {
     loadMinibarData();
   }, [loadMinibarData]);
+
+  // Check for low stock alerts periodically
+  useEffect(() => {
+    const checkLowStock = async () => {
+      try {
+        const lowStockItems = await minibarService.getLowStockItems();
+        if (lowStockItems.data && lowStockItems.data.length > 0) {
+          lowStockItems.data.forEach((item: any) => {
+            const message = `Stock faible: ${item.product_nom} (Chambre ${item.room_numero}) - ${item.quantite} unités`;
+            onError?.(message);
+          });
+        }
+      } catch (error) {
+        console.error('Error checking low stock:', error);
+      }
+    };
+
+    // Check immediately and then every 5 minutes
+    checkLowStock();
+    const interval = setInterval(checkLowStock, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [onError]);
 
   // Filtrer les items par chambre sélectionnée
   const roomItems = selectedRoom 
@@ -301,6 +331,79 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
     setIsConsumptionModalOpen(true);
   };
 
+  // Ouvrir le modal d'ajout de produit
+  const openAddProductModal = () => {
+    if (!selectedRoom) {
+      onError?.('Veuillez sélectionner une chambre');
+      return;
+    }
+    setSelectedProductToAdd('');
+    setQuantityToAdd(1);
+    setAlertThresholdToAdd(1);
+    setIsAddProductModalOpen(true);
+  };
+
+  // Ouvrir le modal de transfert de stock
+  const openStockTransferModal = () => {
+    if (!selectedRoom) {
+      onError?.('Veuillez sélectionner une chambre');
+      return;
+    }
+    setIsStockTransferModalOpen(true);
+  };
+
+  // Gérer le transfert de stock
+  const handleStockTransfer = async (data: {
+    product_id: number;
+    source_location_id: number;
+    quantity: number;
+    room_id: number;
+  }) => {
+    try {
+      await minibarService.transferStock(data);
+      onSuccess?.('Stock transféré avec succès');
+      await loadMinibarData(); // Reload to get updated quantities
+    } catch (error) {
+      console.error('Erreur lors du transfert de stock:', error);
+      onError?.('Impossible de transférer le stock');
+      throw error;
+    }
+  };
+
+  // Ajouter un produit au minibar
+  const handleAddProduct = async () => {
+    if (!selectedRoom) {
+      onError?.('Veuillez sélectionner une chambre');
+      return;
+    }
+
+    if (!selectedProductToAdd) {
+      onError?.('Veuillez sélectionner un produit');
+      return;
+    }
+
+    if (quantityToAdd <= 0) {
+      onError?.('La quantité doit être supérieure à 0');
+      return;
+    }
+
+    try {
+      await minibarService.create({
+        room_id: selectedRoom.id,
+        product_id: Number(selectedProductToAdd),
+        quantite: quantityToAdd,
+        seuil_alerte: alertThresholdToAdd,
+      });
+
+      onSuccess?.('Produit ajouté au minibar avec succès');
+      setIsAddProductModalOpen(false);
+      await loadMinibarData();
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout du produit:', error);
+      onError?.('Impossible d\'ajouter le produit au minibar');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -390,6 +493,21 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={openStockTransferModal}
+                  className="px-4 py-2 rounded-xl border border-base text-primary font-medium hover:bg-surface-2 transition-colors flex items-center gap-2"
+                  title="Transférer du stock depuis restaurant/bar"
+                >
+                  <ArrowRight size={18} />
+                  Transférer Stock
+                </button>
+                <button
+                  onClick={openAddProductModal}
+                  className="px-4 py-2 rounded-xl border border-base text-primary font-medium hover:bg-surface-2 transition-colors flex items-center gap-2"
+                >
+                  <Package size={18} />
+                  Ajouter
+                </button>
+                <button
                   onClick={openModal}
                   className="btn-primary px-4 py-2 rounded-xl flex items-center gap-2"
                   disabled={roomItems.length === 0}
@@ -403,8 +521,24 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
             {roomItems.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-5xl mb-4">🍾</div>
-                <p className="text-muted">Aucun produit dans le mini-bar</p>
-                <p className="text-muted text-sm mt-1">Ajoutez des produits depuis la gestion des stocks</p>
+                <p className="text-muted mb-2">Aucun produit dans le mini-bar</p>
+                <p className="text-sm text-muted mb-4">Transférez du stock depuis le restaurant ou le bar</p>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={openStockTransferModal}
+                    className="mt-4 btn-primary px-4 py-2 rounded-xl flex items-center gap-2"
+                  >
+                    <ArrowRight size={18} />
+                    Transférer du Stock
+                  </button>
+                  <button
+                    onClick={openAddProductModal}
+                    className="mt-4 px-4 py-2 rounded-xl border border-base text-primary font-medium hover:bg-surface-2 transition-colors flex items-center gap-2"
+                  >
+                    <Package size={18} />
+                    Ajouter Manuellement
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -587,8 +721,126 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
         onClose={() => setIsConsumptionModalOpen(false)}
         room={selectedRoom}
         products={products}
+        minibarItems={roomItems}
         onConsume={handleConsume}
       />
+
+      {/* Modal de transfert de stock */}
+      <StockTransferModal
+        isOpen={isStockTransferModalOpen}
+        onClose={() => setIsStockTransferModalOpen(false)}
+        room={selectedRoom}
+        products={products}
+        onTransfer={handleStockTransfer}
+      />
+
+      {/* Modal d'ajout de produit */}
+      <Modal isOpen={isAddProductModalOpen} onClose={() => setIsAddProductModalOpen(false)} size="md">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-primary font-bold text-xl flex items-center gap-2">
+                <Package size={20} className="text-accent" />
+                Ajouter un produit au mini-bar
+              </h3>
+              {selectedRoom && (
+                <p className="text-sm text-muted mt-1">
+                  Chambre {selectedRoom.numero}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setIsAddProductModalOpen(false)}
+              className="p-2 rounded-lg hover:bg-surface-2 transition-colors"
+            >
+              <X size={20} className="text-muted hover:text-primary" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Sélection du produit */}
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">
+                Produit *
+              </label>
+              <select
+                value={selectedProductToAdd}
+                onChange={(e) => setSelectedProductToAdd(Number(e.target.value))}
+                className="input-field w-full"
+                required
+              >
+                <option value="">Sélectionner un produit</option>
+                {products.length === 0 ? (
+                  <option disabled>Aucun produit disponible</option>
+                ) : (
+                  products.map(product => (
+                    <option key={product.id} value={product.id}>
+                      {product.nom} - {formatCurrency(product.prix_vente || 0)}
+                      {product.unite && ` (${product.unite})`}
+                      {product.type_produit && ` [${product.type_produit}]`}
+                    </option>
+                  ))
+                )}
+              </select>
+              {products.length === 0 && (
+                <p className="text-sm text-warning mt-1">
+                  Aucun produit disponible. Vérifiez que les produits sont configurés.
+                </p>
+              )}
+            </div>
+
+            {/* Quantité */}
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">
+                Quantité
+              </label>
+              <input
+                type="number"
+                value={quantityToAdd}
+                onChange={(e) => setQuantityToAdd(Math.max(1, Number(e.target.value)))}
+                className="input-field w-full"
+                min="1"
+              />
+            </div>
+
+            {/* Seuil d'alerte */}
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">
+                Seuil d'alerte
+              </label>
+              <input
+                type="number"
+                value={alertThresholdToAdd}
+                onChange={(e) => setAlertThresholdToAdd(Math.max(1, Number(e.target.value)))}
+                className="input-field w-full"
+                min="1"
+              />
+              <p className="text-xs text-muted mt-1">
+                Alerte quand le stock tombe en dessous de ce niveau
+              </p>
+            </div>
+
+            {/* Boutons d'action */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsAddProductModalOpen(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-base text-primary font-medium hover:bg-surface-2 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleAddProduct}
+                className="flex-1 px-4 py-2.5 rounded-xl btn-primary font-medium"
+                disabled={!selectedProductToAdd}
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
