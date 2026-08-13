@@ -219,6 +219,24 @@ class AuthService {
   }
 
   // --------------------------------------------------
+  // Historique de connexion
+  // --------------------------------------------------
+  static async getConnectionHistory(page: number = 1, limit: number = 10): Promise<any> {
+    try {
+      const response = await api.get("/api/auth/connection-history", {
+        params: { page, limit },
+      });
+      const data = response.data as ApiResponse;
+      if (!data.success) {
+        throw new Error(data.error || "Échec du chargement de l'historique");
+      }
+      return data;
+    } catch (error: any) {
+      throw this.handleError(error, "Erreur lors du chargement de l'historique");
+    }
+  }
+
+  // --------------------------------------------------
   // Gestion du stockage des données d'authentification
   // --------------------------------------------------
   private static setAuthData(user: User, token: string, refreshToken?: string): void {

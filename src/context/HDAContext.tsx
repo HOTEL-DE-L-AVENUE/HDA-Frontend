@@ -43,6 +43,8 @@ interface Notification {
   type: 'info' | 'success' | 'warning' | 'error';
   message: string;
   timestamp: string;
+  source?: string;
+  actionUrl?: string;
 }
 
 // ==================== DONNÉES INITIALES POUR LES CHAMBRES ====================
@@ -124,6 +126,8 @@ type Action =
   // Actions Notifications
   | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, 'id' | 'timestamp'> }
   | { type: 'CLEAR_NOTIFICATION'; payload: string }
+  | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
+  | { type: 'CLEAR_ALL_NOTIFICATIONS' }
   // Actions Chambres
   | { type: 'ADD_CHAMBRE'; payload: Chambre }
   | { type: 'UPDATE_CHAMBRE'; payload: Chambre }
@@ -301,6 +305,18 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         ...state,
         notifications: state.notifications.filter(n => n.id !== action.payload)
       };
+    
+    case 'SET_NOTIFICATIONS':
+      return {
+        ...state,
+        notifications: action.payload
+      };
+    
+    case 'CLEAR_ALL_NOTIFICATIONS':
+      return {
+        ...state,
+        notifications: []
+      };
 
     // ===== CHAMBRES =====
     case 'ADD_CHAMBRE':
@@ -342,11 +358,7 @@ const initialState: HDAState = {
   chambres: initialChambres,
   activeModule: 'dashboard',
   sidebarCollapsed: false,
-  notifications: [
-    { id: 'n1', type: 'warning', message: 'Stock faible: Serviettes de Bain (8 unités)', timestamp: new Date().toISOString() },
-    { id: 'n2', type: 'warning', message: 'Stock faible: Champagne Brut (7 bouteilles)', timestamp: new Date().toISOString() },
-    { id: 'n3', type: 'error', message: 'Stock épuisé: Truffe Noire', timestamp: new Date().toISOString() },
-  ]
+  notifications: []
 };
 
 // ==================== CONTEXT ====================
@@ -360,6 +372,9 @@ interface HDAContextType {
   getModuleCaisseSolde: (module: ModuleType) => { solde: number; entrees: number; sorties: number };
   getCasinoTotalCaisse: () => { solde: number; entrees: number; sorties: number };
   getGlobalStats: () => { totalRevenu: number; totalDepenses: number; soldeGlobal: number };
+  addNotification: (type: 'info' | 'success' | 'warning' | 'error', message: string, source?: string, actionUrl?: string) => void;
+  clearNotification: (id: string) => void;
+  clearAllNotifications: () => void;
 }
 
 const HDAContext = createContext<HDAContextType | undefined>(undefined);
@@ -409,6 +424,21 @@ export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { totalRevenu, totalDepenses, soldeGlobal: totalRevenu - totalDepenses };
   };
 
+  const addNotification = (type: 'info' | 'success' | 'warning' | 'error', message: string, source?: string, actionUrl?: string) => {
+    dispatch({ 
+      type: 'ADD_NOTIFICATION', 
+      payload: { type, message, source, actionUrl } 
+    });
+  };
+
+  const clearNotification = (id: string) => {
+    dispatch({ type: 'CLEAR_NOTIFICATION', payload: id });
+  };
+
+  const clearAllNotifications = () => {
+    dispatch({ type: 'CLEAR_ALL_NOTIFICATIONS' });
+  };
+
   return (
     <HDAContext.Provider value={{ 
       state, 
@@ -417,7 +447,10 @@ export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       getModuleStock, 
       getModuleCaisseSolde,
       getCasinoTotalCaisse,
-      getGlobalStats
+      getGlobalStats,
+      addNotification,
+      clearNotification,
+      clearAllNotifications
     }}>
       {children}
     </HDAContext.Provider>

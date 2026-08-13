@@ -188,3 +188,7 @@ export const hotelService = {
     }
   }
 };
+
+export function getChambres() {
+  throw new Error('Function not implemented.');
+}
