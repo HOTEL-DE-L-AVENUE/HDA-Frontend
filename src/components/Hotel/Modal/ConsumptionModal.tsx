@@ -11,6 +11,7 @@ interface ConsumptionModalProps {
   onClose: () => void;
   room: Room | null;
   products: Product[];
+  minibarItems: any[]; // Items from the minibar for this room
   onConsume: (productId: number, quantity: number) => Promise<void> | void;
   isLoading?: boolean;
 }
@@ -20,6 +21,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   onClose,
   room,
   products,
+  minibarItems,
   onConsume,
   isLoading = false,
 }) => {
@@ -39,6 +41,10 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   // Filtrer les produits disponibles pour le mini-bar
   const availableProducts = products.filter(p => {
+    // Check if product is in the minibar for this room
+    const inMinibar = minibarItems.some(item => item.product_id === p.id && item.quantite > 0);
+    if (!inMinibar) return false;
+    
     // Inclure les produits consommables et finis
     if (p.type_produit === 'PRODUIT_FINI' || p.type_produit === 'CONSOMMABLE') {
       return true;
@@ -52,6 +58,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   // Récupérer le produit sélectionné
   const selectedProductData = products.find(p => p.id === selectedProduct);
+  
+  // Récupérer le stock disponible pour le produit sélectionné
+  const getAvailableStock = (productId: number) => {
+    const minibarItem = minibarItems.find(item => item.product_id === productId);
+    return minibarItem ? minibarItem.quantite : 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +75,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
     if (quantity <= 0) {
       setError('La quantité doit être supérieure à 0');
+      return;
+    }
+
+    const availableStock = getAvailableStock(Number(selectedProduct));
+    if (quantity > availableStock) {
+      setError(`Stock insuffisant. Disponible: ${availableStock}`);
       return;
     }
 
@@ -80,7 +98,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   };
 
   const handleQuantityChange = (delta: number) => {
-    setQuantity(prev => Math.max(1, prev + delta));
+    const maxStock = selectedProduct ? getAvailableStock(Number(selectedProduct)) : 1;
+    setQuantity(prev => Math.max(1, Math.min(maxStock, prev + delta)));
   };
 
   // Calcul du total
@@ -135,12 +154,16 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
               disabled={isSubmitting || isLoading}
             >
               <option value="">Sélectionner un produit</option>
-              {availableProducts.map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.nom} - {formatCurrency(product.prix_vente || 0)}
-                  {product.unite && ` (${product.unite})`}
-                </option>
-              ))}
+              {availableProducts.map(product => {
+                const stock = getAvailableStock(product.id);
+                return (
+                  <option key={product.id} value={product.id}>
+                    {product.nom} - {formatCurrency(product.prix_vente || 0)}
+                    {product.unite && ` (${product.unite})`}
+                    {` (Stock: ${stock})`}
+                  </option>
+                );
+              })}
             </select>
             {availableProducts.length === 0 && (
               <p className="text-sm text-warning mt-1">
@@ -166,7 +189,10 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
               <input
                 type="number"
                 value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => {
+                  const maxStock = selectedProduct ? getAvailableStock(Number(selectedProduct)) : 1;
+                  setQuantity(Math.max(1, Math.min(maxStock, Number(e.target.value))));
+                }}
                 className="input-field w-20 text-center"
                 min="1"
                 disabled={isSubmitting || isLoading}
@@ -175,7 +201,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 type="button"
                 onClick={() => handleQuantityChange(1)}
                 className="p-2 rounded-lg bg-surface-2 hover:bg-surface-3 transition-colors disabled:opacity-50"
-                disabled={isSubmitting || isLoading}
+                disabled={quantity >= (selectedProduct ? getAvailableStock(Number(selectedProduct)) : 1) || isSubmitting || isLoading}
               >
                 <Plus size={16} className="text-primary" />
               </button>

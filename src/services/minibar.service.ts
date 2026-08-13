@@ -28,6 +28,12 @@ export const minibarService = {
     return response.data;
   },
 
+  // Créer un minibar item
+  async create(data: { room_id: number; product_id: number; quantite: number; seuil_alerte: number }) {
+    const response = await api.post('/api/hebergement/room-minibar', data);
+    return response.data;
+  },
+
   // Mettre à jour la quantité
   async updateQuantity(id: number, quantite: number) {
     // Fix: Use PUT with quantite in body
@@ -39,6 +45,53 @@ export const minibarService = {
   async delete(id: number) {
     // Fix: Use correct endpoint path
     const response = await api.delete(`/api/hebergement/room-minibar/${id}`);
+    return response.data;
+  },
+
+  // --- Stock Management Methods ---
+
+  // Transfer stock from source location (restaurant/bar) to hotel minibar location
+  async transferStock(data: { 
+    product_id: number; 
+    source_location_id: number; 
+    quantity: number; 
+    room_id: number;
+  }) {
+    const response = await api.post('/api/hebergement/minibar/transfer-stock', data);
+    return response.data;
+  },
+
+  // Handle minibar consumption with stock movement tracking
+  async consumeWithStock(data: {
+    room_id: number;
+    product_id: number;
+    quantity: number;
+    client_id: number;
+    price: number;
+  }) {
+    const response = await api.post('/api/hebergement/minibar/consume', data);
+    return response.data;
+  },
+
+  // Get minibar items with low stock alerts
+  async getWithAlerts() {
+    const response = await api.get('/api/hebergement/minibar/alerts');
+    return response.data;
+  },
+
+  // Get only low stock minibar items for notifications
+  async getLowStockItems() {
+    const response = await api.get('/api/hebergement/minibar/low-stock');
+    return response.data;
+  },
+
+  // Restock minibar from hotel stock location
+  async restock(data: {
+    room_id: number;
+    product_id: number;
+    quantity: number;
+  }) {
+    const response = await api.post('/api/hebergement/minibar/restock', data);
     return response.data;
   },
 };
