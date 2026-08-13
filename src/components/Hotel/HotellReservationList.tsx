@@ -26,9 +26,10 @@ interface ReservationListProps {
   onEdit?: (reservation: Reservation) => void;
   onCancel?: (reservationId: number) => void;
   onDelete?: (reservationId: number) => void;
+  refreshTrigger?: number;
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit }) => {
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, refreshTrigger }) => {
   const { 
     reservations, 
     loading: reservationsLoading, 
@@ -56,7 +57,13 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit }) => {
       await Promise.all([loadReservations(), loadClients(), loadRooms()]);
     };
     loadAllData();
-  }, []);
+  }, [loadReservations, loadClients, loadRooms]);
+
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      loadReservations();
+    }
+  }, [loadReservations, refreshTrigger]);
 
   // Enrichir les réservations
   useEffect(() => {

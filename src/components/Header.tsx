@@ -1,9 +1,10 @@
 // src/components/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, ChevronRight, X, LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { Bell, Search, ChevronRight, X, LogOut, User, Settings, ChevronDown, RefreshCw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthService from '../services/authService'; // ← Import du service
 import { useHDA } from '../context/HDAContext'; // Gardé uniquement pour les notifications
+import { generateNotifications } from '../services/notificationService';
 import logo from '../assets/logo_s.png';
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -48,6 +49,7 @@ export const Header: React.FC = () => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -66,6 +68,52 @@ export const Header: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Load notifications on mount and periodically refresh
+  useEffect(() => {
+    loadNotifications();
+    
+    // Refresh notifications every 2 minutes
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 120000); // 2 minutes
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // For testing: add a sample notification if empty after initial load
+  useEffect(() => {
+    if (notifications.length === 0 && !loadingNotifs) {
+      const timer = setTimeout(() => {
+        if (notifications.length === 0) {
+          // Add a welcome notification for testing
+          dispatch({ 
+            type: 'ADD_NOTIFICATION', 
+            payload: { 
+              type: 'info', 
+              message: 'Système de notifications actif - Cliquez sur la cloche pour voir les alertes',
+              source: 'Système',
+              actionUrl: '/dashboard'
+            } 
+          });
+        }
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notifications.length, loadingNotifs, dispatch]);
+
+  // Load notifications function
+  const loadNotifications = async () => {
+    setLoadingNotifs(true);
+    try {
+      const notifs = await generateNotifications();
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: notifs });
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
 
   // Déconnexion via AuthService
   const handleLogout = () => {
@@ -205,18 +253,29 @@ export const Header: React.FC = () => {
                 style={{ borderBottom: '1px solid var(--color-border)' }}
               >
                 <h3 className="text-primary font-semibold text-xs">Alertes</h3>
-                <span className="text-[10px] text-muted">{notifications.length} non lues</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted">{notifications.length} non lues</span>
+                  <button
+                    onClick={loadNotifications}
+                    className="text-muted hover:text-primary transition-colors"
+                    disabled={loadingNotifs}
+                    title="Actualiser"
+                  >
+                    <RefreshCw size={12} className={loadingNotifs ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
               <div className="max-h-72 overflow-y-auto">
                 {notifications.length === 0 ? (
                   <div className="p-5 text-center text-muted text-xs">Aucune alerte</div>
                 ) : (
-                  notifications.map((notif) => {
+                  <>
+                    {notifications.map((notif) => {
                     const colors = NOTIFICATION_COLORS[notif.type] || NOTIFICATION_COLORS.info;
                     return (
                       <div
                         key={notif.id}
-                        className="flex items-start gap-3 px-4 py-2.5 transition-colors"
+                        className={`flex items-start gap-3 px-4 py-2.5 transition-colors ${notif.actionUrl ? 'cursor-pointer' : ''}`}
                         style={{
                           borderBottom: '1px solid var(--color-surface-2)',
                         }}
@@ -225,6 +284,12 @@ export const Header: React.FC = () => {
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        onClick={() => {
+                          if (notif.actionUrl) {
+                            navigate(notif.actionUrl);
+                            setShowNotifs(false);
+                          }
                         }}
                       >
                         <div
@@ -235,19 +300,28 @@ export const Header: React.FC = () => {
                           <p className="text-xs font-medium" style={{ color: colors.text }}>
                             {notif.message}
                           </p>
-                          <p className="text-subtle text-[10px] mt-0.5">
-                            {new Date(notif.timestamp).toLocaleTimeString('fr-FR')}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-subtle text-[10px]">
+                              {new Date(notif.timestamp).toLocaleTimeString('fr-FR')}
+                            </p>
+                            {notif.source && (
+                              <span className="text-[10px] text-muted">• {notif.source}</span>
+                            )}
+                          </div>
                         </div>
                         <button
-                          onClick={() => dispatch({ type: 'CLEAR_NOTIFICATION', payload: notif.id })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dispatch({ type: 'CLEAR_NOTIFICATION', payload: notif.id });
+                          }}
                           className="text-subtle hover:text-primary transition-colors"
                         >
                           <X size={12} />
                         </button>
                       </div>
                     );
-                  })
+                  })}
+                  </>
                 )}
               </div>
             </div>

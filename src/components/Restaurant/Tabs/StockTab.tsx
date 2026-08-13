@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import ReactDOM from 'react-dom';
-import { Button } from '../../UI';
+import { createPortal } from 'react-dom';
 import {
   Package, Plus, History, X, Truck, BookOpen,
   ChevronRight, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import * as restaurantService from '../../../services/restaurantService';
+import { Button } from '../../UI';
+import { useHDA } from '../../../context/HDAContext';
 
 // ==================== TYPES ====================
 
@@ -59,7 +60,7 @@ const inputStyle = { backgroundColor: 'var(--color-surface-2)', border: '1px sol
 const ModalShell: React.FC<{
   title: string; onClose: () => void; wide?: boolean; children: React.ReactNode;
 }> = ({ title, onClose, wide, children }) =>
-    ReactDOM.createPortal(
+    createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
         <div
           className={`rounded-xl p-6 w-full ${wide ? 'max-w-2xl' : 'max-w-sm'} max-h-[90vh] overflow-y-auto`}
@@ -121,6 +122,7 @@ export const StockTab: React.FC = () => {
 // ==================== PANEL STOCK ====================
 
 const StockPanel: React.FC = () => {
+  const { addNotification } = useHDA();
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('');
@@ -216,10 +218,26 @@ if (loc.success) {
         quantite: Math.abs(delta),
         source_module: 'MANUEL',
       });
-      if (res.success)
-        setStocks(prev => prev.map(s =>
-          s.product_id === productId ? { ...s, quantite: res.data.newQty } : s
-        ));
+      if (res.success) {
+        setStocks(prev => {
+          const updated = prev.map(s =>
+            s.product_id === productId ? { ...s, quantite: res.data.newQty } : s
+          );
+          
+          // Check if stock is now low and add notification
+          const updatedItem = updated.find(s => s.product_id === productId);
+          if (updatedItem && updatedItem.quantite <= 5) {
+            addNotification(
+              updatedItem.quantite <= 3 ? 'error' : 'warning',
+              `Stock faible: ${updatedItem.product_nom} (${updatedItem.quantite} ${updatedItem.unite})`,
+              'Restaurant',
+              '/restaurant?tab=stock'
+            );
+          }
+          
+          return updated;
+        });
+      }
     } catch (e: any) { alert(e.message); }
   };
 
@@ -327,12 +345,21 @@ if (loc.success) {
 
         <div className="flex-1" />
 
-        <Button size="sm" variant="secondary" onClick={loadHistory} disabled={histLoading}>
+        <button 
+          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+          style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+          onClick={loadHistory} 
+          disabled={histLoading}
+        >
           <History size={14} className="mr-1" /> Historique
-        </Button>
-        <Button size="sm" onClick={() => { setAddErr(''); setShowAddModal(true); }}>
+        </button>
+        <button 
+          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+          style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+          onClick={() => { setAddErr(''); setShowAddModal(true); }}
+        >
           <Plus size={14} className="mr-1" /> Nouveau produit
-        </Button>
+        </button>
       </div>
 
       {/* Grille */}
@@ -489,10 +516,22 @@ if (loc.success) {
             </div>
             {addErr && <p className="text-xs text-danger">{addErr}</p>}
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={addLoading}>Annuler</Button>
-              <Button onClick={handleAddProduct} disabled={addLoading}>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                onClick={() => setShowAddModal(false)} 
+                disabled={addLoading}
+              >
+                Annuler
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+                onClick={handleAddProduct} 
+                disabled={addLoading}
+              >
                 {addLoading ? 'Création…' : 'Créer & ajouter'}
-              </Button>
+              </button>
             </div>
           </div>
         </ModalShell>
@@ -526,10 +565,22 @@ if (loc.success) {
             </div>
             {adjErr && <p className="text-xs text-danger">{adjErr}</p>}
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="secondary" onClick={() => setShowAdjustModal(false)} disabled={adjLoading}>Annuler</Button>
-              <Button onClick={handleAdjust} disabled={adjLoading}>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                onClick={() => setShowAdjustModal(false)} 
+                disabled={adjLoading}
+              >
+                Annuler
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+                onClick={handleAdjust} 
+                disabled={adjLoading}
+              >
                 {adjLoading ? 'En cours…' : 'Confirmer'}
-              </Button>
+              </button>
             </div>
           </div>
         </ModalShell>
@@ -641,12 +692,20 @@ const AchatsPanel: React.FC = () => {
       <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
         <p className="text-sm text-secondary">{purchases.length} achat(s)</p>
         <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setShowSupplierModal(true)}>
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+            onClick={() => setShowSupplierModal(true)}
+          >
             <Plus size={14} className="mr-1" /> Fournisseur
-          </Button>
-          <Button size="sm" onClick={() => { setPurchaseErr(''); setShowPurchaseModal(true); }}>
+          </button>
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+            onClick={() => { setPurchaseErr(''); setShowPurchaseModal(true); }}
+          >
             <Truck size={14} className="mr-1" /> Nouvel achat
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -766,10 +825,22 @@ const AchatsPanel: React.FC = () => {
 
             {purchaseErr && <p className="text-xs text-danger">{purchaseErr}</p>}
             <div className="flex gap-2 justify-end">
-              <Button variant="secondary" onClick={() => setShowPurchaseModal(false)} disabled={purchaseLoading}>Annuler</Button>
-              <Button onClick={handlePurchase} disabled={purchaseLoading}>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                onClick={() => setShowPurchaseModal(false)} 
+                disabled={purchaseLoading}
+              >
+                Annuler
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+                onClick={handlePurchase} 
+                disabled={purchaseLoading}
+              >
                 {purchaseLoading ? 'Enregistrement…' : 'Valider l\'achat'}
-              </Button>
+              </button>
             </div>
           </div>
         </ModalShell>
@@ -794,10 +865,22 @@ const AchatsPanel: React.FC = () => {
             ))}
             {supErr && <p className="text-xs text-danger">{supErr}</p>}
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="secondary" onClick={() => setShowSupplierModal(false)} disabled={supLoading}>Annuler</Button>
-              <Button onClick={handleSupplier} disabled={supLoading}>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                onClick={() => setShowSupplierModal(false)} 
+                disabled={supLoading}
+              >
+                Annuler
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+                onClick={handleSupplier} 
+                disabled={supLoading}
+              >
                 {supLoading ? 'Création…' : 'Créer'}
-              </Button>
+              </button>
             </div>
           </div>
         </ModalShell>
@@ -853,12 +936,12 @@ const RecettesPanel: React.FC = () => {
   // Création
   const [cNom, setCNom] = useState('');
   const [cProduct, setCProduct] = useState<number | ''>('');
-  const [cIngs, setCIngs] = useState([{ ingredient_id: '' as number | '', quantite: 0 }]);
+  const [cIngs, setCIngs] = useState<{ ingredient_id: number | ''; quantite: number }[]>([{ ingredient_id: '', quantite: 0 }]);
   const [cErr, setCErr] = useState('');
   const [cLoading, setCLoading] = useState(false);
 
   // Édition
-  const [eIngs, setEIngs] = useState([{ ingredient_id: '' as number | '', quantite: 0 }]);
+  const [eIngs, setEIngs] = useState<{ ingredient_id: number | ''; quantite: number }[]>([{ ingredient_id: '', quantite: 0 }]);
   const [eErr, setEErr] = useState('');
   const [eLoading, setELoading] = useState(false);
 
@@ -881,7 +964,7 @@ const RecettesPanel: React.FC = () => {
     setDetailLoading(true);
     try {
       const res = await restaurantService.getRecipeById(id);
-      if (res.success) setSelected(res.data);
+      if (res.success) setSelected(res.data as RecipeDetail);
     } catch (e) { console.error(e); }
     finally { setDetailLoading(false); }
   };
@@ -911,7 +994,7 @@ const RecettesPanel: React.FC = () => {
         ingredients: cIngs.map(i => ({ ingredient_id: Number(i.ingredient_id), quantite: i.quantite })),
       });
       if (res.success) {
-        setRecipes(prev => [...prev, res.data]);
+        setRecipes(prev => [...prev, res.data as RecipeSummary]);
         setShowCreateModal(false);
         setCNom(''); setCProduct(''); setCIngs([{ ingredient_id: '', quantite: 0 }]);
       }
@@ -937,7 +1020,7 @@ const RecettesPanel: React.FC = () => {
       });
       if (res.success) {
         const detail = await restaurantService.getRecipeById(selected.id);
-        if (detail.success) setSelected(detail.data);
+        if (detail.success) setSelected(detail.data as RecipeDetail);
         setShowEditModal(false);
       }
     } catch (e: any) { setEErr(e.message); }
@@ -981,9 +1064,13 @@ const RecettesPanel: React.FC = () => {
     <>
       <div className="flex justify-between items-center mb-4">
         <p className="text-sm text-secondary">{recipes.length} recette(s)</p>
-        <Button size="sm" onClick={() => { setCErr(''); setShowCreateModal(true); }}>
+        <button 
+          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+          style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+          onClick={() => { setCErr(''); setShowCreateModal(true); }}
+        >
           <Plus size={14} className="mr-1" /> Nouvelle recette
-        </Button>
+        </button>
       </div>
 
       {loading ? (
@@ -1076,10 +1163,22 @@ const RecettesPanel: React.FC = () => {
             </div>
             {cErr && <p className="text-xs text-danger">{cErr}</p>}
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={cLoading}>Annuler</Button>
-              <Button onClick={handleCreate} disabled={cLoading}>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                onClick={() => setShowCreateModal(false)} 
+                disabled={cLoading}
+              >
+                Annuler
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+                onClick={handleCreate} 
+                disabled={cLoading}
+              >
                 {cLoading ? 'Création…' : 'Créer la recette'}
-              </Button>
+              </button>
             </div>
           </div>
         </ModalShell>
@@ -1095,10 +1194,22 @@ const RecettesPanel: React.FC = () => {
             </div>
             {eErr && <p className="text-xs text-danger">{eErr}</p>}
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="secondary" onClick={() => setShowEditModal(false)} disabled={eLoading}>Annuler</Button>
-              <Button onClick={handleEdit} disabled={eLoading}>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                onClick={() => setShowEditModal(false)} 
+                disabled={eLoading}
+              >
+                Annuler
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+                onClick={handleEdit} 
+                disabled={eLoading}
+              >
                 {eLoading ? 'Enregistrement…' : 'Enregistrer'}
-              </Button>
+              </button>
             </div>
           </div>
         </ModalShell>

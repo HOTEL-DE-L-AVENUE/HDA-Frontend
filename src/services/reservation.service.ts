@@ -111,6 +111,46 @@ export const reservationService = {
     }
   },
 
+  // Récupérer des séjours
+  getStays: async (filters?: { reservation_id?: number; room_id?: number; checkin_at?: string; checkout_at?: string }): Promise<Stay[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.reservation_id) params.append('reservation_id', String(filters.reservation_id));
+      if (filters?.room_id) params.append('room_id', String(filters.room_id));
+      if (filters?.checkin_at) params.append('checkin_at', filters.checkin_at);
+      if (filters?.checkout_at) params.append('checkout_at', filters.checkout_at);
+
+      const url = `${BASE_URL.replace('/reservations', '/stays')}${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await api.get<ApiResponse<Stay[]>>(url);
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getStays:', error);
+      throw error;
+    }
+  },
+
+  // Enregistrer un check-in
+  checkIn: async (reservationId: number): Promise<Stay> => {
+    try {
+      const response = await api.post<ApiResponse<Stay>>(`/api/hebergement/stays/check-in/${reservationId}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur checkIn ${reservationId}:`, error);
+      throw error;
+    }
+  },
+
+  // Enregistrer un check-out
+  checkOut: async (stayId: number): Promise<Stay> => {
+    try {
+      const response = await api.post<ApiResponse<Stay>>(`/api/hebergement/stays/check-out/${stayId}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur checkOut ${stayId}:`, error);
+      throw error;
+    }
+  },
+
   // Statistiques des réservations.
   getReservationStats: async (): Promise<any> => {
     try {
@@ -122,3 +162,13 @@ export const reservationService = {
     }
   }
 };
+
+export interface Stay {
+  id: number;
+  reservation_id: number;
+  checkin_at: string | null;
+  checkout_at: string | null;
+  room_id?: number;
+  created_at?: string;
+  updated_at?: string;
+}
