@@ -242,6 +242,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       setDeletingId(null);
     }
   };
+
   const escapePrintHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   } as Record<string, string>)[char] || char);
@@ -399,7 +400,8 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
       </div>
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle Commande" size="lg">
-        <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
+        {/* Ajout de max-h-[75vh] et overflow-y-auto pour permettre le défilement et rendre le bouton accessible */}
+        <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4 max-h-[75vh] overflow-y-auto pr-2">
           <Select
             label="Table"
             value={table}
@@ -578,6 +580,7 @@ export const BarCommandeView: React.FC<Props> = ({ commandes, onCreateCommande, 
           </div>
         )}
       </Modal>
+
       <div className="rounded-2xl overflow-hidden border border-base bg-surface">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base px-3 py-3 sm:px-6 sm:py-4 gap-3">
           <h3 className="text-primary font-semibold text-base sm:text-lg">Liste des commandes</h3>
