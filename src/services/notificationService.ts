@@ -2,6 +2,7 @@ import * as restaurantService from './restaurantService';
 import * as barService from './bar.service';
 import * as hotelService from './hotel.service';
 import { stockService } from './stock.service';
+import api from '../lib/api';
 
 export interface Notification {
   id: string;
@@ -30,8 +31,9 @@ const checkRestaurantStock = async (): Promise<Notification[]> => {
       loc.nom.toLowerCase().includes('restaurant')
     ) || locations[0];
     
-    const stocksRes = await stockService.getByLocation(restaurantLocation.id);
-    const stocks = Array.isArray(stocksRes) ? stocksRes : (stocksRes as any)?.data || [];
+    // Use the new endpoint that includes product information
+    const stocksRes = await api.get(`/api/stock/stocks/with-products?location_id=${restaurantLocation.id}`);
+    const stocks = Array.isArray(stocksRes.data) ? stocksRes.data : (stocksRes.data as any)?.data || [];
     if (!stocks.length) return notifications;
     
     // Check for critical and low stock items
@@ -40,7 +42,7 @@ const checkRestaurantStock = async (): Promise<Notification[]> => {
         notifications.push({
           id: `stock-critical-${stock.product_id}-${Date.now()}`,
           type: 'error',
-          message: `Stock critique: ${stock.product?.nom || stock.product_nom} (${stock.quantite} ${stock.product?.unite || ''})`,
+          message: `Stock critique: ${stock.product_nom || stock.product?.nom} (${stock.quantite} ${stock.product_unite || stock.product?.unite || ''})`,
           timestamp: new Date().toISOString(),
           source: 'Restaurant',
           actionUrl: '/restaurant?tab=stock'
@@ -49,7 +51,7 @@ const checkRestaurantStock = async (): Promise<Notification[]> => {
         notifications.push({
           id: `stock-low-${stock.product_id}-${Date.now()}`,
           type: 'warning',
-          message: `Stock faible: ${stock.product?.nom || stock.product_nom} (${stock.quantite} ${stock.product?.unite || ''})`,
+          message: `Stock faible: ${stock.product_nom || stock.product?.nom} (${stock.quantite} ${stock.product_unite || stock.product?.unite || ''})`,
           timestamp: new Date().toISOString(),
           source: 'Restaurant',
           actionUrl: '/restaurant?tab=stock'
@@ -82,8 +84,9 @@ const checkBarStock = async (): Promise<Notification[]> => {
     
     if (!barLocation) return notifications;
     
-    const stocksRes = await stockService.getByLocation(barLocation.id);
-    const stocks = Array.isArray(stocksRes) ? stocksRes : (stocksRes as any)?.data || [];
+    // Use the new endpoint that includes product information
+    const stocksRes = await api.get(`/api/stock/stocks/with-products?location_id=${barLocation.id}`);
+    const stocks = Array.isArray(stocksRes.data) ? stocksRes.data : (stocksRes.data as any)?.data || [];
     if (!stocks.length) return notifications;
     
     stocks.forEach((stock: any) => {
@@ -91,7 +94,7 @@ const checkBarStock = async (): Promise<Notification[]> => {
         notifications.push({
           id: `bar-stock-critical-${stock.product_id}-${Date.now()}`,
           type: 'error',
-          message: `Stock critique (Bar): ${stock.product?.nom || stock.product_nom} (${stock.quantite} ${stock.product?.unite || ''})`,
+          message: `Stock critique (Bar): ${stock.product_nom || stock.product?.nom} (${stock.quantite} ${stock.product_unite || stock.product?.unite || ''})`,
           timestamp: new Date().toISOString(),
           source: 'Bar',
           actionUrl: '/bar?tab=stock'
@@ -100,7 +103,7 @@ const checkBarStock = async (): Promise<Notification[]> => {
         notifications.push({
           id: `bar-stock-low-${stock.product_id}-${Date.now()}`,
           type: 'warning',
-          message: `Stock faible (Bar): ${stock.product?.nom || stock.product_nom} (${stock.quantite} ${stock.product?.unite || ''})`,
+          message: `Stock faible (Bar): ${stock.product_nom || stock.product?.nom} (${stock.quantite} ${stock.product_unite || stock.product?.unite || ''})`,
           timestamp: new Date().toISOString(),
           source: 'Bar',
           actionUrl: '/bar?tab=stock'
