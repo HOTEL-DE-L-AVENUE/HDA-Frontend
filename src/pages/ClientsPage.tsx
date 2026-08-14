@@ -400,10 +400,10 @@ const ClientsPage: React.FC = () => {
     const jsonString = JSON.stringify(clientData);
     setQrCodeData(jsonString);
     setSelectedClient(client);
-    setIsQRModalOpen(true);
 
-    // Generate QR code with real library - wait for it to complete
+    // Generate QR code with real library - wait for it to complete before opening modal
     await generateQRCodeImage(jsonString, client);
+    setIsQRModalOpen(true);
   };
 
   const generateQRCodeImage = async (data: string, client: Client) => {
