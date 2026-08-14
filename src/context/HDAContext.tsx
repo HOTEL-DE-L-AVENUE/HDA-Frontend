@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+// src/context/HDAContext.tsx
+import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { 
   StockItem, 
   CaisseTransaction, 
@@ -20,6 +21,7 @@ import {
   stockMovements,
   generateId
 } from '../utils/data';
+import AuthService from '../services/authService';
 
 // ==================== STATE ====================
 
@@ -113,6 +115,7 @@ type Action =
   | { type: 'ADD_USER'; payload: Omit<User, 'id' | 'createdAt'> }
   | { type: 'UPDATE_USER'; payload: User }
   | { type: 'DELETE_USER'; payload: string }
+  | { type: 'SET_CURRENT_USER'; payload: User }
   // Actions Réservations
   | { type: 'ADD_RESERVATION'; payload: Omit<Reservation, 'id' | 'createdAt'> }
   | { type: 'UPDATE_RESERVATION'; payload: Reservation }
@@ -230,13 +233,20 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
     case 'UPDATE_USER':
       return {
         ...state,
-        users: state.users.map(u => u.id === action.payload.id ? action.payload : u)
+        users: state.users.map(u => u.id === action.payload.id ? action.payload : u),
+        currentUser: state.currentUser?.id === action.payload.id ? action.payload : state.currentUser
       };
     
     case 'DELETE_USER':
       return {
         ...state,
         users: state.users.filter(u => u.id !== action.payload)
+      };
+
+    case 'SET_CURRENT_USER':
+      return {
+        ...state,
+        currentUser: action.payload
       };
     
     // ===== RÉSERVATIONS =====
@@ -348,7 +358,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
 
 const initialState: HDAState = {
   users: initialUsers,
-  currentUser: initialUsers[0],
+  currentUser: AuthService.getCurrentUser() || initialUsers[0], // ⬅️ Récupération dynamique de la session active
   stockItems: initialStockItems,
   transactions: initialTransactions,
   jeux: initialJeuxCasino,
@@ -381,6 +391,21 @@ const HDAContext = createContext<HDAContextType | undefined>(undefined);
 
 export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(hdaReducer, initialState);
+
+  // ⬅️ Écouter les changements d'authentification (connexion / déconnexion)
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const activeUser = AuthService.getCurrentUser();
+      if (activeUser) {
+        dispatch({ type: 'SET_CURRENT_USER', payload: activeUser });
+      }
+    };
+
+    window.addEventListener('auth-change', handleAuthChange);
+    return () => {
+      window.removeEventListener('auth-change', handleAuthChange);
+    };
+  }, []);
 
   // ===== HELPERS =====
   

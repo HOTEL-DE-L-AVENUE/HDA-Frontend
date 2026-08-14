@@ -56,62 +56,7 @@ export const getStatusColor = (status: string): string => {
 
 // ==================== DONNÉES INITIALES ====================
 
-export const initialUsers: User[] = [
-  {
-    id: 'u1',
-    nom: 'Dupont',
-    prenom: 'Jean',
-    email: 'jean.dupont@hda.com',
-    role: 'admin',
-    module: ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'],
-    actif: true,
-    createdAt: '2024-01-15T10:00:00Z',
-    lastLogin: new Date().toISOString()
-  },
-  {
-    id: 'u2',
-    nom: 'Martin',
-    prenom: 'Sophie',
-    email: 'sophie.martin@hda.com',
-    role: 'manager',
-    module: ['restaurant', 'bar'],
-    actif: true,
-    createdAt: '2024-02-20T09:00:00Z',
-    lastLogin: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: 'u3',
-    nom: 'Bernard',
-    prenom: 'Marc',
-    email: 'marc.bernard@hda.com',
-    role: 'caissier',
-    module: ['casino'],
-    actif: true,
-    createdAt: '2024-03-05T11:00:00Z',
-    lastLogin: new Date(Date.now() - 172800000).toISOString()
-  },
-  {
-    id: 'u4',
-    nom: 'Leroy',
-    prenom: 'Emma',
-    email: 'emma.leroy@hda.com',
-    role: 'stock_manager',
-    module: ['hebergement', 'hotel'],
-    actif: true,
-    createdAt: '2024-03-10T14:00:00Z',
-    lastLogin: new Date(Date.now() - 259200000).toISOString()
-  },
-  {
-    id: 'u5',
-    nom: 'Moreau',
-    prenom: 'Lucas',
-    email: 'lucas.moreau@hda.com',
-    role: 'viewer',
-    module: ['finances'],
-    actif: false,
-    createdAt: '2024-04-01T08:00:00Z'
-  }
-];
+export const initialUsers: User[] = [];
 
 export const initialStockItems: StockItem[] = [
   // Hébergement
