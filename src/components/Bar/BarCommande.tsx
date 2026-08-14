@@ -31,7 +31,6 @@ export const BarCommandeView: React.FC<Props> = ({
   cocktails = [], 
   stockMap = {} 
 }) => {
-  // État local pour refléter les modifications de statut immédiatement sur l'interface
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
 
   useEffect(() => {
@@ -142,16 +141,17 @@ export const BarCommandeView: React.FC<Props> = ({
     }
 
     try {
-      const createdTable = await barService.createBarTable({ numero, capacite: 0 });
+      const createdTable = await barService.createBarTable({ numero, capacite: 4 });
       const tableName = createdTable?.numero || numero;
       setTables((prev) => [...prev, createdTable]);
       setTable(String(createdTable.id));
       setIsCreatingTable(false);
       setNewTableNumber('');
       setFeedback({ type: 'success', message: `Table ${tableName} créée avec succès.` });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur création table bar:', error);
-      setFeedback({ type: 'error', message: 'La table n’a pas pu être créée.' });
+      const errorMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'La table n’a pas pu être créée.';
+      setFeedback({ type: 'error', message: errorMsg });
     }
   };
 
@@ -268,7 +268,6 @@ export const BarCommandeView: React.FC<Props> = ({
           || await (barService as any).updateStatut?.(commandeId, nouveauStatut);
       }
 
-      // Mise à jour instantanée de l'état local pour rafraîchir l'écran tout de suite
       setLocalCommandes((prev) =>
         prev.map((cmd) => (cmd.id === commandeId ? { ...cmd, statut: nouveauStatut } : cmd))
       );
@@ -444,13 +443,6 @@ export const BarCommandeView: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      {feedback && (
-        <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
-          <span>{feedback.message}</span>
-          <button type="button" onClick={() => setFeedback(null)} className="text-xs opacity-80 hover:opacity-100">✕</button>
-        </div>
-      )}
-
       <div className="rounded-2xl border border-base bg-surface p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -485,6 +477,13 @@ export const BarCommandeView: React.FC<Props> = ({
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle Commande" size="lg">
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+          {feedback && (
+            <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+              <span>{feedback.message}</span>
+              <button type="button" onClick={() => setFeedback(null)} className="text-xs opacity-80 hover:opacity-100">✕</button>
+            </div>
+          )}
+
           <Select
             label="Table"
             value={table}
@@ -656,7 +655,6 @@ export const BarCommandeView: React.FC<Props> = ({
           </div>
         ) : (
           <>
-            {/* Vue mobile - Cartes */}
             <div className="block sm:hidden space-y-3 p-3">
               {data.map((commande) => (
                 <div key={commande.id} className="rounded-lg border border-base bg-surface-2 p-3 space-y-2 text-xs">
@@ -676,7 +674,6 @@ export const BarCommandeView: React.FC<Props> = ({
               ))}
             </div>
 
-            {/* Vue desktop - Tableau */}
             <div className="hidden sm:block overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-surface-2 text-slate-400 text-xs">
@@ -698,9 +695,7 @@ export const BarCommandeView: React.FC<Props> = ({
                       <td className="px-3 py-3">{columns[3].render(commande)}</td>
                       <td className="px-3 py-3">{columns[4].render(commande)}</td>
                       <td className="px-3 py-3 text-right">
-                        <div className="flex gap-1 justify-end">
-                          {columns[5].render(commande)}
-                        </div>
+                        <div className="flex gap-1 justify-end">{columns[5].render(commande)}</div>
                       </td>
                     </tr>
                   ))}
