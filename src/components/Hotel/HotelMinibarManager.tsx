@@ -17,6 +17,14 @@ interface MinibarManagerProps {
   onSuccess?: (message: string) => void;
 }
 
+// Helper function to extract error message from backend response
+const getErrorMessage = (error: any): string => {
+  return error?.response?.data?.error?.message || 
+         error?.response?.data?.message || 
+         error?.message || 
+         'Une erreur est survenue';
+};
+
 export const MinibarManager: React.FC<MinibarManagerProps> = ({
   rooms,
   products,
@@ -59,13 +67,13 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       setConsumptions(formattedConsumptions);
     } catch (error) {
       console.error('Erreur lors du chargement des consommations:', error);
-      const errorMessage = 'Impossible de charger les consommations';
+      const errorMessage = getErrorMessage(error);
       setError(errorMessage);
       onError?.(errorMessage);
     } finally {
       setLoadingConsumptions(false);
     }
-  }, [onError]);
+  }, [onError, getErrorMessage]);
 
   // Charger les données du minibar
   const loadMinibarData = useCallback(async () => {
@@ -113,7 +121,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       }
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
-      const errorMessage = 'Impossible de charger les données du minibar';
+      const errorMessage = getErrorMessage(error);
       setError(errorMessage);
       onError?.(errorMessage);
     } finally {
@@ -183,7 +191,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       onSuccess?.(`Quantité mise à jour avec succès`);
     } catch (error) {
       console.error('Erreur lors de la mise à jour de la quantité:', error);
-      onError?.('Impossible de mettre à jour la quantité');
+      onError?.(getErrorMessage(error));
       // Recharger les données pour corriger l'état
       await loadMinibarData();
     }
@@ -209,7 +217,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       onSuccess?.(`Réapprovisionnement effectué avec succès`);
     } catch (error) {
       console.error('Erreur lors du réapprovisionnement:', error);
-      onError?.('Impossible de réapprovisionner');
+      onError?.(getErrorMessage(error));
       await loadMinibarData();
     }
   };
@@ -225,7 +233,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       onSuccess?.('Produit supprimé avec succès');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      onError?.('Impossible de supprimer le produit');
+      onError?.(getErrorMessage(error));
       await loadMinibarData();
     }
   };
@@ -244,7 +252,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       onSuccess?.('Consommation facturée avec succès');
     } catch (error) {
       console.error('Erreur lors du marquage de la facturation:', error);
-      onError?.('Impossible de marquer comme facturée');
+      onError?.(getErrorMessage(error));
     }
   };
 
@@ -318,7 +326,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       setIsConsumptionModalOpen(false);
     } catch (error) {
       console.error('Erreur lors de la consommation:', error);
-      onError?.('Impossible d\'enregistrer la consommation');
+      onError?.(getErrorMessage(error));
     }
   };
 
@@ -365,7 +373,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       await loadMinibarData(); // Reload to get updated quantities
     } catch (error) {
       console.error('Erreur lors du transfert de stock:', error);
-      onError?.('Impossible de transférer le stock');
+      onError?.(getErrorMessage(error));
       throw error;
     }
   };
@@ -400,7 +408,7 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
       await loadMinibarData();
     } catch (error) {
       console.error('Erreur lors de l\'ajout du produit:', error);
-      onError?.('Impossible d\'ajouter le produit au minibar');
+      onError?.(getErrorMessage(error));
     }
   };
 
