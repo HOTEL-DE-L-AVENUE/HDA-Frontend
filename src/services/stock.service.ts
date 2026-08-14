@@ -29,13 +29,13 @@ export const stockService = {
 
   // Get stock by location
   async getByLocation(locationId: number): Promise<StockItem[]> {
-    const response = await api.get(`/api/stock?location_id=${locationId}`);
+    const response = await api.get(`/api/stock/stocks?location_id=${locationId}`);
     return response.data?.data || response.data || [];
   },
 
   // Get stock by product
   async getByProduct(productId: number): Promise<StockItem[]> {
-    const response = await api.get(`/api/stock/product/${productId}`);
+    const response = await api.get(`/api/stock/products/${productId}/stock`);
     return response.data?.data || response.data || [];
   },
 
