@@ -1,7 +1,6 @@
 // src/pages/LoginPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import logo from '../assets/logo_s.png';
 import AuthService from '../services/authService';
@@ -13,7 +12,6 @@ interface LoginFormData {
 }
 
 export const LoginPage: React.FC = () => {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -136,14 +134,11 @@ export const LoginPage: React.FC = () => {
   // ===== DÉTECTION DE PERFORMANCE FIABLE =====
   useEffect(() => {
     const detectDevicePerformance = () => {
-      // Ne pas afficher si déjà affiché
       if (warningShownRef.current) return;
       
-      // 1. Récupérer les informations matérielles
       const cores = navigator.hardwareConcurrency || 4;
-      const memory = (navigator as any).deviceMemory || 4; // RAM en GB (si disponible)
+      const memory = (navigator as any).deviceMemory || 4;
       
-      // 2. Benchmark léger
       const start = performance.now();
       let sum = 0;
       for (let i = 0; i < 1_000_000; i++) {
@@ -152,11 +147,9 @@ export const LoginPage: React.FC = () => {
       const elapsed = performance.now() - start;
       void sum;
       
-      // 3. Calcul du score de performance (0-100)
       let score = 0;
       let details = [];
       
-      // Score basé sur le nombre de cœurs
       if (cores >= 8) {
         score += 35;
         details.push('8+ cœurs');
@@ -171,7 +164,6 @@ export const LoginPage: React.FC = () => {
         details.push('1 cœur');
       }
       
-      // Score basé sur la RAM
       if (memory >= 16) {
         score += 30;
         details.push('16+ GB RAM');
@@ -186,8 +178,6 @@ export const LoginPage: React.FC = () => {
         details.push('Moins de 4 GB RAM');
       }
       
-      // Score basé sur le benchmark
-      // Temps de référence pour une machine rapide : < 30ms
       if (elapsed < 20) {
         score += 35;
         details.push('Très rapide');
@@ -202,25 +192,16 @@ export const LoginPage: React.FC = () => {
         details.push('Lent');
       }
       
-      // Seuil de performance : 50/100 = machine lente
       const isSlow = score < 50;
-      
-      console.log(`[Perf Check] Score: ${score}/100 | Cœurs: ${cores} | RAM: ${memory}GB | Benchmark: ${elapsed.toFixed(1)}ms | ${isSlow ? '🐢 LENT' : '🚀 RAPIDE'}`);
-      console.log(`[Perf Check] Détails: ${details.join(' | ')}`);
-
-      // Marquer comme affiché pour ne pas répéter
       warningShownRef.current = true;
 
-      // ===== AFFICHER LE MESSAGE APPROPRIÉ =====
       if (isSlow) {
-        // ⚠️ Machine lente - Message d'avertissement
         showToast(
           `⚠️ Performances limitées détectées (${score}/100). Certaines animations peuvent être ralenties.`,
           'warning',
           5000
         );
       } else {
-        // ✅ Machine rapide - Message de succès
         showToast(
           `✅ Performances optimales détectées (${score}/100) - L'application fonctionnera parfaitement.`,
           'success',
@@ -268,7 +249,9 @@ export const LoginPage: React.FC = () => {
       showToast(welcomeMessage, 'success', 5000);
 
       const redirectPath = AuthService.getRedirectPath();
-      navigate(redirectPath, { replace: true });
+      
+      // Redirection avec rechargement complet pour initialiser la session globale
+      window.location.href = redirectPath;
     } catch (err: any) {
       const errorMessage = err.message || 'Erreur de connexion';
       setError(errorMessage);
