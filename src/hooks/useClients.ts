@@ -68,6 +68,8 @@ export const useClients = () => {
           client.id === id ? { ...client, statut: 'INACTIF' as const } : client
         ));
       }
+      
+      return result;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la suppression');
       console.error('❌ deleteClient error:', err);
