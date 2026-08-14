@@ -1,5 +1,5 @@
 // src/pages/UtilisateursPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { User, UserRole, ModuleType } from '../types';
 import { formatDate } from '../utils/data';
@@ -8,16 +8,14 @@ import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-rea
 import AuthService from '../services/authService';
 import api from '../lib/api';
 
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Administrateur',
+const roleLabels: Record<string, string> = {
   manager: 'Manager',
   caissier: 'Caissier',
   stock_manager: 'Gestionnaire Stock',
   viewer: 'Lecteur',
 };
 
-const roleIcons: Record<UserRole, string> = {
-  admin: '👑',
+const roleIcons: Record<string, string> = {
   manager: '🎯',
   caissier: '💰',
   stock_manager: '📦',
@@ -35,6 +33,32 @@ const moduleLabels: Record<string, string> = {
 
 const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'];
 
+// Extraction d'ID ultra-robuste avec repli par index pour sécuriser l'affichage
+const extractId = (u: any, index: number = 0): string => {
+  const id = u.id_admin || u.id_user || u.id || u._id || u.id_utilisateur || u.userId || u.ID;
+  return id !== undefined && id !== null && String(id).trim() !== '' 
+    ? String(id) 
+    : `user-fallback-${index}`;
+};
+
+const parseModules = (mod: any): ModuleType[] => {
+  if (!mod) return [];
+  if (Array.isArray(mod)) {
+    return mod.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))) as ModuleType[];
+  }
+  if (typeof mod === 'string') {
+    try {
+      const parsed = JSON.parse(mod);
+      if (Array.isArray(parsed)) {
+        return parsed.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))) as ModuleType[];
+      }
+    } catch {
+      return mod.split(',').map(s => s.trim()).filter(Boolean) as ModuleType[];
+    }
+  }
+  return [];
+};
+
 export const UtilisateursPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const [showModal, setShowModal] = useState(false);
@@ -43,36 +67,40 @@ export const UtilisateursPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [form, setForm] = useState({
-    nom: '', prenom: '', email: '', role: 'viewer' as UserRole,
+    nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
   });
 
-  // Charger les vrais utilisateurs depuis le backend (route /api/admin/users)
-  useEffect(() => {
-    const fetchRealUsers = async () => {
-      try {
-        const response = await api.get('/api/admin/users');
-        const rawData = response.data.data || response.data;
-        if (Array.isArray(rawData)) {
-          const formattedUsers = rawData.map((u: any) => ({
-            id: u.id_admin || u.id,
-            nom: u.nom,
-            prenom: u.prenom || '',
-            email: u.email,
-            role: u.role || 'viewer',
-            module: u.module || [],
-            actif: u.statut === 'actif' || u.actif === true,
-            lastLogin: u.lastLogin || u.date_creation || null
-          }));
-          dispatch({ type: 'SET_USERS', payload: formattedUsers });
-        }
-      } catch (err) {
-        console.error("Erreur lors de la récupération des utilisateurs:", err);
-      }
-    };
+  const fetchRealUsers = useCallback(async () => {
+    try {
+      const response = await api.get('/api/admin/users');
+      console.log("Données brutes reçues de l'API users:", response.data);
 
-    fetchRealUsers();
+      const rawData = response.data.data || response.data.users || response.data.result || response.data;
+      
+      if (Array.isArray(rawData)) {
+        const formattedUsers = rawData.map((u: any, index: number) => ({
+          id: extractId(u, index),
+          nom: u.nom || u.name || u.Nom || 'Nom inconnu',
+          prenom: u.prenom || u.firstName || u.Prenom || '',
+          email: u.email || u.mail || '',
+          role: u.role || 'viewer',
+          module: parseModules(u.module || u.modules),
+          actif: u.statut === 'actif' || u.actif === true || u.status === 'actif' || u.statut === 1,
+          lastLogin: u.lastLogin || u.date_creation || null
+        }));
+        
+        console.log("Utilisateurs formatés prêts à l'affichage:", formattedUsers);
+        dispatch({ type: 'SET_USERS', payload: formattedUsers });
+      }
+    } catch (err) {
+      console.error("Erreur lors de la récupération des utilisateurs:", err);
+    }
   }, [dispatch]);
+
+  useEffect(() => {
+    fetchRealUsers();
+  }, [fetchRealUsers]);
 
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -81,7 +109,15 @@ export const UtilisateursPage: React.FC = () => {
   const openEdit = (user: User) => {
     setEditUser(user);
     setErrorMessage('');
-    setForm({ nom: user.nom, prenom: user.prenom, email: user.email, role: user.role, module: user.module, actif: user.actif, password: '' });
+    setForm({ 
+      nom: user.nom, 
+      prenom: user.prenom, 
+      email: user.email, 
+      role: user.role, 
+      module: parseModules(user.module), 
+      actif: user.actif, 
+      password: '' 
+    });
     setShowModal(true);
   };
 
@@ -94,8 +130,7 @@ export const UtilisateursPage: React.FC = () => {
     try {
       setErrorMessage('');
       if (editUser) {
-        // Mise à jour via l'API backend
-        const response = await api.put(`/api/admin/users/${editUser.id}`, {
+        await api.put(`/api/admin/users/${editUser.id}`, {
           nom: form.nom,
           prenom: form.prenom,
           email: form.email,
@@ -103,20 +138,8 @@ export const UtilisateursPage: React.FC = () => {
           module: form.module,
           statut: form.actif ? 'actif' : 'inactif'
         });
-        const updatedRaw = response.data.data || response.data;
-        const updatedUser: User = {
-          ...editUser,
-          nom: updatedRaw.nom || form.nom,
-          prenom: updatedRaw.prenom || form.prenom,
-          email: updatedRaw.email || form.email,
-          role: updatedRaw.role || form.role,
-          module: updatedRaw.module || form.module,
-          actif: updatedRaw.statut === 'actif' || form.actif
-        };
-        dispatch({ type: 'UPDATE_USER', payload: updatedUser });
       } else {
-        // Enregistrement via AuthService
-        const responseData = await AuthService.register({
+        await AuthService.register({
           nom: form.nom,
           prenom: form.prenom,
           email: form.email,
@@ -125,25 +148,12 @@ export const UtilisateursPage: React.FC = () => {
           module: form.module,
           statut: form.actif ? 'actif' : 'inactif'
         });
-
-        const rawUser = responseData.data || responseData.user || responseData;
-        const newUser: User = {
-          id: rawUser.id_admin || rawUser.id || Date.now(),
-          nom: rawUser.nom || form.nom,
-          prenom: rawUser.prenom || form.prenom,
-          email: rawUser.email || form.email,
-          role: rawUser.role || form.role,
-          module: rawUser.module || form.module,
-          actif: rawUser.statut === 'actif' || form.actif,
-          lastLogin: rawUser.lastLogin || null
-        };
-
-        dispatch({ type: 'ADD_USER', payload: newUser });
       }
 
+      await fetchRealUsers();
       setShowModal(false);
       setEditUser(null);
-      setForm({ nom: '', prenom: '', email: '', role: 'viewer', module: [], actif: true, password: '' });
+      setForm({ nom: '', prenom: '', email: '', role: 'manager', module: [], actif: true, password: '' });
     } catch (err: any) {
       const errorMsg = typeof err === 'string' 
         ? err 
@@ -154,22 +164,31 @@ export const UtilisateursPage: React.FC = () => {
 
   const handleDeleteUser = async (id: string) => {
     try {
+      if (id.length > 15 && !id.match(/^[0-9]+$/)) {
+        dispatch({ type: 'DELETE_USER', payload: id });
+        return;
+      }
       await api.delete(`/api/admin/users/${id}`);
-      dispatch({ type: 'DELETE_USER', payload: id });
+      await fetchRealUsers();
     } catch (err) {
       console.error("Erreur lors de la suppression de l'utilisateur:", err);
+      dispatch({ type: 'DELETE_USER', payload: id });
     }
   };
 
   const toggleModule = (mod: ModuleType) => {
-    setForm(prev => ({
-      ...prev,
-      module: prev.module.includes(mod) ? prev.module.filter(m => m !== mod) : [...prev.module, mod]
-    }));
+    setForm(prev => {
+      const currentModules = parseModules(prev.module);
+      const exists = currentModules.includes(mod);
+      return {
+        ...prev,
+        module: exists ? currentModules.filter(m => m !== mod) : [...currentModules, mod]
+      };
+    });
   };
 
   const activeCount = state.users.filter(u => u.actif).length;
-  const adminCount = state.users.filter(u => u.role === 'admin').length;
+  const managerCount = state.users.filter(u => u.role === 'manager').length;
 
   return (
     <div className="space-y-6">
@@ -192,7 +211,7 @@ export const UtilisateursPage: React.FC = () => {
           { label: 'Total Utilisateurs', value: state.users.length, color: 'text-primary' },
           { label: 'Actifs', value: activeCount, color: 'text-success' },
           { label: 'Inactifs', value: state.users.length - activeCount, color: 'text-muted' },
-          { label: 'Administrateurs', value: adminCount, color: 'text-accent' },
+          { label: 'Managers', value: managerCount, color: 'text-accent' },
         ].map(s => (
           <div key={s.label} className="bg-surface border border-base rounded-2xl p-5">
             <p className="text-muted text-xs mb-1">{s.label}</p>
@@ -229,66 +248,68 @@ export const UtilisateursPage: React.FC = () => {
               Aucun utilisateur trouvé.
             </div>
           ) : (
-            filtered.map(user => (
-              <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  user.role === 'admin' ? 'bg-accent' :
-                  user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
-                  user.role === 'caissier' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
-                  'bg-gradient-to-br from-slate-600 to-slate-700'
-                }`}>
-                  <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom[0]}</span>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-primary font-medium">{user.prenom} {user.nom}</p>
-                    <span className="text-sm">{roleIcons[user.role]}</span>
+            filtered.map(user => {
+              const userModulesList = parseModules(user.module);
+              return (
+                <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
+                    user.role === 'caissier' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                    'bg-gradient-to-br from-slate-600 to-slate-700'
+                  }`}>
+                    <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom?.[0] || ''}</span>
                   </div>
-                  <p className="text-muted text-xs">{user.email}</p>
-                </div>
 
-                <div className="hidden md:block">
-                  <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-primary font-medium">{user.prenom} {user.nom}</p>
+                      <span className="text-sm">{roleIcons[user.role]}</span>
+                    </div>
+                    <p className="text-muted text-xs">{user.email}</p>
+                  </div>
 
-                <div className="hidden lg:flex flex-wrap gap-1 max-w-48">
-                  {user.module?.slice(0, 3).map(m => (
-                    <span key={m} className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
-                      {moduleLabels[m] || m}
-                    </span>
-                  ))}
-                  {(user.module?.length || 0) > 3 && (
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
-                      +{(user.module?.length || 0) - 3}
-                    </span>
-                  )}
-                </div>
+                  <div className="hidden md:block">
+                    <Badge variant={user.role}>{roleLabels[user.role] || user.role}</Badge>
+                  </div>
 
-                <div>
-                  <Badge variant={user.actif ? 'actif' : 'inactif'}>
-                    {user.actif ? 'Actif' : 'Inactif'}
-                  </Badge>
-                </div>
+                  <div className="hidden lg:flex flex-wrap gap-1 max-w-48">
+                    {userModulesList.slice(0, 3).map(m => (
+                      <span key={m} className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
+                        {moduleLabels[m] || m}
+                      </span>
+                    ))}
+                    {userModulesList.length > 3 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
+                        +{userModulesList.length - 3}
+                      </span>
+                    )}
+                  </div>
 
-                <div className="hidden xl:block text-right">
-                  <p className="text-muted text-xs">
-                    {user.lastLogin ? formatDate(user.lastLogin) : 'Jamais'}
-                  </p>
-                </div>
+                  <div>
+                    <Badge variant={user.actif ? 'actif' : 'inactif'}>
+                      {user.actif ? 'Actif' : 'Inactif'}
+                    </Badge>
+                  </div>
 
-                <div className="flex gap-2">
-                  <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
-                    <Edit2 size={14} />
-                  </button>
-                  {user.id !== state.currentUser?.id && (
-                    <button onClick={() => handleDeleteUser(user.id)} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
-                      <Trash2 size={14} />
+                  <div className="hidden xl:block text-right">
+                    <p className="text-muted text-xs">
+                      {user.lastLogin ? formatDate(user.lastLogin) : 'Jamais'}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
+                      <Edit2 size={14} />
                     </button>
-                  )}
+                    {user.id !== state.currentUser?.id && (
+                      <button onClick={() => handleDeleteUser(user.id)} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -300,7 +321,7 @@ export const UtilisateursPage: React.FC = () => {
           Niveaux d'Accès
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {(Object.entries(roleLabels) as [UserRole, string][]).map(([role, label]) => (
+          {(Object.entries(roleLabels) as [string, string][]).map(([role, label]) => (
             <div key={role} className="flex items-start gap-3 p-4 rounded-xl bg-surface-2/50 border border-base">
               <span className="text-2xl">{roleIcons[role]}</span>
               <div>
@@ -309,7 +330,6 @@ export const UtilisateursPage: React.FC = () => {
                   <Badge variant={role}>{role}</Badge>
                 </div>
                 <p className="text-muted text-xs">
-                  {role === 'admin' && 'Accès complet à toute la plateforme'}
                   {role === 'manager' && 'Gestion des modules assignés'}
                   {role === 'caissier' && 'Accès aux opérations de caisse'}
                   {role === 'stock_manager' && 'Gestion des stocks uniquement'}
@@ -348,26 +368,29 @@ export const UtilisateursPage: React.FC = () => {
           <div>
             <label className="text-muted text-sm font-medium block mb-2">Modules autorisés</label>
             <div className="grid grid-cols-3 gap-2">
-              {allModules.map(mod => (
-                <button
-                  key={mod}
-                  onClick={() => toggleModule(mod)}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
-                    form.module.includes(mod)
-                      ? 'bg-accent-4 text-accent border-accent/40'
-                      : 'bg-surface-2 text-muted border-base hover:text-primary'
-                  }`}
-                >
-                  {moduleLabels[mod]}
-                </button>
-              ))}
+              {allModules.map(mod => {
+                const isSelected = parseModules(form.module).includes(mod);
+                return (
+                  <button
+                    key={mod}
+                    onClick={() => toggleModule(mod)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                      isSelected
+                        ? 'bg-accent-4 text-accent border-accent/40'
+                        : 'bg-surface-2 text-muted border-base hover:text-primary'
+                    }`}
+                  >
+                    {moduleLabels[mod]}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button onClick={() => setForm({...form, actif: !form.actif})}
               className={`w-12 h-6 rounded-full transition-all ${form.actif ? 'bg-success' : 'bg-surface-3'} relative`}>
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
             </button>
             <span className="text-muted text-sm">{form.actif ? 'Compte actif' : 'Compte inactif'}</span>
           </div>

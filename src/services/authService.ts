@@ -100,6 +100,25 @@ class SecureStorage {
 // AuthService
 // ----------------------------------------------------------------------
 class AuthService {
+  // Fonction utilitaire robuste pour parser les modules peu importe leur format (JSON, tableau, string)
+  private static parseModules(mod: any): string[] {
+    if (!mod) return [];
+    if (Array.isArray(mod)) {
+      return mod.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))).filter(Boolean);
+    }
+    if (typeof mod === 'string') {
+      try {
+        const parsed = JSON.parse(mod);
+        if (Array.isArray(parsed)) {
+          return parsed.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))).filter(Boolean);
+        }
+      } catch {
+        return mod.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  }
+
   static async login(email: string, mot_de_passe: string): Promise<{ user: User; token: string }> {
     try {
       const response = await api.post("/api/auth/login", { 
@@ -130,7 +149,7 @@ class AuthService {
         email: user.email,
         role: user.role,
         actif: user.statut === 'actif' || user.actif === true,
-        module: user.module || [],
+        module: this.parseModules(user.module),
         created_at: user.date_creation || user.created_at,
         updated_at: user.updated_at,
       };
@@ -251,7 +270,7 @@ class AuthService {
         email: user.email,
         role: user.role,
         actif: user.statut === 'actif' || user.actif,
-        module: user.module || [],
+        module: this.parseModules(user.module),
         created_at: user.date_creation || user.created_at,
         updated_at: user.updated_at,
       };
@@ -264,7 +283,7 @@ class AuthService {
     return SecureStorage.getItem("auth-token");
   }
 
-  static isAuthenticated(): boolean {
+    static isAuthenticated(): boolean {
     const token = this.getToken();
     const user = this.getCurrentUser();
     return !!(token && user);

@@ -271,6 +271,25 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
   );
 };
 
+// Fonction utilitaire locale pour parser les modules de façon sécurisée
+const parseUserModules = (rawModules: any): string[] => {
+  if (!rawModules) return [];
+  if (Array.isArray(rawModules)) {
+    return rawModules.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean);
+  }
+  if (typeof rawModules === 'string') {
+    try {
+      const parsed = JSON.parse(rawModules);
+      if (Array.isArray(parsed)) {
+        return parsed.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean);
+      }
+    } catch {
+      return rawModules.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+};
+
 /* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -286,9 +305,9 @@ export const Sidebar: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  // FILTRAGE DES MODULES SELON LE RÔLE ET LES MODULES AUTORISÉS DE L'UTILISATEUR
+  // FILTRAGE DES MODULES SÉCURISÉ
   const userRole = currentUser?.role || '';
-  const userModules: string[] = currentUser?.module || [];
+  const userModules = parseUserModules(currentUser?.module);
 
   const filteredNavItems = userRole === 'admin' 
     ? navItems 
@@ -296,7 +315,7 @@ export const Sidebar: React.FC = () => {
         const roleAllowed = item.roles.includes(userRole);
         if (!roleAllowed) return false;
 
-        const restrictedModules = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'];
+        const restrictedModules = ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances', 'clients'];
         if (restrictedModules.includes(item.id)) {
           return userModules.includes(item.id);
         }
@@ -493,7 +512,7 @@ const MobileBottomNav: React.FC = () => {
   }, []);
 
   const userRole = currentUser?.role || '';
-  const userModules: string[] = currentUser?.module || [];
+  const userModules = parseUserModules(currentUser?.module);
 
   const filteredNavItems = userRole === 'admin' 
     ? navItems 
@@ -501,7 +520,7 @@ const MobileBottomNav: React.FC = () => {
         const roleAllowed = item.roles.includes(userRole);
         if (!roleAllowed) return false;
 
-        const restrictedModules = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'];
+        const restrictedModules = ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances', 'clients'];
         if (restrictedModules.includes(item.id)) {
           return userModules.includes(item.id);
         }
