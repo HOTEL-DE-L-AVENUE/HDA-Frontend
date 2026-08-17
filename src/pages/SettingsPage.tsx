@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Lock, Bell, Shield, Info, X, Check, AlertCircle, LogIn, LogOut, Clock, User, Settings } from 'lucide-react';
+import { Settings as SettingsIcon, Lock, Bell, X, Check, AlertCircle, LogIn, LogOut, Clock, Shield, Info, User } from 'lucide-react';
 import AuthService from '../services/authService';
 
 interface SettingsItem {
@@ -34,8 +34,7 @@ const SettingsPage: React.FC = () => {
     emailNotifications: true,
     pushNotifications: false,
   });
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+
 
   useEffect(() => {
     // Load notification settings from localStorage
@@ -50,64 +49,7 @@ const SettingsPage: React.FC = () => {
     localStorage.setItem('notification-settings', JSON.stringify(settings));
   };
 
-  const handleExportData = async () => {
-    try {
-      setIsExporting(true);
-      const currentUser = AuthService.getCurrentUser();
-      
-      if (!currentUser) {
-        throw new Error('Utilisateur non connecté');
-      }
 
-      // Create export data as text
-      const exportText = `
-===========================================
-EXPORT DE DONNÉES UTILISATEUR
-===========================================
-Date d'export: ${new Date().toLocaleString('fr-FR')}
-Version: 1.0.0
-
--------------------------------------------
-INFORMATIONS UTILISATEUR
--------------------------------------------
-Nom: ${currentUser.nom}
-Prénom: ${currentUser.prenom || 'N/A'}
-Email: ${currentUser.email}
-Rôle: ${currentUser.role}
-ID: ${currentUser.id}
-Statut: ${currentUser.actif ? 'Actif' : 'Inactif'}
-Date de création: ${currentUser.created_at ? new Date(currentUser.created_at).toLocaleString('fr-FR') : 'N/A'}
-
--------------------------------------------
-PARAMÈTRES DE NOTIFICATION
--------------------------------------------
-Notifications email: ${notificationSettings.emailNotifications ? 'Activé' : 'Désactivé'}
-Notifications push: ${notificationSettings.pushNotifications ? 'Activé' : 'Désactivé'}
-
--------------------------------------------
-FIN DE L'EXPORT
-===========================================
-      `.trim();
-
-      // Create and download the file
-      const dataBlob = new Blob([exportText], { type: 'text/plain' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `hda-export-${currentUser.email}-${new Date().toISOString().split('T')[0]}.txt`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      setShowPrivacyModal(false);
-    } catch (error: any) {
-      console.error('Export error:', error);
-      alert('Erreur lors de l\'export des données: ' + error.message);
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const loadConnectionHistory = async () => {
     try {
@@ -192,18 +134,6 @@ FIN DE L'EXPORT
           label: 'Notifications push', 
           action: notificationSettings.pushNotifications ? 'Activé' : 'Désactivé',
           onClick: () => setShowNotificationsModal(true)
-        },
-      ],
-    },
-    {
-      title: 'Confidentialité',
-      description: 'Gérer vos données personnelles',
-      icon: <Shield size={20} className="text-black" />,
-      items: [
-        { 
-          label: 'Exporter mes données', 
-          action: 'Exporter',
-          onClick: () => setShowPrivacyModal(true)
         },
       ],
     },
@@ -749,146 +679,6 @@ FIN DE L'EXPORT
                 }}
               >
                 Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Privacy Modal */}
-      {showPrivacyModal && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-          onClick={() => setShowPrivacyModal(false)}
-        >
-          <div
-            className="rounded-2xl p-6 w-full max-w-md"
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{
-                    backgroundColor: 'var(--color-accent)',
-                    boxShadow: 'var(--shadow-accent)',
-                  }}
-                >
-                  <Shield size={20} className="text-black" />
-                </div>
-                <h3 className="text-primary font-semibold text-lg">Exporter mes données</h3>
-              </div>
-              <button
-                onClick={() => setShowPrivacyModal(false)}
-                className="p-2 rounded-lg transition-colors"
-                style={{ color: 'var(--color-muted)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Info Content */}
-            <div className="mb-6">
-              <div
-                className="p-4 rounded-xl mb-4"
-                style={{
-                  backgroundColor: 'var(--color-info-bg)',
-                  border: '1px solid var(--color-info)',
-                }}
-              >
-                <p className="text-primary text-sm mb-2">
-                  <Info size={16} className="inline mr-2" style={{ color: 'var(--color-info)' }} />
-                  Informations sur l'export
-                </p>
-                <p className="text-muted text-xs">
-                  Cette fonctionnalité vous permet d'exporter vos données personnelles au format texte. 
-                  Le fichier contiendra vos informations de profil et vos paramètres.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: 'var(--color-surface-2)' }}
-                  >
-                    <User size={16} className="text-muted" />
-                  </div>
-                  <div>
-                    <p className="text-primary text-sm font-medium">Profil utilisateur</p>
-                    <p className="text-muted text-xs">Nom, email, rôle, etc.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: 'var(--color-surface-2)' }}
-                  >
-                    <Settings size={16} className="text-muted" />
-                  </div>
-                  <div>
-                    <p className="text-primary text-sm font-medium">Paramètres</p>
-                    <p className="text-muted text-xs">Notifications</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-4">
-              <button
-                onClick={() => setShowPrivacyModal(false)}
-                disabled={isExporting}
-                className="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all"
-                style={{
-                  backgroundColor: 'var(--color-surface-2)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-primary)',
-                  opacity: isExporting ? '0.5' : '1',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isExporting) {
-                    e.currentTarget.style.backgroundColor = 'var(--color-surface-3)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
-                }}
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleExportData}
-                disabled={isExporting}
-                className="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all"
-                style={{
-                  backgroundColor: 'var(--color-accent)',
-                  color: 'black',
-                  opacity: isExporting ? '0.7' : '1',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isExporting) {
-                    e.currentTarget.style.opacity = '0.9';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = isExporting ? '0.7' : '1';
-                }}
-              >
-                {isExporting ? 'Exportation...' : 'Exporter'}
               </button>
             </div>
           </div>
