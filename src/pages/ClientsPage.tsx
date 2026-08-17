@@ -1,5 +1,5 @@
 // src/pages/ClientsPage.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, 
   Edit, 
@@ -401,12 +401,10 @@ const ClientsPage: React.FC = () => {
     setQrCodeData(jsonString);
     setSelectedClient(client);
     setIsQRModalOpen(true);
-
-    // Generate QR code with real library - wait for it to complete
-    await generateQRCodeImage(jsonString, client);
+    // QR code generation will be handled by useEffect after modal is rendered
   };
 
-  const generateQRCodeImage = async (data: string, client: Client) => {
+  const generateQRCodeImage = useCallback(async (data: string, client: Client) => {
     const canvas = qrCanvasRef.current;
     if (!canvas) return;
 
@@ -475,7 +473,7 @@ const ClientsPage: React.FC = () => {
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText(`Client: ${client.prenom || ''} ${client.nom}`.trim(), canvas.width / 2, canvas.height - 10);
-  };
+  }, []);
 
   const generateSimpleQRMatrix = (data: string): number[][] => {
     const matrix: number[][] = [];
@@ -495,6 +493,17 @@ const ClientsPage: React.FC = () => {
     
     return matrix;
   };
+
+  // Generate QR code when modal opens and canvas is ready
+  useEffect(() => {
+    if (isQRModalOpen && selectedClient && qrCodeData) {
+      // Small delay to ensure canvas is rendered
+      const timer = setTimeout(() => {
+        generateQRCodeImage(qrCodeData, selectedClient);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isQRModalOpen, selectedClient, qrCodeData, generateQRCodeImage]);
 
   const copyQRData = () => {
     if (qrCodeData) {
