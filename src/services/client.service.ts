@@ -80,6 +80,9 @@ export interface ClientWithDetails extends Client {
 interface ApiResponse<T> {
   success: boolean;
   data: T;
+  error?: {
+    message: string;
+  };
   message?: string;
   count?: number;
 }
@@ -160,9 +163,21 @@ export const clientService = {
   },
 
   // Supprimer un client
-  deleteClient: async (id: number): Promise<{ deleted: boolean; deactivated: boolean; relatedCount?: number }> => {
+  deleteClient: async (id: number): Promise<{ 
+    success: boolean; 
+    message: string; 
+    deleted: boolean; 
+    deactivated: boolean; 
+    relatedCount?: number 
+  }> => {
     try {
-      const response = await api.delete<ApiResponse<{ deleted: boolean; deactivated: boolean; relatedCount?: number }>>(`/api/clients/${id}`);
+      const response = await api.delete<ApiResponse<{ 
+        success: boolean; 
+        message: string; 
+        deleted: boolean; 
+        deactivated: boolean; 
+        relatedCount?: number 
+      }>>(`/api/clients/${id}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur deleteClient ${id}:`, error);
