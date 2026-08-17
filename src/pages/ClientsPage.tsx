@@ -1,5 +1,5 @@
 // src/pages/ClientsPage.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, 
   Edit, 
@@ -40,6 +40,7 @@ import { useClients } from '../hooks/useClients';
 import { Client, ClientFormData, ClientKyc, ClientKycFormData, NiveauRisque } from '../services/client.service';
 import SignaturePad from '../components/SignaturePad';
 import toast from 'react-hot-toast';
+import QRCode from 'qrcode';
 
 const ClientsPage: React.FC = () => {
   const { 
@@ -350,7 +351,7 @@ const ClientsPage: React.FC = () => {
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Erreur lors de la suppression';
+      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Erreur lors de la suppression';
       toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
@@ -386,7 +387,7 @@ const ClientsPage: React.FC = () => {
   };
 
   // Génération du QR Code
-  const generateQRCode = (client: Client) => {
+  const generateQRCode = async (client: Client) => {
     const clientData = {
       id: client.id,
       name: `${client.prenom} ${client.nom}`,
@@ -400,13 +401,10 @@ const ClientsPage: React.FC = () => {
     setQrCodeData(jsonString);
     setSelectedClient(client);
     setIsQRModalOpen(true);
-
-    setTimeout(() => {
-      generateQRCodeImage(jsonString, client);
-    }, 100);
+    // QR code generation will be handled by useEffect after modal is rendered
   };
 
-  const generateQRCodeImage = (data: string, client: Client) => {
+  const generateQRCodeImage = useCallback(async (data: string, client: Client) => {
     const canvas = qrCanvasRef.current;
     if (!canvas) return;
 
@@ -416,27 +414,57 @@ const ClientsPage: React.FC = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const size = 200;
-    const cellSize = 4;
-    const margin = 20;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const qrMatrix = generateSimpleQRMatrix(data);
     
-    const startX = (canvas.width - size) / 2;
-    const startY = (canvas.height - size) / 2;
+    try {
+      // Generate real QR code using the qrcode library
+      const qrDataUrl = await QRCode.toDataURL(data, {
+        width: size,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
 
-    for (let row = 0; row < qrMatrix.length; row++) {
-      for (let col = 0; col < qrMatrix[row].length; col++) {
-        if (qrMatrix[row][col] === 1) {
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(
-            startX + col * cellSize + margin,
-            startY + row * cellSize + margin,
-            cellSize,
-            cellSize
-          );
+      // Wait for image to load before drawing
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          const startX = (canvas.width - size) / 2;
+          const startY = (canvas.height - size) / 2;
+          
+          ctx.drawImage(img, startX, startY, size, size);
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = qrDataUrl;
+      });
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      // Fallback to simple pattern if QR code generation fails
+      const cellSize = 4;
+      const margin = 20;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      const qrMatrix = generateSimpleQRMatrix(data);
+      const startX = (canvas.width - size) / 2;
+      const startY = (canvas.height - size) / 2;
+
+      for (let row = 0; row < qrMatrix.length; row++) {
+        for (let col = 0; col < qrMatrix[row].length; col++) {
+          if (qrMatrix[row][col] === 1) {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(
+              startX + col * cellSize + margin,
+              startY + row * cellSize + margin,
+              cellSize,
+              cellSize
+            );
+          }
         }
       }
     }
@@ -445,7 +473,7 @@ const ClientsPage: React.FC = () => {
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText(`Client: ${client.prenom || ''} ${client.nom}`.trim(), canvas.width / 2, canvas.height - 10);
-  };
+  }, []);
 
   const generateSimpleQRMatrix = (data: string): number[][] => {
     const matrix: number[][] = [];
@@ -466,6 +494,17 @@ const ClientsPage: React.FC = () => {
     return matrix;
   };
 
+  // Generate QR code when modal opens and canvas is ready
+  useEffect(() => {
+    if (isQRModalOpen && selectedClient && qrCodeData) {
+      // Small delay to ensure canvas is rendered
+      const timer = setTimeout(() => {
+        generateQRCodeImage(qrCodeData, selectedClient);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isQRModalOpen, selectedClient, qrCodeData, generateQRCodeImage]);
+
   const copyQRData = () => {
     if (qrCodeData) {
       navigator.clipboard.writeText(qrCodeData);
@@ -483,7 +522,7 @@ const ClientsPage: React.FC = () => {
   // Compose la carte client (QR + infos) dans un canvas hors-écran, aux dimensions
   // exactes d'une carte de visite — réutilisé pour le téléchargement ET l'impression,
   // pour garantir que les deux rendus soient identiques et correctement proportionnés.
-  const renderClientCard = (client: Client, qrData: string): HTMLCanvasElement => {
+  const renderClientCard = async (client: Client, qrData: string): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas');
     canvas.width = CARD_WIDTH_PX;
     canvas.height = CARD_HEIGHT_PX;
@@ -505,17 +544,41 @@ const ClientsPage: React.FC = () => {
     ctx.textBaseline = 'middle';
     ctx.fillText('CARTE CLIENT', 40, 45);
 
-    // QR code à gauche
-    const qrMatrix = generateSimpleQRMatrix(qrData);
+    // QR code à gauche - use real QR code library
     const qrSize = 380;
     const qrX = 40;
     const qrY = 150;
-    const cell = qrSize / qrMatrix.length;
-    ctx.fillStyle = '#000000';
-    for (let row = 0; row < qrMatrix.length; row++) {
-      for (let col = 0; col < qrMatrix[row].length; col++) {
-        if (qrMatrix[row][col] === 1) {
-          ctx.fillRect(qrX + col * cell, qrY + row * cell, cell, cell);
+
+    try {
+      const qrDataUrl = await QRCode.toDataURL(qrData, {
+        width: qrSize,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = qrDataUrl;
+      });
+    } catch (error) {
+      console.error('Error generating QR code for card:', error);
+      // Fallback to simple pattern
+      const qrMatrix = generateSimpleQRMatrix(qrData);
+      const cell = qrSize / qrMatrix.length;
+      ctx.fillStyle = '#000000';
+      for (let row = 0; row < qrMatrix.length; row++) {
+        for (let col = 0; col < qrMatrix[row].length; col++) {
+          if (qrMatrix[row][col] === 1) {
+            ctx.fillRect(qrX + col * cell, qrY + row * cell, cell, cell);
+          }
         }
       }
     }
@@ -546,18 +609,18 @@ const ClientsPage: React.FC = () => {
     return canvas;
   };
 
-  const downloadQRCode = () => {
+  const downloadQRCode = async () => {
     if (!selectedClient || !qrCodeData) return;
-    const card = renderClientCard(selectedClient, qrCodeData);
+    const card = await renderClientCard(selectedClient, qrCodeData);
     const link = document.createElement('a');
     link.download = `carte-client-${selectedClient.code_client || selectedClient.id}.png`;
     link.href = card.toDataURL('image/png');
     link.click();
   };
 
-  const printQRCode = () => {
+  const printQRCode = async () => {
     if (!selectedClient || !qrCodeData) return;
-    const card = renderClientCard(selectedClient, qrCodeData);
+    const card = await renderClientCard(selectedClient, qrCodeData);
     const dataUrl = card.toDataURL('image/png');
 
     const printWindow = window.open('', '_blank');
