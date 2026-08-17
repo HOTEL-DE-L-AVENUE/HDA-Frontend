@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { useHDA } from '../context/HDAContext';
+import React, { useState, useEffect } from 'react';
 import { formatCurrency, formatDate } from '../utils/data';
 import { ModuleType } from '../types';
-import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Download, Filter } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, CreditCard } from 'lucide-react';
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats } from '../services/finance.service';
+import { CreateInvoiceModal } from '../components/Finance/modals/CreateInvoiceModal';
+import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
 
 const moduleConfig: Record<string, { label: string; gradient: string; color: string }> = {
   hebergement: { label: 'Hébergement', gradient: 'from-blue-500 to-cyan-600', color: '#3b82f6' },
@@ -11,6 +13,8 @@ const moduleConfig: Record<string, { label: string; gradient: string; color: str
   restaurant: { label: 'Restaurant', gradient: 'from-orange-500 to-amber-600', color: '#f97316' },
   bar: { label: 'Bar & Lounge', gradient: 'from-rose-500 to-pink-600', color: '#f43f5e' },
   casino: { label: 'Casino', gradient: 'from-emerald-500 to-green-600', color: '#10b981' },
+  general: { label: 'Général', gradient: 'from-gray-500 to-gray-600', color: '#6b7280' },
+  facturation: { label: 'Facturation', gradient: 'from-purple-500 to-purple-600', color: '#8b5cf6' },
 };
 
 const mockMonthlyData = [
@@ -23,19 +27,165 @@ const mockMonthlyData = [
 ];
 
 export const FinancesPage: React.FC = () => {
-  const { state, getModuleCaisseSolde, getCasinoTotalCaisse, getGlobalStats, getModuleTransactions } = useHDA();
   const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
+  const [financialStats, setFinancialStats] = useState<FinancialStats>({
+    totalRevenu: 0,
+    totalDepenses: 0,
+    soldeGlobal: 0
+  });
+  const [modulesSoldes, setModulesSoldes] = useState<Array<{ module: ModuleType } & ModuleCaisseSolde>>([]);
+  
+  // Modal states
+  const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
 
-  const globalStats = getGlobalStats();
-  const casinoTotal = getCasinoTotalCaisse();
+  // Fetch financial data on component mount
+  useEffect(() => {
+    fetchFinancialData();
+  }, []);
 
-  const modulesSoldes = [
-    { module: 'hebergement' as ModuleType, ...getModuleCaisseSolde('hebergement') },
-    { module: 'hotel' as ModuleType, ...getModuleCaisseSolde('hotel') },
-    { module: 'restaurant' as ModuleType, ...getModuleCaisseSolde('restaurant') },
-    { module: 'bar' as ModuleType, ...getModuleCaisseSolde('bar') },
-    { module: 'casino' as ModuleType, solde: casinoTotal.solde, entrees: casinoTotal.entrees, sorties: casinoTotal.sorties },
-  ];
+  const fetchFinancialData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all data in parallel
+      const [transactionsData, statsData, hebergementSolde, hotelSolde, restaurantSolde, barSolde, casinoSolde] = await Promise.all([
+        financeService.getTransactions(),
+        financeService.getFinancialStats(),
+        financeService.getModuleCaisseSolde('hebergement'),
+        financeService.getModuleCaisseSolde('hotel'),
+        financeService.getModuleCaisseSolde('restaurant'),
+        financeService.getModuleCaisseSolde('bar'),
+        financeService.getModuleCaisseSolde('casino'),
+      ]);
+
+      setTransactions(transactionsData);
+      setFinancialStats(statsData);
+      
+      setModulesSoldes([
+        { module: 'hebergement' as ModuleType, ...hebergementSolde },
+        { module: 'hotel' as ModuleType, ...hotelSolde },
+        { module: 'restaurant' as ModuleType, ...restaurantSolde },
+        { module: 'bar' as ModuleType, ...barSolde },
+        { module: 'casino' as ModuleType, ...casinoSolde },
+      ]);
+    } catch (error) {
+      console.error('Error fetching financial data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      // Check if there is any data to export
+      const hasTransactions = transactions.length > 0;
+      const hasModuleData = modulesSoldes.length > 0;
+
+      if (!hasTransactions && !hasModuleData) {
+        alert('Aucune donnée financière à exporter. Veuillez vérifier que les données sont chargées.');
+        return;
+      }
+
+      // Create CSV content
+      const csvRows: string[][] = [];
+      
+      // Add header section with report metadata
+      csvRows.push(['RAPPORT FINANCIER - HOTEL DE L\'AVENUE (HDA)']);
+      csvRows.push(['Généré le:', new Date().toLocaleString('fr-FR')]);
+      csvRows.push(['Nombre total de transactions:', transactions.length.toString()]);
+      csvRows.push([]);
+      
+      // ── Section 1: Global statistics ──
+      csvRows.push(['═══ STATISTIQUES GLOBALES ═══']);
+      csvRows.push(['Indicateur', 'Montant (MGA)']);
+      csvRows.push(['Solde Global', financialStats.soldeGlobal.toString()]);
+      csvRows.push(['Total Revenus', financialStats.totalRevenu.toString()]);
+      csvRows.push(['Total Dépenses', financialStats.totalDepenses.toString()]);
+      csvRows.push([]);
+      
+      // ── Section 2: Module-specific caisse data ──
+      csvRows.push(['═══ CAISSES PAR MODULE ═══']);
+      csvRows.push(['Module', 'Solde (MGA)', 'Entrées (MGA)', 'Sorties (MGA)']);
+      if (hasModuleData) {
+        modulesSoldes.forEach(m => {
+          csvRows.push([
+            moduleConfig[m.module]?.label || m.module,
+            m.solde.toString(),
+            m.entrees.toString(),
+            m.sorties.toString()
+          ]);
+        });
+      } else {
+        csvRows.push(['Aucune donnée de caisse disponible']);
+      }
+      csvRows.push([]);
+      
+      // ── Section 3: Full transaction history (ALL transactions, not filtered) ──
+      csvRows.push(['═══ HISTORIQUE COMPLET DES TRANSACTIONS ═══']);
+      csvRows.push(['ID', 'Date', 'Module', 'Type de Flux', 'Description', 'Montant (MGA)', 'Référence', 'Statut Sync']);
+      
+      if (hasTransactions) {
+        // Use raw transactions from backend (not the filtered allTransactions)
+        // Sort by date descending for the export
+        const sortedTransactions = [...transactions].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        sortedTransactions.forEach(tx => {
+          const moduleName = moduleConfig[tx.module?.toLowerCase()]?.label || tx.module || 'Inconnu';
+          csvRows.push([
+            tx.id.toString(),
+            tx.created_at ? formatDate(tx.created_at) : 'N/A',
+            moduleName,
+            tx.type_flux?.toUpperCase().includes('ENTREE') ? 'ENTRÉE' : 'SORTIE',
+            tx.description || 'Transaction',
+            Number(tx.montant).toString(),
+            tx.ref_flux_global || '',
+            tx.statut_sync || ''
+          ]);
+        });
+      } else {
+        csvRows.push(['Aucune transaction enregistrée']);
+      }
+      
+      // Convert to CSV string with proper escaping
+      const csvContent = csvRows.map(row => 
+        row.map(cell => {
+          const cellStr = String(cell ?? '');
+          // Wrap in quotes if contains comma, quote, newline, or semicolon
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n') || cellStr.includes(';')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(',')
+      ).join('\n');
+      
+      // Create and trigger download with BOM for Excel UTF-8 compatibility
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      const filename = `rapport_financier_HDA_${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Cleanup the object URL
+      URL.revokeObjectURL(url);
+      
+      console.log(`✅ Export financier réussi: ${filename} (${transactions.length} transactions)`);
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'export:', error);
+      alert('Erreur lors de l\'export des données financières. Veuillez réessayer.');
+    }
+  };
 
   const pieData = modulesSoldes.map(m => ({
     name: moduleConfig[m.module].label,
@@ -50,9 +200,31 @@ export const FinancesPage: React.FC = () => {
     solde: m.solde,
   }));
 
-  // All transactions
-  const allTransactions = state.transactions
+  // All transactions - convert backend format to frontend format
+  const allTransactions = transactions
     .filter(tx => activeFilter === 'all' || tx.module === activeFilter)
+    .map(tx => {
+      // Map backend module names to frontend ModuleType
+      let module: ModuleType = 'hebergement'; // default
+      const moduleLower = tx.module?.toLowerCase() || '';
+      if (moduleLower.includes('hebergement')) module = 'hebergement';
+      else if (moduleLower.includes('hotel')) module = 'hotel';
+      else if (moduleLower.includes('restaurant')) module = 'restaurant';
+      else if (moduleLower.includes('bar')) module = 'bar';
+      else if (moduleLower.includes('casino')) module = 'casino';
+      
+      return {
+        id: tx.id.toString(),
+        type: tx.type_flux === 'ENTREE' ? 'entree' : 'sortie',
+        montant: Number(tx.montant),
+        description: tx.description || 'Transaction',
+        categorie: tx.module || 'Général',
+        userId: '0',
+        userName: 'Système',
+        module,
+        date: tx.created_at || new Date().toISOString(),
+      };
+    })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const totalEntrees = modulesSoldes.reduce((sum, m) => sum + m.entrees, 0);
@@ -83,7 +255,27 @@ export const FinancesPage: React.FC = () => {
           <p className="text-muted text-sm mt-1">Vue consolidée de toutes les caisses</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-2 border border-base text-muted hover:text-primary text-sm transition-all">
+          <button 
+            onClick={() => setShowCreateInvoiceModal(true)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-2 border border-base text-muted hover:text-primary text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={16} />
+            <span className="hidden md:inline">Facture</span>
+          </button>
+          <button 
+            onClick={() => setShowRecordPaymentModal(true)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-2 border border-base text-muted hover:text-primary text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CreditCard size={16} />
+            <span className="hidden md:inline">Paiement</span>
+          </button>
+          <button 
+            onClick={handleExport}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-2 border border-base text-muted hover:text-primary text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download size={16} />
             <span className="hidden md:inline">Exporter</span>
           </button>
@@ -93,12 +285,19 @@ export const FinancesPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-muted">Chargement des données financières...</div>
+        </div>
+      ) : (
+        <>
       {/* Global KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="relative overflow-hidden bg-accent-4 border border-accent/20 rounded-2xl p-6">
           <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl bg-accent/20" />
           <p className="text-muted text-sm mb-1">Solde Global</p>
-          <p className="text-primary font-black text-4xl">{formatCurrency(globalStats.soldeGlobal)}</p>
+          <p className="text-primary font-black text-4xl">{formatCurrency(financialStats.soldeGlobal)}</p>
           <div className="flex items-center gap-1 text-accent text-sm mt-2">
             <TrendingUp size={14} />
             <span>+18.4% vs mois dernier</span>
@@ -110,7 +309,7 @@ export const FinancesPage: React.FC = () => {
           <p className="text-success font-black text-4xl">{formatCurrency(totalEntrees)}</p>
           <div className="flex items-center gap-1 text-success text-sm mt-2">
             <ArrowUpRight size={14} />
-            <span>{state.transactions.filter(t => t.type === 'entree').length} transactions</span>
+            <span>{allTransactions.filter(t => t.type === 'entree').length} transactions</span>
           </div>
         </div>
         <div className="relative overflow-hidden bg-danger-bg border border-danger/20 rounded-2xl p-6">
@@ -119,7 +318,7 @@ export const FinancesPage: React.FC = () => {
           <p className="text-danger font-black text-4xl">{formatCurrency(totalSorties)}</p>
           <div className="flex items-center gap-1 text-danger text-sm mt-2">
             <ArrowDownRight size={14} />
-            <span>{state.transactions.filter(t => t.type === 'sortie').length} transactions</span>
+            <span>{allTransactions.filter(t => t.type === 'sortie').length} transactions</span>
           </div>
         </div>
       </div>
@@ -206,7 +405,7 @@ export const FinancesPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
           <h3 className="text-primary font-semibold">Historique des Transactions</h3>
           <div className="flex flex-wrap gap-2">
-            {[{ value: 'all', label: 'Tout' }, ...Object.entries(moduleConfig).map(([k, v]) => ({ value: k, label: v.label }))].map(f => (
+            {[{ value: 'all', label: 'Tout' }, ...Object.entries(moduleConfig).filter(([k]) => ['hebergement', 'hotel', 'restaurant', 'bar', 'casino'].includes(k)).map(([k, v]) => ({ value: k, label: v.label }))].map(f => (
               <button
                 key={f.value}
                 onClick={() => setActiveFilter(f.value)}
@@ -220,25 +419,56 @@ export const FinancesPage: React.FC = () => {
           </div>
         </div>
         <div className="divide-y divide-base max-h-96 overflow-y-auto">
-          {allTransactions.map(tx => (
-            <div key={tx.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tx.type === 'entree' ? 'bg-success-bg' : 'bg-danger-bg'}`}>
-                {tx.type === 'entree' ? <ArrowUpRight size={18} className="text-success" /> : <ArrowDownRight size={18} className="text-danger" />}
+          {allTransactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center mb-4">
+                <DollarSign size={32} className="text-muted" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
-                <p className="text-muted text-xs">
-                  <span className="capitalize" style={{ color: moduleConfig[tx.module]?.color }}>{moduleConfig[tx.module]?.label}</span>
-                  {' • '}{tx.categorie} • {tx.userName} • {formatDate(tx.date)}
-                </p>
-              </div>
-              <div className={`font-bold whitespace-nowrap ${tx.type === 'entree' ? 'text-success' : 'text-danger'}`}>
-                {tx.type === 'entree' ? '+' : '-'}{formatCurrency(tx.montant)}
-              </div>
+              <p className="text-muted text-sm">Aucune transaction trouvée</p>
+              <p className="text-muted text-xs mt-1">Les transactions apparaîtront ici une fois les données disponibles</p>
             </div>
-          ))}
+          ) : (
+            allTransactions.map(tx => (
+              <div key={tx.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tx.type === 'entree' ? 'bg-success-bg' : 'bg-danger-bg'}`}>
+                  {tx.type === 'entree' ? <ArrowUpRight size={18} className="text-success" /> : <ArrowDownRight size={18} className="text-danger" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
+                  <p className="text-muted text-xs">
+                    <span className="capitalize" style={{ color: moduleConfig[tx.module]?.color }}>{moduleConfig[tx.module]?.label}</span>
+                    {' • '}{tx.categorie} • {tx.userName} • {formatDate(tx.date)}
+                  </p>
+                </div>
+                <div className={`font-bold whitespace-nowrap ${tx.type === 'entree' ? 'text-success' : 'text-danger'}`}>
+                  {tx.type === 'entree' ? '+' : '-'}{formatCurrency(tx.montant)}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
+    </>
+    )}
+    
+    {/* Modals */}
+    <CreateInvoiceModal
+      isOpen={showCreateInvoiceModal}
+      onClose={() => setShowCreateInvoiceModal(false)}
+      onSuccess={() => {
+        fetchFinancialData();
+        setShowCreateInvoiceModal(false);
+      }}
+    />
+    
+    <RecordPaymentModal
+      isOpen={showRecordPaymentModal}
+      onClose={() => setShowRecordPaymentModal(false)}
+      onSuccess={() => {
+        fetchFinancialData();
+        setShowRecordPaymentModal(false);
+      }}
+    />
     </div>
   );
 };
