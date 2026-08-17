@@ -2,7 +2,7 @@
 
 export type ModuleType = 'hebergement' | 'hotel' | 'restaurant' | 'bar' | 'casino' | 'finances' | 'utilisateurs' | 'dashboard' | 'clients';
 
-export type UserRole = 'admin' | 'manager' | 'caissier' | 'stock_manager' | 'viewer';
+export type UserRole = 'admin' | 'manager' | 'caissier' | 'stock_manager';
 
 export type TransactionType = 'entree' | 'sortie';
 

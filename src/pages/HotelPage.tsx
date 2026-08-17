@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Hotel, 
-  Wifi, 
-  Coffee, 
-  Car, 
+import {
+  Hotel,
+  Wifi,
+  Coffee,
+  Car,
   Sparkles,
   DoorOpen,
   Calendar,
@@ -26,7 +26,8 @@ import {
   Bell,
   Search,
   Moon,
-  Sun
+  Sun,
+  Package
 } from 'lucide-react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency, formatDate } from '../utils/data';
@@ -42,8 +43,9 @@ import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormM
 import { useRooms } from '../hooks/useRooms';
 import { useReservations } from '../hooks/useReservations';
 import { Room, Reservation } from '../types/hotel.types';
-import { Button } from '../components/UI';
-import api from '../lib/api';
+import { StockManager } from '../components/StockManager';
+import AuthService from '../services/authService';
+import { filterTabsByRole, getDefaultTabForRole } from '../utils/permissions';
 
 interface Tab {
   id: string;
@@ -60,8 +62,8 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
+  { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
 ];
-
 
 // Composant pour les statistiques responsive
 const StatsCard: React.FC<{
@@ -128,8 +130,8 @@ const TabButton: React.FC<{
 const HotelPage: React.FC = () => {
   const context = useHDA();
 
-  const { 
-    getModuleCaisseSolde, 
+  const {
+    getModuleCaisseSolde,
   } = context;
 
   const {
@@ -146,7 +148,10 @@ const HotelPage: React.FC = () => {
     loadReservations,
   } = useReservations();
 
-  const [activeTab, setActiveTab] = useState('chambres');
+  const currentUser = AuthService.getCurrentUser();
+  const visibleTabs = filterTabsByRole(tabs, currentUser?.role);
+
+  const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('chambres', currentUser?.role));
   const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
@@ -169,7 +174,7 @@ const HotelPage: React.FC = () => {
   } catch (err) {
     console.error('Erreur lors de la récupération des données de caisse:', err);
   }
-  
+
   const { solde = 0, entrees = 0, sorties = 0 } = caisseData;
 
   useEffect(() => {
@@ -234,7 +239,7 @@ const HotelPage: React.FC = () => {
         <div className="text-center max-w-md">
           <div className="text-5xl mb-4">⚠️</div>
           <p className="text-danger font-medium text-base md:text-lg">{error}</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="mt-4 px-6 py-2.5 rounded-xl font-medium text-white bg-accent hover:bg-accent/90 transition-colors"
           >
@@ -255,7 +260,7 @@ const HotelPage: React.FC = () => {
           </h2>
           <p className="text-muted text-xs md:text-sm mt-0.5">Gestion complète de l'hôtel</p>
         </div>
-        
+
         {/* Actions - Mobile Friendly */}
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -309,7 +314,7 @@ const HotelPage: React.FC = () => {
       {/* Tabs - Scrollable on Mobile */}
       <div className="relative">
         <div className="flex overflow-x-auto gap-1 bg-surface border border-base rounded-2xl p-1 shadow-soft-sm scrollbar-hide">
-          {tabs.map(tab => (
+          {visibleTabs.map(tab => (
             <TabButton
               key={tab.id}
               tab={tab}
@@ -327,7 +332,7 @@ const HotelPage: React.FC = () => {
       <div className="mt-4 md:mt-6">
         {activeTab === 'chambres' && (
           <div className="overflow-x-auto">
-            <RoomList 
+            <RoomList
               onEdit={(room) => {
                 setSelectedRoom(room);
                 setIsRoomModalOpen(true);
@@ -338,7 +343,7 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'reservations' && (
           <div className="overflow-x-auto">
-            <ReservationList 
+            <ReservationList
               onEdit={(res) => {
                 setSelectedReservation(res);
                 setIsReservationModalOpen(true);
@@ -349,7 +354,7 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'clients' && (
           <div className="bg-surface border border-base rounded-2xl p-4 md:p-6">
-            <ClientSearch 
+            <ClientSearch
               onSelect={(client) => {
                 console.log('Client sélectionné:', client);
               }}
@@ -358,7 +363,7 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'equipements' && (
           <div className="overflow-x-auto">
-            <EquipmentManager 
+            <EquipmentManager
               equipments={safeEquipments as any}
               roomEquipments={safeRoomEquipments as any}
               rooms={safeRooms as any}
@@ -367,7 +372,7 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'maintenance' && (
           <div className="overflow-x-auto">
-            <MaintenanceManager 
+            <MaintenanceManager
               tasks={safeMaintenanceTasks as any}
               equipments={safeEquipments as any}
               rooms={safeRooms as any}
@@ -376,7 +381,7 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'housekeeping' && (
           <div className="overflow-x-auto">
-            <HousekeepingManager 
+            <HousekeepingManager
               tasks={safeHousekeepingTasks as any}
               rooms={safeRooms as any}
             />
@@ -384,11 +389,16 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'minibar' && (
           <div className="overflow-x-auto">
-            <MinibarManager 
+            <MinibarManager
               items={safeMinibarItems as any}
               rooms={safeRooms as any}
               products={safeProducts as any}
             />
+          </div>
+        )}
+        {activeTab === 'stock' && (
+          <div className="overflow-x-auto">
+            <StockManager module="hotel" />
           </div>
         )}
       </div>
