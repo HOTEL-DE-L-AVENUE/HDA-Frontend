@@ -81,7 +81,18 @@ export function useHebergement() {
   }, [fetchData]);
 
   // ── UI ───────────────────────────────────────────────────────────────────
-  const [activeTab,   setActiveTab]   = useState('reservations');
+  const [activeTab,   setActiveTab]   = useState(() => {
+    try {
+      const stored = localStorage.getItem('user-data') || sessionStorage.getItem('user-data');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const r = u.role?.toLowerCase();
+        if (r === 'caissier' || r === 'caisse') return 'caisse';
+        if (r === 'stock_manager') return 'stock';
+      }
+    } catch {}
+    return 'reservations';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus,setFilterStatus]= useState('');
   const [editingId,   setEditingId]   = useState<number | null>(null);

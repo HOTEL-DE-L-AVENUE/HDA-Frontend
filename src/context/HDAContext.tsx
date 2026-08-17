@@ -1,20 +1,20 @@
 // src/context/HDAContext.tsx
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { 
-  StockItem, 
-  CaisseTransaction, 
-  User, 
-  JeuCasino, 
+import {
+  StockItem,
+  CaisseTransaction,
+  User,
+  JeuCasino,
   ModuleType,
   Reservation,
   Commande,
   StockMovement,
   Chambre
 } from '../types';
-import { 
-  initialUsers, 
-  initialStockItems, 
-  initialTransactions, 
+import {
+  initialUsers,
+  initialStockItems,
+  initialTransactions,
   initialJeuxCasino,
   reservations,
   commandes,
@@ -115,6 +115,7 @@ type Action =
   | { type: 'ADD_USER'; payload: Omit<User, 'id' | 'createdAt'> }
   | { type: 'UPDATE_USER'; payload: User }
   | { type: 'DELETE_USER'; payload: string }
+  | { type: 'SET_USERS'; payload: User[] }
   | { type: 'SET_CURRENT_USER'; payload: User }
   // Actions Réservations
   | { type: 'ADD_RESERVATION'; payload: Omit<Reservation, 'id' | 'createdAt'> }
@@ -143,10 +144,10 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
     // ===== NAVIGATION =====
     case 'SET_MODULE':
       return { ...state, activeModule: action.payload };
-    
+
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
-    
+
     // ===== STOCK =====
     case 'ADD_STOCK_ITEM': {
       const newItem: StockItem = {
@@ -157,23 +158,23 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
       return { ...state, stockItems: [...state.stockItems, newItem] };
     }
-    
+
     case 'UPDATE_STOCK_ITEM':
       return {
         ...state,
         stockItems: state.stockItems.map(item =>
-          item.id === action.payload.id 
-            ? { ...action.payload, updatedAt: new Date().toISOString() } 
+          item.id === action.payload.id
+            ? { ...action.payload, updatedAt: new Date().toISOString() }
             : item
         )
       };
-    
+
     case 'DELETE_STOCK_ITEM':
       return {
         ...state,
         stockItems: state.stockItems.filter(item => item.id !== action.payload)
       };
-    
+
     // ===== TRANSACTIONS =====
     case 'ADD_TRANSACTION': {
       const newTransaction: CaisseTransaction = {
@@ -183,7 +184,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
       return { ...state, transactions: [newTransaction, ...state.transactions] };
     }
-    
+
     case 'ADD_CASINO_TRANSACTION': {
       const { jeuId, transaction } = action.payload;
       const newTransaction: CaisseTransaction = {
@@ -191,7 +192,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         id: generateId(),
         date: new Date().toISOString(),
       };
-      
+
       const updatedJeux = state.jeux.map(jeu => {
         if (jeu.id === jeuId) {
           const delta = transaction.type === 'entree' ? transaction.montant : -transaction.montant;
@@ -200,11 +201,11 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
             caisse: {
               ...jeu.caisse,
               soldeTotal: jeu.caisse.soldeTotal + delta,
-              totalEntrees: transaction.type === 'entree' 
-                ? jeu.caisse.totalEntrees + transaction.montant 
+              totalEntrees: transaction.type === 'entree'
+                ? jeu.caisse.totalEntrees + transaction.montant
                 : jeu.caisse.totalEntrees,
-              totalSorties: transaction.type === 'sortie' 
-                ? jeu.caisse.totalSorties + transaction.montant 
+              totalSorties: transaction.type === 'sortie'
+                ? jeu.caisse.totalSorties + transaction.montant
                 : jeu.caisse.totalSorties,
               transactions: [newTransaction, ...jeu.caisse.transactions]
             }
@@ -212,15 +213,18 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         }
         return jeu;
       });
-      
+
       return {
         ...state,
         jeux: updatedJeux,
         transactions: [newTransaction, ...state.transactions]
       };
     }
-    
+
     // ===== UTILISATEURS =====
+    case 'SET_USERS':
+      return { ...state, users: action.payload };
+
     case 'ADD_USER': {
       const newUser: User = {
         ...action.payload,
@@ -229,14 +233,14 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
       return { ...state, users: [...state.users, newUser] };
     }
-    
+
     case 'UPDATE_USER':
       return {
         ...state,
         users: state.users.map(u => u.id === action.payload.id ? action.payload : u),
         currentUser: state.currentUser?.id === action.payload.id ? action.payload : state.currentUser
       };
-    
+
     case 'DELETE_USER':
       return {
         ...state,
@@ -248,7 +252,7 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         ...state,
         currentUser: action.payload
       };
-    
+
     // ===== RÉSERVATIONS =====
     case 'ADD_RESERVATION': {
       const newRes: Reservation = {
@@ -258,19 +262,19 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
       return { ...state, reservations: [newRes, ...state.reservations] };
     }
-    
+
     case 'UPDATE_RESERVATION':
       return {
         ...state,
         reservations: state.reservations.map(r => r.id === action.payload.id ? action.payload : r)
       };
-    
+
     case 'DELETE_RESERVATION':
       return {
         ...state,
         reservations: state.reservations.filter(r => r.id !== action.payload)
       };
-    
+
     // ===== COMMANDES =====
     case 'ADD_COMMANDE': {
       const newCmd: Commande = {
@@ -280,26 +284,26 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
       return { ...state, commandes: [newCmd, ...state.commandes] };
     }
-    
+
     case 'UPDATE_COMMANDE':
       return {
         ...state,
         commandes: state.commandes.map(c => c.id === action.payload.id ? action.payload : c)
       };
-    
+
     case 'DELETE_COMMANDE':
       return {
         ...state,
         commandes: state.commandes.filter(c => c.id !== action.payload)
       };
-    
+
     // ===== JEUX CASINO =====
     case 'UPDATE_JEU':
       return {
         ...state,
         jeux: state.jeux.map(j => j.id === action.payload.id ? action.payload : j)
       };
-    
+
     // ===== NOTIFICATIONS =====
     case 'ADD_NOTIFICATION': {
       const notif: Notification = {
@@ -309,19 +313,19 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
       };
       return { ...state, notifications: [notif, ...state.notifications.slice(0, 9)] };
     }
-    
+
     case 'CLEAR_NOTIFICATION':
       return {
         ...state,
         notifications: state.notifications.filter(n => n.id !== action.payload)
       };
-    
+
     case 'SET_NOTIFICATIONS':
       return {
         ...state,
         notifications: action.payload
       };
-    
+
     case 'CLEAR_ALL_NOTIFICATIONS':
       return {
         ...state,
@@ -334,21 +338,21 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
         ...state,
         chambres: [...state.chambres, action.payload]
       };
-    
+
     case 'UPDATE_CHAMBRE':
       return {
         ...state,
-        chambres: state.chambres.map(c => 
+        chambres: state.chambres.map(c =>
           c.id === action.payload.id ? action.payload : c
         )
       };
-    
+
     case 'DELETE_CHAMBRE':
       return {
         ...state,
         chambres: state.chambres.filter(c => c.id !== action.payload)
       };
-    
+
     default:
       return state;
   }
@@ -356,9 +360,24 @@ const hdaReducer = (state: HDAState, action: Action): HDAState => {
 
 // ==================== STATE INITIAL ====================
 
+const normalizeAuthUser = (u: ReturnType<typeof AuthService.getCurrentUser>): User | null => {
+  if (!u) return null;
+  return {
+    id: String(u.id ?? u.id_admin ?? ''),
+    nom: u.nom,
+    prenom: u.prenom ?? '',
+    email: u.email,
+    role: (u.role as User['role']) ?? 'manager',
+    module: Array.isArray(u.module) ? u.module as User['module'] : [],
+    actif: u.actif ?? true,
+    createdAt: u.created_at ?? u.date_creation ?? new Date().toISOString(),
+    lastLogin: undefined,
+  };
+};
+
 const initialState: HDAState = {
   users: initialUsers,
-  currentUser: AuthService.getCurrentUser() || initialUsers[0], // ⬅️ Récupération dynamique de la session active
+  currentUser: normalizeAuthUser(AuthService.getCurrentUser()) || initialUsers[0], // ⬅️ Récupération dynamique de la session active
   stockItems: initialStockItems,
   transactions: initialTransactions,
   jeux: initialJeuxCasino,
@@ -395,7 +414,7 @@ export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // ⬅️ Écouter les changements d'authentification (connexion / déconnexion)
   useEffect(() => {
     const handleAuthChange = () => {
-      const activeUser = AuthService.getCurrentUser();
+      const activeUser = normalizeAuthUser(AuthService.getCurrentUser());
       if (activeUser) {
         dispatch({ type: 'SET_CURRENT_USER', payload: activeUser });
       }
@@ -408,7 +427,7 @@ export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // ===== HELPERS =====
-  
+
   const getModuleTransactions = (module: ModuleType) => {
     return state.transactions.filter(t => t.module === module);
   };
@@ -435,24 +454,24 @@ export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const modules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar'];
     let totalRevenu = 0;
     let totalDepenses = 0;
-    
+
     modules.forEach(m => {
       const { entrees, sorties } = getModuleCaisseSolde(m);
       totalRevenu += entrees;
       totalDepenses += sorties;
     });
-    
+
     const casino = getCasinoTotalCaisse();
     totalRevenu += casino.entrees;
     totalDepenses += casino.sorties;
-    
+
     return { totalRevenu, totalDepenses, soldeGlobal: totalRevenu - totalDepenses };
   };
 
   const addNotification = (type: 'info' | 'success' | 'warning' | 'error', message: string, source?: string, actionUrl?: string) => {
-    dispatch({ 
-      type: 'ADD_NOTIFICATION', 
-      payload: { type, message, source, actionUrl } 
+    dispatch({
+      type: 'ADD_NOTIFICATION',
+      payload: { type, message, source, actionUrl }
     });
   };
 
@@ -465,11 +484,11 @@ export const HDAProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   return (
-    <HDAContext.Provider value={{ 
-      state, 
-      dispatch, 
-      getModuleTransactions, 
-      getModuleStock, 
+    <HDAContext.Provider value={{
+      state,
+      dispatch,
+      getModuleTransactions,
+      getModuleStock,
       getModuleCaisseSolde,
       getCasinoTotalCaisse,
       getGlobalStats,
