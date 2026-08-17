@@ -1,5 +1,7 @@
 import React from 'react';
 import { ShoppingCart, UtensilsCrossed, Table as TableIcon, Package, DollarSign } from 'lucide-react';
+import AuthService from '../../../services/authService';
+import { filterTabsByRole } from '../../../utils/permissions';
 
 const TABS = [
   { id: 'commandes', label: 'Commandes', icon: <ShoppingCart size={16} /> },
@@ -15,6 +17,9 @@ interface RestaurantTabsProps {
 }
 
 export const RestaurantTabs: React.FC<RestaurantTabsProps> = ({ activeTab, setActiveTab }) => {
+  const currentUser = AuthService.getCurrentUser();
+  const visibleTabs = filterTabsByRole(TABS, currentUser?.role);
+
   return (
     <div 
       className="flex gap-1 rounded-2xl p-1 w-full overflow-x-auto hide-scrollbar"
@@ -23,7 +28,7 @@ export const RestaurantTabs: React.FC<RestaurantTabsProps> = ({ activeTab, setAc
         border: '1px solid var(--color-border)',
       }}
     >
-      {TABS.map((tab) => (
+      {visibleTabs.map((tab) => (
         <button 
           key={tab.id} 
           onClick={() => setActiveTab(tab.id)}

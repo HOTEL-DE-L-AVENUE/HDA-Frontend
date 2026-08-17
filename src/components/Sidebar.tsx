@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
 import AuthService from '../services/authService';
 import { ModuleType } from '../types';
+import { canAccessModule } from '../utils/permissions';
 import {
   LayoutDashboard, BedDouble, Hotel, UtensilsCrossed,
   Wine, Dices, DollarSign, TrendingUp, X, MoreHorizontal,
@@ -23,13 +24,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2', path: "/dashboard", roles: ['admin', 'manager'] },
-  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement", roles: ['admin', 'manager', 'receptioniste', 'housekeeping'] },
-  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel", roles: ['admin', 'manager', 'receptioniste', 'housekeeping'] },
-  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse'] },
-  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water'] },
-  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse'] },
-  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse'] },
-  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse'] },
+  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager'] },
+  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'stock_manager'] },
+  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager'] },
+  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
+  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier'] },
+  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
+  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier'] },
   { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs", roles: ['admin'] },
 ];
 
@@ -271,24 +272,6 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
   );
 };
 
-// Fonction utilitaire locale pour parser les modules de façon sécurisée
-const parseUserModules = (rawModules: any): string[] => {
-  if (!rawModules) return [];
-  if (Array.isArray(rawModules)) {
-    return rawModules.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean);
-  }
-  if (typeof rawModules === 'string') {
-    try {
-      const parsed = JSON.parse(rawModules);
-      if (Array.isArray(parsed)) {
-        return parsed.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean);
-      }
-    } catch {
-      return rawModules.split(',').map(s => s.trim()).filter(Boolean);
-    }
-  }
-  return [];
-};
 
 /* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
@@ -305,23 +288,10 @@ export const Sidebar: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  // FILTRAGE DES MODULES SÉCURISÉ
-  const userRole = currentUser?.role || '';
-  const userModules = parseUserModules(currentUser?.module);
-
-  const filteredNavItems = userRole === 'admin' 
-    ? navItems 
-    : navItems.filter(item => {
-        const roleAllowed = item.roles.includes(userRole);
-        if (!roleAllowed) return false;
-
-        const restrictedModules = ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances', 'clients'];
-        if (restrictedModules.includes(item.id)) {
-          return userModules.includes(item.id);
-        }
-
-        return true;
-      });
+  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
+  const filteredNavItems = navItems.filter(item =>
+    canAccessModule(currentUser, item.id, item.roles)
+  );
 
   const unreadCount = state.notifications.length;
 
@@ -511,22 +481,10 @@ const MobileBottomNav: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  const userRole = currentUser?.role || '';
-  const userModules = parseUserModules(currentUser?.module);
-
-  const filteredNavItems = userRole === 'admin' 
-    ? navItems 
-    : navItems.filter(item => {
-        const roleAllowed = item.roles.includes(userRole);
-        if (!roleAllowed) return false;
-
-        const restrictedModules = ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances', 'clients'];
-        if (restrictedModules.includes(item.id)) {
-          return userModules.includes(item.id);
-        }
-
-        return true;
-      });
+  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
+  const filteredNavItems = navItems.filter(item =>
+    canAccessModule(currentUser, item.id, item.roles)
+  );
 
   const bottomNavItems = filteredNavItems.slice(0, 4);
   const moreNavItems = filteredNavItems.slice(4);

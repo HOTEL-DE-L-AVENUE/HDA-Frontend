@@ -301,7 +301,8 @@ class AuthService {
     const user = this.getCurrentUser();
     if (!user) return "/login";
 
-    if (user.role === UserRole.ADMIN) {
+    const role = user.role?.toLowerCase();
+    if (role === 'admin') {
       return "/dashboard";
     }
 
@@ -309,14 +310,17 @@ class AuthService {
       return `/${user.module[0]}`;
     }
 
-    switch (user.role) {
-      case UserRole.RECEPTIONIST:
-        return "/hebergement";
-      case UserRole.CASHIER:
+    switch (role) {
+      case 'caissier':
+      case 'caisse':
         return "/finances";
-      case UserRole.WAITER:
+      case 'stock_manager':
+        return "/restaurant";
+      case 'receptioniste':
+        return "/hebergement";
+      case 'water':
         return "/bar";
-      case UserRole.HOUSEKEEPING:
+      case 'housekeeping':
         return "/hotel";
       default:
         return "/dashboard";

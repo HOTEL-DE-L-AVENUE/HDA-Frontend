@@ -9,17 +9,17 @@ import AuthService from '../services/authService';
 import api from '../lib/api';
 
 const roleLabels: Record<string, string> = {
+  admin: 'Administrateur',
   manager: 'Manager',
   caissier: 'Caissier',
   stock_manager: 'Gestionnaire Stock',
-  viewer: 'Lecteur',
 };
 
 const roleIcons: Record<string, string> = {
+  admin: '👑',
   manager: '🎯',
   caissier: '💰',
   stock_manager: '📦',
-  viewer: '👁️',
 };
 
 const moduleLabels: Record<string, string> = {
@@ -76,31 +76,84 @@ export const UtilisateursPage: React.FC = () => {
       const response = await api.get('/api/admin/users');
       console.log("Données brutes reçues de l'API users:", response.data);
 
-      const rawData = response.data.data || response.data.users || response.data.result || response.data;
-      
-      if (Array.isArray(rawData)) {
-        const formattedUsers = rawData.map((u: any, index: number) => ({
-          id: extractId(u, index),
-          nom: u.nom || u.name || u.Nom || 'Nom inconnu',
-          prenom: u.prenom || u.firstName || u.Prenom || '',
-          email: u.email || u.mail || '',
-          role: u.role || 'viewer',
-          module: parseModules(u.module || u.modules),
-          actif: u.statut === 'actif' || u.actif === true || u.status === 'actif' || u.statut === 1,
-          lastLogin: u.lastLogin || u.date_creation || null
-        }));
-        
-        console.log("Utilisateurs formatés prêts à l'affichage:", formattedUsers);
-        dispatch({ type: 'SET_USERS', payload: formattedUsers });
+      const resData = response.data;
+      let rawData: any[] | null = null;
+
+      if (Array.isArray(resData)) {
+        rawData = resData;
+      } else if (resData && typeof resData === 'object') {
+        const candidate =
+          resData.data ??
+          resData.users ??
+          resData.items ??
+          resData.rows ??
+          resData.result ??
+          resData.results ??
+          null;
+
+        if (Array.isArray(candidate)) {
+          rawData = candidate;
+        } else if (candidate && typeof candidate === 'object' && Array.isArray(candidate.data)) {
+          rawData = candidate.data;
+        }
       }
-    } catch (err) {
-      console.error("Erreur lors de la récupération des utilisateurs:", err);
+
+      if (!rawData) {
+        console.warn("fetchRealUsers : structure de réponse inattendue — impossible d'extraire la liste.", resData);
+        return;
+      }
+
+      const formattedUsers: User[] = rawData.map((u: any, index: number) => ({
+        id: extractId(u, index),
+        nom: u.nom || u.name || u.Nom || 'Nom inconnu',
+        prenom: u.prenom || u.firstName || u.Prenom || '',
+        email: u.email || u.mail || u.Email || '',
+        role: (u.role || u.Role || 'manager') as User['role'],
+        module: parseModules(u.module || u.modules || u.Module),
+        actif: u.statut === 'actif' || u.actif === true || u.status === 'actif' || u.statut === 1 || u.is_active === true,
+        createdAt: u.date_creation || u.created_at || u.createdAt || new Date().toISOString(),
+        lastLogin: u.lastLogin || u.last_login || u.dernier_login || null,
+      }));
+
+      console.log(`fetchRealUsers : ${formattedUsers.length} utilisateur(s) chargé(s)`, formattedUsers);
+      dispatch({ type: 'SET_USERS', payload: formattedUsers });
+    } catch (err: any) {
+      console.error("Erreur lors de la récupération des utilisateurs:", err?.response?.data || err?.message || err);
     }
   }, [dispatch]);
 
   useEffect(() => {
     fetchRealUsers();
   }, [fetchRealUsers]);
+
+  // Calcul du nombre de managers par module (pour la règle max 2 managers par module)
+  const getManagersCountByModule = useCallback((): Record<ModuleType, number> => {
+    const counts: Record<string, number> = {
+      hebergement: 0,
+      hotel: 0,
+      restaurant: 0,
+      bar: 0,
+      casino: 0,
+      finances: 0,
+    };
+
+    state.users.forEach(u => {
+      if (u.role === 'manager') {
+        // Ne pas compter l'utilisateur en cours d'édition
+        if (editUser && String(u.id) === String(editUser.id)) return;
+        const uMods = parseModules(u.module);
+        uMods.forEach(mod => {
+          if (counts[mod] !== undefined) {
+            counts[mod]++;
+          }
+        });
+      }
+    });
+
+    return counts as Record<ModuleType, number>;
+  }, [state.users, editUser]);
+
+  const managersCountByModule = getManagersCountByModule();
 
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -126,6 +179,18 @@ export const UtilisateursPage: React.FC = () => {
       setErrorMessage('Le nom et l\'email sont requis');
       return;
     }
+
+    // Validation : Règle max 2 managers par module
+    if (form.role === 'manager') {
+      const selectedMods = parseModules(form.module);
+      for (const mod of selectedMods) {
+        const count = managersCountByModule[mod] || 0;
+        if (count >= 2) {
+          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà atteint sa limite maximale de 2 managers.`);
+          return;
+        }
+      }
+    }
     
     try {
       setErrorMessage('');
@@ -146,7 +211,7 @@ export const UtilisateursPage: React.FC = () => {
           mot_de_passe: form.password,
           role: form.role,
           module: form.module,
-          statut: form.actif ? 'actif' : 'inactif'
+          actif: form.actif,
         });
       }
 
@@ -163,26 +228,40 @@ export const UtilisateursPage: React.FC = () => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    try {
-      if (id.length > 15 && !id.match(/^[0-9]+$/)) {
-        dispatch({ type: 'DELETE_USER', payload: id });
-        return;
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) return;
+
+    // 1. Suppression optimiste immédiate dans l'état global React
+    dispatch({ type: 'DELETE_USER', payload: id });
+
+    // 2. Appel API si ce n'est pas un ID temporaire fallback
+    if (!id.startsWith('user-fallback-')) {
+      try {
+        await api.delete(`/api/admin/users/${id}`);
+      } catch (err) {
+        console.error("Erreur lors de la suppression sur le serveur:", err);
       }
-      await api.delete(`/api/admin/users/${id}`);
-      await fetchRealUsers();
-    } catch (err) {
-      console.error("Erreur lors de la suppression de l'utilisateur:", err);
-      dispatch({ type: 'DELETE_USER', payload: id });
     }
   };
 
   const toggleModule = (mod: ModuleType) => {
+    const currentModules = parseModules(form.module);
+    const exists = currentModules.includes(mod);
+
+    // Si on veut ajouter le module et que le rôle est manager, vérifier la limite de 2
+    if (!exists && form.role === 'manager') {
+      const currentCount = managersCountByModule[mod] || 0;
+      if (currentCount >= 2) {
+        setErrorMessage(`Limite atteinte : Le module "${moduleLabels[mod] || mod}" a déjà 2 managers assignés.`);
+        return;
+      }
+    }
+
+    setErrorMessage('');
     setForm(prev => {
-      const currentModules = parseModules(prev.module);
-      const exists = currentModules.includes(mod);
+      const cur = parseModules(prev.module);
       return {
         ...prev,
-        module: exists ? currentModules.filter(m => m !== mod) : [...currentModules, mod]
+        module: cur.includes(mod) ? cur.filter(m => m !== mod) : [...cur, mod]
       };
     });
   };
