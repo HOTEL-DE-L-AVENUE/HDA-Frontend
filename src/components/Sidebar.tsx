@@ -1,13 +1,13 @@
 // src/components/Sidebar.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
-import AuthService from '../services/authService'; // ← Import du service
+import AuthService from '../services/authService';
 import { ModuleType } from '../types';
+import { canAccessModule } from '../utils/permissions';
 import {
   LayoutDashboard, BedDouble, Hotel, UtensilsCrossed,
-  Wine, Dices, DollarSign, Users, TrendingUp, X, MoreHorizontal,
-  UserCog,
-  UserRoundPlus,
+  Wine, Dices, DollarSign, TrendingUp, X, MoreHorizontal,
+  UserCog, UserRoundPlus,
 } from 'lucide-react';
 import logo from '../assets/logo_s.png';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -19,22 +19,20 @@ interface NavItem {
   gradient: string;
   path: string;
   badge?: number;
+  roles: string[];
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2', path: "/dashboard" },
-  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement" },
-  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel" },
-  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant" },
-  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar" },
-  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino" },
-  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances" },
-  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients" },
-  { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs" },
+  { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2', path: "/dashboard", roles: ['admin', 'manager'] },
+  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager'] },
+  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'stock_manager'] },
+  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager'] },
+  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
+  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier'] },
+  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
+  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier'] },
+  { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs", roles: ['admin'] },
 ];
-
-const bottomNavItems = navItems.slice(0, 4);
-const moreNavItems = navItems.slice(4);
 
 /* ─── ONDULATION COMME BORDURE ─── */
 const WavyEdge: React.FC = () => (
@@ -274,30 +272,29 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
   );
 };
 
+
 /* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { state } = useHDA(); // On garde le contexte pour les notifications
+  const { state } = useHDA(); 
 
-  // Récupération de l'utilisateur connecté via AuthService
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
 
-  // Écoute des changements d'authentification (login/logout)
   useEffect(() => {
     const updateUser = () => setCurrentUser(AuthService.getCurrentUser());
     window.addEventListener('auth-change', updateUser);
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
+  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
+  const filteredNavItems = navItems.filter(item =>
+    canAccessModule(currentUser, item.id, item.roles)
+  );
+
   const unreadCount = state.notifications.length;
 
-  const setModule = (path: string) => {
-    navigate(path);
-  };
-
-  // Préparation de l'affichage de l'avatar et du nom (gère le cas null)
   const userInitials = currentUser
     ? `${currentUser.prenom?.[0] || ''}${currentUser.nom?.[0] || 'U'}`
     : 'U';
@@ -387,7 +384,7 @@ export const Sidebar: React.FC = () => {
             width: '100%',
           }}
         >
-          {navItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <NavButton
               key={item.id}
               item={item}
@@ -417,7 +414,7 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Avatar et nom utilisateur (données provenant de AuthService) */}
+        {/* Avatar et nom utilisateur */}
         <Tooltip label={userFullName}>
           <div style={{ position: 'relative', marginBottom: '14px', cursor: 'pointer' }}>
             <div
@@ -476,6 +473,22 @@ const MobileBottomNav: React.FC = () => {
   const location = useLocation();
 
   const [showMore, setShowMore] = useState(false);
+  const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
+
+  useEffect(() => {
+    const updateUser = () => setCurrentUser(AuthService.getCurrentUser());
+    window.addEventListener('auth-change', updateUser);
+    return () => window.removeEventListener('auth-change', updateUser);
+  }, []);
+
+  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
+  const filteredNavItems = navItems.filter(item =>
+    canAccessModule(currentUser, item.id, item.roles)
+  );
+
+  const bottomNavItems = filteredNavItems.slice(0, 4);
+  const moreNavItems = filteredNavItems.slice(4);
+  const hasMoreItems = moreNavItems.length > 0;
 
   const setModule = (path: string) => {
     navigate(path);
@@ -486,9 +499,6 @@ const MobileBottomNav: React.FC = () => {
     if (!showMore) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // AJOUT: on vérifie aussi #mobile-more-panel, sinon le mousedown
-      // ferme le menu AVANT que le onClick d'un item ne se déclenche
-      // (le panneau "Plus" n'est pas un descendant de #mobile-bottom-nav)
       if (
         !target.closest('#mobile-bottom-nav') &&
         !target.closest('#mobile-more-panel')
@@ -496,8 +506,6 @@ const MobileBottomNav: React.FC = () => {
         setShowMore(false);
       }
     };
-    // AJOUT: 'click' au lieu de 'mousedown' pour laisser le temps
-    // au onClick natif du bouton de s'exécuter avant la fermeture
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [showMore]);
@@ -508,7 +516,7 @@ const MobileBottomNav: React.FC = () => {
 
   return (
     <>
-      {showMore && (
+      {showMore && hasMoreItems && (
         <>
           <div
             className="md:hidden fixed inset-0 z-40"
@@ -660,47 +668,49 @@ const MobileBottomNav: React.FC = () => {
             );
           })}
 
-          <button
-            onClick={() => setShowMore(!showMore)}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '2px',
-              flex: 1,
-              padding: '4px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            <span
+          {hasMoreItems && (
+            <button
+              onClick={() => setShowMore(!showMore)}
               style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '12px',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: isMoreActive || showMore ? 'var(--color-accent)' : 'var(--color-surface-2)',
-                color: isMoreActive || showMore ? '#000000' : 'var(--color-muted)',
-                boxShadow: isMoreActive || showMore ? 'var(--shadow-accent)' : 'none',
-                transition: 'all 0.15s',
+                gap: '2px',
+                flex: 1,
+                padding: '4px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
               }}
             >
-              <MoreHorizontal size={20} />
-            </span>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 500,
-                color: isMoreActive || showMore ? 'var(--color-primary)' : 'var(--color-subtle)',
-              }}
-            >
-              Plus
-            </span>
-          </button>
+              <span
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isMoreActive || showMore ? 'var(--color-accent)' : 'var(--color-surface-2)',
+                  color: isMoreActive || showMore ? '#000000' : 'var(--color-muted)',
+                  boxShadow: isMoreActive || showMore ? 'var(--shadow-accent)' : 'none',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <MoreHorizontal size={20} />
+              </span>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 500,
+                  color: isMoreActive || showMore ? 'var(--color-primary)' : 'var(--color-subtle)',
+                }}
+              >
+                Plus
+              </span>
+            </button>
+          )}
         </div>
       </nav>
     </>

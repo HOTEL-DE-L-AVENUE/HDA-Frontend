@@ -238,7 +238,6 @@ export const Badge: React.FC<BadgeProps> = ({ children, variant = '', className 
     manager: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
     caissier: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
     stock_manager: 'bg-teal-500/15 text-teal-400 border border-teal-500/30',
-    viewer: 'bg-slate-500/15 text-slate-400 border border-slate-500/30',
     confirmee: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
     en_cours: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
     terminee: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
