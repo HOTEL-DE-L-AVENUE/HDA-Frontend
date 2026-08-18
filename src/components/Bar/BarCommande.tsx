@@ -264,8 +264,13 @@ export const BarCommandeView: React.FC<Props> = ({
       if (onUpdateStatut) {
         await onUpdateStatut(commandeId, nouveauStatut);
       } else {
-        await (barService as any).updateCommande?.(commandeId, { statut: nouveauStatut }) 
-          || await (barService as any).updateStatut?.(commandeId, nouveauStatut);
+        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'SERVIE' | 'ENCAISSEE'> = {
+          'En attente': 'EN_ATTENTE',
+          'En préparation': 'EN_PREPARATION',
+          'Servie': 'SERVIE',
+          'Encaissée': 'ENCAISSEE',
+        };
+        await barService.updateBarOrderStatus(commandeId, statuses[nouveauStatut]);
       }
 
       setLocalCommandes((prev) =>
@@ -401,7 +406,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 size="sm" 
                 variant="secondary" 
                 icon={<DollarSign size={14} />} 
-                onClick={() => void handleStatusChange(commande.id, 'Encaissée' as BarCommande['statut'])}
+                onClick={() => void handleStatusChange(commande.id, 'Encaissée')}
                 disabled={isUpdating}
               >
                 {isUpdating ? '...' : 'Encaisser'}
