@@ -16,8 +16,12 @@ import { GameTablesTab } from '../components/Casino/tabs/GameTablesTab';
 // Onglet Stock existant (module casino) — conservé tel quel, non réécrit ici.
 // import { StockTab } from '../components/Casino/tabs/';
 
+import AuthService from '../services/authService';
+import { getDefaultTabForRole } from '../utils/permissions';
+
 export const CasinoPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const currentUser = AuthService.getCurrentUser();
+  const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('overview', currentUser?.role));
   const [dashboard, setDashboard] = useState<CasinoDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showRoomForm, setShowRoomForm] = useState(false);

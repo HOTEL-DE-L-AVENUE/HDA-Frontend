@@ -135,3 +135,9 @@ export const roomService = {
     }
   }
 };
+
+// ➔ AJOUT DE L'EXPORT PAR DÉFAUT POUR ÉVITER LES ERREURS D'IMPORTATION
+export default {
+  roomService,
+  roomTypeService
+};

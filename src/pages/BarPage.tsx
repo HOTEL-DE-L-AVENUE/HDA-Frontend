@@ -16,8 +16,12 @@ import { BestSellers } from '../components/Bar/BestSellers';
 import { BarCommandeView } from '../components/Bar/BarCommande';
 import type { BarCommande } from '../types/bar.type';
 
+import AuthService from '../services/authService';
+import { getDefaultTabForRole } from '../utils/permissions';
+
 export const BarPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<BarTabId>('bar');
+  const currentUser = AuthService.getCurrentUser();
+  const [activeTab, setActiveTab] = useState<BarTabId>(() => getDefaultTabForRole('bar', currentUser?.role) as BarTabId);
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
