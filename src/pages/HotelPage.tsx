@@ -46,6 +46,7 @@ import { Room, Reservation } from '../types/hotel.types';
 import { StockManager } from '../components/StockManager';
 import AuthService from '../services/authService';
 import { filterTabsByRole, getDefaultTabForRole } from '../utils/permissions';
+import api from '../lib/api';
 
 interface Tab {
   id: string;
