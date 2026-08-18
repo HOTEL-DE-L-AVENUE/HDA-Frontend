@@ -1,5 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, Dices, CreditCard, Users, Package, DollarSign } from 'lucide-react';
+import AuthService from '../../services/authService';
+import { filterTabsByRole } from '../../utils/permissions';
 
 const TABS = [
   { id: 'overview', label: 'Vue d\'ensemble', icon: <LayoutDashboard size={16} /> },
@@ -16,6 +18,9 @@ interface CasinoTabsProps {
 }
 
 export const CasinoTabs: React.FC<CasinoTabsProps> = ({ activeTab, setActiveTab }) => {
+  const currentUser = AuthService.getCurrentUser();
+  const visibleTabs = filterTabsByRole(TABS, currentUser?.role);
+
   return (
     <div
       className="flex gap-1 rounded-2xl p-1 w-full overflow-x-auto hide-scrollbar"
@@ -24,7 +29,7 @@ export const CasinoTabs: React.FC<CasinoTabsProps> = ({ activeTab, setActiveTab 
         border: '1px solid var(--color-border)',
       }}
     >
-      {TABS.map((tab) => (
+      {visibleTabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}

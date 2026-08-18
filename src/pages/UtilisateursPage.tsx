@@ -1,24 +1,25 @@
-import React, { useState } from 'react';
+// src/pages/UtilisateursPage.tsx
+import React, { useState, useEffect, useCallback } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { User, UserRole, ModuleType } from '../types';
 import { formatDate } from '../utils/data';
 import { Modal, Input, Select, Button, Badge } from '../components/UI';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-react';
+import AuthService from '../services/authService';
+import api from '../lib/api';
 
-const roleLabels: Record<UserRole, string> = {
+const roleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
   caissier: 'Caissier',
   stock_manager: 'Gestionnaire Stock',
-  viewer: 'Lecteur',
 };
 
-const roleIcons: Record<UserRole, string> = {
+const roleIcons: Record<string, string> = {
   admin: '👑',
   manager: '🎯',
   caissier: '💰',
   stock_manager: '📦',
-  viewer: '👁️',
 };
 
 const moduleLabels: Record<string, string> = {
@@ -32,16 +33,127 @@ const moduleLabels: Record<string, string> = {
 
 const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'];
 
+// Extraction d'ID ultra-robuste avec repli par index pour sécuriser l'affichage
+const extractId = (u: any, index: number = 0): string => {
+  const id = u.id_admin || u.id_user || u.id || u._id || u.id_utilisateur || u.userId || u.ID;
+  return id !== undefined && id !== null && String(id).trim() !== '' 
+    ? String(id) 
+    : `user-fallback-${index}`;
+};
+
+const parseModules = (mod: any): ModuleType[] => {
+  if (!mod) return [];
+  if (Array.isArray(mod)) {
+    return mod.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))) as ModuleType[];
+  }
+  if (typeof mod === 'string') {
+    try {
+      const parsed = JSON.parse(mod);
+      if (Array.isArray(parsed)) {
+        return parsed.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))) as ModuleType[];
+      }
+    } catch {
+      return mod.split(',').map(s => s.trim()).filter(Boolean) as ModuleType[];
+    }
+  }
+  return [];
+};
+
 export const UtilisateursPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [search, setSearch] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [form, setForm] = useState({
-    nom: '', prenom: '', email: '', role: 'viewer' as UserRole,
+    nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
   });
+
+  const fetchRealUsers = useCallback(async () => {
+    try {
+      const response = await api.get('/api/admin/users');
+      console.log("Données brutes reçues de l'API users:", response.data);
+
+      const resData = response.data;
+      let rawData: any[] | null = null;
+
+      if (Array.isArray(resData)) {
+        rawData = resData;
+      } else if (resData && typeof resData === 'object') {
+        const candidate =
+          resData.data ??
+          resData.users ??
+          resData.items ??
+          resData.rows ??
+          resData.result ??
+          resData.results ??
+          null;
+
+        if (Array.isArray(candidate)) {
+          rawData = candidate;
+        } else if (candidate && typeof candidate === 'object' && Array.isArray(candidate.data)) {
+          rawData = candidate.data;
+        }
+      }
+
+      if (!rawData) {
+        console.warn("fetchRealUsers : structure de réponse inattendue — impossible d'extraire la liste.", resData);
+        return;
+      }
+
+      const formattedUsers: User[] = rawData.map((u: any, index: number) => ({
+        id: extractId(u, index),
+        nom: u.nom || u.name || u.Nom || 'Nom inconnu',
+        prenom: u.prenom || u.firstName || u.Prenom || '',
+        email: u.email || u.mail || u.Email || '',
+        role: (u.role || u.Role || 'manager') as User['role'],
+        module: parseModules(u.module || u.modules || u.Module),
+        actif: u.statut === 'actif' || u.actif === true || u.status === 'actif' || u.statut === 1 || u.is_active === true,
+        createdAt: u.date_creation || u.created_at || u.createdAt || new Date().toISOString(),
+        lastLogin: u.lastLogin || u.last_login || u.dernier_login || null,
+      }));
+
+      console.log(`fetchRealUsers : ${formattedUsers.length} utilisateur(s) chargé(s)`, formattedUsers);
+      dispatch({ type: 'SET_USERS', payload: formattedUsers });
+    } catch (err: any) {
+      console.error("Erreur lors de la récupération des utilisateurs:", err?.response?.data || err?.message || err);
+    }
+  }, [dispatch]);
+
+  useEffect(() => {
+    fetchRealUsers();
+  }, [fetchRealUsers]);
+
+  // Calcul du nombre de managers par module (pour la règle max 2 managers par module)
+  const getManagersCountByModule = useCallback((): Record<ModuleType, number> => {
+    const counts: Record<string, number> = {
+      hebergement: 0,
+      hotel: 0,
+      restaurant: 0,
+      bar: 0,
+      casino: 0,
+      finances: 0,
+    };
+
+    state.users.forEach(u => {
+      if (u.role === 'manager') {
+        // Ne pas compter l'utilisateur en cours d'édition
+        if (editUser && String(u.id) === String(editUser.id)) return;
+        const uMods = parseModules(u.module);
+        uMods.forEach(mod => {
+          if (counts[mod] !== undefined) {
+            counts[mod]++;
+          }
+        });
+      }
+    });
+
+    return counts as Record<ModuleType, number>;
+  }, [state.users, editUser]);
+
+  const managersCountByModule = getManagersCountByModule();
 
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -49,31 +161,113 @@ export const UtilisateursPage: React.FC = () => {
 
   const openEdit = (user: User) => {
     setEditUser(user);
-    setForm({ nom: user.nom, prenom: user.prenom, email: user.email, role: user.role, module: user.module, actif: user.actif, password: '' });
+    setErrorMessage('');
+    setForm({ 
+      nom: user.nom, 
+      prenom: user.prenom, 
+      email: user.email, 
+      role: user.role, 
+      module: parseModules(user.module), 
+      actif: user.actif, 
+      password: '' 
+    });
     setShowModal(true);
   };
 
-  const handleSubmit = () => {
-    if (!form.nom || !form.email) return;
-    if (editUser) {
-      dispatch({ type: 'UPDATE_USER', payload: { ...editUser, ...form } });
-    } else {
-      dispatch({ type: 'ADD_USER', payload: { ...form } });
+  const handleSubmit = async () => {
+    if (!form.nom || !form.email) {
+      setErrorMessage('Le nom et l\'email sont requis');
+      return;
     }
-    setShowModal(false);
-    setEditUser(null);
-    setForm({ nom: '', prenom: '', email: '', role: 'viewer', module: [], actif: true, password: '' });
+
+    // Validation : Règle max 2 managers par module
+    if (form.role === 'manager') {
+      const selectedMods = parseModules(form.module);
+      for (const mod of selectedMods) {
+        const count = managersCountByModule[mod] || 0;
+        if (count >= 2) {
+          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà atteint sa limite maximale de 2 managers.`);
+          return;
+        }
+      }
+    }
+    
+    try {
+      setErrorMessage('');
+      if (editUser) {
+        await api.put(`/api/admin/users/${editUser.id}`, {
+          nom: form.nom,
+          prenom: form.prenom,
+          email: form.email,
+          role: form.role,
+          module: form.module,
+          statut: form.actif ? 'actif' : 'inactif'
+        });
+      } else {
+        await AuthService.register({
+          nom: form.nom,
+          prenom: form.prenom,
+          email: form.email,
+          mot_de_passe: form.password,
+          role: form.role,
+          module: form.module,
+          actif: form.actif,
+        });
+      }
+
+      await fetchRealUsers();
+      setShowModal(false);
+      setEditUser(null);
+      setForm({ nom: '', prenom: '', email: '', role: 'manager', module: [], actif: true, password: '' });
+    } catch (err: any) {
+      const errorMsg = typeof err === 'string' 
+        ? err 
+        : err?.response?.data?.message || err?.message || 'Une erreur est survenue';
+      setErrorMessage(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) return;
+
+    // 1. Suppression optimiste immédiate dans l'état global React
+    dispatch({ type: 'DELETE_USER', payload: id });
+
+    // 2. Appel API si ce n'est pas un ID temporaire fallback
+    if (!id.startsWith('user-fallback-')) {
+      try {
+        await api.delete(`/api/admin/users/${id}`);
+      } catch (err) {
+        console.error("Erreur lors de la suppression sur le serveur:", err);
+      }
+    }
   };
 
   const toggleModule = (mod: ModuleType) => {
-    setForm(prev => ({
-      ...prev,
-      module: prev.module.includes(mod) ? prev.module.filter(m => m !== mod) : [...prev.module, mod]
-    }));
+    const currentModules = parseModules(form.module);
+    const exists = currentModules.includes(mod);
+
+    // Si on veut ajouter le module et que le rôle est manager, vérifier la limite de 2
+    if (!exists && form.role === 'manager') {
+      const currentCount = managersCountByModule[mod] || 0;
+      if (currentCount >= 2) {
+        setErrorMessage(`Limite atteinte : Le module "${moduleLabels[mod] || mod}" a déjà 2 managers assignés.`);
+        return;
+      }
+    }
+
+    setErrorMessage('');
+    setForm(prev => {
+      const cur = parseModules(prev.module);
+      return {
+        ...prev,
+        module: cur.includes(mod) ? cur.filter(m => m !== mod) : [...cur, mod]
+      };
+    });
   };
 
   const activeCount = state.users.filter(u => u.actif).length;
-  const adminCount = state.users.filter(u => u.role === 'admin').length;
+  const managerCount = state.users.filter(u => u.role === 'manager').length;
 
   return (
     <div className="space-y-6">
@@ -96,7 +290,7 @@ export const UtilisateursPage: React.FC = () => {
           { label: 'Total Utilisateurs', value: state.users.length, color: 'text-primary' },
           { label: 'Actifs', value: activeCount, color: 'text-success' },
           { label: 'Inactifs', value: state.users.length - activeCount, color: 'text-muted' },
-          { label: 'Administrateurs', value: adminCount, color: 'text-accent' },
+          { label: 'Managers', value: managerCount, color: 'text-accent' },
         ].map(s => (
           <div key={s.label} className="bg-surface border border-base rounded-2xl p-5">
             <p className="text-muted text-xs mb-1">{s.label}</p>
@@ -121,80 +315,81 @@ export const UtilisateursPage: React.FC = () => {
                 className="w-full sm:w-48 h-9 pl-9 pr-3 bg-surface-2 border border-base rounded-xl text-primary placeholder-muted text-sm focus:outline-none focus:border-accent/50" 
               />
             </div>
-            <Button icon={<Plus size={16} />} onClick={() => { setEditUser(null); setShowModal(true); }}>
+            <Button icon={<Plus size={16} />} onClick={() => { setEditUser(null); setErrorMessage(''); setShowModal(true); }}>
               Ajouter
             </Button>
           </div>
         </div>
 
         <div className="divide-y divide-base">
-          {filtered.map(user => (
-            <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
-              {/* Avatar */}
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                user.role === 'admin' ? 'bg-accent' :
-                user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
-                user.role === 'caissier' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
-                'bg-gradient-to-br from-slate-600 to-slate-700'
-              }`}>
-                <span className="text-black font-bold text-sm">{user.prenom[0]}{user.nom[0]}</span>
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-primary font-medium">{user.prenom} {user.nom}</p>
-                  <span className="text-sm">{roleIcons[user.role]}</span>
-                </div>
-                <p className="text-muted text-xs">{user.email}</p>
-              </div>
-
-              {/* Role */}
-              <div className="hidden md:block">
-                <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
-              </div>
-
-              {/* Modules */}
-              <div className="hidden lg:flex flex-wrap gap-1 max-w-48">
-                {user.module.slice(0, 3).map(m => (
-                  <span key={m} className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
-                    {moduleLabels[m] || m}
-                  </span>
-                ))}
-                {user.module.length > 3 && (
-                  <span className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
-                    +{user.module.length - 3}
-                  </span>
-                )}
-              </div>
-
-              {/* Status */}
-              <div>
-                <Badge variant={user.actif ? 'actif' : 'inactif'}>
-                  {user.actif ? 'Actif' : 'Inactif'}
-                </Badge>
-              </div>
-
-              {/* Last Login */}
-              <div className="hidden xl:block text-right">
-                <p className="text-muted text-xs">
-                  {user.lastLogin ? formatDate(user.lastLogin) : 'Jamais'}
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
-                  <Edit2 size={14} />
-                </button>
-                {user.id !== state.currentUser.id && (
-                  <button onClick={() => dispatch({ type: 'DELETE_USER', payload: user.id })} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
+          {filtered.length === 0 ? (
+            <div className="px-6 py-8 text-center text-muted text-sm">
+              Aucun utilisateur trouvé.
             </div>
-          ))}
+          ) : (
+            filtered.map(user => {
+              const userModulesList = parseModules(user.module);
+              return (
+                <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
+                    user.role === 'caissier' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                    'bg-gradient-to-br from-slate-600 to-slate-700'
+                  }`}>
+                    <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom?.[0] || ''}</span>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-primary font-medium">{user.prenom} {user.nom}</p>
+                      <span className="text-sm">{roleIcons[user.role]}</span>
+                    </div>
+                    <p className="text-muted text-xs">{user.email}</p>
+                  </div>
+
+                  <div className="hidden md:block">
+                    <Badge variant={user.role}>{roleLabels[user.role] || user.role}</Badge>
+                  </div>
+
+                  <div className="hidden lg:flex flex-wrap gap-1 max-w-48">
+                    {userModulesList.slice(0, 3).map(m => (
+                      <span key={m} className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
+                        {moduleLabels[m] || m}
+                      </span>
+                    ))}
+                    {userModulesList.length > 3 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-surface-2 text-muted border border-base">
+                        +{userModulesList.length - 3}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <Badge variant={user.actif ? 'actif' : 'inactif'}>
+                      {user.actif ? 'Actif' : 'Inactif'}
+                    </Badge>
+                  </div>
+
+                  <div className="hidden xl:block text-right">
+                    <p className="text-muted text-xs">
+                      {user.lastLogin ? formatDate(user.lastLogin) : 'Jamais'}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
+                      <Edit2 size={14} />
+                    </button>
+                    {user.id !== state.currentUser?.id && (
+                      <button onClick={() => handleDeleteUser(user.id)} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -205,7 +400,7 @@ export const UtilisateursPage: React.FC = () => {
           Niveaux d'Accès
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {(Object.entries(roleLabels) as [UserRole, string][]).map(([role, label]) => (
+          {(Object.entries(roleLabels) as [string, string][]).map(([role, label]) => (
             <div key={role} className="flex items-start gap-3 p-4 rounded-xl bg-surface-2/50 border border-base">
               <span className="text-2xl">{roleIcons[role]}</span>
               <div>
@@ -214,7 +409,6 @@ export const UtilisateursPage: React.FC = () => {
                   <Badge variant={role}>{role}</Badge>
                 </div>
                 <p className="text-muted text-xs">
-                  {role === 'admin' && 'Accès complet à toute la plateforme'}
                   {role === 'manager' && 'Gestion des modules assignés'}
                   {role === 'caissier' && 'Accès aux opérations de caisse'}
                   {role === 'stock_manager' && 'Gestion des stocks uniquement'}
@@ -229,6 +423,11 @@ export const UtilisateursPage: React.FC = () => {
       {/* Modal */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditUser(null); }} title={editUser ? 'Modifier l\'utilisateur' : 'Nouvel Utilisateur'} size="lg">
         <div className="space-y-4">
+          {errorMessage && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm">
+              {errorMessage}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Input label="Prénom" value={form.prenom} onChange={e => setForm({...form, prenom: e.target.value})} placeholder="Prénom" />
             <Input label="Nom" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} placeholder="Nom de famille" />
@@ -248,26 +447,29 @@ export const UtilisateursPage: React.FC = () => {
           <div>
             <label className="text-muted text-sm font-medium block mb-2">Modules autorisés</label>
             <div className="grid grid-cols-3 gap-2">
-              {allModules.map(mod => (
-                <button
-                  key={mod}
-                  onClick={() => toggleModule(mod)}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
-                    form.module.includes(mod)
-                      ? 'bg-accent-4 text-accent border-accent/40'
-                      : 'bg-surface-2 text-muted border-base hover:text-primary'
-                  }`}
-                >
-                  {moduleLabels[mod]}
-                </button>
-              ))}
+              {allModules.map(mod => {
+                const isSelected = parseModules(form.module).includes(mod);
+                return (
+                  <button
+                    key={mod}
+                    onClick={() => toggleModule(mod)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                      isSelected
+                        ? 'bg-accent-4 text-accent border-accent/40'
+                        : 'bg-surface-2 text-muted border-base hover:text-primary'
+                    }`}
+                  >
+                    {moduleLabels[mod]}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button onClick={() => setForm({...form, actif: !form.actif})}
               className={`w-12 h-6 rounded-full transition-all ${form.actif ? 'bg-success' : 'bg-surface-3'} relative`}>
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
             </button>
             <span className="text-muted text-sm">{form.actif ? 'Compte actif' : 'Compte inactif'}</span>
           </div>
@@ -281,3 +483,5 @@ export const UtilisateursPage: React.FC = () => {
     </div>
   );
 };
+
+export default UtilisateursPage;

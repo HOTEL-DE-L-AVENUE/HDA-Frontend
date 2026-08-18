@@ -27,11 +27,15 @@ import type {
   Client,
 } from '../components/Restaurant/types';
 
+import AuthService from '../services/authService';
+import { getDefaultTabForRole } from '../utils/permissions';
+
 export const RestaurantPage: React.FC = () => {
   const { state, dispatch } = useHDA();
+  const currentUser = AuthService.getCurrentUser();
 
   // ---------- États ----------
-  const [activeTab, setActiveTab] = useState('commandes');
+  const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('commandes', currentUser?.role));
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(false);
