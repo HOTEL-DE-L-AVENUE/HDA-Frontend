@@ -110,7 +110,7 @@ export const clientService = {
     try {
       const params = new URLSearchParams({ q: term });
       if (limit) params.append('limit', String(limit));
-      const response = await api.get<ApiResponse<Client[]>>(`/api/clients/search?${params.toString()}`);
+      const response = await api.get<ApiResponse<Client[]>>(`/clients/search?${params.toString()}`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur searchClients:', error);
@@ -121,7 +121,7 @@ export const clientService = {
   // Récupérer un client par ID
   getClientById: async (id: number): Promise<Client> => {
     try {
-      const response = await api.get<ApiResponse<Client>>(`/api/clients/${id}`);
+      const response = await api.get<ApiResponse<Client>>(`/clients/${id}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getClientById ${id}:`, error);
@@ -132,7 +132,7 @@ export const clientService = {
   // Récupérer un client avec son solde et sa fiche KYC
   getClientWithDetails: async (id: number): Promise<ClientWithDetails> => {
     try {
-      const response = await api.get<ApiResponse<ClientWithDetails>>(`/api/clients/${id}/full`);
+      const response = await api.get<ApiResponse<ClientWithDetails>>(`/clients/${id}/full`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getClientWithDetails ${id}:`, error);
@@ -143,7 +143,7 @@ export const clientService = {
   // Créer un client
   createClient: async (data: ClientFormData): Promise<Client> => {
     try {
-      const response = await api.post<ApiResponse<Client>>('/api/clients', data);
+      const response = await api.post<ApiResponse<Client>>('/clients', data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur createClient:', error);
@@ -154,7 +154,7 @@ export const clientService = {
   // Mettre à jour un client
   updateClient: async (id: number, data: ClientFormData): Promise<Client> => {
     try {
-      const response = await api.put<ApiResponse<Client>>(`/api/clients/${id}`, data);
+      const response = await api.put<ApiResponse<Client>>(`/clients/${id}`, data);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateClient ${id}:`, error);
@@ -177,7 +177,7 @@ export const clientService = {
         deleted: boolean; 
         deactivated: boolean; 
         relatedCount?: number 
-      }>>(`/api/clients/${id}`);
+      }>>(`/clients/${id}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur deleteClient ${id}:`, error);
@@ -188,7 +188,7 @@ export const clientService = {
   // Récupérer la fiche KYC d'un client
   getClientKyc: async (id: number): Promise<ClientKyc | null> => {
     try {
-      const response = await api.get<ApiResponse<ClientKyc | null>>(`/api/clients/${id}/kyc`);
+      const response = await api.get<ApiResponse<ClientKyc | null>>(`/clients/${id}/kyc`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getClientKyc ${id}:`, error);
@@ -199,7 +199,7 @@ export const clientService = {
   // Créer ou mettre à jour la fiche KYC d'un client (upsert)
   saveClientKyc: async (id: number, data: ClientKycFormData): Promise<ClientKyc> => {
     try {
-      const response = await api.put<ApiResponse<ClientKyc>>(`/api/clients/${id}/kyc`, data);
+      const response = await api.put<ApiResponse<ClientKyc>>(`/clients/${id}/kyc`, data);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur saveClientKyc ${id}:`, error);
@@ -210,7 +210,7 @@ export const clientService = {
   // Dernière signature électronique liée à la déclaration KYC (ou null si aucune)
   getClientKycSignature: async (id: number): Promise<string | null> => {
     try {
-      const response = await api.get<ApiResponse<{ signature_data: string } | null>>(`/api/clients/${id}/kyc/signature`);
+      const response = await api.get<ApiResponse<{ signature_data: string } | null>>(`/clients/${id}/kyc/signature`);
       return response.data.data?.signature_data || null;
     } catch (error) {
       console.error(`❌ Erreur getClientKycSignature ${id}:`, error);
@@ -221,7 +221,7 @@ export const clientService = {
   // Historique complet des signatures KYC de ce client (du plus récent au plus ancien)
   getClientKycSignatureHistory: async (id: number): Promise<{ signature_data: string; signed_at: string }[]> => {
     try {
-      const response = await api.get<ApiResponse<{ signature_data: string; signed_at: string }[]>>(`/api/clients/${id}/kyc/signature/history`);
+      const response = await api.get<ApiResponse<{ signature_data: string; signed_at: string }[]>>(`/clients/${id}/kyc/signature/history`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur getClientKycSignatureHistory ${id}:`, error);
