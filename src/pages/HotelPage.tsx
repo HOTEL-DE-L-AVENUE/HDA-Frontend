@@ -62,7 +62,7 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
-  { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
+  // { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
 ];
 
 // Composant pour les statistiques responsive
