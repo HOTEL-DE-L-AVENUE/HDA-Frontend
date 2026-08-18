@@ -58,6 +58,12 @@ export interface FinancialStats {
   soldeGlobal: number;
 }
 
+export const isFinancialInflow = (typeFlux?: string) =>
+  String(typeFlux || '').trim().toUpperCase().startsWith('ENTREE');
+
+export const isFinancialOutflow = (typeFlux?: string) =>
+  String(typeFlux || '').trim().toUpperCase().startsWith('SORTIE');
+
 // ==================== API SERVICE ====================
 
 export const financeService = {
@@ -65,7 +71,7 @@ export const financeService = {
   
   async getInvoices(params?: { client_id?: number; statut?: string }) {
     try {
-      const response = await api.get('/finance/invoices', { params });
+      const response = await api.get('/api/finance/invoices', { params });
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Erreur getInvoices:', error);
@@ -139,8 +145,22 @@ export const financeService = {
   
   async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string }) {
     try {
-      const response = await api.get('/api/finance/transactions', { params });
-      return response.data.data || [];
+      // The API paginates at 20 rows by default. Finance needs the complete
+      // ledger; otherwise a module total can exist while its history is absent.
+      const allTransactions: FinancialTransaction[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        const response = await api.get('/api/finance/transactions', {
+          params: { ...params, page, limit: 100, sort: 'created_at', order: 'DESC' }
+        });
+        allTransactions.push(...(response.data.data || []));
+        totalPages = Number(response.data.meta?.totalPages || 1);
+        page += 1;
+      } while (page <= totalPages);
+
+      return allTransactions;
     } catch (error) {
       console.error('❌ Erreur getTransactions:', error);
       return [];
@@ -155,6 +175,18 @@ export const financeService = {
       console.error('❌ Erreur getTransactionById:', error);
       return null;
     }
+  },
+
+  async createTransaction(data: {
+    module: string;
+    type_flux: 'ENTREE' | 'SORTIE';
+    montant: number;
+    description: string;
+    client_id?: number | null;
+    reference_id?: number | null;
+  }) {
+    const response = await api.post('/api/finance/transactions', data);
+    return response.data.data as FinancialTransaction;
   },
 
   // ==================== CLIENT STATEMENTS ====================
@@ -173,22 +205,8 @@ export const financeService = {
   
   async getFinancialStats(): Promise<FinancialStats> {
     try {
-      // Calculate stats from transactions since backend doesn't have a dedicated stats endpoint
-      const transactions = await this.getTransactions();
-      
-      const totalRevenu = transactions
-        .filter((t: { type_flux: string; }) => t.type_flux === 'ENTREE')
-        .reduce((sum: number, t: { montant: any; }) => sum + Number(t.montant), 0);
-      
-      const totalDepenses = transactions
-        .filter((t: { type_flux: string; }) => t.type_flux === 'SORTIE')
-        .reduce((sum: number, t: { montant: any; }) => sum + Number(t.montant), 0);
-      
-      return {
-        totalRevenu,
-        totalDepenses,
-        soldeGlobal: totalRevenu - totalDepenses
-      };
+      const response = await api.get('/api/finance/summary');
+      return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getFinancialStats:', error);
       return {
@@ -206,11 +224,11 @@ export const financeService = {
       const transactions = await this.getTransactions({ module });
       
       const entrees = transactions
-        .filter((t: { type_flux: string; }) => t.type_flux === 'ENTREE')
+        .filter((t: { type_flux: string; }) => isFinancialInflow(t.type_flux))
         .reduce((sum: number, t: { montant: any; }) => sum + Number(t.montant), 0);
       
       const sorties = transactions
-        .filter((t: { type_flux: string; }) => t.type_flux === 'SORTIE')
+        .filter((t: { type_flux: string; }) => isFinancialOutflow(t.type_flux))
         .reduce((sum: number, t: { montant: any; }) => sum + Number(t.montant), 0);
       
       return {
@@ -232,7 +250,7 @@ export const financeService = {
   
   async getInvoiceItems(params?: { invoice_id?: number }) {
     try {
-      const response = await api.get('/finance/invoice-items', { params });
+      const response = await api.get('/api/finance/invoice-items', { params });
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Erreur getInvoiceItems:', error);
