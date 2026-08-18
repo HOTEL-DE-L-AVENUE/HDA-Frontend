@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency, formatDate } from '../utils/data';
-import { ModuleType } from '../types';
 import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, CreditCard } from 'lucide-react';
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats } from '../services/finance.service';
+import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import { CreateInvoiceModal } from '../components/Finance/modals/CreateInvoiceModal';
 import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
+import { Modal } from '../components/ui/Modal';
+import { toast } from 'react-hot-toast';
 
 const moduleConfig: Record<string, { label: string; gradient: string; color: string }> = {
   hebergement: { label: 'Hébergement', gradient: 'from-blue-500 to-cyan-600', color: '#3b82f6' },
@@ -17,14 +18,7 @@ const moduleConfig: Record<string, { label: string; gradient: string; color: str
   facturation: { label: 'Facturation', gradient: 'from-purple-500 to-purple-600', color: '#8b5cf6' },
 };
 
-const mockMonthlyData = [
-  { mois: 'Jan', total: 221000 },
-  { mois: 'Fév', total: 221000 },
-  { mois: 'Mar', total: 275000 },
-  { mois: 'Avr', total: 310000 },
-  { mois: 'Mai', total: 302000 },
-  { mois: 'Jun', total: 370000 },
-];
+const financeModules = Object.keys(moduleConfig);
 
 export const FinancesPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('all');
@@ -35,11 +29,14 @@ export const FinancesPage: React.FC = () => {
     totalDepenses: 0,
     soldeGlobal: 0
   });
-  const [modulesSoldes, setModulesSoldes] = useState<Array<{ module: ModuleType } & ModuleCaisseSolde>>([]);
+  const [modulesSoldes, setModulesSoldes] = useState<Array<{ module: string } & ModuleCaisseSolde>>([]);
   
   // Modal states
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  const [showOperationModal, setShowOperationModal] = useState(false);
+  const [operation, setOperation] = useState({ module: 'general', type_flux: 'ENTREE' as 'ENTREE' | 'SORTIE', montant: '', description: '' });
+  const [isSavingOperation, setIsSavingOperation] = useState(false);
 
   // Fetch financial data on component mount
   useEffect(() => {
@@ -51,26 +48,25 @@ export const FinancesPage: React.FC = () => {
       setLoading(true);
       
       // Fetch all data in parallel
-      const [transactionsData, statsData, hebergementSolde, hotelSolde, restaurantSolde, barSolde, casinoSolde] = await Promise.all([
+      const [transactionsData, statsData] = await Promise.all([
         financeService.getTransactions(),
         financeService.getFinancialStats(),
-        financeService.getModuleCaisseSolde('hebergement'),
-        financeService.getModuleCaisseSolde('hotel'),
-        financeService.getModuleCaisseSolde('restaurant'),
-        financeService.getModuleCaisseSolde('bar'),
-        financeService.getModuleCaisseSolde('casino'),
       ]);
 
       setTransactions(transactionsData);
       setFinancialStats(statsData);
       
-      setModulesSoldes([
-        { module: 'hebergement' as ModuleType, ...hebergementSolde },
-        { module: 'hotel' as ModuleType, ...hotelSolde },
-        { module: 'restaurant' as ModuleType, ...restaurantSolde },
-        { module: 'bar' as ModuleType, ...barSolde },
-        { module: 'casino' as ModuleType, ...casinoSolde },
-      ]);
+      const balances = new Map(financeModules.map(module => [module, { module, entrees: 0, sorties: 0, solde: 0 }]));
+      transactionsData.forEach((transaction) => {
+        const module = String(transaction.module || 'general').toLowerCase();
+        const balance = balances.get(module) || { module, entrees: 0, sorties: 0, solde: 0 };
+        const amount = Number(transaction.montant) || 0;
+        if (isFinancialInflow(transaction.type_flux)) balance.entrees += amount;
+        if (isFinancialOutflow(transaction.type_flux)) balance.sorties += amount;
+        balance.solde = balance.entrees - balance.sorties;
+        balances.set(module, balance);
+      });
+      setModulesSoldes([...balances.values()]);
     } catch (error) {
       console.error('Error fetching financial data:', error);
     } finally {
@@ -188,13 +184,13 @@ export const FinancesPage: React.FC = () => {
   };
 
   const pieData = modulesSoldes.map(m => ({
-    name: moduleConfig[m.module].label,
+    name: moduleConfig[m.module]?.label || m.module,
     value: m.entrees,
-    color: moduleConfig[m.module].color,
+    color: moduleConfig[m.module]?.color || '#6b7280',
   }));
 
   const barData = modulesSoldes.map(m => ({
-    name: moduleConfig[m.module].label,
+    name: moduleConfig[m.module]?.label || m.module,
     entrees: m.entrees,
     sorties: m.sorties,
     solde: m.solde,
@@ -202,20 +198,22 @@ export const FinancesPage: React.FC = () => {
 
   // All transactions - convert backend format to frontend format
   const allTransactions = transactions
-    .filter(tx => activeFilter === 'all' || tx.module === activeFilter)
+    .filter(tx => activeFilter === 'all' || tx.module?.toLowerCase() === activeFilter.toLowerCase())
     .map(tx => {
       // Map backend module names to frontend ModuleType
-      let module: ModuleType = 'hebergement'; // default
+      let module = 'general';
       const moduleLower = tx.module?.toLowerCase() || '';
       if (moduleLower.includes('hebergement')) module = 'hebergement';
       else if (moduleLower.includes('hotel')) module = 'hotel';
       else if (moduleLower.includes('restaurant')) module = 'restaurant';
       else if (moduleLower.includes('bar')) module = 'bar';
       else if (moduleLower.includes('casino')) module = 'casino';
+      else if (moduleLower.includes('facturation')) module = 'facturation';
+      else if (moduleLower.includes('general')) module = 'general';
       
       return {
         id: tx.id.toString(),
-        type: tx.type_flux === 'ENTREE' ? 'entree' : 'sortie',
+        type: isFinancialInflow(tx.type_flux) ? 'entree' : 'sortie',
         montant: Number(tx.montant),
         description: tx.description || 'Transaction',
         categorie: tx.module || 'Général',
@@ -227,8 +225,29 @@ export const FinancesPage: React.FC = () => {
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const totalEntrees = modulesSoldes.reduce((sum, m) => sum + m.entrees, 0);
-  const totalSorties = modulesSoldes.reduce((sum, m) => sum + m.sorties, 0);
+  const totalEntrees = financialStats.totalRevenu;
+  const totalSorties = financialStats.totalDepenses;
+
+  const handleCreateOperation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const montant = Number(operation.montant);
+    if (!montant || montant <= 0 || !operation.description.trim()) {
+      toast.error('Indiquez un montant positif et une description.');
+      return;
+    }
+    setIsSavingOperation(true);
+    try {
+      await financeService.createTransaction({ ...operation, montant, description: operation.description.trim() });
+      toast.success(operation.type_flux === 'ENTREE' ? 'Entrée enregistrée.' : 'Sortie enregistrée.');
+      setShowOperationModal(false);
+      setOperation({ module: 'general', type_flux: 'ENTREE', montant: '', description: '' });
+      await fetchFinancialData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Impossible d’enregistrer l’opération.');
+    } finally {
+      setIsSavingOperation(false);
+    }
+  };
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload?.length) {
@@ -255,6 +274,14 @@ export const FinancesPage: React.FC = () => {
           <p className="text-muted text-sm mt-1">Vue consolidée de toutes les caisses</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowOperationModal(true)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-black text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={16} />
+            <span className="hidden md:inline">Opération</span>
+          </button>
           <button 
             onClick={() => setShowCreateInvoiceModal(true)}
             disabled={loading}
@@ -328,7 +355,7 @@ export const FinancesPage: React.FC = () => {
         <h3 className="text-primary font-semibold mb-4">Caisses par Module</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {modulesSoldes.map(m => {
-            const config = moduleConfig[m.module];
+            const config = moduleConfig[m.module] || moduleConfig.general;
             const pct = totalEntrees > 0 ? (m.entrees / totalEntrees) * 100 : 0;
             return (
               <div key={m.module} className="bg-surface border border-base rounded-2xl overflow-hidden hover:border-accent transition-all">
@@ -405,7 +432,7 @@ export const FinancesPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
           <h3 className="text-primary font-semibold">Historique des Transactions</h3>
           <div className="flex flex-wrap gap-2">
-            {[{ value: 'all', label: 'Tout' }, ...Object.entries(moduleConfig).filter(([k]) => ['hebergement', 'hotel', 'restaurant', 'bar', 'casino'].includes(k)).map(([k, v]) => ({ value: k, label: v.label }))].map(f => (
+            {[{ value: 'all', label: 'Tout' }, ...modulesSoldes.map(m => ({ value: m.module, label: moduleConfig[m.module]?.label || m.module }))].map(f => (
               <button
                 key={f.value}
                 onClick={() => setActiveFilter(f.value)}
@@ -436,7 +463,7 @@ export const FinancesPage: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
                   <p className="text-muted text-xs">
-                    <span className="capitalize" style={{ color: moduleConfig[tx.module]?.color }}>{moduleConfig[tx.module]?.label}</span>
+                    <span className="capitalize" style={{ color: moduleConfig[tx.module]?.color || moduleConfig.general.color }}>{moduleConfig[tx.module]?.label || tx.module}</span>
                     {' • '}{tx.categorie} • {tx.userName} • {formatDate(tx.date)}
                   </p>
                 </div>
@@ -469,6 +496,43 @@ export const FinancesPage: React.FC = () => {
         setShowRecordPaymentModal(false);
       }}
     />
+    <Modal isOpen={showOperationModal} onClose={() => setShowOperationModal(false)} title="Nouvelle opération de caisse" size="md">
+      <form className="space-y-4" onSubmit={handleCreateOperation}>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Type de flux</label>
+          <select
+            value={operation.type_flux}
+            onChange={(event) => setOperation({ ...operation, type_flux: event.target.value as 'ENTREE' | 'SORTIE' })}
+            className="w-full bg-surface border border-base rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="ENTREE">Entrée</option>
+            <option value="SORTIE">Sortie</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Module</label>
+          <select
+            value={operation.module}
+            onChange={(event) => setOperation({ ...operation, module: event.target.value })}
+            className="w-full bg-surface border border-base rounded-lg px-3 py-2 text-sm"
+          >
+            {financeModules.map((module) => <option key={module} value={module}>{moduleConfig[module].label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Montant (MGA)</label>
+          <input type="number" min="1" step="1" required value={operation.montant} onChange={(event) => setOperation({ ...operation, montant: event.target.value })} className="w-full bg-surface border border-base rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+          <input required value={operation.description} onChange={(event) => setOperation({ ...operation, description: event.target.value })} placeholder="Ex. Achat de fournitures" className="w-full bg-surface border border-base rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={() => setShowOperationModal(false)} className="px-4 py-2 rounded-lg border border-base text-sm">Annuler</button>
+          <button type="submit" disabled={isSavingOperation} className="px-4 py-2 rounded-lg bg-accent text-black text-sm font-medium disabled:opacity-50">{isSavingOperation ? 'Enregistrement…' : 'Enregistrer'}</button>
+        </div>
+      </form>
+    </Modal>
     </div>
   );
 };
