@@ -41,11 +41,17 @@ api.interceptors.request.use(
       ) {
         originalRequest._retry = true;
         try {
-          const refreshToken = localStorage.getItem("refresh-token");
+          const refreshToken = localStorage.getItem("refresh-token") || sessionStorage.getItem("refresh-token");
           if (!refreshToken) throw new Error("Aucun refresh token");
           const res = await api.post("/api/auth/refresh-token", { refreshToken });
-          const newToken = res.data.token;
-          localStorage.setItem("auth-token", newToken);
+          const newToken = res.data?.data?.token || res.data?.token;
+          if (!newToken) throw new Error("Nouveau jeton manquant");
+
+          const tokenStorage = sessionStorage.getItem("auth-token") && !localStorage.getItem("auth-token")
+            ? sessionStorage
+            : localStorage;
+          tokenStorage.setItem("auth-token", newToken);
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         } catch (refreshError) {
@@ -55,6 +61,8 @@ api.interceptors.request.use(
           return Promise.reject(refreshError);
         }
       }
+
+      return Promise.reject(error);
     }
     
 );
