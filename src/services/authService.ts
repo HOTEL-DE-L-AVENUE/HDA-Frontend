@@ -143,7 +143,7 @@ class AuthService {
     try {
       const refreshToken = SecureStorage.getItem("refresh-token");
       if (refreshToken) {
-        await api.post("/api/auth/logout", { refreshToken }).catch(() => {});
+        await api.post("/auth/logout", { refreshToken }).catch(() => {});
       }
     } finally {
       SecureStorage.clear();
@@ -165,7 +165,7 @@ class AuthService {
     }
     try {
       console.log("🔄 Rafraîchissement du token...");
-      const response = await api.post("/api/auth/refresh-token", { refreshToken });
+      const response = await api.post("/auth/refresh-token", { refreshToken });
       const data = response.data as ApiResponse;
       if (!data.success || !data.token) {
         throw new Error(data.error || "Échec du rafraîchissement");
@@ -185,7 +185,7 @@ class AuthService {
   // --------------------------------------------------
   static async getProfile(): Promise<User> {
     try {
-      const response = await api.get("/api/auth/me");
+      const response = await api.get("/auth/me");
       const data = response.data as ApiResponse<User>;
       if (!data.success || !data.user) {
         throw new Error(data.message || "Profil non trouvé");
@@ -205,7 +205,7 @@ class AuthService {
       throw new Error(validation.error!);
     }
     try {
-      const response = await api.post("/api/auth/change-password", {
+      const response = await api.post("/auth/change-password", {
         oldPassword,
         newPassword,
       });
