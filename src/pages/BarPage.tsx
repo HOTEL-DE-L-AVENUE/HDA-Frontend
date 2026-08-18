@@ -15,6 +15,7 @@ import { CocktailMenu } from '../components/Bar/CocktailMenu';
 import { BestSellers } from '../components/Bar/BestSellers';
 import { BarCommandeView } from '../components/Bar/BarCommande';
 import type { BarCommande } from '../types/bar.type';
+import type { BarOrderStatus } from '../services/bar.service';
 
 import AuthService from '../services/authService';
 import { getDefaultTabForRole } from '../utils/permissions';
@@ -28,6 +29,13 @@ export const BarPage: React.FC = () => {
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const orderStatusLabels: Record<string, BarCommande['statut']> = {
+    EN_ATTENTE: 'En attente',
+    EN_PREPARATION: 'En préparation',
+    SERVIE: 'Servie',
+    ENCAISSEE: 'Encaissée',
+  };
+
   const loadOrders = async () => {
     try {
       const data = await barService.getBarOrders();
@@ -35,7 +43,7 @@ export const BarPage: React.FC = () => {
         id: order.id,
         client: order.client,
         table: order.table,
-        statut: order.statut === 'EN_ATTENTE' ? 'En attente' : (order.statut as BarCommande['statut']),
+        statut: orderStatusLabels[order.statut] || (order.statut as BarCommande['statut']),
         total: Number(order.total || 0),
         created_at: order.created_at,
         items: order.items || [],
@@ -73,6 +81,24 @@ export const BarPage: React.FC = () => {
     } catch (error) {
       console.error('Erreur suppression commande bar:', error);
       setError("La commande bar n'a pas pu être supprimée.");
+      throw error;
+    }
+  };
+
+  const handleUpdateStatut = async (id: number, statut: BarCommande['statut']) => {
+    const statuses: Record<BarCommande['statut'], BarOrderStatus> = {
+      'En attente': 'EN_ATTENTE',
+      'En préparation': 'EN_PREPARATION',
+      'Servie': 'SERVIE',
+      'Encaissée': 'ENCAISSEE',
+    };
+
+    try {
+      await barService.updateBarOrderStatus(id, statuses[statut]);
+      await loadOrders();
+    } catch (error) {
+      console.error('Erreur mise à jour statut commande bar:', error);
+      setError("Le statut de la commande bar n'a pas pu être mis à jour.");
       throw error;
     }
   };
@@ -176,7 +202,7 @@ export const BarPage: React.FC = () => {
       )}
 
       {activeTab === 'commandes' && (
-        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} cocktails={cocktails} stockMap={stockMap} />
+        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} onUpdateStatut={handleUpdateStatut} cocktails={cocktails} stockMap={stockMap} />
       )}
 
       {activeTab === 'stock' && (

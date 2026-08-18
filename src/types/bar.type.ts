@@ -35,7 +35,7 @@ export interface BarCommande {
   id: number;
   client: string;
   table: number;
-  statut: 'En attente' | 'En préparation' | 'Servie';
+  statut: 'En attente' | 'En préparation' | 'Servie' | 'Encaissée';
   total: number;
   items: BarCommandeItem[];
   created_at?: string;
