@@ -37,7 +37,7 @@
         error.response?.status === 401 &&
         originalRequest &&
         !originalRequest._retry &&
-        !originalRequest.url?.includes("/auth/")
+        !originalRequest.url?.includes("/api/auth/")
       ) {
         originalRequest._retry = true;
         try {
