@@ -75,7 +75,7 @@ export const financeService = {
 
   async getInvoiceById(id: number) {
     try {
-      const response = await api.get(`/finance/invoices/${id}`);
+      const response = await api.get(`/api/finance/invoices/${id}`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getInvoiceById:', error);
@@ -85,7 +85,7 @@ export const financeService = {
 
   async getInvoiceDetail(id: number) {
     try {
-      const response = await api.get(`/finance/invoices/${id}/detail`);
+      const response = await api.get(`/api/finance/invoices/${id}/detail`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getInvoiceDetail:', error);
@@ -95,7 +95,7 @@ export const financeService = {
 
   async createInvoice(data: { client_id: number; items: Array<{ description: string; montant: number }> }) {
     try {
-      const response = await api.post('/finance/invoices', data);
+      const response = await api.post('/api/finance/invoices', data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur createInvoice:', error);
@@ -107,7 +107,7 @@ export const financeService = {
   
   async getPayments(params?: { client_id?: number; invoice_id?: number }) {
     try {
-      const response = await api.get('/finance/payments', { params });
+      const response = await api.get('/api/finance/payments', { params });
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Erreur getPayments:', error);
@@ -117,7 +117,7 @@ export const financeService = {
 
   async getPaymentById(id: number) {
     try {
-      const response = await api.get(`/finance/payments/${id}`);
+      const response = await api.get(`/api/finance/payments/${id}`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getPaymentById:', error);
@@ -127,7 +127,7 @@ export const financeService = {
 
   async recordPayment(data: { client_id: number; invoice_id: number; montant: number; moyen_paiement: string }) {
     try {
-      const response = await api.post('/finance/payments', data);
+      const response = await api.post('/api/finance/payments', data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur recordPayment:', error);
@@ -139,7 +139,7 @@ export const financeService = {
   
   async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string }) {
     try {
-      const response = await api.get('/finance/transactions', { params });
+      const response = await api.get('/api/finance/transactions', { params });
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Erreur getTransactions:', error);
@@ -149,7 +149,7 @@ export const financeService = {
 
   async getTransactionById(id: number) {
     try {
-      const response = await api.get(`/finance/transactions/${id}`);
+      const response = await api.get(`/api/finance/transactions/${id}`);
       return response.data.data;
     } catch (error) {
       console.error('❌ Erreur getTransactionById:', error);
@@ -161,7 +161,7 @@ export const financeService = {
   
   async getClientStatement(clientId: number) {
     try {
-      const response = await api.get(`/finance/clients/${clientId}/statement`);
+      const response = await api.get(`/api/finance/clients/${clientId}/statement`);
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Erreur getClientStatement:', error);
