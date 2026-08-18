@@ -535,6 +535,7 @@ export const BarCommandeView: React.FC<Props> = ({
               className="flex-1"
             />
             <Button
+              type="button"
               variant="secondary"
               onClick={() => { setIsCreatingClient((current) => !current); setFeedback(null); }}
               className="w-full sm:w-auto"
