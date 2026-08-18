@@ -1,3 +1,4 @@
+
 // src/pages/UtilisateursPage.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHDA } from '../context/HDAContext';
@@ -5,21 +6,24 @@ import { User, UserRole, ModuleType } from '../types';
 import { formatDate } from '../utils/data';
 import { Modal, Input, Select, Button, Badge } from '../components/UI';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-react';
-import AuthService from '../services/authService';
 import api from '../lib/api';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
-  caissier: 'Caissier',
-  stock_manager: 'Gestionnaire Stock',
+  receptioniste: 'Réceptionniste',
+  caisse: 'Caissier',
+  water: 'Barman',
+  housekeeping: 'Personnel d’entretien',
 };
 
 const roleIcons: Record<string, string> = {
   admin: '👑',
   manager: '🎯',
-  caissier: '💰',
-  stock_manager: '📦',
+  receptioniste: '🛎️',
+  caisse: '💰',
+  water: '🍸',
+  housekeeping: '🧹',
 };
 
 const moduleLabels: Record<string, string> = {
@@ -33,12 +37,9 @@ const moduleLabels: Record<string, string> = {
 
 const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'];
 
-// Extraction d'ID ultra-robuste avec repli par index pour sécuriser l'affichage
-const extractId = (u: any, index: number = 0): string => {
-  const id = u.id_admin || u.id_user || u.id || u._id || u.id_utilisateur || u.userId || u.ID;
-  return id !== undefined && id !== null && String(id).trim() !== '' 
-    ? String(id) 
-    : `user-fallback-${index}`;
+const getApiErrorMessage = (error: any, fallback: string) => {
+  const data = error?.response?.data;
+  return data?.error?.message || data?.message || error?.message || fallback;
 };
 
 const parseModules = (mod: any): ModuleType[] => {
@@ -66,59 +67,39 @@ export const UtilisateursPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [form, setForm] = useState({
     nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
   });
 
   const fetchRealUsers = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const response = await api.get('/api/admin/users');
-      console.log("Données brutes reçues de l'API users:", response.data);
-
-      const resData = response.data;
-      let rawData: any[] | null = null;
-
-      if (Array.isArray(resData)) {
-        rawData = resData;
-      } else if (resData && typeof resData === 'object') {
-        const candidate =
-          resData.data ??
-          resData.users ??
-          resData.items ??
-          resData.rows ??
-          resData.result ??
-          resData.results ??
-          null;
-
-        if (Array.isArray(candidate)) {
-          rawData = candidate;
-        } else if (candidate && typeof candidate === 'object' && Array.isArray(candidate.data)) {
-          rawData = candidate.data;
-        }
+      const response = await api.get('/api/admin/users', { params: { limit: 100 } });
+      const rawUsers = response.data?.data;
+      if (!Array.isArray(rawUsers)) {
+        throw new Error('Réponse utilisateurs invalide');
       }
 
-      if (!rawData) {
-        console.warn("fetchRealUsers : structure de réponse inattendue — impossible d'extraire la liste.", resData);
-        return;
-      }
-
-      const formattedUsers: User[] = rawData.map((u: any, index: number) => ({
-        id: extractId(u, index),
-        nom: u.nom || u.name || u.Nom || 'Nom inconnu',
-        prenom: u.prenom || u.firstName || u.Prenom || '',
-        email: u.email || u.mail || u.Email || '',
-        role: (u.role || u.Role || 'manager') as User['role'],
-        module: parseModules(u.module || u.modules || u.Module),
-        actif: u.statut === 'actif' || u.actif === true || u.status === 'actif' || u.statut === 1 || u.is_active === true,
-        createdAt: u.date_creation || u.created_at || u.createdAt || new Date().toISOString(),
-        lastLogin: u.lastLogin || u.last_login || u.dernier_login || null,
+      const formattedUsers: User[] = rawUsers.map((u: any) => ({
+        id: String(u.id_admin),
+        nom: u.nom,
+        prenom: u.prenom || '',
+        email: u.email,
+        role: (u.role || 'manager') as User['role'],
+        module: parseModules(u.module),
+        actif: u.statut === 'actif',
+        createdAt: u.date_creation || new Date().toISOString(),
+        lastLogin: u.last_login || null,
       }));
-
-      console.log(`fetchRealUsers : ${formattedUsers.length} utilisateur(s) chargé(s)`, formattedUsers);
       dispatch({ type: 'SET_USERS', payload: formattedUsers });
     } catch (err: any) {
-      console.error("Erreur lors de la récupération des utilisateurs:", err?.response?.data || err?.message || err);
+      setErrorMessage(getApiErrorMessage(err, 'Impossible de charger les utilisateurs.'));
+    } finally {
+      setIsLoading(false);
     }
   }, [dispatch]);
 
@@ -175,8 +156,12 @@ export const UtilisateursPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!form.nom || !form.email) {
-      setErrorMessage('Le nom et l\'email sont requis');
+    if (!form.nom || !form.prenom || !form.email) {
+      setErrorMessage('Le nom, le prénom et l\'email sont requis');
+      return;
+    }
+    if (!editUser && !form.password) {
+      setErrorMessage('Le mot de passe est requis pour créer un compte');
       return;
     }
 
@@ -193,6 +178,7 @@ export const UtilisateursPage: React.FC = () => {
     }
     
     try {
+      setIsSubmitting(true);
       setErrorMessage('');
       if (editUser) {
         await api.put(`/api/admin/users/${editUser.id}`, {
@@ -204,14 +190,14 @@ export const UtilisateursPage: React.FC = () => {
           statut: form.actif ? 'actif' : 'inactif'
         });
       } else {
-        await AuthService.register({
+        await api.post('/api/auth/register', {
           nom: form.nom,
           prenom: form.prenom,
           email: form.email,
           mot_de_passe: form.password,
           role: form.role,
           module: form.module,
-          actif: form.actif,
+          statut: form.actif ? 'actif' : 'inactif',
         });
       }
 
@@ -220,26 +206,24 @@ export const UtilisateursPage: React.FC = () => {
       setEditUser(null);
       setForm({ nom: '', prenom: '', email: '', role: 'manager', module: [], actif: true, password: '' });
     } catch (err: any) {
-      const errorMsg = typeof err === 'string' 
-        ? err 
-        : err?.response?.data?.message || err?.message || 'Une erreur est survenue';
-      setErrorMessage(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      setErrorMessage(getApiErrorMessage(err, 'Une erreur est survenue.'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteUser = async (id: string) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) return;
 
-    // 1. Suppression optimiste immédiate dans l'état global React
-    dispatch({ type: 'DELETE_USER', payload: id });
-
-    // 2. Appel API si ce n'est pas un ID temporaire fallback
-    if (!id.startsWith('user-fallback-')) {
-      try {
-        await api.delete(`/api/admin/users/${id}`);
-      } catch (err) {
-        console.error("Erreur lors de la suppression sur le serveur:", err);
-      }
+    try {
+      setDeletingUserId(id);
+      setErrorMessage('');
+      await api.delete(`/api/admin/users/${id}`);
+      await fetchRealUsers();
+    } catch (err: any) {
+      setErrorMessage(getApiErrorMessage(err, 'Impossible de supprimer cet utilisateur.'));
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -284,6 +268,12 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
+      {errorMessage && !showModal && (
+        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm">
+          {errorMessage}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -322,7 +312,9 @@ export const UtilisateursPage: React.FC = () => {
         </div>
 
         <div className="divide-y divide-base">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="px-6 py-8 text-center text-muted text-sm">Chargement des utilisateurs…</div>
+          ) : filtered.length === 0 ? (
             <div className="px-6 py-8 text-center text-muted text-sm">
               Aucun utilisateur trouvé.
             </div>
@@ -333,7 +325,7 @@ export const UtilisateursPage: React.FC = () => {
                 <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
                     user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
-                    user.role === 'caissier' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                    user.role === 'caisse' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
                     'bg-gradient-to-br from-slate-600 to-slate-700'
                   }`}>
                     <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom?.[0] || ''}</span>
@@ -380,9 +372,16 @@ export const UtilisateursPage: React.FC = () => {
                     <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
                       <Edit2 size={14} />
                     </button>
-                    {user.id !== state.currentUser?.id && (
-                      <button onClick={() => handleDeleteUser(user.id)} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
-                        <Trash2 size={14} />
+                    {String(user.id) !== String(state.currentUser?.id) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={deletingUserId !== null}
+                        aria-label={`Supprimer ${user.prenom} ${user.nom}`}
+                        title="Supprimer l'utilisateur"
+                        className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center text-danger transition-all"
+                      >
+                        <Trash2 size={14} className={deletingUserId === user.id ? 'animate-pulse' : ''} />
                       </button>
                     )}
                   </div>
@@ -410,8 +409,10 @@ export const UtilisateursPage: React.FC = () => {
                 </div>
                 <p className="text-muted text-xs">
                   {role === 'manager' && 'Gestion des modules assignés'}
-                  {role === 'caissier' && 'Accès aux opérations de caisse'}
-                  {role === 'stock_manager' && 'Gestion des stocks uniquement'}
+                  {role === 'receptioniste' && 'Accueil, clients et réservations'}
+                  {role === 'caisse' && 'Accès aux opérations de caisse'}
+                  {role === 'water' && 'Service du bar'}
+                  {role === 'housekeeping' && 'Entretien et gestion des chambres'}
                   {role === 'viewer' && 'Lecture seule, sans modification'}
                 </p>
               </div>
@@ -476,7 +477,9 @@ export const UtilisateursPage: React.FC = () => {
 
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" onClick={() => { setShowModal(false); setEditUser(null); }} className="flex-1">Annuler</Button>
-            <Button onClick={handleSubmit} className="flex-1">{editUser ? 'Mettre à jour' : 'Créer le compte'}</Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1">
+              {isSubmitting ? 'Enregistrement…' : editUser ? 'Mettre à jour' : 'Créer le compte'}
+            </Button>
           </div>
         </div>
       </Modal>
