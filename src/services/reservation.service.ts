@@ -1,9 +1,4 @@
 // src/services/reservation.service.ts
-//
-// Les réservations vivent sous le domaine "hébergement" côté backend
-// (routes/hebergementRoutes.js, montées sous /api/hebergement), pas sous
-// /api/reservations à la racine. Toutes les URLs ci-dessous ont été
-// corrigées en conséquence.
 import api from '../lib/api';
 import { Reservation } from '../types/hotel.types';
 
@@ -63,9 +58,6 @@ export const reservationService = {
   },
 
   // Créer une réservation
-  // Note backend : la route vérifie la disponibilité de la chambre et peut aussi
-  // accepter des accompagnants (reservation_guests) dans le même payload — non
-  // exposés ici tant qu'aucun formulaire ne les utilise.
   createReservation: async (data: ReservationFormData): Promise<Reservation> => {
     try {
       const response = await api.post<ApiResponse<Reservation>>(BASE_URL, data);
@@ -87,10 +79,7 @@ export const reservationService = {
     }
   },
 
-  // Mettre à jour le statut d'une réservation.
-  // Il n'existe pas de route dédiée PUT /:id/status côté backend (seule la route
-  // CRUD générique PUT /:id est exposée) : on passe donc par updateReservation.
-  // Si une route dédiée est ajoutée côté backend, il suffira de changer l'URL ici.
+  // Mettre à jour le statut d'une réservation
   updateReservationStatus: async (id: number, statut: string): Promise<Reservation> => {
     try {
       const response = await api.put<ApiResponse<Reservation>>(`${BASE_URL}/${id}`, { statut });
@@ -132,7 +121,7 @@ export const reservationService = {
   // Enregistrer un check-in
   checkIn: async (reservationId: number): Promise<Stay> => {
     try {
-      const response = await api.post<ApiResponse<Stay>>(`/api/hebergement/stays/check-in/${reservationId}`);
+      const response = await api.post<ApiResponse<Stay>>(`/hebergement/stays/check-in/${reservationId}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur checkIn ${reservationId}:`, error);
@@ -143,7 +132,7 @@ export const reservationService = {
   // Enregistrer un check-out
   checkOut: async (stayId: number): Promise<Stay> => {
     try {
-      const response = await api.post<ApiResponse<Stay>>(`/api/hebergement/stays/check-out/${stayId}`);
+      const response = await api.post<ApiResponse<Stay>>(`/hebergement/stays/check-out/${stayId}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur checkOut ${stayId}:`, error);
@@ -151,7 +140,7 @@ export const reservationService = {
     }
   },
 
-  // Statistiques des réservations.
+  // Statistiques des réservations
   getReservationStats: async (): Promise<any> => {
     try {
       const response = await api.get<ApiResponse<any>>(`${BASE_URL}/stats`);
