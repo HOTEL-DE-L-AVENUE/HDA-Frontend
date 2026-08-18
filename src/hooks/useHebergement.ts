@@ -127,8 +127,11 @@ export function useHebergement() {
 
   const handleCheckOut = async (reservation: Reservation) => {
     try {
-      const stays = await reservationService.getStays({ reservation_id: reservation.id });
-      const stay = stays.find((s) => s.reservation_id === reservation.id && !s.checkout_at);
+      const reservationId = Number(reservation.id);
+      const stays = await reservationService.getStays({ reservation_id: reservationId });
+      // MySQL numeric ids can arrive as strings depending on the driver/API
+      // serialization. Compare normalized values so an active stay is found.
+      const stay = stays.find((s) => Number(s.reservation_id) === reservationId && !s.checkout_at);
       if (!stay) {
         throw new Error('Séjour introuvable pour cette réservation');
       }
