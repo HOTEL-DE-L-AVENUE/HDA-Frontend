@@ -117,7 +117,6 @@ export function useHebergement() {
   const handleCheckIn = async (reservation: Reservation) => {
     try {
       await reservationService.checkIn(reservation.id);
-      await reservationService.updateReservationStatus(reservation.id, 'EN_COURS');
       await fetchData();
     } catch (err: any) {
       console.error('Erreur lors du check-in :', err);
