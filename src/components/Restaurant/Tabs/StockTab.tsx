@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Package, Plus, History, X, Truck, BookOpen,
-  ChevronRight, AlertTriangle, RefreshCw,
+  ChevronRight, AlertTriangle, RefreshCw, Trash2,
 } from 'lucide-react';
 import * as restaurantService from '../../../services/restaurantService';
 import { Button } from '../../UI';
@@ -135,7 +135,10 @@ const StockPanel: React.FC = () => {
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<StockItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StockItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Ajout produit
   const [units, setUnits] = useState<Unit[]>([]);
@@ -293,6 +296,27 @@ if (loc.success) {
     finally { setAddLoading(false); }
   };
 
+  const handleDeleteStock = async () => {
+    if (!deleteTarget || deleteLoading) return;
+    setDeleteLoading(true);
+    try {
+      // Use product_id + location_id to reliably identify the stock row
+      console.log('Deleting stock item with ID:', deleteTarget.id);
+      const res = await restaurantService.deleteStockItem({ product_id: deleteTarget.product_id, location_id: deleteTarget.location_id });
+      if (res.success) {
+        setStocks(prev => prev.filter(s => !(s.product_id === deleteTarget.product_id && s.location_id === deleteTarget.location_id)));
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+        addNotification('success', 'Produit supprimé du stock', 'Restaurant');
+      }
+    } catch (e: any) {
+      console.error('Delete error:', e);
+      addNotification('error', e.message || 'Erreur lors de la suppression', 'Restaurant');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const stockBas = stocks.filter(s => Number(s.quantite) < 5);
 
   const [selectedType, setSelectedType] = useState('MATIERE_PREMIERE');
@@ -402,6 +426,15 @@ if (loc.success) {
                       onClick={() => quickAdjust(stock.product_id, +1)}
                       className="w-7 h-7 rounded-lg bg-success-bg text-success flex items-center justify-center font-bold"
                     >+</button>
+                    {stock.id && (
+                      <button
+                        onClick={() => { setDeleteTarget(stock); setShowDeleteModal(true); }}
+                        className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center"
+                        title="Supprimer du stock"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -582,6 +615,35 @@ if (loc.success) {
                 {adjLoading ? 'En cours…' : 'Confirmer'}
               </button>
             </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* MODAL Suppression */}
+      {showDeleteModal && deleteTarget && (
+        <ModalShell title="Supprimer du stock" onClose={() => setShowDeleteModal(false)}>
+          <p className="text-sm text-secondary mb-4">
+            Êtes-vous sûr de vouloir supprimer <span className="font-medium text-primary">{deleteTarget.product_nom}</span> du stock ?
+          </p>
+          <p className="text-xs text-muted mb-4">
+            Cette action est irréversible. Le produit sera retiré de l'emplacement <span className="font-medium">{deleteTarget.location_nom}</span>.
+          </p>
+          <div className="flex gap-2 justify-end pt-1">
+            <button
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+              onClick={() => setShowDeleteModal(false)}
+            >
+              Annuler
+            </button>
+            <button
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{ backgroundColor: deleteLoading ? 'var(--color-surface-2)' : 'var(--color-danger)', color: deleteLoading ? 'var(--color-text-secondary)' : 'white' }}
+              onClick={handleDeleteStock}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Suppression…' : 'Supprimer'}
+            </button>
           </div>
         </ModalShell>
       )}
