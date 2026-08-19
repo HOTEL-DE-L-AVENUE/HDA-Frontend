@@ -161,7 +161,6 @@ const HotelPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
-  const [products, setProducts] = useState<any[]>([]);
 
   const roomsData = Array.isArray(rooms) ? rooms : [];
   const reservationsData = Array.isArray(reservations) ? reservations : [];
@@ -194,19 +193,6 @@ const HotelPage: React.FC = () => {
     void loadData();
   }, [refreshRooms, loadReservations]);
 
-  // Load products for minibar
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const response = await api.get('/api/stock/products');
-        setProducts(response.data?.data || response.data || []);
-      } catch (error) {
-        console.error('Erreur lors du chargement des produits:', error);
-      }
-    };
-    loadProducts();
-  }, []);
-
   // Statistiques sécurisées
   const safeRooms = roomsData;
   const safeReservations = reservationsData;
@@ -215,7 +201,7 @@ const HotelPage: React.FC = () => {
   const safeMaintenanceTasks: any[] = [];
   const safeHousekeepingTasks: any[] = [];
   const safeMinibarItems: any[] = [];
-  const safeProducts = products;
+  const safeProducts: any[] = [];
 
   const totalRooms = safeRooms.length;
   const occupiedRooms = safeRooms.filter(r => r?.statut === 'OCCUPEE').length;

@@ -32,17 +32,17 @@ const DEFAULT_CLIENT_FORM: ClientForm = {
 
 export function useHebergement() {
   // ── Données ──────────────────────────────────────────────────────────────
-  const [roomTypes,         setRoomTypes]     = useState<RoomType[]>([]);
-  const [clients,           setClients]       = useState<Client[]>([]);
-  const [equipments,        setEquipments]    = useState<Equipment[]>([]);
-  const [rooms,             setRooms]         = useState<Room[]>([]);
-  const [reservations,      setReservations]  = useState<Reservation[]>([]);
-  const [roomEquipments,    setRoomEquipments]= useState<RoomEquipment[]>([]);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [equipments, setEquipments] = useState<Equipment[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [roomEquipments, setRoomEquipments] = useState<RoomEquipment[]>([]);
   const [housekeepingTasks, setHousekeepingTasks] = useState<HousekeepingTask[]>([]);
-  const [maintenances,      setMaintenances]  = useState<RoomMaintenance[]>([]);
+  const [maintenances, setMaintenances] = useState<RoomMaintenance[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // ── Chargement depuis l'API ────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -81,7 +81,7 @@ export function useHebergement() {
   }, [fetchData]);
 
   // ── UI ───────────────────────────────────────────────────────────────────
-  const [activeTab,   setActiveTab]   = useState(() => {
+  const [activeTab, setActiveTab] = useState(() => {
     try {
       const stored = localStorage.getItem('user-data') || sessionStorage.getItem('user-data');
       if (stored) {
@@ -90,28 +90,28 @@ export function useHebergement() {
         if (r === 'caissier' || r === 'caisse') return 'caisse';
         if (r === 'stock_manager') return 'stock';
       }
-    } catch {}
+    } catch { }
     return 'reservations';
   });
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus,setFilterStatus]= useState('');
-  const [editingId,   setEditingId]   = useState<number | null>(null);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   // ── Modales ───────────────────────────────────────────────────────────────
-  const [showReservationModal,  setShowReservationModal]  = useState(false);
-  const [showRoomModal,         setShowRoomModal]         = useState(false);
-  const [showEquipmentModal,    setShowEquipmentModal]    = useState(false);
+  const [showReservationModal, setShowReservationModal] = useState(false);
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [showEquipmentModal, setShowEquipmentModal] = useState(false);
   const [showHousekeepingModal, setShowHousekeepingModal] = useState(false);
-  const [showMaintenanceModal,  setShowMaintenanceModal]  = useState(false);
-  const [showClientModal,       setShowClientModal]       = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
 
   // ── Formulaires ───────────────────────────────────────────────────────────
-  const [reservationForm,  setReservationForm]  = useState<ReservationForm>(DEFAULT_RESERVATION_FORM);
-  const [roomForm,         setRoomForm]         = useState<RoomForm>(DEFAULT_ROOM_FORM);
-  const [equipmentForm,    setEquipmentForm]    = useState<EquipmentForm>(DEFAULT_EQUIPMENT_FORM);
+  const [reservationForm, setReservationForm] = useState<ReservationForm>(DEFAULT_RESERVATION_FORM);
+  const [roomForm, setRoomForm] = useState<RoomForm>(DEFAULT_ROOM_FORM);
+  const [equipmentForm, setEquipmentForm] = useState<EquipmentForm>(DEFAULT_EQUIPMENT_FORM);
   const [housekeepingForm, setHousekeepingForm] = useState<HousekeepingForm>(DEFAULT_HOUSEKEEPING_FORM);
-  const [maintenanceForm,  setMaintenanceForm]  = useState<MaintenanceForm>(DEFAULT_MAINTENANCE_FORM);
-  const [clientForm,       setClientForm]       = useState<ClientForm>(DEFAULT_CLIENT_FORM);
+  const [maintenanceForm, setMaintenanceForm] = useState<MaintenanceForm>(DEFAULT_MAINTENANCE_FORM);
+  const [clientForm, setClientForm] = useState<ClientForm>(DEFAULT_CLIENT_FORM);
 
   // ── Handlers : réservations ───────────────────────────────────────────────
   const handleCheckIn = async (reservation: Reservation) => {
@@ -121,7 +121,7 @@ export function useHebergement() {
       await fetchData();
     } catch (err: any) {
       console.error('Erreur lors du check-in :', err);
-      setError('Impossible de valider le check-in.');
+      setError(err?.response?.data?.error || err?.message || 'Impossible de valider le check-in.');
     }
   };
 
@@ -391,9 +391,9 @@ export function useHebergement() {
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = {
     totalReservations: reservations.length,
-    enCours:           reservations.filter(r => r.statut === 'EN_COURS').length,
-    chambresOccupees:  rooms.filter(r => r.statut === 'OCCUPEE').length,
-    chambresLibres:    rooms.filter(r => r.statut === 'LIBRE').length,
+    enCours: reservations.filter(r => r.statut === 'EN_COURS').length,
+    chambresOccupees: rooms.filter(r => r.statut === 'OCCUPEE').length,
+    chambresLibres: rooms.filter(r => r.statut === 'LIBRE').length,
   };
 
   return {
@@ -408,19 +408,19 @@ export function useHebergement() {
     editingId,
     stats,
     // modales
-    showReservationModal,  setShowReservationModal,
-    showRoomModal,         setShowRoomModal,
-    showEquipmentModal,    setShowEquipmentModal,
+    showReservationModal, setShowReservationModal,
+    showRoomModal, setShowRoomModal,
+    showEquipmentModal, setShowEquipmentModal,
     showHousekeepingModal, setShowHousekeepingModal,
-    showMaintenanceModal,  setShowMaintenanceModal,
-    showClientModal,       setShowClientModal,
+    showMaintenanceModal, setShowMaintenanceModal,
+    showClientModal, setShowClientModal,
     // formulaires
-    reservationForm,  setReservationForm,
-    roomForm,         setRoomForm,
-    equipmentForm,    setEquipmentForm,
+    reservationForm, setReservationForm,
+    roomForm, setRoomForm,
+    equipmentForm, setEquipmentForm,
     housekeepingForm, setHousekeepingForm,
-    maintenanceForm,  setMaintenanceForm,
-    clientForm,       setClientForm,
+    maintenanceForm, setMaintenanceForm,
+    clientForm, setClientForm,
     // handlers
     handleCheckIn, handleCheckOut, handleCancelReservation, handleDeleteReservation, handleSaveReservation,
     handleEditRoom, handleDeleteRoom, handleSaveRoom, openNewRoomModal,
