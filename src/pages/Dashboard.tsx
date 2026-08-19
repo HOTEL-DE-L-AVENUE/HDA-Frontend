@@ -1,16 +1,25 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { StatCard } from '../components/UI';
 import { formatCurrency } from '../utils/data';
+import financeService, { FinancialStats, FinancialTransaction, isFinancialInflow } from '../services/finance.service';
 import { 
   DollarSign, TrendingUp, TrendingDown, Package, 
   AlertTriangle, Activity, BedDouble, Hotel, 
   UtensilsCrossed, Wine, Dices, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend 
-} from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+
+const EMPTY_FINANCIAL_STATS: FinancialStats = {
+  totalEntrees: 0, totalSorties: 0, beneficeNet: 0,
+  totalRevenu: 0, totalDepenses: 0, soldeGlobal: 0, modules: [],
+};
+
+const normalizeModule = (module?: string) => String(module || 'general')
+  .trim()
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
 
 const revenueData = [
   { mois: 'Jan', hebergement: 42000, hotel: 38000, restaurant: 28000, bar: 18000, casino: 95000 },
@@ -24,14 +33,38 @@ const revenueData = [
 const COLORS = ['#d4a847', '#c4953a', '#e8c86a', '#f5e4a0', '#b8860b'];
 
 export const Dashboard: React.FC = () => {
-  const { state, getModuleCaisseSolde, getCasinoTotalCaisse, getGlobalStats } = useHDA();
-  
-  const globalStats = getGlobalStats();
-  const hebergement = getModuleCaisseSolde('hebergement');
-  const hotel = getModuleCaisseSolde('hotel');
-  const restaurant = getModuleCaisseSolde('restaurant');
-  const bar = getModuleCaisseSolde('bar');
-  const casino = getCasinoTotalCaisse();
+  const { state } = useHDA();
+  const [financialStats, setFinancialStats] = useState<FinancialStats>(EMPTY_FINANCIAL_STATS);
+  const [recentTransactions, setRecentTransactions] = useState<FinancialTransaction[]>([]);
+
+  useEffect(() => {
+    const loadFinancialDashboard = async () => {
+      const [summary, transactions] = await Promise.all([
+        financeService.getFinancialStats(),
+        financeService.getTransactions(),
+      ]);
+      setFinancialStats(summary);
+      setRecentTransactions(transactions.slice(0, 6));
+    };
+    loadFinancialDashboard();
+  }, []);
+
+  const moduleSummary = (module: string) => financialStats.modules
+    .filter(item => normalizeModule(item.module) === module)
+    .reduce(
+      (total, item) => ({
+        module,
+        entrees: total.entrees + Number(item.entrees || 0),
+        sorties: total.sorties + Number(item.sorties || 0),
+        solde: total.solde + Number(item.solde || 0),
+      }),
+      { module, entrees: 0, sorties: 0, solde: 0 }
+    );
+  const hebergement = moduleSummary('hebergement');
+  const hotel = moduleSummary('hotel');
+  const restaurant = moduleSummary('restaurant');
+  const bar = moduleSummary('bar');
+  const casino = moduleSummary('casino');
 
   const stockAlerts = state.stockItems.filter(s => s.status !== 'disponible').length;
   const totalStockValue = state.stockItems.reduce((sum, s) => sum + (s.quantite * s.prixUnitaire), 0);
@@ -45,11 +78,11 @@ export const Dashboard: React.FC = () => {
   ];
 
   const moduleCards = [
-    { label: 'Hébergement', solde: hebergement.solde, entrees: hebergement.entrees, sorties: hebergement.sorties, icon: <BedDouble size={16} className="text-black" />, gradient: 'from-accent to-accent-2', trend: 12.4 },
-    { label: 'Hôtel', solde: hotel.solde, entrees: hotel.entrees, sorties: hotel.sorties, icon: <Hotel size={16} className="text-black" />, gradient: 'from-accent to-accent-2', trend: 8.2 },
-    { label: 'Restaurant', solde: restaurant.solde, entrees: restaurant.entrees, sorties: restaurant.sorties, icon: <UtensilsCrossed size={16} className="text-black" />, gradient: 'from-accent to-accent-2', trend: -2.1 },
-    { label: 'Bar & Lounge', solde: bar.solde, entrees: bar.entrees, sorties: bar.sorties, icon: <Wine size={16} className="text-black" />, gradient: 'from-accent to-accent-2', trend: 21.5 },
-    { label: 'Casino', solde: casino.solde, entrees: casino.entrees, sorties: casino.sorties, icon: <Dices size={16} className="text-black" />, gradient: 'from-accent to-accent-2', trend: 34.8 },
+    { label: 'Hébergement', solde: hebergement.solde, entrees: hebergement.entrees, sorties: hebergement.sorties, icon: <BedDouble size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
+    { label: 'Hôtel', solde: hotel.solde, entrees: hotel.entrees, sorties: hotel.sorties, icon: <Hotel size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
+    { label: 'Restaurant', solde: restaurant.solde, entrees: restaurant.entrees, sorties: restaurant.sorties, icon: <UtensilsCrossed size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
+    { label: 'Bar & Lounge', solde: bar.solde, entrees: bar.entrees, sorties: bar.sorties, icon: <Wine size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
+    { label: 'Casino', solde: casino.solde, entrees: casino.entrees, sorties: casino.sorties, icon: <Dices size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
   ];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -92,29 +125,26 @@ export const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           <StatCard
             title="Solde Global"
-            value={globalStats.soldeGlobal}
+            value={financialStats.beneficeNet}
             icon={<DollarSign size={20} className="text-black" />}
             gradient="from-accent to-accent-2"
-            trend={18.4}
-            subtitle="Tous modules confondus"
+            subtitle="Entrées moins sorties"
             isCurrency
           />
           <StatCard
             title="Revenus Totaux"
-            value={globalStats.totalRevenu}
+            value={financialStats.totalEntrees}
             icon={<TrendingUp size={20} className="text-black" />}
             gradient="from-accent to-accent-2"
-            trend={24.1}
-            subtitle={`${state.transactions.filter(t => t.type === 'entree').length} transactions`}
+            subtitle={`${recentTransactions.filter(t => isFinancialInflow(t.type_flux)).length} transactions récentes`}
             isCurrency
           />
           <StatCard
             title="Dépenses Totales"
-            value={globalStats.totalDepenses}
+            value={financialStats.totalSorties}
             icon={<TrendingDown size={20} className="text-black" />}
             gradient="from-accent to-accent-2"
-            trend={-5.3}
-            subtitle={`${state.transactions.filter(t => t.type === 'sortie').length} transactions`}
+            subtitle={`${recentTransactions.filter(t => !isFinancialInflow(t.type_flux)).length} transactions récentes`}
             isCurrency
           />
           <StatCard
@@ -122,7 +152,6 @@ export const Dashboard: React.FC = () => {
             value={totalStockValue}
             icon={<Package size={20} className="text-black" />}
             gradient="from-accent to-accent-2"
-            trend={3.2}
             subtitle={`${stockAlerts} alertes stock`}
             isCurrency
           />
@@ -141,33 +170,24 @@ export const Dashboard: React.FC = () => {
         >
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-primary font-semibold">Évolution des Revenus</h3>
-              <p className="text-muted text-sm">6 derniers mois par module</p>
+              <h3 className="text-primary font-semibold">Entrées et sorties par module</h3>
+              <p className="text-muted text-sm">Données issues du grand livre financier</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-accent)', fontSize: '14px', fontWeight: 600 }}>
               <TrendingUp size={16} />
-              <span>+18.4%</span>
+              <span>Solde : {formatCurrency(financialStats.beneficeNet)}</span>
             </div>
           </div>
           <div className="w-full h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <defs>
-                  {['hebergement', 'hotel', 'restaurant', 'bar', 'casino'].map((key, i) => (
-                    <linearGradient key={key} id={`gradient-${key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS[i]} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={COLORS[i]} stopOpacity={0} />
-                    </linearGradient>
-                  ))}
-                </defs>
+              <BarChart data={moduleCards}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="mois" tick={{ fill: 'var(--color-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fill: 'var(--color-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: 'var(--color-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k MGA`} />
                 <Tooltip content={<CustomTooltip />} />
-                {['hebergement', 'hotel', 'restaurant', 'bar', 'casino'].map((key, i) => (
-                  <Area key={key} type="monotone" dataKey={key} stroke={COLORS[i]} strokeWidth={2} fill={`url(#gradient-${key})`} />
-                ))}
-              </AreaChart>
+                <Bar dataKey="entrees" name="Entrées" fill="#4ade80" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="sorties" name="Sorties" fill="#f87171" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -236,9 +256,9 @@ export const Dashboard: React.FC = () => {
                 <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${mod.gradient} flex items-center justify-center`}>
                   {mod.icon}
                 </div>
-                <div className={`flex items-center gap-1 text-xs font-semibold ${mod.trend >= 0 ? 'text-accent' : 'text-danger'}`}>
-                  {mod.trend >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {Math.abs(mod.trend)}%
+                <div className={`flex items-center gap-1 text-xs font-semibold ${mod.solde >= 0 ? 'text-accent' : 'text-danger'}`}>
+                  {mod.solde >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                  Net
                 </div>
               </div>
               <p className="text-muted text-xs font-medium mb-1">{mod.label}</p>
@@ -273,30 +293,33 @@ export const Dashboard: React.FC = () => {
             <button className="text-accent text-sm hover:text-accent-2 transition-colors">Tout voir</button>
           </div>
           <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
-            {state.transactions.slice(0, 6).map(tx => (
+            {recentTransactions.map(tx => {
+              const isInflow = isFinancialInflow(tx.type_flux);
+              return (
               <div key={tx.id} className="flex items-center gap-4 px-6 py-3 transition-colors" style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  tx.type === 'entree' ? 'bg-accent-4' : 'bg-danger-bg'
+                  isInflow ? 'bg-accent-4' : 'bg-danger-bg'
                 }`}>
-                  {tx.type === 'entree' 
+                  {isInflow
                     ? <ArrowUpRight size={16} className="text-accent" />
                     : <ArrowDownRight size={16} className="text-danger" />
                   }
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
-                  <p className="text-muted text-xs capitalize">{tx.module} • {tx.userName}</p>
+                  <p className="text-muted text-xs capitalize">{tx.module} • {tx.type_flux}</p>
                 </div>
                 <div className="text-right">
-                  <p className={`font-bold text-sm ${tx.type === 'entree' ? 'text-accent' : 'text-danger'}`}>
-                    {tx.type === 'entree' ? '+' : '-'}{formatCurrency(tx.montant)}
+                  <p className={`font-bold text-sm ${isInflow ? 'text-accent' : 'text-danger'}`}>
+                    {isInflow ? '+' : '-'}{formatCurrency(tx.montant)}
                   </p>
                   <p className="text-subtle text-xs">
-                    {new Date(tx.date).toLocaleDateString('fr-FR')}
+                    {new Date(tx.created_at).toLocaleDateString('fr-FR')}
                   </p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

@@ -39,9 +39,13 @@ export const FinancesPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [financialStats, setFinancialStats] = useState<FinancialStats>({
+    totalEntrees: 0,
+    totalSorties: 0,
+    beneficeNet: 0,
     totalRevenu: 0,
     totalDepenses: 0,
-    soldeGlobal: 0
+    soldeGlobal: 0,
+    modules: [],
   });
   const [modulesSoldes, setModulesSoldes] = useState<Array<{ module: string } & ModuleCaisseSolde>>([]);
   

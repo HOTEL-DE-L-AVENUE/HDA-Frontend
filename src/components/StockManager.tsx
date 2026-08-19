@@ -4,7 +4,7 @@ import { ModuleType, StockItem } from '../types';
 import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from '../components/UI';
 import BarTransactionsCard from './Bar/BarTransactionsCard';
 import { formatCurrency } from '../utils/data';
-import { financeService, FinancialTransaction, isFinancialInflow } from '../services/finance.service';
+import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import api from '../lib/api';
 import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle } from 'lucide-react';
 
@@ -42,8 +42,8 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
 
   const getErrorMessage = (err: unknown) => {
     if (typeof err === 'object' && err !== null && 'response' in err) {
-      const response = (err as { response?: { data?: { error?: { message?: string } } } }).response;
-      return response?.data?.error?.message || 'Erreur réseau';
+      const response = (err as { response?: { data?: { message?: string; error?: { message?: string } } } }).response;
+      return response?.data?.message || response?.data?.error?.message || 'Erreur réseau';
     }
     return err instanceof Error ? err.message : 'Erreur de connexion';
   };
@@ -63,7 +63,14 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     }
   };
 
-  useEffect(() => { refetchStock(); }, [isBar]);
+  useEffect(() => {
+    if (isBar) {
+      void refetchStock();
+    } else {
+      setBackendStock([]);
+      setError(null);
+    }
+  }, [isBar, module]);
 
   const contextItems = getModuleStock(module);
 
@@ -96,25 +103,47 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     return 'disponible';
   };
 
+  const notifyStockLevel = (nom: string, quantite: number, unite: string) => {
+    const source = module === 'bar' ? 'Bar' : module === 'restaurant' ? 'Restaurant' : module;
+    const actionUrl = `/${module}?tab=stock`;
+
+    if (quantite <= 3) {
+      addNotification('error', `Stock critique: ${nom} (${quantite} ${unite})`, source, actionUrl);
+    } else if (quantite <= 5) {
+      addNotification('warning', `Stock faible: ${nom} (${quantite} ${unite})`, source, actionUrl);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!form.nom.trim()) return;
-    const status = computeStatus(form.quantite, form.seuilMinimum);
+    const nom = form.nom.trim();
+    const quantite = Number(form.quantite);
+    const prixUnitaire = Number(form.prixUnitaire);
+    const seuilMinimum = Number(form.seuilMinimum);
+
+    if (!nom) {
+      setError('Le nom du produit est requis.');
+      return;
+    }
+    if (!Number.isFinite(quantite) || quantite < 0 || !Number.isFinite(prixUnitaire) || prixUnitaire < 0 || !Number.isFinite(seuilMinimum) || seuilMinimum < 0) {
+      setError('La quantité, le prix et le seuil doivent être des nombres positifs.');
+      return;
+    }
+    const status = computeStatus(quantite, seuilMinimum);
 
     if (isBar) {
       setLoading(true);
       setError(null);
       try {
-        const prixValue = Number(form.prixUnitaire);
         const payload = {
-          nom: form.nom.trim(),
+          nom,
           categorie: form.categorie || 'Bar',
-          quantite: Number(form.quantite) || 0,
-          prix: Number.isFinite(prixValue) ? prixValue : 0,
-          prixUnitaire: Number.isFinite(prixValue) ? prixValue : 0,
-          price: Number.isFinite(prixValue) ? prixValue : 0,
+          quantite,
+          prix: prixUnitaire,
+          prixUnitaire,
+          price: prixUnitaire,
           unite: form.unite.trim() || 'unités',
-          seuil_minimum: Number(form.seuilMinimum) || 5,
-          seuilMinimum: Number(form.seuilMinimum) || 5,
+          seuil_minimum: seuilMinimum,
+          seuilMinimum,
           ingredients: '',
           alcool: true,
         };
@@ -127,21 +156,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
 
         await refetchStock();
         
-        if (form.quantite <= 3) {
-          addNotification(
-            'error',
-            `Stock critique: ${form.nom} (${form.quantite} ${form.unite})`,
-            'Bar',
-            '/bar?tab=stock'
-          );
-        } else if (form.quantite <= 5) {
-          addNotification(
-            'warning',
-            `Stock faible: ${form.nom} (${form.quantite} ${form.unite})`,
-            'Bar',
-            '/bar?tab=stock'
-          );
-        }
+        notifyStockLevel(nom, quantite, form.unite);
         
         setShowModal(false);
         setEditItem(null);
@@ -159,39 +174,11 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         ...editItem, ...form, status, updatedAt: new Date().toISOString()
       }});
       
-      if (form.quantite <= 3) {
-        addNotification(
-          'error',
-          `Stock critique: ${form.nom} (${form.quantite} ${form.unite})`,
-          module === 'bar' ? 'Bar' : 'Restaurant',
-          `/${module}?tab=stock`
-        );
-      } else if (form.quantite <= 5) {
-        addNotification(
-          'warning',
-          `Stock faible: ${form.nom} (${form.quantite} ${form.unite})`,
-          module === 'bar' ? 'Bar' : 'Restaurant',
-          `/${module}?tab=stock`
-        );
-      }
+      notifyStockLevel(nom, quantite, form.unite);
     } else {
       dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
       
-      if (form.quantite <= 3) {
-        addNotification(
-          'error',
-          `Stock critique: ${form.nom} (${form.quantite} ${form.unite})`,
-          module === 'bar' ? 'Bar' : 'Restaurant',
-          `/${module}?tab=stock`
-        );
-      } else if (form.quantite <= 5) {
-        addNotification(
-          'warning',
-          `Stock faible: ${form.nom} (${form.quantite} ${form.unite})`,
-          module === 'bar' ? 'Bar' : 'Restaurant',
-          `/${module}?tab=stock`
-        );
-      }
+      notifyStockLevel(nom, quantite, form.unite);
     }
 
     setShowModal(false);
@@ -238,12 +225,17 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
           <Edit2 size={14} />
         </button>
         <button onClick={async () => {
+          if (!window.confirm(`Supprimer ${item.nom} ?`)) return;
           if (isBar) {
             setLoading(true);
             setError(null);
             try {
               await api.delete(`${apiBase}/${item.id}`);
               await refetchStock();
+              if (editItem?.id === item.id) {
+                setShowModal(false);
+                setEditItem(null);
+              }
             } catch (err) {
               setError(getErrorMessage(err));
             } finally {
@@ -350,34 +342,52 @@ interface CaisseManagerProps {
 }
 
 export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500' }) => {
-  const { state, dispatch, getModuleCaisseSolde } = useHDA();
+  const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
   const [backendTransactions, setBackendTransactions] = useState<FinancialTransaction[]>([]);
+  const [moduleStockSummary, setModuleStockSummary] = useState<{ entrees: number; sorties: number; solde: number } | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
 
   const isBar = module === 'bar';
+  const isBackendCaisse = module === 'restaurant' || module === 'hebergement' || module === 'bar';
   const isHebergement = module === 'hebergement';
   const transactionTitle = isBar ? 'Transactions Bar' : isHebergement ? 'Transactions Hébergement' : 'Transactions Restaurant';
 
   useEffect(() => {
-    if (!isHebergement) return;
+    if (!isBackendCaisse) return;
 
-    financeService.getTransactions({ module: 'HEBERGEMENT' })
-      .then(setBackendTransactions)
-      .catch(() => setBackendError('Impossible de charger les transactions de la caisse.'));
-  }, [isHebergement]);
+    Promise.all([
+      financeService.getTransactions({ module: module.toUpperCase() }),
+      financeService.getFinancialStats(),
+    ])
+      .then(([transactions, stats]) => {
+        setBackendTransactions(transactions);
+        const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
+        setModuleStockSummary(summary || null);
+        setBackendError(null);
+      })
+      .catch(() => setBackendError('Impossible de charger les données de la caisse.'));
+  }, [isBackendCaisse, module]);
 
   const backendEntrees = backendTransactions
     .filter((transaction) => isFinancialInflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
-  const backendSorties = backendTransactions
-    .filter((transaction) => !isFinancialInflow(transaction.type_flux))
+  const transactionSorties = backendTransactions
+    .filter((transaction) => isFinancialOutflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
+  const backendSorties = moduleStockSummary?.sorties ?? transactionSorties;
   const localCaisse = getModuleCaisseSolde(module);
-  const solde = isHebergement ? backendEntrees - backendSorties : localCaisse.solde;
-  const entrees = isHebergement ? backendEntrees : localCaisse.entrees;
-  const sorties = isHebergement ? backendSorties : localCaisse.sorties;
+  const localStockValue = getModuleStock(module).reduce(
+    (total, item) => total + Number(item.quantite || 0) * Number(item.prixUnitaire || 0),
+    0
+  );
+  const sortiesCaisse = module === 'hebergement' && localStockValue > 0
+    ? localStockValue
+    : backendSorties;
+  const solde = isBackendCaisse ? backendEntrees - sortiesCaisse : localCaisse.solde;
+  const entrees = isBackendCaisse ? backendEntrees : localCaisse.entrees;
+  const sorties = isBackendCaisse ? sortiesCaisse : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
   const restaurantOrders = (state.orders || state.commandes || []).filter(
@@ -409,15 +419,21 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const handleSubmit = async () => {
     if (!form.description || !form.montant) return;
 
-    if (isHebergement) {
+    if (isBackendCaisse) {
       try {
         const transaction = await financeService.createTransaction({
-          module: 'HEBERGEMENT',
+          module: module.toUpperCase(),
           type_flux: form.type === 'entree' ? 'ENTREE' : 'SORTIE',
           montant: form.montant,
           description: `${form.categorie} - ${form.description}`,
         });
-        setBackendTransactions((transactions) => [transaction, ...transactions]);
+        const [transactions, stats] = await Promise.all([
+          financeService.getTransactions({ module: module.toUpperCase() }),
+          financeService.getFinancialStats(),
+        ]);
+        setBackendTransactions(transactions.length ? transactions : [transaction]);
+        const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
+        setModuleStockSummary(summary || null);
         setBackendError(null);
       } catch {
         setBackendError('Impossible d’enregistrer la transaction.');
@@ -443,7 +459,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     setForm({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
   };
 
-  const transactions = isHebergement
+  const transactions = isBackendCaisse
     ? backendTransactions.map((transaction) => ({
         type: isFinancialInflow(transaction.type_flux) ? 'entree' : 'sortie',
         montant: transaction.montant,
@@ -460,7 +476,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
 
       {/* Transactions adaptées au module */}
-      {isBar ? (
+      {isBar && !isBackendCaisse ? (
         <BarTransactionsCard title={transactionTitle} />
       ) : (
         <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">

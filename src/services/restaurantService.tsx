@@ -73,6 +73,9 @@ export const createOrder = (data: {
 export const updateOrderStatus = (id: number, statut: string) =>
   api.put<ApiResponse<Order>>(`/api/restaurant/orders/${id}/status`, { statut }).then(res => res.data);
 
+export const deleteOrder = (id: number) =>
+  api.delete<ApiResponse<null>>(`/api/restaurant/orders/${id}`).then(res => res.data);
+
 // ==================== PAIEMENTS ====================
 
 export const processPayment = (data: {

@@ -271,13 +271,21 @@ interface CaisseCardProps {
 export const CaisseCard: React.FC<CaisseCardProps> = ({ 
   solde, entrees, sorties, title = 'Caisse', gradient = 'from-amber-500 to-orange-500'
 }) => (
-  
-
- 
   <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-  
-
+    <div className={`bg-gradient-to-r ${gradient} px-6 py-5`}>
+      <p className="text-white/75 text-xs font-medium uppercase tracking-wide">{title}</p>
+      <p className="text-white text-3xl font-black mt-1">{formatCurrency(Number(solde) || 0)}</p>
+      <p className="text-white/70 text-xs mt-1">Solde actuel</p>
+    </div>
+    <div className="grid grid-cols-2 divide-x divide-slate-800/50">
+      <div className="px-6 py-4">
+        <p className="text-slate-500 text-xs">Entrées</p>
+        <p className="text-emerald-400 text-lg font-bold mt-1">+ {formatCurrency(Number(entrees) || 0)}</p>
+      </div>
+      <div className="px-6 py-4">
+        <p className="text-slate-500 text-xs">Sorties</p>
+        <p className="text-red-400 text-lg font-bold mt-1">- {formatCurrency(Number(sorties) || 0)}</p>
+      </div>
+    </div>
   </div>
-
-  
 );
