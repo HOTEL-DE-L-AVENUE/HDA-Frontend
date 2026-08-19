@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { Badge, Button, DataTable } from '../../../components/UI';
 import { STATUTS_RESERVATION } from '../../../data/Hebergement.data';
 import { Reservation } from '../../../types/hebergement.type';
@@ -11,10 +11,11 @@ interface Props {
   onCheckIn:  (r: Reservation) => void;
   onCheckOut: (r: Reservation) => void;
   onCancel:   (id: number) => void;
+  onDelete:   (id: number) => void;
 }
 
 export const ReservationsTab: React.FC<Props> = ({
-  reservations, onNew, onCheckIn, onCheckOut, onCancel,
+  reservations, onNew, onCheckIn, onCheckOut, onCancel, onDelete,
 }) => {
   const getClientName = (reservation: Reservation) => {
     const name = [reservation.client_prenom, reservation.client_nom]
@@ -86,6 +87,15 @@ export const ReservationsTab: React.FC<Props> = ({
 
             <Button size="sm" variant="danger" onClick={() => onCancel(r.id)}>
               <X size={14} />
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              title="Supprimer la réservation"
+              aria-label={`Supprimer la réservation ${r.id}`}
+              onClick={() => onDelete(r.id)}
+            >
+              <Trash2 size={14} />
             </Button>
           </div>
         );
