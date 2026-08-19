@@ -69,6 +69,7 @@ export const UtilisateursPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [form, setForm] = useState({
     nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
@@ -215,10 +216,14 @@ export const UtilisateursPage: React.FC = () => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) return;
 
     try {
+      setDeletingUserId(id);
+      setErrorMessage('');
       await api.delete(`/api/admin/users/${id}`);
       await fetchRealUsers();
     } catch (err: any) {
       setErrorMessage(getApiErrorMessage(err, 'Impossible de supprimer cet utilisateur.'));
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -367,9 +372,16 @@ export const UtilisateursPage: React.FC = () => {
                     <button onClick={() => openEdit(user)} className="w-8 h-8 rounded-lg bg-surface-2 hover:bg-surface-3 flex items-center justify-center text-muted hover:text-primary transition-all">
                       <Edit2 size={14} />
                     </button>
-                    {user.id !== state.currentUser?.id && (
-                      <button onClick={() => handleDeleteUser(user.id)} className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 flex items-center justify-center text-danger transition-all">
-                        <Trash2 size={14} />
+                    {String(user.id) !== String(state.currentUser?.id) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={deletingUserId !== null}
+                        aria-label={`Supprimer ${user.prenom} ${user.nom}`}
+                        title="Supprimer l'utilisateur"
+                        className="w-8 h-8 rounded-lg bg-danger-bg hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center text-danger transition-all"
+                      >
+                        <Trash2 size={14} className={deletingUserId === user.id ? 'animate-pulse' : ''} />
                       </button>
                     )}
                   </div>
