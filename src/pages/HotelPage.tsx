@@ -46,6 +46,7 @@ import { Room, Reservation } from '../types/hotel.types';
 import { StockManager } from '../components/StockManager';
 import AuthService from '../services/authService';
 import { filterTabsByRole, getDefaultTabForRole } from '../utils/permissions';
+import api from '../lib/api';
 
 interface Tab {
   id: string;
@@ -62,7 +63,7 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
-  { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
+  // { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
 ];
 
 // Composant pour les statistiques responsive
