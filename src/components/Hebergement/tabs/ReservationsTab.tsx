@@ -16,12 +16,21 @@ interface Props {
 export const ReservationsTab: React.FC<Props> = ({
   reservations, onNew, onCheckIn, onCheckOut, onCancel,
 }) => {
+  const getClientName = (reservation: Reservation) => {
+    const name = [reservation.client_prenom, reservation.client_nom]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    return name || `Client #${reservation.client_id}`;
+  };
+
   const columns: any[] = [
     {
       key: 'client', label: 'Client',
       render: (r: Reservation) => (
         <div>
-          <p className="text-primary font-medium">{r.client_prenom || 'Client'} {r.client_nom || ''}</p>
+          <p className="text-primary font-medium">{getClientName(r)}</p>
           <p className="text-muted text-xs">Chambre {r.room_numero || r.room_id}</p>
         </div>
       ),
