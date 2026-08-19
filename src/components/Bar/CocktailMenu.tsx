@@ -96,11 +96,11 @@ export const CocktailMenu: React.FC<Props> = ({
 
     try {
       setIsSaving(true);
-      const payload: Record<string, any> = {
+      const payload = {
         nom: trimmedNom,
         categorie,
         prix: parsedPrix,
-        alcool: alcool ? 1 : 0,
+        alcool,
         quantite: parsedQuantite,
         seuil_minimum: parsedSeuil,
         unite: unite.trim() || 'unités',
@@ -140,11 +140,11 @@ export const CocktailMenu: React.FC<Props> = ({
     try {
       setIsSaving(true);
 
-      const payload: Record<string, any> = {
+      const payload = {
         nom: trimmedNom,
         categorie: editCategorie,
         prix: parsedPrix,
-        alcool: editAlcool ? 1 : 0,
+        alcool: editAlcool,
         quantite: Number.isNaN(parsedQuantite) ? 0 : parsedQuantite,
         seuil_minimum: Number.isNaN(parsedSeuil) ? 5 : parsedSeuil,
         unite: editUnite.trim() || 'unités',
@@ -161,7 +161,7 @@ export const CocktailMenu: React.FC<Props> = ({
           nom: trimmedNom,
           categorie: editCategorie,
           prix: parsedPrix,
-          alcool: editAlcool ? 1 : 0,
+          alcool: editAlcool,
         });
       }
 

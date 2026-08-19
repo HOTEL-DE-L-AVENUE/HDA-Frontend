@@ -270,6 +270,17 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
+  const handleDeleteOrder = async (orderId: number | string) => {
+    if (!window.confirm('Supprimer définitivement cette commande ?')) return;
+
+    try {
+      await restaurantService.deleteOrder(Number(orderId));
+      setOrders(prev => prev.filter(order => order.id !== Number(orderId)));
+    } catch (error) {
+      console.error('Erreur suppression commande', error);
+    }
+  };
+
   // Produits (mock)
   const handleAddProduct = async (formData: any) => {
     try {
@@ -330,8 +341,8 @@ export const RestaurantPage: React.FC = () => {
   const stats: any[] = [
     { label: 'Total Commandes', value: orders.length, icon: <ShoppingCart size={20} className="text-black" /> },
     { label: 'En Cours', value: orders.filter(o => o.statut === 'EN_COURS' || o.statut === 'EN_ATTENTE').length, icon: <Clock size={20} className="text-black" /> },
-    { label: 'Payées', value: orders.filter(o => o.statut === 'PAYEE').length, icon: <CheckCircle size={20} className="text-black" /> },
-    { label: 'CA Journée', value: formatCurrency(orders.filter(o => o.statut === 'PAYEE').reduce((sum, o) => sum + o.montant_total, 0)), icon: <TrendingUp size={20} className="text-black" /> },
+    { label: 'Payées', value: orders.filter(o => o.statut === 'PAYE' || o.statut === 'PAYEE').length, icon: <CheckCircle size={20} className="text-black" /> },
+    { label: 'CA Journée', value: formatCurrency(orders.filter(o => o.statut === 'PAYE' || o.statut === 'PAYEE').reduce((sum, o) => sum + o.montant_total, 0)), icon: <TrendingUp size={20} className="text-black" /> },
   ];
 
   return (
@@ -385,6 +396,7 @@ export const RestaurantPage: React.FC = () => {
             onUpdateStatus={handleUpdateOrderStatus}
             onPayment={handlePayment}
             onCancel={handleCancelOrder}
+            onDelete={handleDeleteOrder}
             onNewOrder={() => setShowOrderModal(true)}
           />
         )}

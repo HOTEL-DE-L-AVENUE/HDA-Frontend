@@ -1,13 +1,14 @@
 import React from 'react';
 import { Badge, Button, DataTable } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, XCircle, Pencil } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil } from 'lucide-react';
 import type { Order } from '../types';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
   EN_COURS: { label: 'En cours', variant: 'info' },
   SERVIE: { label: 'Servie', variant: 'success' },
+  PAYE: { label: 'Payée', variant: 'success' },
   PAYEE: { label: 'Payée', variant: 'success' },
   ANNULEE: { label: 'Annulée', variant: 'danger' },
 };
@@ -18,6 +19,7 @@ interface CommandesTabProps {
   onUpdateStatus: (orderId: number, status: Order['statut']) => void;
   onPayment: (orderId: number) => void;
   onCancel: (orderId: number) => void;
+  onDelete: (orderId: number) => void;
   onNewOrder: () => void;
   onEditOrder: (order: Order) => void;
 }
@@ -28,13 +30,16 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onUpdateStatus,
   onPayment,
   onCancel,
+  onDelete,
   onNewOrder,
   onEditOrder
 }) => {
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => (
       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
-        <span className="text-black font-bold text-sm">{order.table?.numero || 'N/A'}</span>
+        <span className="text-black font-bold text-sm">
+          {order.table?.numero || order.table_numero || order.table_id || 'N/A'}
+        </span>
       </div>
     )},
     { key: 'items', label: 'Articles', render: (order: Order) => (
@@ -45,7 +50,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           <>
             {order.items.slice(0, 2).map((item, i) => (
               <p key={i} className="text-secondary text-sm">
-                {products.find(p => p.id === item.product_id)?.nom || 'Produit'} x{item.quantite}
+                {item.product_nom || item.product?.nom || products.find(p => p.id === item.product_id)?.nom || `Article #${item.product_id}`} x{item.quantite}
               </p>
             ))}
             {order.items.length > 2 && <p className="text-subtle text-xs">+{order.items.length - 2} autres</p>}
@@ -85,6 +90,15 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
             <XCircle size={14} />
           </Button>
         )}
+        <Button
+          size="sm"
+          variant="danger"
+          title="Supprimer la commande"
+          aria-label={`Supprimer la commande ${order.id}`}
+          onClick={() => onDelete(order.id)}
+        >
+          <Trash2 size={14} />
+        </Button>
       </div>
     )},
   ];
