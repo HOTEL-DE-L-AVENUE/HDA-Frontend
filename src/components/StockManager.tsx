@@ -4,6 +4,7 @@ import { ModuleType, StockItem } from '../types';
 import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from '../components/UI';
 import BarTransactionsCard from './Bar/BarTransactionsCard';
 import { formatCurrency } from '../utils/data';
+import { financeService, FinancialTransaction, isFinancialInflow } from '../services/finance.service';
 import api from '../lib/api';
 import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle } from 'lucide-react';
 
@@ -352,11 +353,31 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const { state, dispatch, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
-
-  const { solde, entrees, sorties } = getModuleCaisseSolde(module);
+  const [backendTransactions, setBackendTransactions] = useState<FinancialTransaction[]>([]);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   const isBar = module === 'bar';
-  const transactionTitle = isBar ? "Transactions Bar" : "Transactions Restaurant";
+  const isHebergement = module === 'hebergement';
+  const transactionTitle = isBar ? 'Transactions Bar' : isHebergement ? 'Transactions Hébergement' : 'Transactions Restaurant';
+
+  useEffect(() => {
+    if (!isHebergement) return;
+
+    financeService.getTransactions({ module: 'HEBERGEMENT' })
+      .then(setBackendTransactions)
+      .catch(() => setBackendError('Impossible de charger les transactions de la caisse.'));
+  }, [isHebergement]);
+
+  const backendEntrees = backendTransactions
+    .filter((transaction) => isFinancialInflow(transaction.type_flux))
+    .reduce((total, transaction) => total + Number(transaction.montant), 0);
+  const backendSorties = backendTransactions
+    .filter((transaction) => !isFinancialInflow(transaction.type_flux))
+    .reduce((total, transaction) => total + Number(transaction.montant), 0);
+  const localCaisse = getModuleCaisseSolde(module);
+  const solde = isHebergement ? backendEntrees - backendSorties : localCaisse.solde;
+  const entrees = isHebergement ? backendEntrees : localCaisse.entrees;
+  const sorties = isHebergement ? backendSorties : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
   const restaurantOrders = (state.orders || state.commandes || []).filter(
@@ -385,8 +406,28 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     return dateB - dateA;
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.description || !form.montant) return;
+
+    if (isHebergement) {
+      try {
+        const transaction = await financeService.createTransaction({
+          module: 'HEBERGEMENT',
+          type_flux: form.type === 'entree' ? 'ENTREE' : 'SORTIE',
+          montant: form.montant,
+          description: `${form.categorie} - ${form.description}`,
+        });
+        setBackendTransactions((transactions) => [transaction, ...transactions]);
+        setBackendError(null);
+      } catch {
+        setBackendError('Impossible d’enregistrer la transaction.');
+        return;
+      }
+      setShowModal(false);
+      setForm({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
+      return;
+    }
+
     dispatch({
       type: 'ADD_TRANSACTION',
       payload: {
@@ -402,6 +443,17 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     setForm({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
   };
 
+  const transactions = isHebergement
+    ? backendTransactions.map((transaction) => ({
+        type: isFinancialInflow(transaction.type_flux) ? 'entree' : 'sortie',
+        montant: transaction.montant,
+        description: transaction.description,
+        categorie: transaction.module,
+        userName: 'Système',
+        heure: transaction.created_at,
+      }))
+    : allRestaurantTransactions;
+
   return (
     <div className="space-y-6">
       {/* Caisse Card */}
@@ -416,8 +468,9 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
             <h3 className="text-white font-semibold">{transactionTitle}</h3>
           </div>
           <div className="divide-y divide-slate-800/50">
-            {allRestaurantTransactions.length > 0 ? (
-              allRestaurantTransactions.map((t: any, index: number) => (
+            {backendError && <p className="px-6 py-3 text-sm text-red-400">{backendError}</p>}
+            {transactions.length > 0 ? (
+              transactions.map((t: any, index: number) => (
                 <div key={index} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-all">
                   <div className="flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${t.type === 'entree' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
