@@ -57,6 +57,18 @@ export const stockService = {
     return response.data;
   },
 
+  // Create a supplier purchase for the selected module. The financial report
+  // values the stock currently available in that module as its outflow.
+  async createPurchase(data: {
+    supplier_id: number;
+    location_id: number;
+    source_module: 'HEBERGEMENT' | 'HOTEL' | 'RESTAURANT' | 'BAR' | 'CASINO' | 'GENERAL';
+    items: Array<{ product_id: number; quantite: number; prix_unitaire: number }>;
+  }) {
+    const response = await api.post('/api/stock/purchases', data);
+    return response.data?.data || response.data;
+  },
+
   // Get stock movements
   async getMovements(filters?: {
     product_id?: number;

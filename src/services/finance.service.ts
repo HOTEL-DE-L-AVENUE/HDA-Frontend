@@ -53,10 +53,13 @@ export interface ModuleCaisseSolde {
 }
 
 export interface FinancialStats {
+  totalEntrees: number;
+  totalSorties: number;
+  beneficeNet: number;
   totalRevenu: number;
   totalDepenses: number;
   soldeGlobal: number;
-  modules?: Array<{
+  modules: Array<{
     module: string;
     entrees: number;
     sorties: number;
@@ -216,9 +219,13 @@ export const financeService = {
     } catch (error) {
       console.error('❌ Erreur getFinancialStats:', error);
       return {
+        totalEntrees: 0,
+        totalSorties: 0,
+        beneficeNet: 0,
         totalRevenu: 0,
         totalDepenses: 0,
-        soldeGlobal: 0
+        soldeGlobal: 0,
+        modules: []
       };
     }
   },
