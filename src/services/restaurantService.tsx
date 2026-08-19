@@ -123,6 +123,22 @@ export const adjustStock = (data: {
 }) =>
   api.post('/api/restaurant/stock/adjust', data).then(res => res.data);
 
+export const deleteStockItem = (stockIdOrFilter: number | { product_id?: number; location_id?: number }) => {
+  // Use the restaurant-scoped delete endpoint which supports deletion by id
+  // or by product_id + location_id pair (convenient for the restaurant UI).
+  if (typeof stockIdOrFilter === 'number') {
+    return api.delete('/api/restaurant/stock', { params: { id: stockIdOrFilter } }).then(res => {
+      if (res.status === 204) return { success: true };
+      return res.data || { success: true };
+    });
+  }
+  const { product_id, location_id } = stockIdOrFilter || {};
+  return api.delete('/api/restaurant/stock', { params: { product_id, location_id } }).then(res => {
+    if (res.status === 204) return { success: true };
+    return res.data || { success: true };
+  });
+};
+
 export const createProduct = (data: {
   nom: string;
   unite: string;
