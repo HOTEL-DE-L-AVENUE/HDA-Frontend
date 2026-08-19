@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { BarProduct } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
-import barService from '../../services/bar.service';
 import { useToast } from '../../context/ToastContext';
 
 interface Props {
@@ -37,21 +36,6 @@ export const CocktailListItem: React.FC<Props> = ({
 
     setAdding(true);
     try {
-      const sessionRes = await barService.getBarOpenSessions();
-      const sessions = sessionRes;
-      const currentSession = Array.isArray(sessions)
-        ? sessions.find((s) => s.fermeture_at === null || s.fermeture_at === undefined)
-        : null;
-
-      await barService.addBarTransaction({
-        session_id: currentSession?.id,
-        product_id: cocktail.id,
-        quantite: 1,
-        prix_unitaire: cocktail.prix,
-      });
-
-      await barService.updateBarStock(cocktail.id, { quantite: stock.quantite - 1 });
-
       const added = await onAddToOrder(cocktail);
       if (added === false) {
         showToast('Créez d\'abord une commande', 'error');
@@ -59,7 +43,6 @@ export const CocktailListItem: React.FC<Props> = ({
       }
 
       showToast(`${cocktail.nom} ajouté`, 'success');
-      if (onStockUpdate) onStockUpdate();
     } catch (err) {
       showToast('Erreur lors de l\'ajout', 'error');
     } finally {

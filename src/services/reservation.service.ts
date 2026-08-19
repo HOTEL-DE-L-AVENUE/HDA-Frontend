@@ -121,7 +121,7 @@ export const reservationService = {
   // Enregistrer un check-in
   checkIn: async (reservationId: number): Promise<Stay> => {
     try {
-      const response = await api.post<ApiResponse<Stay>>(`/hebergement/stays/check-in/${reservationId}`);
+      const response = await api.post<ApiResponse<Stay>>(`${BASE_URL.replace('/reservations', '')}/stays/check-in/${reservationId}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur checkIn ${reservationId}:`, error);
@@ -132,7 +132,7 @@ export const reservationService = {
   // Enregistrer un check-out
   checkOut: async (stayId: number): Promise<Stay> => {
     try {
-      const response = await api.post<ApiResponse<Stay>>(`/hebergement/stays/check-out/${stayId}`);
+      const response = await api.post<ApiResponse<Stay>>(`${BASE_URL.replace('/reservations', '')}/stays/check-out/${stayId}`);
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur checkOut ${stayId}:`, error);
@@ -160,4 +160,9 @@ export interface Stay {
   room_id?: number;
   created_at?: string;
   updated_at?: string;
+  invoice?: {
+    id: number;
+    montant_total: number;
+    statut: string;
+  } | null;
 }

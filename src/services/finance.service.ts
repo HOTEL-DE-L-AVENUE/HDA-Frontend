@@ -153,27 +153,22 @@ export const financeService = {
   // ==================== FINANCIAL TRANSACTIONS ====================
   
   async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string }) {
-    try {
-      // The API paginates at 20 rows by default. Finance needs the complete
-      // ledger; otherwise a module total can exist while its history is absent.
-      const allTransactions: FinancialTransaction[] = [];
-      let page = 1;
-      let totalPages = 1;
+    // The API paginates at 20 rows by default. Finance needs the complete
+    // ledger; otherwise a module total can exist while its history is absent.
+    const allTransactions: FinancialTransaction[] = [];
+    let page = 1;
+    let totalPages = 1;
 
-      do {
-        const response = await api.get('/api/finance/transactions', {
-          params: { ...params, page, limit: 100, sort: 'created_at', order: 'DESC' }
-        });
-        allTransactions.push(...(response.data.data || []));
-        totalPages = Number(response.data.meta?.totalPages || 1);
-        page += 1;
-      } while (page <= totalPages);
+    do {
+      const response = await api.get('/api/finance/transactions', {
+        params: { ...params, page, limit: 100, sort: 'created_at', order: 'DESC' }
+      });
+      allTransactions.push(...(response.data.data || []));
+      totalPages = Number(response.data.meta?.totalPages || 1);
+      page += 1;
+    } while (page <= totalPages);
 
-      return allTransactions;
-    } catch (error) {
-      console.error('❌ Erreur getTransactions:', error);
-      return [];
-    }
+    return allTransactions;
   },
 
   async getTransactionById(id: number) {
