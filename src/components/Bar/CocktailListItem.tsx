@@ -7,16 +7,28 @@ import { useToast } from '../../context/ToastContext';
 
 interface Props {
   cocktail: BarProduct;
-  stock?: { quantite: number; unite: string };
+  stock?: { quantite: number; unite: string; seuil_minimum?: number };
   onStockUpdate?: () => void;
   onAddToOrder?: (cocktail: BarProduct) => boolean | void | Promise<void>;
+  onEdit?: (cocktail: BarProduct) => void;
+  onDelete?: (cocktailId: number) => void;
 }
 
-export const CocktailListItem: React.FC<Props> = ({ cocktail, stock, onStockUpdate, onAddToOrder }) => {
+export const CocktailListItem: React.FC<Props> = ({
+  cocktail,
+  stock,
+  onStockUpdate,
+  onAddToOrder,
+  onEdit,
+  onDelete
+}) => {
   const [adding, setAdding] = useState(false);
   const { showToast } = useToast();
 
   const handleAddToOrder = async () => {
+    // Si aucun gestionnaire de commande n'est fourni (ex: dans l'onglet de gestion), le clic ne fait rien
+    if (!onAddToOrder) return;
+
     if (adding) return;
     if (!stock || stock.quantite <= 0) {
       showToast('Rupture de stock', 'error');
@@ -27,8 +39,8 @@ export const CocktailListItem: React.FC<Props> = ({ cocktail, stock, onStockUpda
     try {
       const sessionRes = await barService.getBarOpenSessions();
       const sessions = sessionRes;
-      const currentSession = Array.isArray(sessions) 
-        ? sessions.find((s) => s.fermeture_at === null || s.fermeture_at === undefined) 
+      const currentSession = Array.isArray(sessions)
+        ? sessions.find((s) => s.fermeture_at === null || s.fermeture_at === undefined)
         : null;
 
       await barService.addBarTransaction({
@@ -37,15 +49,13 @@ export const CocktailListItem: React.FC<Props> = ({ cocktail, stock, onStockUpda
         quantite: 1,
         prix_unitaire: cocktail.prix,
       });
-      
+
       await barService.updateBarStock(cocktail.id, { quantite: stock.quantite - 1 });
 
-      if (onAddToOrder) {
-        const added = await onAddToOrder(cocktail);
-        if (!added) {
-          showToast('Créez d\'abord une commande', 'error');
-          return;
-        }
+      const added = await onAddToOrder(cocktail);
+      if (added === false) {
+        showToast('Créez d\'abord une commande', 'error');
+        return;
       }
 
       showToast(`${cocktail.nom} ajouté`, 'success');
@@ -59,13 +69,14 @@ export const CocktailListItem: React.FC<Props> = ({ cocktail, stock, onStockUpda
 
   const isOutOfStock = !stock || stock.quantite <= 0;
   const isLowStock = stock && stock.quantite > 0 && stock.quantite <= 5;
+  const isClickable = Boolean(onAddToOrder);
 
   return (
-    <div 
+    <div
       onClick={handleAddToOrder}
-      className={`flex items-center justify-between gap-3 p-3 border-b border-base last:border-b-0 transition-colors group ${
-        isOutOfStock ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-surface/30'
-      } ${adding ? 'opacity-60 cursor-wait' : ''}`}
+      className={`flex items-center justify-between gap-3 p-3 border-b border-base last:border-b-0 transition-colors group ${isOutOfStock ? 'opacity-65' : ''
+        } ${isClickable ? 'cursor-pointer hover:bg-surface/30' : ''} ${adding ? 'opacity-60 cursor-wait' : ''
+        }`}
     >
       {/* Info produit */}
       <div className="flex-1 min-w-0">
@@ -77,16 +88,47 @@ export const CocktailListItem: React.FC<Props> = ({ cocktail, stock, onStockUpda
             {formatCurrency(cocktail.prix)}
           </span>
         </div>
-        
+
         {/* Stock info */}
         {stock && (
           <div className="text-xs text-muted">
-            Stock: <span className={`font-semibold ${
-              isOutOfStock ? 'text-red-400' : isLowStock ? 'text-amber-400' : 'text-emerald-400'
-            }`}>
+            Stock:{' '}
+            <span
+              className={`font-semibold ${isOutOfStock
+                ? 'text-red-400'
+                : isLowStock
+                  ? 'text-amber-400'
+                  : 'text-emerald-400'
+                }`}
+            >
               {isOutOfStock ? 'Rupture' : `${stock.quantite} ${stock.unite}`}
             </span>
           </div>
+        )}
+      </div>
+
+      {/* Boutons Modifier & Supprimer à droite */}
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(cocktail)}
+            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-medium rounded-lg transition"
+            title="Modifier la boisson"
+          >
+            Modifier
+          </button>
+        )}
+
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(cocktail.id)}
+            className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium rounded-lg transition"
+            title="Supprimer la boisson"
+          >
+            Supprimer
+          </button>
         )}
       </div>
     </div>
