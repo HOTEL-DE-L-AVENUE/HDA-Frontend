@@ -155,6 +155,18 @@ export function useHebergement() {
     }
   };
 
+  const handleDeleteReservation = async (id: number) => {
+    if (!window.confirm('Supprimer définitivement cette réservation ?')) return;
+
+    try {
+      await reservationService.deleteReservation(id);
+      await fetchData();
+    } catch (err) {
+      console.error('Erreur lors de la suppression de la réservation :', err);
+      setError('Impossible de supprimer la réservation.');
+    }
+  };
+
   const handleSaveReservation = async () => {
     try {
       await reservationService.createReservation(reservationForm);
@@ -410,7 +422,7 @@ export function useHebergement() {
     maintenanceForm,  setMaintenanceForm,
     clientForm,       setClientForm,
     // handlers
-    handleCheckIn, handleCheckOut, handleCancelReservation, handleSaveReservation,
+    handleCheckIn, handleCheckOut, handleCancelReservation, handleDeleteReservation, handleSaveReservation,
     handleEditRoom, handleDeleteRoom, handleSaveRoom, openNewRoomModal,
     handleEditRoomEquipment, handleDeleteRoomEquipment, handleSaveEquipment, openNewEquipmentModal,
     handleStartTask, handleCompleteTask, handleDeleteTask, handleSaveHousekeeping, openNewHousekeepingModal,

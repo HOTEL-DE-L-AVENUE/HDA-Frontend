@@ -56,6 +56,7 @@ export const HebergementPage: React.FC = () => {
           onCheckIn={h.handleCheckIn}
           onCheckOut={h.handleCheckOut}
           onCancel={h.handleCancelReservation}
+          onDelete={h.handleDeleteReservation}
         />
       )}
 
