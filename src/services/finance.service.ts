@@ -56,6 +56,12 @@ export interface FinancialStats {
   totalRevenu: number;
   totalDepenses: number;
   soldeGlobal: number;
+  modules?: Array<{
+    module: string;
+    entrees: number;
+    sorties: number;
+    solde: number;
+  }>;
 }
 
 export const isFinancialInflow = (typeFlux?: string) =>

@@ -20,6 +20,20 @@ const moduleConfig: Record<string, { label: string; gradient: string; color: str
 
 const financeModules = Object.keys(moduleConfig);
 
+const normalizeModuleKey = (value?: string): string => {
+  const raw = String(value || 'general').trim().toLowerCase();
+
+  if (raw.includes('hebergement')) return 'hebergement';
+  if (raw.includes('hotel')) return 'hotel';
+  if (raw.includes('restaurant')) return 'restaurant';
+  if (raw.includes('bar')) return 'bar';
+  if (raw.includes('casino')) return 'casino';
+  if (raw.includes('facturation')) return 'facturation';
+  if (raw.includes('general')) return 'general';
+
+  return raw || 'general';
+};
+
 export const FinancesPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
@@ -55,17 +69,34 @@ export const FinancesPage: React.FC = () => {
 
       setTransactions(transactionsData);
       setFinancialStats(statsData);
-      
+
       const balances = new Map(financeModules.map(module => [module, { module, entrees: 0, sorties: 0, solde: 0 }]));
-      transactionsData.forEach((transaction) => {
-        const module = String(transaction.module || 'general').toLowerCase();
-        const balance = balances.get(module) || { module, entrees: 0, sorties: 0, solde: 0 };
-        const amount = Number(transaction.montant) || 0;
-        if (isFinancialInflow(transaction.type_flux)) balance.entrees += amount;
-        if (isFinancialOutflow(transaction.type_flux)) balance.sorties += amount;
-        balance.solde = balance.entrees - balance.sorties;
-        balances.set(module, balance);
+
+      const backendModuleSummary = Array.isArray((statsData as any)?.modules) ? (statsData as any).modules : [];
+      backendModuleSummary.forEach((summary: any) => {
+        const module = normalizeModuleKey(summary?.module);
+        const entrees = Number(summary?.entrees) || 0;
+        const sorties = Number(summary?.sorties) || 0;
+        balances.set(module, {
+          module,
+          entrees,
+          sorties,
+          solde: Number(summary?.solde) || (entrees - sorties),
+        });
       });
+
+      if (backendModuleSummary.length === 0) {
+        transactionsData.forEach((transaction) => {
+          const module = normalizeModuleKey(transaction.module);
+          const balance = balances.get(module) || { module, entrees: 0, sorties: 0, solde: 0 };
+          const amount = Number(transaction.montant) || 0;
+          if (isFinancialInflow(transaction.type_flux)) balance.entrees += amount;
+          if (isFinancialOutflow(transaction.type_flux)) balance.sorties += amount;
+          balance.solde = balance.entrees - balance.sorties;
+          balances.set(module, balance);
+        });
+      }
+
       setModulesSoldes([...balances.values()]);
     } catch (error) {
       console.error('Error fetching financial data:', error);
@@ -198,25 +229,15 @@ export const FinancesPage: React.FC = () => {
 
   // All transactions - convert backend format to frontend format
   const allTransactions = transactions
-    .filter(tx => activeFilter === 'all' || tx.module?.toLowerCase() === activeFilter.toLowerCase())
+    .filter(tx => activeFilter === 'all' || normalizeModuleKey(tx.module) === activeFilter.toLowerCase())
     .map(tx => {
-      // Map backend module names to frontend ModuleType
-      let module = 'general';
-      const moduleLower = tx.module?.toLowerCase() || '';
-      if (moduleLower.includes('hebergement')) module = 'hebergement';
-      else if (moduleLower.includes('hotel')) module = 'hotel';
-      else if (moduleLower.includes('restaurant')) module = 'restaurant';
-      else if (moduleLower.includes('bar')) module = 'bar';
-      else if (moduleLower.includes('casino')) module = 'casino';
-      else if (moduleLower.includes('facturation')) module = 'facturation';
-      else if (moduleLower.includes('general')) module = 'general';
-      
+      const module = normalizeModuleKey(tx.module);
       return {
         id: tx.id.toString(),
         type: isFinancialInflow(tx.type_flux) ? 'entree' : 'sortie',
         montant: Number(tx.montant),
         description: tx.description || 'Transaction',
-        categorie: tx.module || 'Général',
+        categorie: moduleConfig[module]?.label || tx.module || 'Général',
         userId: '0',
         userName: 'Système',
         module,
@@ -463,7 +484,9 @@ export const FinancesPage: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
                   <p className="text-muted text-xs">
-                    <span className="capitalize" style={{ color: moduleConfig[tx.module]?.color || moduleConfig.general.color }}>{moduleConfig[tx.module]?.label || tx.module}</span>
+                    <span className="capitalize" style={{ color: moduleConfig[normalizeModuleKey(tx.module)]?.color || moduleConfig.general.color }}>
+                      {moduleConfig[normalizeModuleKey(tx.module)]?.label || tx.module || 'Général'}
+                    </span>
                     {' • '}{tx.categorie} • {tx.userName} • {formatDate(tx.date)}
                   </p>
                 </div>
