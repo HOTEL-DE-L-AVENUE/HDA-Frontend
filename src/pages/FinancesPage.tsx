@@ -224,12 +224,17 @@ export const FinancesPage: React.FC = () => {
     (total, item) => total + Number(item.quantite || 0) * Number(item.prixUnitaire || 0),
     0
   );
+  const hotelStockSorties = getModuleStock('hotel').reduce(
+    (total, item) => total + Number(item.quantite || 0) * Number(item.prixUnitaire || 0),
+    0
+  );
   const displayedModulesSoldes = modulesSoldes.map((module) => {
-    if (module.module !== 'hebergement') return module;
-    const sorties = module.sorties + hebergementStockSorties;
+    if (module.module !== 'hebergement' && module.module !== 'hotel') return module;
+    const stockSorties = module.module === 'hebergement' ? hebergementStockSorties : hotelStockSorties;
+    const sorties = module.sorties + stockSorties;
     return { ...module, sorties, solde: module.entrees - sorties };
   });
-  const displayedTotalSorties = financialStats.totalDepenses + hebergementStockSorties;
+  const displayedTotalSorties = financialStats.totalDepenses + hebergementStockSorties + hotelStockSorties;
 
   const pieData = displayedModulesSoldes.map(m => ({
     name: moduleConfig[m.module]?.label || m.module,
