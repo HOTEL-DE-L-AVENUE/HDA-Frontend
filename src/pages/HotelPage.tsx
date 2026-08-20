@@ -1,3 +1,4 @@
+// src/pages/HotelPage.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Hotel,
@@ -56,14 +57,13 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { id: 'chambres', label: 'Chambres', icon: DoorOpen, mobileLabel: 'Chambres' },
   { id: 'reservations', label: 'Réservations', icon: Calendar, mobileLabel: 'Réserv.' },
+  { id: 'chambres', label: 'Chambres', icon: DoorOpen, mobileLabel: 'Chambres' },
   { id: 'clients', label: 'Clients', icon: Users, mobileLabel: 'Clients' },
   { id: 'equipements', label: 'Équipements', icon: Sparkles, mobileLabel: 'Équip.' },
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
-  // { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
 ];
 
 // Composant pour les statistiques responsive
@@ -133,6 +133,7 @@ const HotelPage: React.FC = () => {
 
   const {
     getModuleCaisseSolde,
+    dispatch,
   } = context;
 
   const {
@@ -176,6 +177,20 @@ const HotelPage: React.FC = () => {
   }
 
   const { solde = 0, entrees = 0, sorties = 0 } = caisseData;
+
+  // Fonction pour encaisser une réservation et mettre à jour le revenu hôtel en haut
+  const handleEncaisser = (res: any) => {
+    const montant = Number(res?.montant || 72000);
+    dispatch({
+      type: 'ADD_TRANSACTION',
+      payload: {
+        module: 'hotel',
+        type: 'entree',
+        montant: montant,
+        description: `Encaissement réservation #${res?.id || res?.numero || ''}`,
+      }
+    });
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -267,7 +282,7 @@ const HotelPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Stats - Responsive Grid */}
+      {/* Quick Stats - Responsive Grid (Ordre permuté : Réservations avant Chambres) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatsCard
           label="Revenu Hôtel"
@@ -276,18 +291,18 @@ const HotelPage: React.FC = () => {
           color="accent"
         />
         <StatsCard
-          label="Chambres"
-          value={`${occupiedRooms}/${totalRooms}`}
-          subValue={`${availableRooms} disponibles`}
-          icon={DoorOpen}
-          color="blue"
-        />
-        <StatsCard
           label="Réservations"
           value={activeReservations}
           subValue="actives"
           icon={Calendar}
           color="green"
+        />
+        <StatsCard
+          label="Chambres"
+          value={`${occupiedRooms}/${totalRooms}`}
+          subValue={`${availableRooms} disponibles`}
+          icon={DoorOpen}
+          color="blue"
         />
         <StatsCard
           label="Maintenance"
@@ -335,6 +350,7 @@ const HotelPage: React.FC = () => {
                 setSelectedReservation(res);
                 setIsReservationModalOpen(true);
               }}
+              onEncaisser={handleEncaisser}
               refreshTrigger={dataRefreshKey}
             />
           </div>

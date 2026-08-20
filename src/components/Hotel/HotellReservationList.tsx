@@ -2,19 +2,20 @@
 import React, { useState, useEffect } from 'react';
 import { Reservation } from '../../types/hotel.types';
 import { formatCurrency, formatDate } from '../../utils/data';
-import { 
-  Calendar, 
-  Edit, 
-  X, 
-  Loader, 
-  AlertCircle, 
+import {
+  Calendar,
+  Edit,
+  X,
+  Loader,
+  AlertCircle,
   Trash2,
   Phone,
   Mail,
   ChevronDown,
   ChevronUp,
   User,
-  DoorOpen
+  DoorOpen,
+  CreditCard
 } from 'lucide-react';
 import { useReservations } from '../../hooks/useReservations';
 import { useClients } from '../../hooks/useClients';
@@ -24,16 +25,17 @@ import { toast } from 'react-hot-toast';
 interface ReservationListProps {
   reservations?: Reservation[];
   onEdit?: (reservation: Reservation) => void;
+  onEncaisser?: (reservation: Reservation) => void;
   onCancel?: (reservationId: number) => void;
   onDelete?: (reservationId: number) => void;
   refreshTrigger?: number;
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, refreshTrigger }) => {
-  const { 
-    reservations, 
-    loading: reservationsLoading, 
-    error: reservationsError, 
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, refreshTrigger }) => {
+  const {
+    reservations,
+    loading: reservationsLoading,
+    error: reservationsError,
     stats,
     loadReservations,
     cancelReservation,
@@ -50,6 +52,9 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, refres
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
+
+  // 🟢 État local pour stocker les IDs des réservations déjà encaissées (pour faire disparaître le bouton instantanément)
+  const [encaissedIds, setEncaissedIds] = useState<number[]>([]);
 
   // Charger toutes les données
   useEffect(() => {
@@ -83,7 +88,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, refres
   const filteredReservations = enrichedReservations.filter(res => {
     const matchesStatus = selectedStatus === 'TOUS' || res.statut === selectedStatus;
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       res.client?.nom?.toLowerCase().includes(searchLower) ||
       res.client?.prenom?.toLowerCase().includes(searchLower) ||
       res.room?.numero?.includes(searchTerm);
@@ -235,8 +240,8 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, refres
           </div>
         ) : (
           filteredReservations.map((res) => (
-            <div 
-              key={res.id} 
+            <div
+              key={res.id}
               className={`bg-gray-900 border rounded-lg overflow-hidden transition-all
                 ${res.statut === 'ANNULEE' ? 'border-red-800/30' : 'border-gray-700'}`}
             >
@@ -267,13 +272,28 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, refres
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {/* Bouton Encaisser dynamique : disparaît si cliqué, ou si la réservation est terminée/annulée */}
+                    {onEncaisser && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
+                      <button
+                        onClick={() => {
+                          setEncaissedIds(prev => [...prev, res.id]); // Masque le bouton instantanément
+                          onEncaisser(res);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs rounded-lg transition-colors font-medium mr-1"
+                        title="Encaisser cette réservation"
+                      >
+                        <CreditCard size={12} />
+                        <span className="hidden sm:inline">Encaisser</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setExpandedId(expandedId === res.id ? null : res.id)}
                       className="p-1.5 hover:bg-gray-800 rounded"
                     >
-                      {expandedId === res.id ? 
-                        <ChevronUp size={14} className="text-gray-400" /> : 
+                      {expandedId === res.id ?
+                        <ChevronUp size={14} className="text-gray-400" /> :
                         <ChevronDown size={14} className="text-gray-400" />
                       }
                     </button>
