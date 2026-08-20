@@ -15,11 +15,11 @@ const moduleConfig: Record<string, { label: string; gradient: string; color: str
   restaurant: { label: 'Restaurant', gradient: 'from-orange-500 to-amber-600', color: '#f97316' },
   bar: { label: 'Bar & Lounge', gradient: 'from-rose-500 to-pink-600', color: '#f43f5e' },
   casino: { label: 'Casino', gradient: 'from-emerald-500 to-green-600', color: '#10b981' },
-  general: { label: 'Général', gradient: 'from-gray-500 to-gray-600', color: '#6b7280' },
-  facturation: { label: 'Facturation', gradient: 'from-purple-500 to-purple-600', color: '#8b5cf6' },
+  // Removed General and Facturation
 };
 
 const financeModules = Object.keys(moduleConfig);
+const defaultModuleConfig = { label: 'Module', gradient: 'from-gray-500 to-gray-600', color: '#6b7280' };
 
 const normalizeModuleKey = (value?: string): string => {
   const raw = String(value || 'general').trim().toLowerCase();
@@ -55,7 +55,7 @@ export const FinancesPage: React.FC = () => {
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
   const [showOperationModal, setShowOperationModal] = useState(false);
-  const [operation, setOperation] = useState({ module: 'general', type_flux: 'ENTREE' as 'ENTREE' | 'SORTIE', montant: '', description: '' });
+  const [operation, setOperation] = useState({ module: financeModules[0], type_flux: 'ENTREE' as 'ENTREE' | 'SORTIE', montant: '', description: '' });
   const [isSavingOperation, setIsSavingOperation] = useState(false);
 
   // Fetch financial data on component mount
@@ -251,6 +251,7 @@ export const FinancesPage: React.FC = () => {
 
   // All transactions - convert backend format to frontend format
   const allTransactions = transactions
+    .filter(tx => financeModules.includes(normalizeModuleKey(tx.module)))
     .filter(tx => activeFilter === 'all' || normalizeModuleKey(tx.module) === activeFilter.toLowerCase())
     .map(tx => {
       const module = normalizeModuleKey(tx.module);
@@ -259,7 +260,7 @@ export const FinancesPage: React.FC = () => {
         type: isFinancialInflow(tx.type_flux) ? 'entree' : 'sortie',
         montant: Number(tx.montant),
         description: tx.description || 'Transaction',
-        categorie: moduleConfig[module]?.label || tx.module || 'Général',
+        categorie: moduleConfig[module]?.label || tx.module || defaultModuleConfig.label,
         userId: '0',
         userName: 'Système',
         module,
@@ -317,15 +318,15 @@ export const FinancesPage: React.FC = () => {
           <p className="text-muted text-sm mt-1">Vue consolidée de toutes les caisses</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
+          {/* <button
             onClick={() => setShowOperationModal(true)}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-black text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={16} />
             <span className="hidden md:inline">Opération</span>
-          </button>
-          <button 
+          </button> */}
+          {/* <button 
             onClick={() => setShowCreateInvoiceModal(true)}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-2 border border-base text-muted hover:text-primary text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -340,7 +341,7 @@ export const FinancesPage: React.FC = () => {
           >
             <CreditCard size={16} />
             <span className="hidden md:inline">Paiement</span>
-          </button>
+          </button> */}
           <button 
             onClick={handleExport}
             disabled={loading}
@@ -398,7 +399,7 @@ export const FinancesPage: React.FC = () => {
         <h3 className="text-primary font-semibold mb-4">Caisses par Module</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {displayedModulesSoldes.map(m => {
-            const config = moduleConfig[m.module] || moduleConfig.general;
+            const config = moduleConfig[m.module] || defaultModuleConfig;
             const pct = totalEntrees > 0 ? (m.entrees / totalEntrees) * 100 : 0;
             return (
               <div key={m.module} className="bg-surface border border-base rounded-2xl overflow-hidden hover:border-accent transition-all">
@@ -507,7 +508,7 @@ export const FinancesPage: React.FC = () => {
                   <p className="text-primary text-sm font-medium truncate">{tx.description}</p>
                   <p className="text-muted text-xs">
                     <span className="capitalize" style={{ color: moduleConfig[normalizeModuleKey(tx.module)]?.color || moduleConfig.general.color }}>
-                      {moduleConfig[normalizeModuleKey(tx.module)]?.label || tx.module || 'Général'}
+                      {moduleConfig[normalizeModuleKey(tx.module)]?.label || tx.module || defaultModuleConfig.label}
                     </span>
                     {' • '}{tx.categorie} • {tx.userName} • {formatDate(tx.date)}
                   </p>
