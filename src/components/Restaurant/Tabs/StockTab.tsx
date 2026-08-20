@@ -719,7 +719,7 @@ const AchatsPanel: React.FC = () => {
         })),
       });
       if (res.success) {
-        setPurchases(prev => [res.data, ...prev]);
+        await load();
         setShowPurchaseModal(false);
         setSupplierId('');
         setLines([{ product_id: '', location_id: '', quantite: 0, prix_unitaire: 0 }]);
@@ -1014,9 +1014,11 @@ const RecettesPanel: React.FC = () => {
       restaurantService.getProducts({ type_produit: 'PRODUIT_FINI', actif: true }),
       restaurantService.getProducts({ type_produit: 'MATIERE_PREMIERE', actif: true }),
     ]).then(([rec, fin, raw]: any[]) => {
-      setRecipes(rec?.data || rec || []);
-      setFinishedProducts(fin?.data || fin || []);
-      setRawProducts(raw?.data || raw || []);
+      const payload = rec?.data ?? rec ?? [];
+      const safeRecipes = Array.isArray(payload) ? payload.filter(Boolean) : [];
+      setRecipes(safeRecipes);
+      setFinishedProducts(Array.isArray(fin?.data || fin) ? (fin?.data || fin) : []);
+      setRawProducts(Array.isArray(raw?.data || raw) ? (raw?.data || raw) : []);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
@@ -1026,7 +1028,13 @@ const RecettesPanel: React.FC = () => {
     setDetailLoading(true);
     try {
       const res = await restaurantService.getRecipeById(id);
-      if (res.success) setSelected(res.data as RecipeDetail);
+      if (res.success) {
+        const detail = res.data as Partial<RecipeDetail>;
+        setSelected({
+          ...(detail as RecipeDetail),
+          ingredients: Array.isArray(detail.ingredients) ? detail.ingredients.filter(Boolean) : [],
+        });
+      }
     } catch (e) { console.error(e); }
     finally { setDetailLoading(false); }
   };
@@ -1036,7 +1044,7 @@ const RecettesPanel: React.FC = () => {
     try {
       const res = await restaurantService.deleteRecipe(id);
       if (res.success) {
-        setRecipes(prev => prev.filter(r => r.id !== id));
+        await load();
         if (selected?.id === id) setSelected(null);
       }
     } catch (e: any) { alert(e.message); }
@@ -1056,7 +1064,7 @@ const RecettesPanel: React.FC = () => {
         ingredients: cIngs.map(i => ({ ingredient_id: Number(i.ingredient_id), quantite: i.quantite })),
       });
       if (res.success) {
-        setRecipes(prev => [...prev, res.data as RecipeSummary]);
+        await load();
         setShowCreateModal(false);
         setCNom(''); setCProduct(''); setCIngs([{ ingredient_id: '', quantite: 0 }]);
       }
@@ -1066,7 +1074,8 @@ const RecettesPanel: React.FC = () => {
 
   const openEdit = () => {
     if (!selected) return;
-    setEIngs(selected.ingredients.map(i => ({ ingredient_id: i.ingredient_id, quantite: i.quantite })));
+    const ingredients = Array.isArray(selected.ingredients) ? selected.ingredients : [];
+    setEIngs(ingredients.map(i => ({ ingredient_id: i.ingredient_id, quantite: i.quantite })));
     setEErr(''); setShowEditModal(true);
   };
 
@@ -1081,8 +1090,15 @@ const RecettesPanel: React.FC = () => {
         ingredients: eIngs.map(i => ({ ingredient_id: Number(i.ingredient_id), quantite: i.quantite })),
       });
       if (res.success) {
+        await load();
         const detail = await restaurantService.getRecipeById(selected.id);
-        if (detail.success) setSelected(detail.data as RecipeDetail);
+        if (detail.success) {
+          const fresh = detail.data as Partial<RecipeDetail>;
+          setSelected({
+            ...(fresh as RecipeDetail),
+            ingredients: Array.isArray(fresh.ingredients) ? fresh.ingredients.filter(Boolean) : [],
+          });
+        }
         setShowEditModal(false);
       }
     } catch (e: any) { setEErr(e.message); }
@@ -1122,10 +1138,13 @@ const RecettesPanel: React.FC = () => {
     </div>
   );
 
+  const safeRecipes = Array.isArray(recipes) ? recipes.filter(Boolean) : [];
+  const safeSelectedIngredients = Array.isArray(selected?.ingredients) ? selected.ingredients.filter(Boolean) : [];
+
   return (
     <>
       <div className="flex justify-between items-center mb-4">
-        <p className="text-sm text-secondary">{recipes.length} recette(s)</p>
+        <p className="text-sm text-secondary">{safeRecipes.length} recette(s)</p>
         <button 
           className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
           style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
@@ -1141,7 +1160,7 @@ const RecettesPanel: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Liste */}
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-            {recipes.map(r => (
+            {safeRecipes.map(r => (
               <div
                 key={r.id}
                 onClick={() => openDetail(r.id)}
@@ -1155,7 +1174,7 @@ const RecettesPanel: React.FC = () => {
                 <p className="text-xs text-muted mt-0.5">Plat : {r.product_nom}</p>
               </div>
             ))}
-            {recipes.length === 0 && (
+            {safeRecipes.length === 0 && (
               <p className="text-sm text-muted text-center py-8">Aucune recette</p>
             )}
           </div>
@@ -1185,13 +1204,13 @@ const RecettesPanel: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {selected.ingredients.map(ing => (
+                    {safeSelectedIngredients.map(ing => (
                       <tr key={ing.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
                         <td className="py-1.5 text-primary">{ing.ingredient_nom}</td>
                         <td className="py-1.5 text-right text-secondary">{ing.quantite} {ing.ingredient_unite}</td>
                       </tr>
                     ))}
-                    {selected.ingredients.length === 0 && (
+                    {safeSelectedIngredients.length === 0 && (
                       <tr><td colSpan={2} className="py-2 text-muted">Aucun ingrédient</td></tr>
                     )}
                   </tbody>
