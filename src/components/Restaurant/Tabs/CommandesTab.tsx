@@ -22,6 +22,7 @@ interface CommandesTabProps {
   onDelete: (orderId: number) => void;
   onNewOrder: () => void;
   onEditOrder: (order: Order) => void;
+  onInvoice?: (orderId: number) => void;
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
@@ -32,7 +33,8 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onCancel,
   onDelete,
   onNewOrder,
-  onEditOrder
+  onEditOrder,
+  onInvoice
 }) => {
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => (
@@ -84,6 +86,10 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
         )}
         {order.statut === 'SERVIE' && (
           <Button size="sm" onClick={() => onPayment(order.id)}>Encaisser</Button>
+        )}
+        {/* Invoice button */}
+        {onInvoice && (
+          <Button size="sm" variant="secondary" onClick={() => onInvoice(order.id)}>Facture</Button>
         )}
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="danger" onClick={() => onCancel(order.id)}>

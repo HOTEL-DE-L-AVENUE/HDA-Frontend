@@ -282,6 +282,54 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
+  const handlePrintInvoice = (orderId: number | string) => {
+    const numericId = Number(orderId);
+    // Try downloading PDF first (authenticated). Embed in a popup for in-app printing. Fallback to HTML printable view.
+    (async () => {
+      try {
+        const arrayBuffer = await restaurantService.getInvoicePdf(numericId as number);
+        const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) {
+          // Popup blocked - force download
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `facture_commande_${numericId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+          return;
+        }
+
+        // Embed PDF in an iframe and trigger print from the popup so user remains inside the app
+        printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Facture #${numericId}</title><style>html,body{height:100%;margin:0}iframe{border:none;width:100%;height:100%}</style></head><body><iframe src="${blobUrl}"></iframe><script>const f=document.querySelector('iframe');f.onload=function(){setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){window.print();}},300);};</script></body></html>`);
+        printWindow.document.close();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+        return;
+      } catch (err) {
+        console.warn('PDF fetch failed, falling back to HTML view', err);
+      }
+
+      // Fallback: fetch invoice HTML via authenticated API client then open in popup and print (same behavior as Bar)
+      try {
+        const html = await restaurantService.getInvoiceHtml(numericId as number);
+        const printWindow = window.open('', '_blank', 'width=720,height=640');
+        if (!printWindow) return alert('Impossible d' + "'" + 'ouvrir une nouvelle fenêtre');
+        // Ensure auto-print when the content loads
+        const autoPrintHtml = html + `<script>window.onload=function(){setTimeout(()=>{window.focus();window.print();},300)}<\/script>`;
+        printWindow.document.open();
+        printWindow.document.write(autoPrintHtml);
+        printWindow.document.close();
+      } catch (err) {
+        console.error('Erreur récupération facture', err);
+        alert('Impossible de récupérer la facture. Vous êtes peut-être déconnecté.');
+      }
+    })();
+  };
+
   // Produits (mock)
   const handleAddProduct = async (formData: any) => {
     try {
@@ -408,6 +456,7 @@ export const RestaurantPage: React.FC = () => {
             onCancel={handleCancelOrder}
             onDelete={handleDeleteOrder}
             onNewOrder={() => setShowOrderModal(true)}
+            onInvoice={handlePrintInvoice}
           />
         )}
         {activeTab === 'menu' && (
