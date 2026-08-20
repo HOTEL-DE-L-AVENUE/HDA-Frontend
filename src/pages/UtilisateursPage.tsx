@@ -1,4 +1,3 @@
-
 // src/pages/UtilisateursPage.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHDA } from '../context/HDAContext';
@@ -15,6 +14,12 @@ const roleLabels: Record<string, string> = {
   caisse: 'Caissier',
   water: 'Barman',
   housekeeping: 'Personnel d’entretien',
+};
+
+// Rôles restreints uniquement pour le formulaire et la légende
+const formRoleLabels: Record<string, string> = {
+  admin: 'Administrateur',
+  manager: 'Manager',
 };
 
 const roleIcons: Record<string, string> = {
@@ -107,7 +112,6 @@ export const UtilisateursPage: React.FC = () => {
     fetchRealUsers();
   }, [fetchRealUsers]);
 
-  // Calcul du nombre de managers par module (pour la règle max 2 managers par module)
   const getManagersCountByModule = useCallback((): Record<ModuleType, number> => {
     const counts: Record<string, number> = {
       hebergement: 0,
@@ -120,7 +124,6 @@ export const UtilisateursPage: React.FC = () => {
 
     state.users.forEach(u => {
       if (u.role === 'manager') {
-        // Ne pas compter l'utilisateur en cours d'édition
         if (editUser && String(u.id) === String(editUser.id)) return;
         const uMods = parseModules(u.module);
         uMods.forEach(mod => {
@@ -143,14 +146,14 @@ export const UtilisateursPage: React.FC = () => {
   const openEdit = (user: User) => {
     setEditUser(user);
     setErrorMessage('');
-    setForm({ 
-      nom: user.nom, 
-      prenom: user.prenom, 
-      email: user.email, 
-      role: user.role, 
-      module: parseModules(user.module), 
-      actif: user.actif, 
-      password: '' 
+    setForm({
+      nom: user.nom,
+      prenom: user.prenom,
+      email: user.email,
+      role: user.role,
+      module: parseModules(user.module),
+      actif: user.actif,
+      password: ''
     });
     setShowModal(true);
   };
@@ -165,7 +168,6 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
-    // Validation : Règle max 2 managers par module
     if (form.role === 'manager') {
       const selectedMods = parseModules(form.module);
       for (const mod of selectedMods) {
@@ -176,7 +178,7 @@ export const UtilisateursPage: React.FC = () => {
         }
       }
     }
-    
+
     try {
       setIsSubmitting(true);
       setErrorMessage('');
@@ -231,7 +233,6 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
-    // Si on veut ajouter le module et que le rôle est manager, vérifier la limite de 2
     if (!exists && form.role === 'manager') {
       const currentCount = managersCountByModule[mod] || 0;
       if (currentCount >= 2) {
@@ -298,11 +299,11 @@ export const UtilisateursPage: React.FC = () => {
           </h3>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <div className="relative flex-1 sm:flex-none">
-              <input 
-                value={search} 
-                onChange={e => setSearch(e.target.value)} 
-                placeholder="Rechercher..." 
-                className="w-full sm:w-48 h-9 pl-9 pr-3 bg-surface-2 border border-base rounded-xl text-primary placeholder-muted text-sm focus:outline-none focus:border-accent/50" 
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher..."
+                className="w-full sm:w-48 h-9 pl-9 pr-3 bg-surface-2 border border-base rounded-xl text-primary placeholder-muted text-sm focus:outline-none focus:border-accent/50"
               />
             </div>
             <Button icon={<Plus size={16} />} onClick={() => { setEditUser(null); setErrorMessage(''); setShowModal(true); }}>
@@ -323,11 +324,10 @@ export const UtilisateursPage: React.FC = () => {
               const userModulesList = parseModules(user.module);
               return (
                 <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
                     user.role === 'caisse' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
-                    'bg-gradient-to-br from-slate-600 to-slate-700'
-                  }`}>
+                      'bg-gradient-to-br from-slate-600 to-slate-700'
+                    }`}>
                     <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom?.[0] || ''}</span>
                   </div>
 
@@ -392,14 +392,14 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Role Legend */}
+      {/* Role Legend (Restreint à Administrateur et Manager) */}
       <div className="bg-surface border border-base rounded-2xl p-6">
         <h3 className="text-primary font-semibold mb-4 flex items-center gap-2">
           <Key size={16} className="text-accent" />
           Niveaux d'Accès
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {(Object.entries(roleLabels) as [string, string][]).map(([role, label]) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {(Object.entries(formRoleLabels) as [string, string][]).map(([role, label]) => (
             <div key={role} className="flex items-start gap-3 p-4 rounded-xl bg-surface-2/50 border border-base">
               <span className="text-2xl">{roleIcons[role]}</span>
               <div>
@@ -408,12 +408,8 @@ export const UtilisateursPage: React.FC = () => {
                   <Badge variant={role}>{role}</Badge>
                 </div>
                 <p className="text-muted text-xs">
+                  {role === 'admin' && 'Accès complet à tous les modules et paramètres'}
                   {role === 'manager' && 'Gestion des modules assignés'}
-                  {role === 'receptioniste' && 'Accueil, clients et réservations'}
-                  {role === 'caisse' && 'Accès aux opérations de caisse'}
-                  {role === 'water' && 'Service du bar'}
-                  {role === 'housekeeping' && 'Entretien et gestion des chambres'}
-                  {role === 'viewer' && 'Lecture seule, sans modification'}
                 </p>
               </div>
             </div>
@@ -430,20 +426,21 @@ export const UtilisateursPage: React.FC = () => {
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Prénom" value={form.prenom} onChange={e => setForm({...form, prenom: e.target.value})} placeholder="Prénom" />
-            <Input label="Nom" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} placeholder="Nom de famille" />
+            <Input label="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} placeholder="Prénom" />
+            <Input label="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} placeholder="Nom de famille" />
           </div>
-          <Input label="Email" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="email@hda.com" />
-          
+          <Input label="Email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@hda.com" />
+
           <div className="relative">
-            <Input label="Mot de passe" type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••••" />
+            <Input label="Mot de passe" type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" />
             <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 bottom-3 text-muted hover:text-primary">
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
 
-          <Select label="Rôle" value={form.role} onChange={e => setForm({...form, role: e.target.value as UserRole})} 
-            options={Object.entries(roleLabels).map(([k, v]) => ({ value: k, label: v }))} />
+          {/* Sélecteur de rôle restreint aux rôles autorisés */}
+          <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}
+            options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
           <div>
             <label className="text-muted text-sm font-medium block mb-2">Modules autorisés</label>
@@ -454,11 +451,10 @@ export const UtilisateursPage: React.FC = () => {
                   <button
                     key={mod}
                     onClick={() => toggleModule(mod)}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
-                      isSelected
-                        ? 'bg-accent-4 text-accent border-accent/40'
-                        : 'bg-surface-2 text-muted border-base hover:text-primary'
-                    }`}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
+                      ? 'bg-accent-4 text-accent border-accent/40'
+                      : 'bg-surface-2 text-muted border-base hover:text-primary'
+                      }`}
                   >
                     {moduleLabels[mod]}
                   </button>
@@ -468,9 +464,9 @@ export const UtilisateursPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={() => setForm({...form, actif: !form.actif})}
+            <button onClick={() => setForm({ ...form, actif: !form.actif })}
               className={`w-12 h-6 rounded-full transition-all ${form.actif ? 'bg-success' : 'bg-surface-3'} relative`}>
-                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.actif ? 'right-0.5' : 'left-0.5'}`} />
             </button>
             <span className="text-muted text-sm">{form.actif ? 'Compte actif' : 'Compte inactif'}</span>
           </div>
