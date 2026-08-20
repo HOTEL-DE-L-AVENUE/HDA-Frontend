@@ -28,6 +28,7 @@ import type {
 } from '../components/Restaurant/types';
 
 import AuthService from '../services/authService';
+import { clientService } from '../services/client.service';
 import { getDefaultTabForRole } from '../utils/permissions';
 
 export const RestaurantPage: React.FC = () => {
@@ -325,16 +326,25 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
-  // Clients (mock)
-  const handleAddClient = (formData: any) => {
-    const newClient: Client = {
-      id: clients.length + 1,
-      code_client: `CL${String(clients.length + 1).padStart(3, '0')}`,
-      ...formData,
-    };
-    setClients([...clients, newClient]);
-    setShowClientModal(false);
-    alert('Client créé avec succès !');
+  // Clients
+  const handleAddClient = async (formData: any) => {
+    try {
+      // Create client via backend so subsequent orders can reference it
+      const created = await clientService.createClient(formData);
+      setClients(prev => [...prev, created]);
+      setShowClientModal(false);
+      alert('Client créé avec succès !');
+    } catch (err) {
+      console.error('Erreur création client', err);
+      alert('Impossible de créer le client sur le serveur. Le client a été conservé localement.');
+      const newClient: Client = {
+        id: clients.length + 1,
+        code_client: `CL${String(clients.length + 1).padStart(3, '0')}`,
+        ...formData,
+      };
+      setClients([...clients, newClient]);
+      setShowClientModal(false);
+    }
   };
 
   // ---------- Statistiques ----------

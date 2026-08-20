@@ -32,8 +32,13 @@ export const deleteTable = (id: number) =>
 export const getMenu = () =>
   api.get<ApiResponse<MenuItem[]>>('/api/restaurant/menu').then(res => res.data);
 
-export const getProducts = (params?: Record<string, any>) =>
-  api.get<ApiResponse<Product[]>>('/api/restaurant/products', { params }).then(res => res.data);
+export const getProducts = (params?: Record<string, any>) => {
+  const normalizedParams = { ...params };
+  if (normalizedParams.actif !== undefined) {
+    normalizedParams.actif = normalizedParams.actif === true || normalizedParams.actif === 'true' ? 1 : 0;
+  }
+  return api.get<ApiResponse<Product[]>>('/api/restaurant/products', { params: normalizedParams }).then(res => res.data);
+};
 
 export const getProductById = (id: number) =>
   api.get<ApiResponse<Product>>(`/api/restaurant/products/${id}`).then(res => res.data);
