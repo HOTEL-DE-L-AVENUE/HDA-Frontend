@@ -16,7 +16,6 @@ const roleLabels: Record<string, string> = {
   housekeeping: 'Personnel d’entretien',
 };
 
-// Rôles restreints uniquement pour le formulaire et la légende
 const formRoleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
@@ -112,6 +111,7 @@ export const UtilisateursPage: React.FC = () => {
     fetchRealUsers();
   }, [fetchRealUsers]);
 
+  // Calcul du nombre de managers par module (Max 1 manager par module, en excluant l'utilisateur en cours d'édition)
   const getManagersCountByModule = useCallback((): Record<ModuleType, number> => {
     const counts: Record<string, number> = {
       hebergement: 0,
@@ -168,12 +168,17 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
+    // Validation : Règle des managers (1 ou 2 modules max et pas déjà pris)
     if (form.role === 'manager') {
       const selectedMods = parseModules(form.module);
+      if (selectedMods.length < 1 || selectedMods.length > 2) {
+        setErrorMessage('Un manager doit obligatoirement gérer 1 ou 2 modules.');
+        return;
+      }
       for (const mod of selectedMods) {
         const count = managersCountByModule[mod] || 0;
-        if (count >= 2) {
-          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà atteint sa limite maximale de 2 managers.`);
+        if (count >= 1) {
+          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà un manager assigné.`);
           return;
         }
       }
@@ -233,11 +238,17 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
-    if (!exists && form.role === 'manager') {
-      const currentCount = managersCountByModule[mod] || 0;
-      if (currentCount >= 2) {
-        setErrorMessage(`Limite atteinte : Le module "${moduleLabels[mod] || mod}" a déjà 2 managers assignés.`);
-        return;
+    if (form.role === 'manager') {
+      if (!exists) {
+        if (currentModules.length >= 2) {
+          setErrorMessage('Un manager ne peut pas gérer plus de 2 modules.');
+          return;
+        }
+        const currentCount = managersCountByModule[mod] || 0;
+        if (currentCount >= 1) {
+          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà un manager assigné.`);
+          return;
+        }
       }
     }
 
@@ -392,7 +403,7 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Role Legend (Restreint à Administrateur et Manager) */}
+      {/* Role Legend */}
       <div className="bg-surface border border-base rounded-2xl p-6">
         <h3 className="text-primary font-semibold mb-4 flex items-center gap-2">
           <Key size={16} className="text-accent" />
@@ -409,7 +420,7 @@ export const UtilisateursPage: React.FC = () => {
                 </div>
                 <p className="text-muted text-xs">
                   {role === 'admin' && 'Accès complet à tous les modules et paramètres'}
-                  {role === 'manager' && 'Gestion des modules assignés'}
+                  {role === 'manager' && 'Gestion de 1 ou 2 modules attribués'}
                 </p>
               </div>
             </div>
@@ -426,37 +437,46 @@ export const UtilisateursPage: React.FC = () => {
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} placeholder="Prénom" />
-            <Input label="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} placeholder="Nom de famille" />
+            <Input label="Prénom" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} placeholder="Prénom" autoComplete="off" />
+            <Input label="Nom" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} placeholder="Nom de famille" autoComplete="off" />
           </div>
-          <Input label="Email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@hda.com" />
+          <Input label="Email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@hda.com" autoComplete="off" />
 
           <div className="relative">
-            <Input label="Mot de passe" type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" />
+            <Input label="Mot de passe" type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" autoComplete="new-password" />
             <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 bottom-3 text-muted hover:text-primary">
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
 
-          {/* Sélecteur de rôle restreint aux rôles autorisés */}
           <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
           <div>
-            <label className="text-muted text-sm font-medium block mb-2">Modules autorisés</label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-muted text-sm font-medium">Modules autorisés (1 ou 2 max pour un manager)</label>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {allModules.map(mod => {
-                const isSelected = parseModules(form.module).includes(mod);
+                const currentModules = parseModules(form.module);
+                const isSelected = currentModules.includes(mod);
+                const managerCountForMod = managersCountByModule[mod] || 0;
+                const isTakenByOther = form.role === 'manager' && managerCountForMod >= 1 && !isSelected;
+
                 return (
                   <button
                     key={mod}
+                    type="button"
                     onClick={() => toggleModule(mod)}
+                    disabled={isTakenByOther}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
-                      : 'bg-surface-2 text-muted border-base hover:text-primary'
+                      : isTakenByOther
+                        ? 'bg-surface-3/30 text-muted/40 border-base cursor-not-allowed opacity-50'
+                        : 'bg-surface-2 text-muted border-base hover:text-primary'
                       }`}
                   >
-                    {moduleLabels[mod]}
+                    {moduleLabels[mod]} {isTakenByOther && '(Déjà assigné)'}
                   </button>
                 );
               })}
