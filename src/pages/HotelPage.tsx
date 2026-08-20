@@ -1,3 +1,4 @@
+// src/pages/HotelPage.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Hotel,
@@ -132,6 +133,7 @@ const HotelPage: React.FC = () => {
 
   const {
     getModuleCaisseSolde,
+    dispatch,
   } = context;
 
   const {
@@ -175,6 +177,20 @@ const HotelPage: React.FC = () => {
   }
 
   const { solde = 0, entrees = 0, sorties = 0 } = caisseData;
+
+  // Fonction pour encaisser une réservation et mettre à jour le revenu hôtel en haut
+  const handleEncaisser = (res: any) => {
+    const montant = Number(res?.montant || 72000);
+    dispatch({
+      type: 'ADD_TRANSACTION',
+      payload: {
+        module: 'hotel',
+        type: 'entree',
+        montant: montant,
+        description: `Encaissement réservation #${res?.id || res?.numero || ''}`,
+      }
+    });
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -334,6 +350,7 @@ const HotelPage: React.FC = () => {
                 setSelectedReservation(res);
                 setIsReservationModalOpen(true);
               }}
+              onEncaisser={handleEncaisser}
               refreshTrigger={dataRefreshKey}
             />
           </div>
