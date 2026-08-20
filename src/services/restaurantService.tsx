@@ -68,6 +68,13 @@ export const getOrders = (params?: {
 export const getOrderById = (id: number) =>
   api.get<ApiResponse<Order>>(`/api/restaurant/orders/${id}`).then(res => res.data);
 
+// Fetch printable invoice HTML as text (uses api client so auth headers are included)
+export const getInvoiceHtml = (id: number) =>
+  api.get<string>(`/api/restaurant/orders/${id}/invoice`, { responseType: 'text' as const }).then(res => res.data);
+
+export const getInvoicePdf = (id: number) =>
+  api.get<ArrayBuffer>(`/api/restaurant/orders/${id}/invoice.pdf`, { responseType: 'arraybuffer' as const }).then(res => res.data);
+
 export const createOrder = (data: {
   client_id?: number;
   table_id?: number;
