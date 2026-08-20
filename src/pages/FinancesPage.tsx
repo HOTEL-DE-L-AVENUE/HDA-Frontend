@@ -7,6 +7,7 @@ import { CreateInvoiceModal } from '../components/Finance/modals/CreateInvoiceMo
 import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
 import { Modal } from '../components/ui/Modal';
 import { toast } from 'react-hot-toast';
+import { useHDA } from '../context/HDAContext';
 
 const moduleConfig: Record<string, { label: string; gradient: string; color: string }> = {
   hebergement: { label: 'Hébergement', gradient: 'from-blue-500 to-cyan-600', color: '#3b82f6' },
@@ -35,6 +36,7 @@ const normalizeModuleKey = (value?: string): string => {
 };
 
 export const FinancesPage: React.FC = () => {
+  const { getModuleStock } = useHDA();
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
@@ -141,7 +143,7 @@ export const FinancesPage: React.FC = () => {
       csvRows.push(['═══ CAISSES PAR MODULE ═══']);
       csvRows.push(['Module', 'Solde (MGA)', 'Entrées (MGA)', 'Sorties (MGA)']);
       if (hasModuleData) {
-        modulesSoldes.forEach(m => {
+        displayedModulesSoldes.forEach(m => {
           csvRows.push([
             moduleConfig[m.module]?.label || m.module,
             m.solde.toString(),
@@ -218,13 +220,24 @@ export const FinancesPage: React.FC = () => {
     }
   };
 
-  const pieData = modulesSoldes.map(m => ({
+  const hebergementStockSorties = getModuleStock('hebergement').reduce(
+    (total, item) => total + Number(item.quantite || 0) * Number(item.prixUnitaire || 0),
+    0
+  );
+  const displayedModulesSoldes = modulesSoldes.map((module) => {
+    if (module.module !== 'hebergement') return module;
+    const sorties = module.sorties + hebergementStockSorties;
+    return { ...module, sorties, solde: module.entrees - sorties };
+  });
+  const displayedTotalSorties = financialStats.totalDepenses + hebergementStockSorties;
+
+  const pieData = displayedModulesSoldes.map(m => ({
     name: moduleConfig[m.module]?.label || m.module,
     value: m.entrees,
     color: moduleConfig[m.module]?.color || '#6b7280',
   }));
 
-  const barData = modulesSoldes.map(m => ({
+  const barData = displayedModulesSoldes.map(m => ({
     name: moduleConfig[m.module]?.label || m.module,
     entrees: m.entrees,
     sorties: m.sorties,
@@ -251,7 +264,7 @@ export const FinancesPage: React.FC = () => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const totalEntrees = financialStats.totalRevenu;
-  const totalSorties = financialStats.totalDepenses;
+  const totalSorties = displayedTotalSorties;
 
   const handleCreateOperation = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -379,7 +392,7 @@ export const FinancesPage: React.FC = () => {
       <div>
         <h3 className="text-primary font-semibold mb-4">Caisses par Module</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {modulesSoldes.map(m => {
+          {displayedModulesSoldes.map(m => {
             const config = moduleConfig[m.module] || moduleConfig.general;
             const pct = totalEntrees > 0 ? (m.entrees / totalEntrees) * 100 : 0;
             return (
@@ -457,7 +470,7 @@ export const FinancesPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
           <h3 className="text-primary font-semibold">Historique des Transactions</h3>
           <div className="flex flex-wrap gap-2">
-            {[{ value: 'all', label: 'Tout' }, ...modulesSoldes.map(m => ({ value: m.module, label: moduleConfig[m.module]?.label || m.module }))].map(f => (
+            {[{ value: 'all', label: 'Tout' }, ...displayedModulesSoldes.map(m => ({ value: m.module, label: moduleConfig[m.module]?.label || m.module }))].map(f => (
               <button
                 key={f.value}
                 onClick={() => setActiveFilter(f.value)}
