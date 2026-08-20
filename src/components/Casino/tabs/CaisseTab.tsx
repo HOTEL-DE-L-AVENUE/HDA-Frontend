@@ -15,6 +15,7 @@ import {
 } from '../common';
 import { sessionsApi, cashiersApi, reportsApi } from '../../../services/casino.service';
 import { caisseTransfersApi } from '../../../services/caisseTransfers.service';
+import financeService, { FinancialStats } from '../../../services/finance.service';
 import { CaisseTransferModal } from '../modals/CaisseTransferModal';
 import type { CashSession, Cashier, EcartCaisseRow, FluxASynchroniserRow } from '../../../types/casino.types';
 import type { CaisseTransfer, StatutCaisseTransfer } from '../../../types/caisseTransfers.types';
@@ -32,23 +33,29 @@ export const CaisseTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [actingTransferId, setActingTransferId] = useState<number | null>(null);
   const [proceedingTransfer, setProceedingTransfer] = useState<CaisseTransfer | null>(null);
+  const [casinoFinance, setCasinoFinance] = useState({ entrees: 0, sorties: 0, solde: 0 });
 
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
-      const [s, cs, ec, fl, tr] = await Promise.all([
+      const [s, cs, ec, fl, tr, finance] = await Promise.all([
         sessionsApi.list(),
         cashiersApi.list(),
         reportsApi.ecartsCaisse({ salle: salleFilter || undefined }),
         reportsApi.fluxASynchroniser(),
         caisseTransfersApi.list({ statut: transferStatutFilter || undefined, limit: 50 }),
+        financeService.getFinancialStats(),
       ]);
       setSessions(s);
       setCashiers(cs);
       setEcarts(ec);
       setFlux(fl);
       setTransfers(tr);
+      const summary = (finance as FinancialStats).modules.find(
+        (module) => module.module.toLowerCase() === 'casino'
+      );
+      setCasinoFinance(summary || { entrees: 0, sorties: 0, solde: 0 });
     } catch (e: any) {
       setError(e?.message || 'Erreur de chargement de la caisse globale.');
     } finally {
@@ -112,6 +119,20 @@ export const CaisseTab: React.FC = () => {
   return (
     <div className="flex flex-col gap-4 w-full">
       {error && <ErrorBanner message={error} />}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[
+          { label: 'Entrées Casino', value: casinoFinance.entrees, color: 'var(--color-success, #4ade80)' },
+          { label: 'Sorties Casino', value: casinoFinance.sorties, color: 'var(--color-danger, #f87171)' },
+          { label: 'Solde Casino', value: casinoFinance.solde, color: 'var(--color-accent)' },
+        ].map((stat) => (
+          <SectionCard key={stat.label} title={stat.label}>
+            <p className="text-primary text-xl font-bold" style={{ color: stat.color }}>
+              {formatAriary(stat.value)}
+            </p>
+          </SectionCard>
+        ))}
+      </div>
 
       <SectionCard
         title="Principe : source unique"
