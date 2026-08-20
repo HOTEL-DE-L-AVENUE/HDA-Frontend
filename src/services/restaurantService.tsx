@@ -4,7 +4,6 @@ import type {
   Product,
   MenuItem,
   Order,
-  Recipe,
   Cashier,
   RestaurantStats,
   ApiResponse,
@@ -43,17 +42,7 @@ export const getProducts = (params?: Record<string, any>) => {
 export const getProductById = (id: number) =>
   api.get<ApiResponse<Product>>(`/api/restaurant/products/${id}`).then(res => res.data);
 
-// ==================== RECETTES ====================
-
-export const createRecipe = (data: {
-  product_id: number;
-  nom: string;
-  ingredients?: { ingredient_id: number; quantite: number }[];
-}) =>
-  api.post<ApiResponse<Recipe>>('/api/restaurant/recipes', data).then(res => res.data);
-
-export const getRecipeById = (id: number) =>
-  api.get<ApiResponse<Recipe>>(`/api/restaurant/recipes/${id}`).then(res => res.data);
+// Recettes endpoints removed
 
 // ==================== COMMANDES ====================
 
@@ -67,6 +56,13 @@ export const getOrders = (params?: {
 
 export const getOrderById = (id: number) =>
   api.get<ApiResponse<Order>>(`/api/restaurant/orders/${id}`).then(res => res.data);
+
+// Fetch printable invoice HTML as text (uses api client so auth headers are included)
+export const getInvoiceHtml = (id: number) =>
+  api.get<string>(`/api/restaurant/orders/${id}/invoice`, { responseType: 'text' as const }).then(res => res.data);
+
+export const getInvoicePdf = (id: number) =>
+  api.get<ArrayBuffer>(`/api/restaurant/orders/${id}/invoice.pdf`, { responseType: 'arraybuffer' as const }).then(res => res.data);
 
 export const createOrder = (data: {
   client_id?: number;
@@ -189,18 +185,7 @@ export const createPurchase = (data: {
 }) =>
   api.post('/api/restaurant/purchases', data).then(res => res.data);
 
-// ==================== RECETTES ====================
-export const getAllRecipes = () =>
-  api.get('/api/restaurant/recipes').then(res => res.data);
-
-export const updateRecipe = (id: number, data: {
-  nom?: string;
-  ingredients?: { ingredient_id: number; quantite: number }[];
-}) =>
-  api.put(`/api/restaurant/recipes/${id}`, data).then(res => res.data);
-
-export const deleteRecipe = (id: number) =>
-  api.delete(`/api/restaurant/recipes/${id}`).then(res => res.data);
+// Recettes endpoints removed
 
 // ==================== UNITÉS ====================
 export const getUnits = () =>
