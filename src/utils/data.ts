@@ -1,8 +1,8 @@
-import { 
-  StockItem, 
-  CaisseTransaction, 
-  User, 
-  JeuCasino, 
+import {
+  StockItem,
+  CaisseTransaction,
+  User,
+  JeuCasino,
   Reservation,
   Commande,
   SessionJeu,
@@ -89,8 +89,7 @@ export const initialTransactions: CaisseTransaction[] = [
   { id: 't2', type: 'entree', montant: 1200, description: 'Chambre double 3 nuits', categorie: 'Hébergement', userId: 'u1', userName: 'Jean Dupont', module: 'hebergement', date: new Date(Date.now() - 7200000).toISOString() },
   { id: 't3', type: 'sortie', montant: 350, description: 'Achat linge de lit', categorie: 'Stock', userId: 'u4', userName: 'Emma Leroy', module: 'hebergement', date: new Date(Date.now() - 86400000).toISOString() },
   // Hôtel
-  { id: 't4', type: 'entree', montant: 3800, description: 'Séjour VIP package complet', categorie: 'Hôtel', userId: 'u1', userName: 'Jean Dupont', module: 'hotel', date: new Date(Date.now() - 3600000).toISOString() },
-  { id: 't5', type: 'sortie', montant: 580, description: 'Maintenance spa et piscine', categorie: 'Maintenance', userId: 'u1', userName: 'Jean Dupont', module: 'hotel', date: new Date(Date.now() - 172800000).toISOString() },
+
   // Restaurant
   { id: 't6', type: 'entree', montant: 680, description: 'Service dîner gala', categorie: 'Restaurant', userId: 'u2', userName: 'Sophie Martin', module: 'restaurant', date: new Date(Date.now() - 3600000).toISOString() },
   { id: 't7', type: 'entree', montant: 420, description: 'Déjeuner groupe - 15 couverts', categorie: 'Restaurant', userId: 'u2', userName: 'Sophie Martin', module: 'restaurant', date: new Date(Date.now() - 7200000).toISOString() },
