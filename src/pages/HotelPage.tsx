@@ -45,7 +45,7 @@ import { useRooms } from '../hooks/useRooms';
 import { useReservations } from '../hooks/useReservations';
 import { reservationService } from '../services/reservation.service';
 import { Room, Reservation } from '../types/hotel.types';
-import { StockManager } from '../components/StockManager';
+import { StockManager, CaisseManager } from '../components/StockManager';
 import AuthService from '../services/authService';
 import { filterTabsByRole, getDefaultTabForRole } from '../utils/permissions';
 import api from '../lib/api';
@@ -65,6 +65,8 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
+  { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
+  { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
 ];
 
 // Composant pour les statistiques responsive
@@ -407,7 +409,20 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'stock' && (
           <div className="overflow-x-auto">
-            <StockManager module="hotel" />
+            <StockManager
+              module="hotel"
+              categories={['Mini-bar', 'Entretien', 'Linge', 'Fournitures', 'Autre']}
+            />
+          </div>
+        )}
+        {activeTab === 'caisse' && (
+          <div className="overflow-x-auto">
+            <CaisseManager
+              module="hotel"
+              categories={['Réservations', 'Mini-bar', 'Achats', 'Maintenance', 'Autre']}
+              title="Caisse Hôtel"
+              gradient="from-indigo-500 to-blue-600"
+            />
           </div>
         )}
       </div>

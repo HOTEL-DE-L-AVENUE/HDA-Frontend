@@ -66,36 +66,20 @@ export const Dashboard: React.FC = () => {
   const bar = moduleSummary('bar');
   const casino = moduleSummary('casino');
 
-  const stockValue = (module: string) => state.stockItems
-    .filter(item => item.module === module)
-    .reduce((total, item) => total + Number(item.quantite || 0) * Number(item.prixUnitaire || 0), 0);
-  const hebergementStockSorties = stockValue('hebergement');
-  const hotelStockSorties = stockValue('hotel');
-  const hebergementDisplayed = {
-    ...hebergement,
-    sorties: hebergement.sorties + hebergementStockSorties,
-    solde: hebergement.entrees - hebergement.sorties - hebergementStockSorties,
-  };
-  const hotelDisplayed = {
-    ...hotel,
-    sorties: hotel.sorties + hotelStockSorties,
-    solde: hotel.entrees - hotel.sorties - hotelStockSorties,
-  };
-
   const stockAlerts = state.stockItems.filter(s => s.status !== 'disponible').length;
   const totalStockValue = state.stockItems.reduce((sum, s) => sum + (s.quantite * s.prixUnitaire), 0);
 
   const pieData = [
-    { name: 'Hébergement', value: hebergementDisplayed.entrees },
-    { name: 'Hôtel', value: hotelDisplayed.entrees },
+    { name: 'Hébergement', value: hebergement.entrees },
+    { name: 'Hôtel', value: hotel.entrees },
     { name: 'Restaurant', value: restaurant.entrees },
     { name: 'Bar', value: bar.entrees },
     { name: 'Casino', value: casino.entrees },
   ];
 
   const moduleCards = [
-    { label: 'Hébergement', solde: hebergementDisplayed.solde, entrees: hebergementDisplayed.entrees, sorties: hebergementDisplayed.sorties, icon: <BedDouble size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
-    { label: 'Hôtel', solde: hotelDisplayed.solde, entrees: hotelDisplayed.entrees, sorties: hotelDisplayed.sorties, icon: <Hotel size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
+    { label: 'Hébergement', solde: hebergement.solde, entrees: hebergement.entrees, sorties: hebergement.sorties, icon: <BedDouble size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
+    { label: 'Hôtel', solde: hotel.solde, entrees: hotel.entrees, sorties: hotel.sorties, icon: <Hotel size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
     { label: 'Restaurant', solde: restaurant.solde, entrees: restaurant.entrees, sorties: restaurant.sorties, icon: <UtensilsCrossed size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
     { label: 'Bar & Lounge', solde: bar.solde, entrees: bar.entrees, sorties: bar.sorties, icon: <Wine size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
     { label: 'Casino', solde: casino.solde, entrees: casino.entrees, sorties: casino.sorties, icon: <Dices size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
