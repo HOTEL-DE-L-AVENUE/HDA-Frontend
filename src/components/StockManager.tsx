@@ -15,6 +15,8 @@ interface StockManagerProps {
 
 interface BackendStockItem {
   id: number;
+  product_nom?: string | null;
+  product_unite?: string | null;
   quantite: number | null;
   seuil_minimum: number | null;
   unite: string | null;
@@ -36,11 +38,16 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backendStock, setBackendStock] = useState<BackendStockItem[]>([]);
-  const apiBase = module === 'bar' ? '/api/bar/stock' : '/api/hebergement/stock';
+  const apiBase = module === 'bar'
+    ? '/api/bar/stock'
+    : module === 'hotel'
+      ? '/api/stock/stocks/with-products?location_id=5'
+      : '/api/hebergement/stock';
 
   const isBar = module === 'bar';
   const isHebergement = module === 'hebergement';
-  const useBackend = isBar || isHebergement;
+  const isHotel = module === 'hotel';
+  const useBackend = isBar || isHebergement || isHotel;
 
   const getErrorMessage = (err: unknown) => {
     if (typeof err === 'object' && err !== null && 'response' in err) {
@@ -79,15 +86,15 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const items = useBackend
     ? backendStock.map((bs) => ({
         id: String(bs.id),
-        nom: bs.nom || '',
-        categorie: bs.categorie || (isBar ? 'Bar' : 'Hébergement'),
+        nom: bs.nom || bs.product_nom || '',
+        categorie: bs.categorie || (isBar ? 'Bar' : 'Hôtel'),
         quantite: bs.quantite ?? 0,
-        unite: bs.unite || 'unités',
+        unite: bs.unite || bs.product_unite || 'unités',
         prixUnitaire: bs.prix ?? 0,
         seuilMinimum: bs.seuil_minimum ?? 5,
         fournisseur: '',
         status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
-        module: isBar ? 'bar' : 'hebergement' as ModuleType,
+        module: isBar ? 'bar' : isHotel ? 'hotel' : 'hebergement' as ModuleType,
         createdAt: '',
         updatedAt: '',
       })) as unknown as StockItem[]
@@ -351,9 +358,16 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [backendError, setBackendError] = useState<string | null>(null);
 
   const isBar = module === 'bar';
-  const isBackendCaisse = module === 'restaurant' || module === 'hebergement' || module === 'bar';
   const isHebergement = module === 'hebergement';
-  const transactionTitle = isBar ? 'Transactions Bar' : isHebergement ? 'Transactions Hébergement' : 'Transactions Restaurant';
+  const isHotel = module === 'hotel';
+  const isBackendCaisse = module === 'restaurant' || module === 'hebergement' || module === 'hotel' || module === 'bar';
+  const transactionTitle = isBar
+    ? 'Transactions Bar'
+    : isHebergement
+      ? 'Transactions Hébergement'
+      : isHotel
+        ? 'Transactions Hôtel'
+        : 'Transactions Restaurant';
 
   useEffect(() => {
     if (!isBackendCaisse) return;
@@ -378,9 +392,14 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     .filter((transaction) => isFinancialOutflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
   const localCaisse = getModuleCaisseSolde(module);
-  const solde = isBackendCaisse ? backendEntrees - backendSorties : localCaisse.solde;
-  const entrees = isBackendCaisse ? backendEntrees : localCaisse.entrees;
-  const sorties = isBackendCaisse ? backendSorties : localCaisse.sorties;
+  const sortiesStock = moduleStockSummary ? Number(moduleStockSummary.sorties) : backendSorties;
+  const solde = isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
+  const entrees = isBackendCaisse && moduleStockSummary
+    ? Number(moduleStockSummary.entrees)
+    : isBackendCaisse
+      ? backendEntrees
+      : localCaisse.entrees;
+  const sorties = isBackendCaisse ? sortiesStock : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
   const restaurantOrders = (state.orders || state.commandes || []).filter(
@@ -465,6 +484,12 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
+          Nouvelle transaction
+        </Button>
+      </div>
+
       {/* Caisse Card */}
       <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
 
