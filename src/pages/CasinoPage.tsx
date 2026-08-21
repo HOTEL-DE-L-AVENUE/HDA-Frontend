@@ -1,18 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, DoorOpen, Wallet, TrendingUp, CreditCard, AlertTriangle } from 'lucide-react';
-import { CasinoHeader } from '../components/Casino/CasinoHeader';
+import React, { useState } from 'react';
+import { Building2, Coins, Dices, Plus, WalletCards } from 'lucide-react';
 import { CasinoTabs } from '../components/Casino/CasinoTabs';
-import { dashboardApi } from '../services/casino.service';
-import type { CasinoDashboard } from '../types/casino.types';
 import { RoomFormModal } from '../components/Casino/modals/RoomCashierModal';
 import { ErrorBanner } from '../components/Casino/common';
+import { Button } from '../components/UI';
 
-import { OverviewTab } from '../components/Casino/tabs/OverviewTab';
-import { RoomsTab } from '../components/Casino/tabs/RoomsTab';
-import { CardsCreditsTab } from '../components/Casino/tabs/CardsCreditsTab';
-import { ClientsTab } from '../components/Casino/tabs/ClientsTab';
+import { CasinoSetupTab } from '../components/Casino/tabs/CasinoSetupTab';
+import { TokensTab } from '../components/Casino/tabs/TokensTab';
 import { CaisseTab } from '../components/Casino/tabs/CaisseTab';
-import { GameTablesTab } from '../components/Casino/tabs/GameTablesTab';
 // Onglet Stock existant (module casino) — conservé tel quel, non réécrit ici.
 // import { StockTab } from '../components/Casino/tabs/';
 
@@ -21,57 +16,40 @@ import { getDefaultTabForRole } from '../utils/permissions';
 
 export const CasinoPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
-  const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('overview', currentUser?.role));
-  const [dashboard, setDashboard] = useState<CasinoDashboard | null>(null);
+  const [activeTab, setActiveTab] = useState(() => {
+    const defaultTab = getDefaultTabForRole('setup', currentUser?.role);
+    return defaultTab === 'stock' || defaultTab === 'rooms' || defaultTab === 'tables-jeu' ? 'setup' : defaultTab;
+  });
   const [error, setError] = useState<string | null>(null);
   const [showRoomForm, setShowRoomForm] = useState(false);
 
-  async function loadDashboard() {
-    try {
-      const d = await dashboardApi.get();
-      setDashboard(d);
-    } catch (e: any) {
-      setError(e?.message || 'Erreur de chargement du tableau de bord.');
-    }
-  }
-
-  useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  const stats = dashboard
-    ? [
-        { label: 'Salles ouvertes', value: `${dashboard.salles_ouvertes}/${dashboard.salles_total}`, icon: <Building2 size={16} className="text-black" /> },
-        { label: 'Sessions ouvertes', value: dashboard.sessions_ouvertes, icon: <Wallet size={16} className="text-black" /> },
-        { label: 'Produit net (jour)', value: `${dashboard.produit_net_jour.toLocaleString('fr-FR')} Ar`, icon: <TrendingUp size={16} className="text-black" /> },
-        { label: 'Incidents ouverts', value: dashboard.incidents_ouverts, icon: <AlertTriangle size={16} className="text-black" /> },
-      ]
-    : [
-        { label: 'Salles ouvertes', value: '—', icon: <Building2 size={16} className="text-black" /> },
-        { label: 'Sessions ouvertes', value: '—', icon: <Wallet size={16} className="text-black" /> },
-        { label: 'Produit net (jour)', value: '—', icon: <TrendingUp size={16} className="text-black" /> },
-        { label: 'Incidents ouverts', value: '—', icon: <AlertTriangle size={16} className="text-black" /> },
-      ];
-
   return (
-    <div className="flex flex-col gap-4 md:gap-6 w-full">
-      <CasinoHeader
-        stats={stats}
-        onNewRoom={() => setShowRoomForm(true)}
-        onNewSession={() => setActiveTab('rooms')}
-        onNewTransaction={() => setActiveTab('rooms')}
-      />
+    <div className="flex flex-col gap-5 md:gap-6 w-full">
+      <header className="relative overflow-hidden rounded-3xl p-5 md:p-7" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', border: '1px solid var(--color-border)' }}>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-accent text-xs font-semibold uppercase tracking-[0.18em]"><Dices size={15} /> Pilotage casino</div>
+            <h1 className="text-primary text-2xl md:text-4xl font-bold mt-3" style={{ fontFamily: 'Playfair Display, serif' }}>Le casino, en trois étapes.</h1>
+            <p className="text-muted text-sm mt-2 max-w-xl">Configurez les salles, affectez une caisse à chaque table, puis échangez ou reprenez les jetons.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button icon={<Plus size={15} />} onClick={() => setShowRoomForm(true)}>Nouvelle salle</Button>
+            <Button variant="secondary" icon={<WalletCards size={15} />} onClick={() => setActiveTab('caisse')}>Ouvrir la caisse</Button>
+          </div>
+        </div>
+        <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
+          {[["01", "Configuration", Building2], ["02", "Jetons", Coins], ["03", "Caisse", WalletCards]].map(([number, label, Icon]) => (
+            <div key={String(label)} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,.05)' }}><span className="text-accent text-xs font-bold">{number}</span><Icon size={14} className="text-muted" /><span className="text-primary text-xs">{label}</span></div>
+          ))}
+        </div>
+      </header>
 
       {error && <ErrorBanner message={error} />}
 
       <CasinoTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {activeTab === 'overview' && <OverviewTab />}
-      {activeTab === 'rooms' && <RoomsTab />}
-      {activeTab === 'tables-jeu' && <GameTablesTab />}
-      {activeTab === 'cards' && <CardsCreditsTab />}
-      {activeTab === 'clients' && <ClientsTab />}
-      {/* {activeTab === 'stock' && <StockTab />} */}
+      {activeTab === 'setup' && <CasinoSetupTab />}
+      {activeTab === 'tokens' && <TokensTab />}
       {activeTab === 'caisse' && <CaisseTab />}
 
       {showRoomForm && (
@@ -79,8 +57,7 @@ export const CasinoPage: React.FC = () => {
           onClose={() => setShowRoomForm(false)}
           onSuccess={() => {
             setShowRoomForm(false);
-            loadDashboard();
-            setActiveTab('rooms');
+            setActiveTab('setup');
           }}
         />
       )}
