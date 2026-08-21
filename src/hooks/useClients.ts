@@ -15,8 +15,14 @@ export const useClients = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await clientService.getClients(filters);
-      setClients(data);
+      const response = await clientService.getClients(filters);
+
+      // Sécurité avec cast (as any)
+      const dataArray = Array.isArray(response)
+        ? response
+        : ((response as any)?.data || (response as any)?.clients || []);
+
+      setClients(dataArray);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors du chargement des clients');
       console.error('❌ loadClients error:', err);
@@ -58,17 +64,15 @@ export const useClients = () => {
     try {
       setError(null);
       const result = await clientService.deleteClient(id);
-      
+
       if (result.deleted) {
-        // Hard delete - remove from list
         setClients(prev => prev.filter(client => client.id !== id));
       } else if (result.deactivated) {
-        // Soft delete - update status to INACTIF
-        setClients(prev => prev.map(client => 
+        setClients(prev => prev.map(client =>
           client.id === id ? { ...client, statut: 'INACTIF' as const } : client
         ));
       }
-      
+
       return result;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la suppression');
@@ -80,7 +84,6 @@ export const useClients = () => {
   // Rechercher des clients (nom, prénom, code_client, téléphone, email)
   const searchClients = useCallback(async (searchTerm: string) => {
     const term = searchTerm.trim();
-    // Le backend exige au moins 2 caractères ; en dessous, on retombe sur la liste complète.
     if (term.length < 2) {
       await loadClients();
       return;
@@ -89,7 +92,7 @@ export const useClients = () => {
       setLoading(true);
       setError(null);
       const data = await clientService.searchClients(term);
-      setClients(data);
+      setClients(Array.isArray(data) ? data : ((data as any)?.data || (data as any)?.clients || []));
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la recherche');
       console.error('❌ searchClients error:', err);
@@ -110,7 +113,7 @@ export const useClients = () => {
     }
   }, []);
 
-  // Récupérer la fiche KYC d'un client (retourne null si non encore renseignée)
+  // Récupérer la fiche KYC d'un client
   const loadClientKyc = useCallback(async (id: number): Promise<ClientKyc | null> => {
     try {
       setError(null);
@@ -134,7 +137,7 @@ export const useClients = () => {
     }
   }, []);
 
-  // Récupérer la dernière signature électronique liée à la déclaration KYC
+  // Récupérer la dernière signature électronique
   const loadClientKycSignature = useCallback(async (id: number): Promise<string | null> => {
     try {
       setError(null);
@@ -145,7 +148,7 @@ export const useClients = () => {
     }
   }, []);
 
-  // Récupérer l'historique complet des signatures KYC d'un client
+  // Récupérer l'historique complet des signatures KYC
   const loadClientKycSignatureHistory = useCallback(async (id: number) => {
     try {
       setError(null);
@@ -156,7 +159,7 @@ export const useClients = () => {
     }
   }, []);
 
-  // Enregistrer une NOUVELLE signature électronique (append-only, ne remplace jamais la précédente)
+  // Enregistrer une NOUVELLE signature électronique
   const createClientKycSignature = useCallback(async (id: number, signatureData: string) => {
     try {
       setError(null);

@@ -79,7 +79,7 @@ export const reservationService = {
     }
   },
 
-  // Mettre à jour le statut d'une réservation
+  // Mettre à jour le statut d'une réservation (utilisé pour encaisser / terminer)
   updateReservationStatus: async (id: number, statut: string): Promise<Reservation> => {
     try {
       const response = await api.put<ApiResponse<Reservation>>(`${BASE_URL}/${id}`, { statut });
