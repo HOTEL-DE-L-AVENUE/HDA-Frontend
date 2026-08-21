@@ -319,7 +319,6 @@ export const MinibarManager: React.FC<MinibarManagerProps> = ({
         );
         
         // Mettre à jour la quantité dans la base de données
-        await minibarService.updateQuantity(minibarItem.id, newQuantity);
       }
 
       onSuccess?.('Consommation enregistrée avec succès');
