@@ -36,9 +36,11 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backendStock, setBackendStock] = useState<BackendStockItem[]>([]);
-  const apiBase = '/api/bar/stock';
+  const apiBase = module === 'bar' ? '/api/bar/stock' : '/api/hebergement/stock';
 
   const isBar = module === 'bar';
+  const isHebergement = module === 'hebergement';
+  const useBackend = isBar || isHebergement;
 
   const getErrorMessage = (err: unknown) => {
     if (typeof err === 'object' && err !== null && 'response' in err) {
@@ -49,7 +51,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   };
 
   const refetchStock = async () => {
-    if (!isBar) return;
+    if (!useBackend) return;
     setLoading(true);
     setError(null);
     try {
@@ -64,28 +66,28 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   };
 
   useEffect(() => {
-    if (isBar) {
+    if (useBackend) {
       void refetchStock();
     } else {
       setBackendStock([]);
       setError(null);
     }
-  }, [isBar, module]);
+  }, [useBackend, module]);
 
   const contextItems = getModuleStock(module);
 
-  const items = isBar
+  const items = useBackend
     ? backendStock.map((bs) => ({
         id: String(bs.id),
         nom: bs.nom || '',
-        categorie: bs.categorie || 'Bar',
+        categorie: bs.categorie || (isBar ? 'Bar' : 'Hébergement'),
         quantite: bs.quantite ?? 0,
         unite: bs.unite || 'unités',
         prixUnitaire: bs.prix ?? 0,
         seuilMinimum: bs.seuil_minimum ?? 5,
         fournisseur: '',
         status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
-        module: 'bar' as ModuleType,
+        module: isBar ? 'bar' : 'hebergement' as ModuleType,
         createdAt: '',
         updatedAt: '',
       })) as unknown as StockItem[]
@@ -130,13 +132,13 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     }
     const status = computeStatus(quantite, seuilMinimum);
 
-    if (isBar) {
+    if (useBackend) {
       setLoading(true);
       setError(null);
       try {
         const payload = {
           nom,
-          categorie: form.categorie || 'Bar',
+          categorie: form.categorie || (isBar ? 'Bar' : 'Hébergement'),
           quantite,
           prix: prixUnitaire,
           prixUnitaire,
@@ -144,8 +146,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
           unite: form.unite.trim() || 'unités',
           seuil_minimum: seuilMinimum,
           seuilMinimum,
-          ingredients: '',
-          alcool: true,
+          ...(isBar && { ingredients: '', alcool: true }),
         };
 
         if (editItem && editItem.id) {
@@ -160,7 +161,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         
         setShowModal(false);
         setEditItem(null);
-        setForm({ nom: '', categorie: categories[0] || 'Bar', quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
+        setForm({ nom: '', categorie: categories[0] || (isBar ? 'Bar' : 'Hébergement'), quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
       } catch (err) {
         setError(getErrorMessage(err));
       } finally {
@@ -226,7 +227,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         </button>
         <button onClick={async () => {
           if (!window.confirm(`Supprimer ${item.nom} ?`)) return;
-          if (isBar) {
+          if (useBackend) {
             setLoading(true);
             setError(null);
             try {
@@ -373,21 +374,13 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const backendEntrees = backendTransactions
     .filter((transaction) => isFinancialInflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
-  const transactionSorties = backendTransactions
+  const backendSorties = backendTransactions
     .filter((transaction) => isFinancialOutflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
-  const backendSorties = moduleStockSummary?.sorties ?? transactionSorties;
   const localCaisse = getModuleCaisseSolde(module);
-  const localStockValue = getModuleStock(module).reduce(
-    (total, item) => total + Number(item.quantite || 0) * Number(item.prixUnitaire || 0),
-    0
-  );
-  const sortiesCaisse = module === 'hebergement' && localStockValue > 0
-    ? localStockValue
-    : backendSorties;
-  const solde = isBackendCaisse ? backendEntrees - sortiesCaisse : localCaisse.solde;
+  const solde = isBackendCaisse ? backendEntrees - backendSorties : localCaisse.solde;
   const entrees = isBackendCaisse ? backendEntrees : localCaisse.entrees;
-  const sorties = isBackendCaisse ? sortiesCaisse : localCaisse.sorties;
+  const sorties = isBackendCaisse ? backendSorties : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
   const restaurantOrders = (state.orders || state.commandes || []).filter(
