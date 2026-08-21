@@ -1,15 +1,12 @@
 import React from 'react';
-import { LayoutDashboard, Dices, CreditCard, Users, Package, DollarSign } from 'lucide-react';
+import { Settings2, Coins, WalletCards } from 'lucide-react';
 import AuthService from '../../services/authService';
 import { filterTabsByRole } from '../../utils/permissions';
 
 const TABS = [
-  { id: 'overview', label: 'Vue d\'ensemble', icon: <LayoutDashboard size={16} /> },
-  { id: 'rooms', label: 'Salles & Caisses', icon: <Dices size={16} /> },
-  { id: 'tables-jeu', label: 'Tables de Jeu', icon: <Dices size={16} /> },
-  { id: 'cards', label: 'Cartes & Crédits', icon: <CreditCard size={16} /> },
-  { id: 'clients', label: 'Joueurs', icon: <Users size={16} /> },
-  { id: 'caisse', label: 'Caisse Globale', icon: <DollarSign size={16} /> },
+  { id: 'setup', label: 'Configuration', icon: <Settings2 size={16} /> },
+  { id: 'tokens', label: 'Jetons', icon: <Coins size={16} /> },
+  { id: 'caisse', label: 'Caisse', icon: <WalletCards size={16} /> },
 ];
 
 interface CasinoTabsProps {
