@@ -43,6 +43,7 @@ import { RoomFormModal } from '../components/Hotel/Modal/RoomFormModal';
 import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormModal';
 import { useRooms } from '../hooks/useRooms';
 import { useReservations } from '../hooks/useReservations';
+import { reservationService } from '../services/reservation.service';
 import { Room, Reservation } from '../types/hotel.types';
 import { StockManager } from '../components/StockManager';
 import AuthService from '../services/authService';
@@ -176,20 +177,26 @@ const HotelPage: React.FC = () => {
     console.error('Erreur lors de la récupération des données de caisse:', err);
   }
 
-  const { solde = 0, entrees = 0, sorties = 0 } = caisseData;
+  // Calcul dynamique du revenu basé sur les réservations au statut 'TERMINEE'
+  const calculatedRevenue = reservationsData
+    .filter(r => r?.statut === 'TERMINEE')
+    .reduce((sum, r) => sum + (Number(r?.montant_total) || 0), 0);
 
-  // Fonction pour encaisser une réservation et mettre à jour le revenu hôtel en haut
-  const handleEncaisser = (res: any) => {
-    const montant = Number(res?.montant || 72000);
-    dispatch({
-      type: 'ADD_TRANSACTION',
-      payload: {
-        module: 'hotel',
-        type: 'entree',
-        montant: montant,
-        description: `Encaissement réservation #${res?.id || res?.numero || ''}`,
-      }
-    });
+  const finalSolde = (caisseData.solde && caisseData.solde > 0) ? caisseData.solde : calculatedRevenue;
+
+  // Mise à jour du statut vers TERMINEE pour l'encaissement
+  const handleEncaisser = async (res: any) => {
+    try {
+      setIsLoading(true);
+      await reservationService.updateReservationStatus(res.id, 'TERMINEE');
+      await Promise.all([refreshRooms(), loadReservations()]);
+      setDataRefreshKey((prev) => prev + 1);
+    } catch (error: any) {
+      console.error("Erreur lors de l'encaissement", error);
+      alert(error?.response?.data?.message || "Erreur lors de l'encaissement de la réservation.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -224,7 +231,7 @@ const HotelPage: React.FC = () => {
   const activeReservations = safeReservations.filter(r => r?.statut === 'CONFIRMEE').length;
   const maintenanceCount = 0;
 
-  if (isLoading) {
+  if (isLoading && roomsData.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[50vh] p-4">
         <div className="text-center">
@@ -282,11 +289,11 @@ const HotelPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Stats - Responsive Grid (Ordre permuté : Réservations avant Chambres) */}
+      {/* Quick Stats - Responsive Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatsCard
           label="Revenu Hôtel"
-          value={formatCurrency(solde)}
+          value={formatCurrency(finalSolde)}
           icon={Hotel}
           color="accent"
         />
@@ -325,7 +332,6 @@ const HotelPage: React.FC = () => {
             />
           ))}
         </div>
-        {/* Gradient fade on edges for mobile */}
         <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface to-transparent pointer-events-none md:hidden" />
         <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-surface to-transparent pointer-events-none md:hidden" />
       </div>
