@@ -19,25 +19,15 @@ export const consumptionService = {
     prix_unitaire: number;
   }) {
     // ✅ ENHANCEMENT: Use the new stock-integrated consumption endpoint
-    try {
-      const response = await minibarService.consumeWithStock({
-        room_id: data.room_id,
-        client_id: data.client_id,
-        product_id: data.product_id,
-        quantity: data.quantite,
-        price: data.prix_unitaire,
-      });
-      return response;
-    } catch (error) {
-      // Fallback to old method if new endpoint fails
-      console.warn('Stock-integrated consumption failed, falling back to basic method:', error);
-      const montant = data.quantite * data.prix_unitaire;
-      const response = await api.post('/api/hebergement/minibar-consumptions', {
-        ...data,
-        montant
-      });
-      return response.data;
-    }
+    // The integrated endpoint creates the HOTEL / ENTREE ledger movement.
+    // Falling back to the generic CRUD endpoint silently drops that movement.
+    return minibarService.consumeWithStock({
+      room_id: data.room_id,
+      client_id: data.client_id,
+      product_id: data.product_id,
+      quantity: data.quantite,
+      price: data.prix_unitaire,
+    });
   },
 
   // Marquer comme facturée
