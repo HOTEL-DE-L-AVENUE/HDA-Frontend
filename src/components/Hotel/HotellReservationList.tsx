@@ -53,7 +53,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
 
-  // 🟢 État local pour stocker les IDs des réservations déjà encaissées (pour faire disparaître le bouton instantanément)
+  // 🟢 État local pour stocker les IDs des réservations déjà encaissées
   const [encaissedIds, setEncaissedIds] = useState<number[]>([]);
 
   // Charger toutes les données
@@ -168,7 +168,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       <div className="text-center py-12">
         <AlertCircle size={40} className="mx-auto text-red-400 mb-3" />
         <p className="text-red-400">{reservationsError}</p>
-        <button onClick={() => loadReservations()} className="mt-3 text-accent hover:underline text-sm">
+        <button type="button" onClick={() => loadReservations()} className="mt-3 text-accent hover:underline text-sm">
           Réessayer
         </button>
       </div>
@@ -220,6 +220,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           <option value="ANNULEE">Annulées</option>
         </select>
         <button
+          type="button" // AJOUTÉ : Empêche le rechargement
           onClick={() => Promise.all([loadReservations(), loadClients(), loadRooms()])}
           className="px-3 py-2 bg-accent text-black rounded-lg text-sm hover:bg-accent-2 transition"
         >
@@ -273,9 +274,10 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* Bouton Encaisser dynamique : disparaît si cliqué, ou si la réservation est terminée/annulée */}
+                    {/* Bouton Encaisser dynamique */}
                     {onEncaisser && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
                       <button
+                        type="button" // AJOUTÉ : Empêche le rechargement
                         onClick={() => {
                           setEncaissedIds(prev => [...prev, res.id]); // Masque le bouton instantanément
                           onEncaisser(res);
@@ -289,6 +291,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                     )}
 
                     <button
+                      type="button"
                       onClick={() => setExpandedId(expandedId === res.id ? null : res.id)}
                       className="p-1.5 hover:bg-gray-800 rounded"
                     >
@@ -298,22 +301,22 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                       }
                     </button>
                     {onEdit && (
-                      <button onClick={() => onEdit(res)} className="p-1.5 hover:bg-gray-800 rounded">
+                      <button type="button" onClick={() => onEdit(res)} className="p-1.5 hover:bg-gray-800 rounded">
                         <Edit size={14} className="text-gray-400" />
                       </button>
                     )}
                     {res.statut !== 'ANNULEE' && res.statut !== 'TERMINEE' && (
-                      <button onClick={() => handleCancel(res)} className="p-1.5 hover:bg-red-500/10 rounded">
+                      <button type="button" onClick={() => handleCancel(res)} className="p-1.5 hover:bg-red-500/10 rounded">
                         <X size={14} className="text-red-400" />
                       </button>
                     )}
-                    <button onClick={() => handleDeleteClick(res)} className="p-1.5 hover:bg-red-500/10 rounded">
+                    <button type="button" onClick={() => handleDeleteClick(res)} className="p-1.5 hover:bg-red-500/10 rounded">
                       <Trash2 size={14} className="text-gray-500 hover:text-red-400" />
                     </button>
                   </div>
                 </div>
 
-                {/* Détails étendus (compact) */}
+                {/* Détails étendus */}
                 {expandedId === res.id && (
                   <div className="mt-2 pt-2 border-t border-gray-800 grid grid-cols-2 gap-2 text-xs">
                     <div>
@@ -359,12 +362,14 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
               </p>
               <div className="flex gap-3 mt-4">
                 <button
+                  type="button"
                   onClick={() => setIsDeleteModalOpen(false)}
                   className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800 transition text-sm"
                 >
                   Annuler
                 </button>
                 <button
+                  type="button"
                   onClick={handleConfirmDelete}
                   className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm flex items-center justify-center gap-2"
                   disabled={isProcessing}
