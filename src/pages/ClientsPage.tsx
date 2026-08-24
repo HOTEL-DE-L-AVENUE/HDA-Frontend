@@ -20,7 +20,8 @@ import {
   Loader,
   AlertCircle,
   RefreshCw,
-  Plus
+  Plus,
+  Check
 } from 'lucide-react';
 import { useClients } from '../hooks/useClients';
 import { Client, ClientFormData } from '../services/client.service';
