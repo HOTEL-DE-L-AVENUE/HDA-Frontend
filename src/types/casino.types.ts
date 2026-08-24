@@ -38,7 +38,7 @@ export type MoyenPaiement = 'ESPECES' | 'MOBILE_MONEY' | 'CARTE' | 'VIREMENT' | 
 export type TypeOperationCaisse =
   | 'BUY_IN'
   | 'CASH_OUT'
-  | 'DEPOSIT'
+  | 'DEPOT'
   | 'AVANCE_CREDIT'
   | 'REMBOURSEMENT_CREDIT';
 

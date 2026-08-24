@@ -97,7 +97,10 @@ export const GameTablesTab: React.FC = () => {
     setRooms(r);
     setCashiers(c);
     setActiveSessions(s);
-    if (!selectedRoomId && r.length) setSelectedRoomId(r[0].id);
+    const firstActiveRoom = r.find((room) => room.statut === 'OUVERTE');
+    if (!r.some((room) => room.id === selectedRoomId && room.statut === 'OUVERTE')) {
+      setSelectedRoomId(firstActiveRoom?.id ?? null);
+    }
   }
 
   async function loadTables(roomId: number) {
@@ -142,6 +145,15 @@ export const GameTablesTab: React.FC = () => {
       await loadTempsJeuJour();
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || 'Erreur lors de la clôture de la présence.');
+    }
+  }
+
+  async function handleChangerPlace(visitId: number, table: TableJeu, numeroPlace: number) {
+    try {
+      await tableVisitApi.changerPlace(visitId, numeroPlace);
+      await loadJoueursActifs(table.id);
+    } catch (e: any) {
+      setError(e?.response?.data?.error?.message || e?.response?.data?.message || e?.message || 'Impossible de changer de place.');
     }
   }
 
@@ -251,6 +263,7 @@ export const GameTablesTab: React.FC = () => {
   }
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) || null;
+  const activeRooms = rooms.filter((room) => room.statut === 'OUVERTE');
 
   // Garde utilisée par les actions qui nécessitent une session de caisse ouverte
   // (Cave, Recave, Prolongation) : au lieu de simplement désactiver le bouton sans
@@ -280,14 +293,31 @@ export const GameTablesTab: React.FC = () => {
         </div>
       )}
 
+      <SectionCard title="Parcours de jeu">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+          <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <p className="text-accent font-bold">1. Choisir la table</p>
+            <p className="text-muted mt-1">Ouvrez la table avant d'accueillir les joueurs.</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <p className="text-accent font-bold">2. Installer le joueur</p>
+            <p className="text-muted mt-1">Cliquez sur <strong className="text-primary">Cave</strong>, identifiez le joueur et choisissez sa place.</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <p className="text-accent font-bold">3. Gérer les places</p>
+            <p className="text-muted mt-1">Jeu simple : place modifiable. Tournoi : place fixe.</p>
+          </div>
+        </div>
+      </SectionCard>
+
       <div className="grid lg:grid-cols-[280px_1fr] gap-4">
         {/* Colonne salles */}
         <SectionCard title="Salles">
-          {rooms.length === 0 ? (
+          {activeRooms.length === 0 ? (
             <EmptyState label="Aucune salle configurée." />
           ) : (
             <div className="flex flex-col gap-2">
-              {rooms.map((room) => (
+              {activeRooms.map((room) => (
                 <div
                   key={room.id}
                   onClick={() => setSelectedRoomId(room.id)}
@@ -329,7 +359,17 @@ export const GameTablesTab: React.FC = () => {
                       ))}
                     </Select>
                   )}
-                  <Button className="text-xs" icon={<Plus size={14} />} onClick={() => setShowTableForm({ table: null })}>
+                  <Button
+                    className="text-xs"
+                    icon={<Plus size={14} />}
+                    onClick={() => {
+                      if (!selectedCashierId) {
+                        setError('Sélectionnez une caisse avant de créer la table.');
+                        return;
+                      }
+                      setShowTableForm({ table: null });
+                    }}
+                  >
                     Table
                   </Button>
                 </div>
@@ -369,7 +409,7 @@ export const GameTablesTab: React.FC = () => {
                             )}
                           </div>
                           <p className="text-muted text-[11px]">
-                            {TYPE_JEU_LABELS[table.type_jeu]} · cave min. {table.cave_minimum.toLocaleString('fr-FR')} Ar
+                            {TYPE_JEU_LABELS[table.type_jeu]} · {table.type_partie === 'TOURNOI' ? 'Tournoi' : 'Jeu simple'} · {table.nombre_places} places · cave min. {table.cave_minimum.toLocaleString('fr-FR')} Ar
                             {' · '}croupier {table.salaire_horaire_croupier.toLocaleString('fr-FR')} Ar/h
                           </p>
                         </div>
@@ -440,7 +480,7 @@ export const GameTablesTab: React.FC = () => {
                                 icon={<Users size={12} />}
                                 onClick={() => toggleJoueursActifs(table.id)}
                               >
-                                Joueurs
+                                Places / joueurs
                               </Button>
                               <Button
                                 variant="secondary"
@@ -514,6 +554,19 @@ export const GameTablesTab: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Badge tone="info">{formatMinutes(j.minutes_ecoulees)}</Badge>
+                                  {table.type_partie === 'TOURNOI' ? (
+                                    <Badge tone="warning">Place {j.numero_place} · fixe</Badge>
+                                  ) : (
+                                    <Select
+                                      value={j.numero_place}
+                                      onChange={(e) => handleChangerPlace(j.id, table, Number(e.target.value))}
+                                      className="text-[11px] py-1 w-24"
+                                    >
+                                      {Array.from({ length: table.nombre_places }, (_, index) => (
+                                        <option key={index + 1} value={index + 1}>Place {index + 1}</option>
+                                      ))}
+                                    </Select>
+                                  )}
                                   <Button
                                     variant="secondary"
                                     className="text-[11px] py-1"
@@ -542,6 +595,7 @@ export const GameTablesTab: React.FC = () => {
       {showTableForm && selectedRoom && (
         <TableFormModal
           room={selectedRoom}
+          cashierId={selectedCashierId}
           table={showTableForm.table}
           onClose={() => setShowTableForm(null)}
           onSuccess={() => {

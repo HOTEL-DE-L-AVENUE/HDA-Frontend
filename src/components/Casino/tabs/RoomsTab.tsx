@@ -116,12 +116,30 @@ export const RoomsTab: React.FC = () => {
   }
 
   async function handleDeleteRoom(room: Room) {
-    if (!confirm(`Supprimer la salle "${room.nom}" ?`)) return;
+    if (!confirm(`Supprimer définitivement la salle "${room.nom}" ?`)) return;
     try {
       await roomsApi.remove(room.id);
       loadAll();
     } catch (e: any) {
-      alert(e?.message || 'Suppression impossible.');
+      const message = e?.response?.data?.error?.message || e?.response?.data?.message || e?.message || 'Suppression impossible.';
+      if (e?.response?.status === 409) {
+        const deleteAll = confirm(`${message}\n\nATTENTION : supprimer cette salle effacera définitivement toutes ses caisses, tables, joueurs, opérations et son historique. Continuer ?`);
+        if (!deleteAll) return;
+        try {
+          await roomsApi.remove(room.id);
+          await loadAll();
+          return;
+        } catch (deleteError: any) {
+          alert(
+            deleteError?.response?.data?.error?.message ||
+              deleteError?.response?.data?.message ||
+              deleteError?.message ||
+              'Impossible de supprimer définitivement la salle.'
+          );
+          return;
+        }
+      }
+      alert(message);
     }
   }
 
@@ -311,12 +329,12 @@ export const RoomsTab: React.FC = () => {
                     <Button className="text-xs" icon={<Wallet size={14} />} onClick={() => setShowCashOp('buy-in')}>
                       Buy-in
                     </Button>
-                    <Button variant="secondary" className="text-xs" onClick={() => setShowCashOp('deposit')}>
+                    {/* <Button variant="secondary" className="text-xs" onClick={() => setShowCashOp('deposit')}>
                       Encaissement
                     </Button>
                     <Button variant="secondary" className="text-xs" onClick={() => setShowCashOp('cash-out')}>
                       Cash-out
-                    </Button>
+                    </Button> */}
                     <Button variant="secondary" className="text-xs" icon={<Coins size={14} />} onClick={() => setShowChipOp('BUY')}>
                       Achat jetons
                     </Button>
