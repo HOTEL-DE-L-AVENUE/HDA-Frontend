@@ -6,6 +6,7 @@
 import type { ID, MoyenPaiement } from './casino.types';
 
 export type TypeJeu = 'POKER' | 'BLACKJACK' | 'ROULETTE' | 'BACCARA' | 'AUTRE';
+export type TypePartie = 'JEU_SIMPLE' | 'TOURNOI';
 export type StatutTableJeu = 'OUVERTE' | 'FERMEE' | 'ARCHIVEE';
 export type StatutPaiementCave = 'PAYE' | 'NON_PAYE';
 export type TypePourboire = 'JETONS' | 'ESPECES';
@@ -23,6 +24,8 @@ export interface TableJeu {
   room_id: ID;
   numero: string;
   type_jeu: TypeJeu;
+  type_partie: TypePartie;
+  nombre_places: number;
   cave_minimum: number;
   /** Ariary/heure, à charge du joueur lors d'une prolongation. */
   salaire_horaire_croupier: number;
@@ -46,6 +49,7 @@ export interface TableCave {
   table_jeu_id: ID;
   cashier_session_id: ID;
   client_id: ID | null;
+  numero_place: number;
   client_libre: string | null;
   numero_adherent: string | null;
   date_jeu: string;
@@ -66,6 +70,7 @@ export interface CaveMovementPayload {
   client_id?: ID | null;
   client_libre?: string | null;
   numero_adherent?: string | null;
+  numero_place: number;
   montant: number;
   statut_paiement: StatutPaiementCave;
   moyen_paiement?: MoyenPaiement | null;
@@ -111,6 +116,8 @@ export interface JoueurActif {
   id: ID;
   joueur: string;
   client_id: ID | null;
+  numero_place: number;
+  type_partie: TypePartie;
   entree_at: string;
   minutes_ecoulees: number;
 }
