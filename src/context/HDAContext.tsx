@@ -26,6 +26,7 @@ import AuthService from '../services/authService';
 // ==================== STATE ====================
 
 interface HDAState {
+  orders: Commande[];
   users: User[];
   currentUser: User;
   stockItems: StockItem[];
