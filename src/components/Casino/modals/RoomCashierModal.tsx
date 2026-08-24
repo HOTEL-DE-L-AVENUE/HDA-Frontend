@@ -112,7 +112,12 @@ export const CashierFormModal: React.FC<CashierFormModalProps> = ({ roomId, room
       const result = isEdit ? await cashiersApi.update(cashier!.id, payload) : await cashiersApi.create(payload);
       onSuccess(result);
     } catch (e: any) {
-      setError(e?.message || "Erreur lors de l'enregistrement de la caisse.");
+      setError(
+        e?.response?.data?.error?.message ||
+          e?.response?.data?.message ||
+          e?.message ||
+          "Erreur lors de l'enregistrement de la caisse."
+      );
     } finally {
       setLoading(false);
     }
