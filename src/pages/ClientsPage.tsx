@@ -8,36 +8,22 @@ import {
   Mail,
   Phone,
   MapPin,
-  Filter,
   Download,
   UserPlus,
   CheckCircle,
   XCircle,
-  Clock,
   X,
   QrCode,
   Copy,
-  Check,
-  Share2,
   Printer,
   Users,
   Loader,
   AlertCircle,
   RefreshCw,
-  User,
-  Calendar,
-  CreditCard,
-  Building,
-  Hash,
-  Camera,
-  Plus,
-  Shield,
-  FileCheck,
-  Landmark,
-  Briefcase
+  Plus
 } from 'lucide-react';
 import { useClients } from '../hooks/useClients';
-import { Client, ClientFormData, ClientKyc, ClientKycFormData, NiveauRisque } from '../services/client.service';
+import { Client, ClientFormData } from '../services/client.service';
 import SignaturePad from '../components/SignaturePad';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
@@ -52,11 +38,7 @@ const ClientsPage: React.FC = () => {
     createClient,
     updateClient,
     deleteClient,
-    loadClientWithDetails,
-    loadClientKyc,
-    saveClientKyc,
-    loadClientKycSignature,
-    createClientKycSignature
+    loadClientWithDetails
   } = useClients();
 
   // États
@@ -96,38 +78,10 @@ const ClientsPage: React.FC = () => {
   
   const [formData, setFormData] = useState<ClientFormData>(initialFormData);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  // Fiche KYC (Know Your Customer) — conformité LBC/FT, uniquement pour les joueurs de casino
-  const initialKycData: ClientKycFormData = {
-    lieu_naissance: '',
-    nationalite: '',
-    profession: '',
-    date_delivrance_piece: '',
-    date_expiration_piece: '',
-    autorite_delivrance: '',
-    source_revenus: '',
-    revenu_mensuel_estime: null,
-    mode_paiement: '',
-    banque: '',
-    doc_piece_identite: false,
-    doc_justificatif_domicile: false,
-    doc_photo_client: false,
-    doc_autre: '',
-    niveau_risque: null,
-    commentaires_risque: '',
-    declaration_client: false,
-    date_verification: '',
-  };
-
-  const [kycData, setKycData] = useState<ClientKycFormData>(initialKycData);
-  const [kycSignature, setKycSignature] = useState<string | null>(null);
-  // Ne devient true que si le client dessine réellement une nouvelle signature dans ce
-  // formulaire (voir handleSignatureChange) — évite de recréer un doublon en base à
-  // chaque simple modification du client si la signature existante n'a pas changé.
+  
+  // Signature
+  const [clientSignature, setClientSignature] = useState<string | null>(null);
   const [signatureDirty, setSignatureDirty] = useState<boolean>(false);
-  const [isLoadingKyc, setIsLoadingKyc] = useState<boolean>(false);
-  const [viewedKyc, setViewedKyc] = useState<ClientKyc | null>(null);
-  const [viewedSignature, setViewedSignature] = useState<string | null>(null);
 
   // Debounce pour la recherche
   useEffect(() => {
@@ -152,7 +106,22 @@ const ClientsPage: React.FC = () => {
       );
     }
     
-    return filtered;
+    // Sort clients: active first, then by most recent date
+    return filtered.sort((a, b) => {
+      // First sort by status (active first)
+      const statusOrder = { 'ACTIF': 0, 'BLOCKED': 1, 'INACTIF': 2 };
+      const statusA = statusOrder[a.statut as keyof typeof statusOrder] ?? 3;
+      const statusB = statusOrder[b.statut as keyof typeof statusOrder] ?? 3;
+      
+      if (statusA !== statusB) {
+        return statusA - statusB;
+      }
+      
+      // Then sort by date (most recent first)
+      const dateA = new Date(a.updated_at || a.created_at || '1970-01-01').getTime();
+      const dateB = new Date(b.updated_at || b.created_at || '1970-01-01').getTime();
+      return dateB - dateA;
+    });
   };
 
   const filteredClients: Client[] = getFilteredClients();
@@ -193,24 +162,9 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  // Gestionnaire dédié aux champs de la fiche KYC
-  const handleKycInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    setKycData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox'
-        ? checked
-        : (name === 'revenu_mensuel_estime' ? (value === '' ? null : Number(value)) : value)
-    }));
-  };
-
-  // Gestionnaire pour SignaturePad — n'est appelé que lors d'une action réelle de
-  // l'utilisateur (validation ou "refaire la signature"), jamais lors du simple
-  // chargement d'une signature existante depuis le serveur.
+  // Gestionnaire pour SignaturePad
   const handleSignatureChange = (dataUrl: string | null): void => {
-    setKycSignature(dataUrl);
+    setClientSignature(dataUrl);
     setSignatureDirty(true);
   };
 
@@ -219,8 +173,7 @@ const ClientsPage: React.FC = () => {
     setEditingClient(null);
     setFormData(initialFormData);
     setFormErrors({});
-    setKycData(initialKycData);
-    setKycSignature(null);
+    setClientSignature(null);
     setSignatureDirty(false);
     setIsModalOpen(true);
   };
@@ -242,46 +195,9 @@ const ClientsPage: React.FC = () => {
       is_casino_player: client.is_casino_player || false,
     });
     setFormErrors({});
-    setKycData(initialKycData);
-    setKycSignature(null);
+    setClientSignature(null);
     setSignatureDirty(false);
     setIsModalOpen(true);
-
-    // La fiche KYC est désormais disponible pour tous les clients
-    setIsLoadingKyc(true);
-    try {
-      const [kyc, signature] = await Promise.all([
-        loadClientKyc(client.id),
-        loadClientKycSignature(client.id),
-      ]);
-      if (kyc) {
-        setKycData({
-          lieu_naissance: kyc.lieu_naissance || '',
-          nationalite: kyc.nationalite || '',
-          profession: kyc.profession || '',
-          date_delivrance_piece: kyc.date_delivrance_piece || '',
-          date_expiration_piece: kyc.date_expiration_piece || '',
-          autorite_delivrance: kyc.autorite_delivrance || '',
-          source_revenus: kyc.source_revenus || '',
-          revenu_mensuel_estime: kyc.revenu_mensuel_estime ?? null,
-          mode_paiement: kyc.mode_paiement || '',
-          banque: kyc.banque || '',
-          doc_piece_identite: kyc.doc_piece_identite || false,
-          doc_justificatif_domicile: kyc.doc_justificatif_domicile || false,
-          doc_photo_client: kyc.doc_photo_client || false,
-          doc_autre: kyc.doc_autre || '',
-          niveau_risque: kyc.niveau_risque || null,
-          commentaires_risque: kyc.commentaires_risque || '',
-          declaration_client: kyc.declaration_client || false,
-          date_verification: kyc.date_verification || '',
-        });
-      }
-      setKycSignature(signature);
-    } catch (err) {
-      console.error('❌ Erreur chargement fiche KYC:', err);
-    } finally {
-      setIsLoadingKyc(false);
-    }
   };
 
   // Soumission du formulaire
@@ -305,21 +221,6 @@ const ClientsPage: React.FC = () => {
         toast.success('Client créé avec succès');
       }
 
-      // La fiche KYC est désormais enregistrée pour tous les clients
-      try {
-        await saveClientKyc(client.id, kycData);
-        // On ne crée une nouvelle signature que si le client vient réellement
-        // de signer dans ce formulaire — les signatures précédentes ne sont
-        // jamais recréées ni écrasées.
-        if (kycSignature && signatureDirty) {
-          await createClientKycSignature(client.id, kycSignature);
-          setSignatureDirty(false);
-        }
-      } catch (kycError) {
-        console.error('❌ Erreur enregistrement fiche KYC:', kycError);
-        toast.error('Client enregistré, mais la fiche KYC n\'a pas pu être sauvegardée');
-      }
-
       closeModal();
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Une erreur est survenue';
@@ -340,14 +241,8 @@ const ClientsPage: React.FC = () => {
     
     setIsProcessing(true);
     try {
-      const result = await deleteClient(clientToDelete.id);
-      
-      if (result.deleted) {
-        toast.success('Client supprimé définitivement');
-      } else if (result.deactivated) {
-        toast.success(`Client désactivé (${result.relatedCount} enregistrements liés conservés)`);
-      }
-      
+      await deleteClient(clientToDelete.id);
+      toast.success('Client supprimé avec succès');
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
     } catch (error: any) {
@@ -360,17 +255,10 @@ const ClientsPage: React.FC = () => {
 
   const handleView = async (client: Client): Promise<void> => {
     setSelectedClient(client);
-    setViewedKyc(null);
-    setViewedSignature(null);
     setIsViewModalOpen(true);
 
     try {
-      const [details, signature] = await Promise.all([
-        loadClientWithDetails(client.id),
-        loadClientKycSignature(client.id),
-      ]);
-      setViewedKyc(details?.kyc || null);
-      setViewedSignature(signature);
+      const details = await loadClientWithDetails(client.id);
     } catch (err) {
       console.error('❌ Erreur chargement détails client:', err);
     }
@@ -381,8 +269,7 @@ const ClientsPage: React.FC = () => {
     setEditingClient(null);
     setFormData(initialFormData);
     setFormErrors({});
-    setKycData(initialKycData);
-    setKycSignature(null);
+    setClientSignature(null);
     setSignatureDirty(false);
   };
 
@@ -844,9 +731,8 @@ const ClientsPage: React.FC = () => {
                       {!searchTerm && filterStatus === 'tous' && (
                         <button 
                           onClick={openAddModal}
-                          className="px-4 py-2 bg-accent text-black rounded-lg hover:bg-accent-2 transition flex items-center gap-2"
+                          className="px-4 py-2 bg-accent text-black rounded-lg hover:bg-accent-2 transition"
                         >
-                          <UserPlus size={16} />
                           Ajouter votre premier client
                         </button>
                       )}
@@ -858,79 +744,78 @@ const ClientsPage: React.FC = () => {
                   <tr key={client.id} className="border-b border-base hover:bg-surface-2 transition">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-black font-semibold text-sm flex-shrink-0">
-                          {client.prenom?.[0] || ''}{client.nom?.[0] || '?'}
+                        <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">
+                          {client.nom.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-medium text-primary">
-                            {client.prenom} {client.nom}
-                          </p>
-                          <p className="text-xs text-muted">
-                            {client.email || 'Pas d\'email'}
-                          </p>
+                          <p className="font-medium text-primary">{client.nom} {client.prenom || ''}</p>
+                          <p className="text-sm text-muted">{client.email || client.telephone || 'Aucun contact'}</p>
                         </div>
                       </div>
                     </td>
                     <td className="p-4 hidden lg:table-cell">
-                      <div className="space-y-1">
+                      <div className="space-y-1 text-sm">
+                        {client.email && (
+                          <p className="flex items-center gap-2 text-muted">
+                            <Mail size={14} />
+                            {client.email}
+                          </p>
+                        )}
                         {client.telephone && (
-                          <p className="text-sm flex items-center gap-1 text-secondary">
-                            <Phone size={14} className="text-muted" />
+                          <p className="flex items-center gap-2 text-muted">
+                            <Phone size={14} />
                             {client.telephone}
                           </p>
                         )}
                         {client.adresse && (
-                          <p className="text-sm flex items-center gap-1 text-secondary">
-                            <MapPin size={14} className="text-muted" />
+                          <p className="flex items-center gap-2 text-muted">
+                            <MapPin size={14} />
                             {client.adresse}
                           </p>
                         )}
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="space-y-1 text-sm">
-                        <p className="font-mono text-muted text-xs">
-                          {client.code_client || `#${client.id}`}
-                        </p>
-                        {client.is_casino_player && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent/20 text-accent text-xs rounded-full">
-                            🎰 Casino
-                          </span>
-                        )}
-                      </div>
+                      <span className="font-mono text-sm bg-surface-2 px-2 py-1 rounded">
+                        {client.code_client || `#${client.id}`}
+                      </span>
                     </td>
                     <td className="p-4">
                       {getStatusBadge(client.statut)}
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        <button 
+                      <div className="flex items-center gap-2">
+                        <button
                           onClick={() => handleView(client)}
-                          className="p-1.5 hover:bg-accent-4 rounded-lg transition"
+                          className="px-3 py-1.5 bg-surface-2 hover:bg-surface-3 rounded-lg transition text-sm font-medium text-muted hover:text-primary flex items-center gap-1.5"
                           title="Voir les détails"
                         >
-                          <Eye size={16} className="text-accent" />
+                          <Eye size={16} />
+                          <span className="hidden sm:inline">Voir</span>
                         </button>
-                        <button 
+                        <button
+                          onClick={() => openEditModal(client)}
+                          className="px-3 py-1.5 bg-surface-2 hover:bg-surface-3 rounded-lg transition text-sm font-medium text-muted hover:text-primary flex items-center gap-1.5"
+                          title="Modifier le client"
+                        >
+                          <Edit size={16} />
+                          <span className="hidden sm:inline">Modifier</span>
+                        </button>
+                        <button
                           onClick={() => generateQRCode(client)}
-                          className="p-1.5 hover:bg-success-bg rounded-lg transition"
+                          className="px-3 py-1.5 bg-surface-2 hover:bg-surface-3 rounded-lg transition text-sm font-medium text-muted hover:text-primary flex items-center gap-1.5"
                           title="Générer QR Code"
                         >
-                          <QrCode size={16} className="text-success" />
+                          <QrCode size={16} />
+                          <span className="hidden sm:inline">QR</span>
                         </button>
-                        <button 
-                          onClick={() => openEditModal(client)}
-                          className="p-1.5 hover:bg-accent-4 rounded-lg transition"
-                          title="Modifier"
-                        >
-                          <Edit size={16} className="text-accent" />
-                        </button>
-                        <button 
+                        <button
                           onClick={() => handleDeleteClick(client)}
-                          className="p-1.5 hover:bg-danger-bg rounded-lg transition"
-                          title="Supprimer"
+                          className="px-3 py-1.5 bg-danger/10 hover:bg-danger/20 rounded-lg transition text-sm font-medium text-danger flex items-center gap-1.5"
+                          title="Supprimer le client"
                         >
-                          <Trash2 size={16} className="text-danger" />
+                          <Trash2 size={16} />
+                          <span className="hidden sm:inline">Supprimer</span>
                         </button>
                       </div>
                     </td>
@@ -940,50 +825,28 @@ const ClientsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-        
+
         {/* Pagination */}
-        {filteredClients.length > itemsPerPage && (
-          <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-base bg-surface-2 gap-3">
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 border-t border-base">
             <p className="text-sm text-muted">
-              Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredClients.length)} sur {filteredClients.length}
+              Affichage de {startIndex + 1} à {Math.min(startIndex + itemsPerPage, filteredClients.length)} sur {filteredClients.length} clients
             </p>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 bg-surface border border-base rounded-lg hover:bg-surface-2 transition disabled:opacity-50 disabled:cursor-not-allowed text-muted hover:text-primary text-sm"
+                className="px-3 py-1.5 bg-surface-2 border border-base rounded-lg hover:bg-surface-3 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Précédent
               </button>
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                let page;
-                if (totalPages <= 5) {
-                  page = i + 1;
-                } else if (currentPage <= 3) {
-                  page = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  page = totalPages - 4 + i;
-                } else {
-                  page = currentPage - 2 + i;
-                }
-                return (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 rounded-lg transition text-sm ${
-                      currentPage === page
-                        ? 'bg-accent text-black'
-                        : 'bg-surface border border-base hover:bg-surface-2 text-muted hover:text-primary'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
+              <span className="px-3 py-1.5 text-sm text-muted">
+                Page {currentPage} sur {totalPages}
+              </span>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 bg-surface border border-base rounded-lg hover:bg-surface-2 transition disabled:opacity-50 disabled:cursor-not-allowed text-muted hover:text-primary text-sm"
+                className="px-3 py-1.5 bg-surface-2 border border-base rounded-lg hover:bg-surface-3 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Suivant
               </button>
@@ -992,195 +855,137 @@ const ClientsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Modal Ajout/Modification */}
+      {/* Modal d'ajout/modification */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-base rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="p-6 border-b border-base flex justify-between items-center sticky top-0 bg-surface z-10">
-              <div>
-                <h2 className="text-xl font-bold text-primary">
-                  {editingClient ? (
-                    <span className="flex items-center gap-2">
-                      <Edit size={20} className="text-accent" />
-                      Modifier le client
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <UserPlus size={20} className="text-accent" />
-                      Nouveau client
-                    </span>
-                  )}
-                </h2>
-                <p className="text-muted text-sm mt-1">
-                  {editingClient ? 'Modifiez les informations du client' : 'Ajoutez un nouveau client'}
-                </p>
-              </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-surface border-b border-base p-6 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-primary">
+                {editingClient ? 'Modifier le client' : 'Ajouter un client'}
+              </h3>
               <button
                 onClick={closeModal}
-                className="p-2 hover:bg-surface-2 rounded-lg transition text-muted"
-                disabled={isSubmitting}
+                className="p-2 hover:bg-surface-2 rounded-lg transition text-muted hover:text-primary"
               >
                 <X size={20} />
               </button>
             </div>
-
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">
-                    Prénom
-                  </label>
-                  <input
-                    type="text"
-                    name="prenom"
-                    value={formData.prenom || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
-                    disabled={isSubmitting}
-                    placeholder="Jean"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">
-                    Nom <span className="text-danger">*</span>
-                  </label>
+                  <label className="block text-sm font-medium text-primary mb-1">Nom *</label>
                   <input
                     type="text"
                     name="nom"
                     value={formData.nom}
                     onChange={handleInputChange}
-                    className={`w-full px-3 py-2 bg-surface-2 border rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition ${
-                      formErrors.nom ? 'border-danger' : 'border-base'
-                    }`}
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
-                    placeholder="Dupont"
                   />
-                  {formErrors.nom && (
-                    <p className="text-danger text-xs mt-1">{formErrors.nom}</p>
-                  )}
+                  {formErrors.nom && <p className="text-danger text-xs mt-1">{formErrors.nom}</p>}
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">
-                    Email
-                  </label>
+                  <label className="block text-sm font-medium text-primary mb-1">Prénom</label>
+                  <input
+                    type="text"
+                    name="prenom"
+                    value={formData.prenom || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-primary mb-1">Email</label>
                   <input
                     type="email"
                     name="email"
                     value={formData.email || ''}
                     onChange={handleInputChange}
-                    className={`w-full px-3 py-2 bg-surface-2 border rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition ${
-                      formErrors.email ? 'border-danger' : 'border-base'
-                    }`}
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
-                    placeholder="jean.dupont@email.com"
                   />
-                  {formErrors.email && (
-                    <p className="text-danger text-xs mt-1">{formErrors.email}</p>
-                  )}
+                  {formErrors.email && <p className="text-danger text-xs mt-1">{formErrors.email}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">
-                    Téléphone
-                  </label>
+                  <label className="block text-sm font-medium text-primary mb-1">Téléphone</label>
                   <input
                     type="tel"
                     name="telephone"
                     value={formData.telephone || ''}
                     onChange={handleInputChange}
-                    className={`w-full px-3 py-2 bg-surface-2 border rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition ${
-                      formErrors.telephone ? 'border-danger' : 'border-base'
-                    }`}
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
-                    placeholder="+33 6 12 34 56 78"
                   />
-                  {formErrors.telephone && (
-                    <p className="text-danger text-xs mt-1">{formErrors.telephone}</p>
-                  )}
+                  {formErrors.telephone && <p className="text-danger text-xs mt-1">{formErrors.telephone}</p>}
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Adresse</label>
-                <input
-                  type="text"
-                  name="adresse"
-                  value={formData.adresse || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
-                  disabled={isSubmitting}
-                  placeholder="12 Rue de la Paix, Paris"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-primary mb-1">Adresse</label>
+                  <input
+                    type="text"
+                    name="adresse"
+                    value={formData.adresse || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                    disabled={isSubmitting}
+                  />
+                </div>
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Date de naissance</label>
+                  <label className="block text-sm font-medium text-primary mb-1">Date de naissance</label>
                   <input
                     type="date"
                     name="date_naissance"
                     value={formData.date_naissance || ''}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Code client</label>
-                  <input
-                    type="text"
-                    name="code_client"
-                    value={formData.code_client || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition font-mono text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={isSubmitting || !!editingClient?.code_client}
-                    placeholder={editingClient ? '' : 'Auto-généré si vide'}
-                    title={editingClient?.code_client ? 'Le code client ne peut pas être modifié une fois attribué' : undefined}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Type de pièce</label>
+                  <label className="block text-sm font-medium text-primary mb-1">Type de pièce</label>
                   <select
                     name="type_piece"
                     value={formData.type_piece || ''}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
                   >
                     <option value="">Sélectionner</option>
-                    <option value="CNI">CNI</option>
-                    <option value="PASSEPORT">Passeport</option>
-                    <option value="PERMIS">Permis de conduire</option>
-                    <option value="CARTE_SEJOUR">Carte de séjour</option>
+                    <option value="CNI">Carte d'identité</option>
+                    <option value="Passeport">Passeport</option>
+                    <option value="Permis">Permis de conduire</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Numéro de pièce</label>
+                  <label className="block text-sm font-medium text-primary mb-1">Numéro de pièce</label>
                   <input
                     type="text"
                     name="numero_piece"
                     value={formData.numero_piece || ''}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition font-mono text-sm"
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
-                    placeholder="123456789"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Statut</label>
+                  <label className="block text-sm font-medium text-primary mb-1">Code client</label>
+                  <input
+                    type="text"
+                    name="code_client"
+                    value={formData.code_client || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                    disabled={isSubmitting}
+                    placeholder="Auto-généré si vide"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-primary mb-1">Statut</label>
                   <select
                     name="statut"
                     value={formData.statut || 'ACTIF'}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-surface-2 border border-base rounded-lg text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
+                    className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
                     disabled={isSubmitting}
                   >
                     <option value="ACTIF">Actif</option>
@@ -1188,24 +993,25 @@ const ClientsPage: React.FC = () => {
                     <option value="BLOCKED">Bloqué</option>
                   </select>
                 </div>
-                <div className="flex items-center pt-6">
-                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="is_casino_player"
-                      checked={formData.is_casino_player || false}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 rounded border-base text-accent focus:ring-accent"
-                      disabled={isSubmitting}
-                    />
-                    <span>🎰 Joueur de casino</span>
-                  </label>
-                </div>
+              </div>
+
+              <div className="border-t border-base pt-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="is_casino_player"
+                    checked={formData.is_casino_player || false}
+                    onChange={handleInputChange}
+                    className="w-4 h-4 rounded border-base text-accent focus:ring-accent"
+                    disabled={isSubmitting}
+                  />
+                  <span>🎰 Joueur de casino</span>
+                </label>
               </div>
 
               <div className="space-y-4 border-t border-base pt-4">
                 <SignaturePad
-                  value={kycSignature}
+                  value={clientSignature}
                   onChange={handleSignatureChange}
                   disabled={isSubmitting}
                   label="Signature électronique du client"
@@ -1243,51 +1049,36 @@ const ClientsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Visualisation */}
+      {/* Modal de vue */}
       {isViewModalOpen && selectedClient && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-base rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="p-6 border-b border-base flex justify-between items-center sticky top-0 bg-surface z-10">
-              <div>
-                <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-                  <Eye size={20} className="text-accent" />
-                  Détails du client
-                </h2>
-                <p className="text-muted text-sm mt-1">
-                  {selectedClient.prenom} {selectedClient.nom}
-                </p>
-              </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-surface border-b border-base p-6 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-primary">Détails du client</h3>
               <button
                 onClick={() => setIsViewModalOpen(false)}
-                className="p-2 hover:bg-surface-2 rounded-lg transition text-muted"
+                className="p-2 hover:bg-surface-2 rounded-lg transition text-muted hover:text-primary"
               >
                 <X size={20} />
               </button>
             </div>
-
-            <div className="p-6 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-accent flex items-center justify-center text-black text-2xl font-semibold">
-                  {selectedClient.prenom?.[0] || ''}{selectedClient.nom?.[0] || '?'}
+            <div className="p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="w-16 h-16 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-2xl">
+                  {selectedClient.nom.charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-primary">{selectedClient.prenom} {selectedClient.nom}</h3>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {getStatusBadge(selectedClient.statut)}
-                    {selectedClient.is_casino_player && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-accent/20 text-accent text-xs rounded-full">
-                        🎰 Casino
-                      </span>
-                    )}
-                    <span className="text-sm text-muted">• Code: {selectedClient.code_client || `#${selectedClient.id}`}</span>
-                  </div>
+                <div className="flex-1">
+                  <h4 className="text-xl font-bold text-primary">
+                    {selectedClient.nom} {selectedClient.prenom || ''}
+                  </h4>
+                  <p className="text-muted">{selectedClient.code_client || `#${selectedClient.id}`}</p>
+                  {getStatusBadge(selectedClient.statut)}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-muted border-b border-base pb-2">Contact</h4>
-                  <div className="space-y-2 text-sm">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
                     {selectedClient.email && (
                       <p className="flex items-center gap-2 text-secondary">
                         <Mail size={16} className="text-muted" />
@@ -1300,125 +1091,33 @@ const ClientsPage: React.FC = () => {
                         {selectedClient.telephone}
                       </p>
                     )}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-muted border-b border-base pb-2">Adresse</h4>
-                  <div className="space-y-2 text-sm">
                     {selectedClient.adresse && (
                       <p className="flex items-center gap-2 text-secondary">
                         <MapPin size={16} className="text-muted" />
                         {selectedClient.adresse}
                       </p>
                     )}
+                  </div>
+                  <div className="space-y-2">
                     {selectedClient.date_naissance && (
                       <p className="flex items-center gap-2 text-secondary">
-                        <Calendar size={16} className="text-muted" />
-                        Né(e) le {new Date(selectedClient.date_naissance).toLocaleDateString('fr-FR')}
+                        <span className="text-muted">Né(e) le:</span>
+                        {new Date(selectedClient.date_naissance).toLocaleDateString('fr-FR')}
                       </p>
                     )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-muted border-b border-base pb-2">Pièce d'identité</h4>
-                  <div className="space-y-2 text-sm">
                     {selectedClient.type_piece && (
                       <p className="flex items-center gap-2 text-secondary">
-                        <CreditCard size={16} className="text-muted" />
-                        {selectedClient.type_piece}
+                        <span className="text-muted">Pièce:</span>
+                        {selectedClient.type_piece} - {selectedClient.numero_piece || 'N/A'}
                       </p>
                     )}
-                    {selectedClient.numero_piece && (
-                      <p className="flex items-center gap-2 text-secondary font-mono text-xs">
-                        <Hash size={16} className="text-muted" />
-                        {selectedClient.numero_piece}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-muted border-b border-base pb-2">Informations</h4>
-                  <div className="space-y-2 text-sm">
-                    <p className="flex items-center gap-2 text-secondary">
-                      <User size={16} className="text-muted" />
-                      ID: {selectedClient.id}
-                    </p>
-                    {selectedClient.created_at && (
-                      <p className="flex items-center gap-2 text-secondary">
-                        <Calendar size={16} className="text-muted" />
-                        Créé le {new Date(selectedClient.created_at).toLocaleDateString('fr-FR')}
+                    {selectedClient.is_casino_player && (
+                      <p className="flex items-center gap-2 text-accent">
+                        🎰 Joueur de casino
                       </p>
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                {!viewedKyc ? (
-                  <p className="text-sm text-muted italic">Aucune fiche KYC renseignée pour ce client.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="space-y-2">
-                      {viewedKyc.nationalite && (
-                        <p className="flex items-center gap-2 text-secondary">
-                          <User size={16} className="text-muted" />
-                          Nationalité : {viewedKyc.nationalite}
-                        </p>
-                      )}
-                      {viewedKyc.profession && (
-                        <p className="flex items-center gap-2 text-secondary">
-                          <Briefcase size={16} className="text-muted" />
-                          {viewedKyc.profession}
-                        </p>
-                      )}
-                      {viewedKyc.banque && (
-                        <p className="flex items-center gap-2 text-secondary">
-                          <Landmark size={16} className="text-muted" />
-                          {viewedKyc.banque}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      {viewedKyc.niveau_risque && (
-                        <p className="flex items-center gap-2">
-                          <AlertCircle size={16} className="text-muted" />
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            viewedKyc.niveau_risque === 'ELEVE' ? 'bg-danger/20 text-danger' :
-                            viewedKyc.niveau_risque === 'MOYEN' ? 'bg-warning/20 text-warning' :
-                            'bg-success-bg text-success'
-                          }`}>
-                            Risque {viewedKyc.niveau_risque === 'FAIBLE' ? 'faible' : viewedKyc.niveau_risque === 'MOYEN' ? 'moyen' : 'élevé'}
-                          </span>
-                        </p>
-                      )}
-                      <p className="flex items-center gap-2 text-secondary">
-                        <FileCheck size={16} className="text-muted" />
-                        {[
-                          viewedKyc.doc_piece_identite && "Pièce d'identité",
-                          viewedKyc.doc_justificatif_domicile && 'Justif. domicile',
-                          viewedKyc.doc_photo_client && 'Photo',
-                        ].filter(Boolean).join(', ') || 'Aucun document renseigné'}
-                      </p>
-                      {viewedKyc.date_verification && (
-                        <p className="flex items-center gap-2 text-secondary">
-                          <Calendar size={16} className="text-muted" />
-                          Vérifié le {new Date(viewedKyc.date_verification).toLocaleDateString('fr-FR')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {viewedSignature && (
-                  <div>
-                    <p className="text-xs text-muted mb-1">Signature du client</p>
-                    <div className="border border-base rounded-lg bg-white p-2 flex items-center justify-center" style={{ height: 120 }}>
-                      <img src={viewedSignature} alt="Signature du client" className="max-h-full" />
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-base flex-wrap">
@@ -1456,84 +1155,43 @@ const ClientsPage: React.FC = () => {
 
       {/* Modal QR Code */}
       {isQRModalOpen && selectedClient && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-base rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="p-6 border-b border-base flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-                  <QrCode size={20} className="text-success" />
-                  QR Code Client
-                </h2>
-                <p className="text-muted text-sm mt-1">
-                  {selectedClient.prenom} {selectedClient.nom}
-                </p>
-              </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-2xl w-full max-w-md">
+            <div className="p-6 border-b border-base flex items-center justify-between">
+              <h3 className="text-xl font-bold text-primary">QR Code Client</h3>
               <button
                 onClick={() => setIsQRModalOpen(false)}
-                className="p-2 hover:bg-surface-2 rounded-lg transition text-muted"
+                className="p-2 hover:bg-surface-2 rounded-lg transition text-muted hover:text-primary"
               >
                 <X size={20} />
               </button>
             </div>
-
             <div className="p-6">
-              <div className="flex flex-col items-center">
-                <div className="bg-white rounded-lg p-4 mb-4 border border-base">
-                  <canvas
-                    ref={qrCanvasRef}
-                    width={250}
-                    height={250}
-                    className="w-64 h-64"
-                  />
-                </div>
-
-                <div className="w-full space-y-2 mb-4">
-                  <div className="bg-surface-2 rounded-lg p-3 border border-base">
-                    <p className="text-xs text-muted">ID</p>
-                    <p className="font-mono text-sm text-primary">#{selectedClient.id}</p>
-                  </div>
-                  <div className="bg-surface-2 rounded-lg p-3 border border-base">
-                    <p className="text-xs text-muted">Nom complet</p>
-                    <p className="font-medium text-primary">{selectedClient.prenom} {selectedClient.nom}</p>
-                  </div>
-                  {selectedClient.email && (
-                    <div className="bg-surface-2 rounded-lg p-3 border border-base">
-                      <p className="text-xs text-muted">Email</p>
-                      <p className="text-sm text-secondary">{selectedClient.email}</p>
-                    </div>
-                  )}
-                  {selectedClient.telephone && (
-                    <div className="bg-surface-2 rounded-lg p-3 border border-base">
-                      <p className="text-xs text-muted">Téléphone</p>
-                      <p className="text-sm text-secondary">{selectedClient.telephone}</p>
-                    </div>
-                  )}
-                  {selectedClient.code_client && (
-                    <div className="bg-surface-2 rounded-lg p-3 border border-base">
-                      <p className="text-xs text-muted">Code client</p>
-                      <p className="font-mono text-sm text-primary">{selectedClient.code_client}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-2 w-full">
+              <div className="flex flex-col items-center gap-4">
+                <canvas 
+                  ref={qrCanvasRef} 
+                  width={250} 
+                  height={250}
+                  className="border border-base rounded-lg"
+                />
+                <div className="flex gap-2 w-full">
                   <button
                     onClick={copyQRData}
-                    className="flex-1 min-w-[80px] px-3 py-2 bg-accent-4 hover:bg-accent/20 rounded-lg transition flex items-center justify-center gap-2 border border-accent/30 text-accent text-sm"
+                    className="flex-1 px-4 py-2 bg-surface-2 border border-base rounded-lg hover:bg-surface-3 transition flex items-center justify-center gap-2"
                   >
                     {copied ? <Check size={16} /> : <Copy size={16} />}
-                    {copied ? 'Copié !' : 'Copier'}
+                    {copied ? 'Copié' : 'Copier'}
                   </button>
                   <button
                     onClick={downloadQRCode}
-                    className="flex-1 min-w-[80px] px-3 py-2 bg-accent-4 hover:bg-accent/20 rounded-lg transition flex items-center justify-center gap-2 border border-accent/30 text-accent text-sm"
+                    className="flex-1 px-4 py-2 bg-surface-2 border border-base rounded-lg hover:bg-surface-3 transition flex items-center justify-center gap-2"
                   >
                     <Download size={16} />
                     Télécharger
                   </button>
                   <button
                     onClick={printQRCode}
-                    className="flex-1 min-w-[80px] px-3 py-2 bg-accent-4 hover:bg-accent/20 rounded-lg transition flex items-center justify-center gap-2 border border-accent/30 text-accent text-sm"
+                    className="flex-1 px-4 py-2 bg-surface-2 border border-base rounded-lg hover:bg-surface-3 transition flex items-center justify-center gap-2"
                   >
                     <Printer size={16} />
                     Imprimer
@@ -1541,58 +1199,41 @@ const ClientsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-
-            <div className="p-4 border-t border-base text-center bg-surface-2 rounded-b-2xl">
-              <p className="text-xs text-muted">
-                Scannez ce QR Code pour accéder aux informations du client
-              </p>
-            </div>
           </div>
         </div>
       )}
 
       {/* Modal de confirmation de suppression */}
       {isDeleteModalOpen && clientToDelete && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-surface border border-base rounded-2xl p-6 max-w-md w-full shadow-xl">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center mx-auto mb-4">
-                <AlertCircle size={32} className="text-danger" />
-              </div>
-              
-              <h3 className="text-xl font-bold text-primary mb-2">
-                Confirmer la suppression
-              </h3>
-              
-              <p className="text-muted text-sm mb-2">
-                Êtes-vous sûr de vouloir supprimer le client <br />
-                <strong className="text-primary">{clientToDelete.prenom} {clientToDelete.nom}</strong> ?
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-2xl w-full max-w-md">
+            <div className="p-6 border-b border-base">
+              <h3 className="text-xl font-bold text-primary">Confirmer la suppression</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-muted mb-4">
+                Êtes-vous sûr de vouloir supprimer le client <strong>{clientToDelete.nom} {clientToDelete.prenom || ''}</strong> ?
               </p>
-              <p className="text-danger/80 text-xs">
-                ⚠️ Cette action est irréversible
+              <p className="text-sm text-danger mb-6">
+                ⚠️ Cette action est irréversible et supprimera définitivement le client.
               </p>
-
-              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+              <div className="flex justify-end gap-3">
                 <button
-                  onClick={() => {
-                    setIsDeleteModalOpen(false);
-                    setClientToDelete(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 rounded-lg border border-base text-primary font-medium text-sm hover:bg-surface-2 transition-all duration-300"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="px-4 py-2 bg-surface-2 border border-base rounded-lg hover:bg-surface-3 transition text-muted hover:text-primary"
                   disabled={isProcessing}
                 >
                   Annuler
                 </button>
-                
                 <button
                   onClick={handleConfirmDelete}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-danger text-white font-medium text-sm hover:bg-danger/90 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/90 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={isProcessing}
                 >
                   {isProcessing ? (
                     <>
                       <Loader size={16} className="animate-spin" />
-                      Suppression...
+                      Traitement...
                     </>
                   ) : (
                     <>
@@ -1606,15 +1247,6 @@ const ClientsPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* ✅ BOUTON FLOATING D'AJOUT (FAB) */}
-      <button
-        onClick={openAddModal}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-accent text-black shadow-2xl hover:bg-accent-2 transition-all hover:scale-105 flex items-center justify-center lg:hidden"
-        title="Ajouter un client"
-      >
-        <Plus size={24} />
-      </button>
     </div>
   );
 };
