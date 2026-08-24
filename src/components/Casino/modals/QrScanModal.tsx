@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScanLine, Camera, KeyRound, CheckCircle2 } from 'lucide-react';
-import { Modal, Field, TextInput, Button, ErrorBanner, Badge } from '../common';
+import { ScanLine, Camera, CheckCircle2 } from 'lucide-react';
+import { Modal, Button, ErrorBanner, Badge } from '../common';
 import { cardsApi } from '../../../services/casino.service';
 import type { Client, LoyaltyCard, ClientProfile, SelectedPlayer } from '../../../types/casino.types';
 import { NIVEAU_CARTE_LABELS, STATUT_SPECIAL_LABELS } from '../../../types/casino.types';
@@ -12,8 +12,8 @@ interface QrScanModalProps {
 
 /**
  * Scanne le QR code d'une carte de fidélité pour retrouver un client en
- * caisse. Utilise l'API native `BarcodeDetector` quand disponible ;
- * sinon, bascule automatiquement sur la saisie manuelle du code.
+ * caisse. La lecture est faite directement par la caméra via l'API native
+ * `BarcodeDetector`; aucun code QR n'est saisi manuellement.
  */
 export const QrScanModal: React.FC<QrScanModalProps> = ({ onClose, onSelect }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -22,7 +22,6 @@ export const QrScanModal: React.FC<QrScanModalProps> = ({ onClose, onSelect }) =
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
-  const [manualCode, setManualCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ card: LoyaltyCard; client: Client; profile: ClientProfile | null } | null>(
@@ -97,7 +96,11 @@ export const QrScanModal: React.FC<QrScanModalProps> = ({ onClose, onSelect }) =
       const data = await cardsApi.scan(trimmed);
       setResult(data);
     } catch (e: any) {
-      setError(e?.status === 404 ? 'QR code inconnu — aucune carte associée.' : e?.message || 'Erreur de scan.');
+      setError(
+        e?.response?.status === 404 || e?.status === 404
+          ? 'QR code inconnu — aucune carte associée.'
+          : e?.response?.data?.error?.message || e?.message || 'Erreur de scan.'
+      );
     } finally {
       setLoading(false);
     }
@@ -156,25 +159,9 @@ export const QrScanModal: React.FC<QrScanModalProps> = ({ onClose, onSelect }) =
             className="rounded-xl p-4 text-xs text-muted"
             style={{ backgroundColor: 'var(--color-bg)', border: '1px dashed var(--color-border)' }}
           >
-            Caméra indisponible ou non supportée par ce navigateur. Utilisez la saisie manuelle ci-dessous
-            (douchette USB ou saisie du code imprimé sur la carte).
+            Le scan direct n'est pas disponible dans ce navigateur. Autorisez l'accès à la caméra et utilisez
+            Chrome ou Edge sur un appareil compatible QR code.
           </div>
-        )}
-
-        {!result && (
-          <Field label="Code QR (saisie manuelle)">
-            <div className="flex gap-2">
-              <TextInput
-                value={manualCode}
-                onChange={(e) => setManualCode(e.target.value)}
-                placeholder="QR-ABC123"
-                onKeyDown={(e) => e.key === 'Enter' && handleLookup(manualCode)}
-              />
-              <Button icon={<KeyRound size={16} />} onClick={() => handleLookup(manualCode)} disabled={loading}>
-                Rechercher
-              </Button>
-            </div>
-          </Field>
         )}
 
         {result && (

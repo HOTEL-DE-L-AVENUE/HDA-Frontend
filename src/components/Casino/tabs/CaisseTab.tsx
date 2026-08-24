@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Link2, ShieldCheck, ArrowRightLeft, Check, X, RefreshCcw } from 'lucide-react';
+import { RefreshCw, Link2, ShieldCheck, ArrowRightLeft, Check, X, RefreshCcw, Unlock, LockKeyhole } from 'lucide-react';
 import {
   SectionCard,
   Spinner,
@@ -17,7 +17,8 @@ import { sessionsApi, cashiersApi, reportsApi } from '../../../services/casino.s
 import { caisseTransfersApi } from '../../../services/caisseTransfers.service';
 import financeService, { FinancialStats } from '../../../services/finance.service';
 import { CaisseTransferModal } from '../modals/CaisseTransferModal';
-import type { CashSession, Cashier, EcartCaisseRow, FluxASynchroniserRow } from '../../../types/casino.types';
+import { OpenSessionModal, CloseSessionModal } from '../modals/SessionModal';
+import type { CashSession, Cashier, EcartCaisseRow, FluxASynchroniserRow, SessionSummary } from '../../../types/casino.types';
 import type { CaisseTransfer, StatutCaisseTransfer } from '../../../types/caisseTransfers.types';
 import { MODULE_CAISSE_LABELS, STATUT_TRANSFER_LABELS, caisseLabel } from '../../../types/caisseTransfers.types';
 
@@ -33,6 +34,9 @@ export const CaisseTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [actingTransferId, setActingTransferId] = useState<number | null>(null);
   const [proceedingTransfer, setProceedingTransfer] = useState<CaisseTransfer | null>(null);
+  const [openingCashier, setOpeningCashier] = useState<Cashier | null>(null);
+  const [closingSession, setClosingSession] = useState<CashSession | null>(null);
+  const [closingSummary, setClosingSummary] = useState<SessionSummary | null>(null);
   const [casinoFinance, setCasinoFinance] = useState({ entrees: 0, sorties: 0, solde: 0 });
 
   async function loadAll() {
@@ -108,6 +112,17 @@ export const CaisseTab: React.FC = () => {
     await loadAll();
   }
 
+  async function handleCloseSession(session: CashSession) {
+    setError(null);
+    try {
+      const summary = await sessionsApi.summary(session.id);
+      setClosingSummary(summary);
+      setClosingSession(session);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || 'Impossible de charger le résumé de la session.');
+    }
+  }
+
   /** Session casino d'origine du transfert en cours de reprise, si encore trouvable. */
   const proceedingSession = useMemo(
     () => (proceedingTransfer ? sessions.find((s) => s.id === proceedingTransfer.session_source_id) : undefined),
@@ -133,6 +148,48 @@ export const CaisseTab: React.FC = () => {
           </SectionCard>
         ))}
       </div>
+
+      <SectionCard title="Sessions de caisse" action={<RefreshCw size={16} className="text-muted" />}>
+        {cashiers.length === 0 ? (
+          <EmptyState label="Aucune caisse configurée." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {cashiers.map((cashier) => {
+              const session = sessions.find((item) => item.cashier_id === cashier.id && item.statut === 'OUVERTE');
+              return (
+                <div
+                  key={cashier.id}
+                  className="flex items-center justify-between gap-3 rounded-xl p-3 text-xs"
+                  style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-primary font-semibold truncate">{cashier.code} · {cashier.nom}</p>
+                    <p className="text-muted">{session ? `Session #${session.id} ouverte le ${formatDateTime(session.ouverture_at)}` : 'Aucune session ouverte'}</p>
+                  </div>
+                  {session ? (
+                    <Button
+                      variant="secondary"
+                      className="text-[11px] py-1 flex-shrink-0"
+                      icon={<LockKeyhole size={12} />}
+                      onClick={() => handleCloseSession(session)}
+                    >
+                      Clôturer
+                    </Button>
+                  ) : (
+                    <Button
+                      className="text-[11px] py-1 flex-shrink-0"
+                      icon={<Unlock size={12} />}
+                      onClick={() => setOpeningCashier(cashier)}
+                    >
+                      Ouvrir
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </SectionCard>
 
       <SectionCard
         title="Principe : source unique"
@@ -377,6 +434,33 @@ export const CaisseTab: React.FC = () => {
           prefill={proceedingTransfer}
           onClose={() => setProceedingTransfer(null)}
           onSuccess={handleProceedSuccess}
+        />
+      )}
+
+      {openingCashier && (
+        <OpenSessionModal
+          cashier={openingCashier}
+          onClose={() => setOpeningCashier(null)}
+          onSuccess={() => {
+            setOpeningCashier(null);
+            loadAll();
+          }}
+        />
+      )}
+
+      {closingSession && (
+        <CloseSessionModal
+          session={closingSession}
+          summary={closingSummary}
+          onClose={() => {
+            setClosingSession(null);
+            setClosingSummary(null);
+          }}
+          onSuccess={() => {
+            setClosingSession(null);
+            setClosingSummary(null);
+            loadAll();
+          }}
         />
       )}
     </div>

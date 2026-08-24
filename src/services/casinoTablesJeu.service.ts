@@ -83,6 +83,8 @@ export const tablesJeuApi = {
 
 export const tableVisitApi = {
   terminer: (visitId: ID) => post<{ id: ID; sortie_at: string }>(`/table-visits/${visitId}/terminer`),
+  changerPlace: (visitId: ID, numero_place: number) =>
+    post<{ id: ID; numero_place: number }>(`/table-visits/${visitId}/place`, { numero_place }),
 };
 
 export const tempsJeuApi = {

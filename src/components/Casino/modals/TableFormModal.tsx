@@ -2,21 +2,24 @@ import React, { useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Modal, Field, TextInput, NumberInput, Select, Button, ErrorBanner } from '../common';
 import { tablesJeuApi } from '../../../services/casinoTablesJeu.service';
-import type { TableJeu, TypeJeu } from '../../../types/casinoTablesJeu.types';
+import type { TableJeu, TypeJeu, TypePartie } from '../../../types/casinoTablesJeu.types';
 import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
 import type { Room } from '../../../types/casino.types';
 
 interface TableFormModalProps {
   room: Room;
+  cashierId?: number | null;
   table?: TableJeu | null; // null/undefined = création
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onClose, onSuccess }) => {
+export const TableFormModal: React.FC<TableFormModalProps> = ({ room, cashierId, table, onClose, onSuccess }) => {
   const isEdit = !!table;
   const [numero, setNumero] = useState(table?.numero || '');
   const [typeJeu, setTypeJeu] = useState<TypeJeu>(table?.type_jeu || 'POKER');
+  const [typePartie, setTypePartie] = useState<TypePartie>(table?.type_partie || 'JEU_SIMPLE');
+  const [nombrePlaces, setNombrePlaces] = useState(String(table?.nombre_places || 8));
   const [caveMinimum, setCaveMinimum] = useState<string>(table ? String(table.cave_minimum) : '');
   const [salaireHoraireCroupier, setSalaireHoraireCroupier] = useState<string>(
     table ? String(table.salaire_horaire_croupier) : ''
@@ -40,6 +43,15 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
       setError('La cave minimum doit être un montant positif.');
       return;
     }
+    const places = Number(nombrePlaces);
+    if (!Number.isInteger(places) || places < 2 || places > 100) {
+      setError('Le nombre de places doit être compris entre 2 et 100.');
+      return;
+    }
+    if (!table && !cashierId) {
+      setError('Sélectionnez une caisse avant de créer la table.');
+      return;
+    }
     const salaire = Number(salaireHoraireCroupier);
     if (!salaire || salaire <= 0) {
       setError('Le salaire horaire du croupier doit être un montant positif.');
@@ -60,8 +72,11 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
     try {
       const payload = {
         room_id: room.id,
+        ...(cashierId ? { cashier_id: cashierId } : {}),
         numero: numero.trim(),
         type_jeu: typeJeu,
+        type_partie: typePartie,
+        nombre_places: places,
         cave_minimum: min,
         salaire_horaire_croupier: salaire,
         duree_jeu_simple_minutes: dureeSimple,
@@ -74,7 +89,12 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
       }
       onSuccess();
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Erreur lors de l'enregistrement de la table.");
+      setError(
+        e?.response?.data?.error?.message ||
+          e?.response?.data?.message ||
+          e?.message ||
+          "Erreur lors de l'enregistrement de la table."
+      );
     } finally {
       setLoading(false);
     }
@@ -111,6 +131,17 @@ export const TableFormModal: React.FC<TableFormModalProps> = ({ room, table, onC
               </option>
             ))}
           </Select>
+        </Field>
+
+        <Field label="Format de la partie" required>
+          <Select value={typePartie} onChange={(e) => setTypePartie(e.target.value as TypePartie)}>
+            <option value="JEU_SIMPLE">Jeu simple — changement de place autorisé</option>
+            <option value="TOURNOI">Tournoi — places fixes</option>
+          </Select>
+        </Field>
+
+        <Field label="Nombre de places" required>
+          <NumberInput value={nombrePlaces} onChange={(e) => setNombrePlaces(e.target.value)} min={2} max={100} />
         </Field>
 
         <Field label="Cave minimum (Ariary)" required>
