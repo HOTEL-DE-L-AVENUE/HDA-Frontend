@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Printer, Download } from 'lucide-react';
-import { Modal, Spinner, ErrorBanner, Badge, Button, formatAriary, formatDateTime } from '../common';
+import { Printer, Download, CalendarDays, Users } from 'lucide-react';
+import { Modal, Spinner, ErrorBanner, Badge, Button, formatAriary, formatDateTime, TextInput } from '../common';
 import { tablesJeuApi } from '../../../services/casinoTablesJeu.service';
 import { chipTypesApi } from '../../../services/casino.service'; // AJOUT v1.2 : jetons réels pour la fiche Poker Night Kamoula
 import type { TableJeu, FeuilleTable } from '../../../types/casinoTablesJeu.types';
@@ -28,6 +28,7 @@ const printCellValue: React.CSSProperties = { border: '1px solid #000', padding:
 
 export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, date, onClose }) => {
   const [feuille, setFeuille] = useState<FeuilleTable | null>(null);
+  const [selectedDate, setSelectedDate] = useState(date || new Date().toISOString().slice(0, 10));
   const [chipTypes, setChipTypes] = useState<ChipType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
       setError(null);
       try {
         const [f, ct] = await Promise.all([
-          tablesJeuApi.feuille(table.id, { date }),
+          tablesJeuApi.feuille(table.id, { date: selectedDate }),
           chipTypesApi.list(),
         ]);
         setFeuille(f);
@@ -51,7 +52,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
         setLoading(false);
       }
     })();
-  }, [table.id, date]);
+  }, [table.id, selectedDate]);
 
   // Lignes vierges façon fiche papier : 20 caves, 8 prolongations, à compléter au stylo
   // si la fiche est imprimée avant la fin du service.
@@ -123,6 +124,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
           : undefined
       }
       onClose={onClose}
+      size="lg"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -148,16 +150,40 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
       ) : !feuille ? null : (
         <>
         <div className="flex flex-col gap-5 print:hidden">
+          <div
+            className="rounded-2xl p-4 flex flex-col md:flex-row md:items-end justify-between gap-3"
+            style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+          >
+            <div>
+              <div className="flex items-center gap-2 text-accent text-xs font-bold uppercase tracking-wide">
+                <Users size={14} /> Feuille de suivi des joueurs
+              </div>
+              <p className="text-primary text-sm font-semibold mt-1">{TYPE_JEU_LABELS[table.type_jeu]} · {table.type_partie === 'TOURNOI' ? 'Tournoi' : 'Jeu simple'} · {table.nombre_places} places</p>
+              <p className="text-muted text-[11px] mt-1">Chaque cave ou recave est ajoutée à la ligne du joueur avec son total cumulé et son état de paiement.</p>
+            </div>
+            <label className="flex flex-col gap-1 text-secondary text-xs font-medium w-full md:w-44">
+              <span className="flex items-center gap-1"><CalendarDays size={13} /> Date de la fiche</span>
+              <TextInput type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="py-2 text-xs" />
+            </label>
+          </div>
+
           {/* Caves / recaves */}
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">
               <thead>
+                <tr className="text-[10px] uppercase tracking-wide" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--text-muted, inherit)' }}>
+                  <th className="px-2 py-2 text-left" colSpan={2}>Arrivée / joueur</th>
+                  <th className="px-2 py-2 text-left" colSpan={2}>Caves</th>
+                  <th className="px-2 py-2 text-right" colSpan={2}>Montants</th>
+                  <th className="px-2 py-2 text-center" colSpan={2}>Paiement</th>
+                  <th className="px-2 py-2 text-center">Validation</th>
+                </tr>
                 <tr className="text-muted text-left" style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <th className="py-1.5 pr-2">Joueur</th>
                   <th className="py-1.5 pr-2">N° adhérent</th>
-                  <th className="py-1.5 pr-2">Heure arrivée</th>
+                  <th className="py-1.5 pr-2">Arrivée</th>
                   <th className="py-1.5 pr-2">Heure</th>
-                  <th className="py-1.5 pr-2 text-right">Nb caves</th>
+                  <th className="py-1.5 pr-2 text-right">N° cave</th>
                   <th className="py-1.5 pr-2 text-right">Montant cave</th>
                   <th className="py-1.5 pr-2 text-right">Total caves</th>
                   <th className="py-1.5 pr-2 text-center">Payé</th>
