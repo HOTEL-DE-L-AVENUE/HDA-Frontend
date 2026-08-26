@@ -493,6 +493,7 @@ export const RestaurantPage: React.FC = () => {
         onClose={() => setShowOrderModal(false)}
         tables={tables}
         products={products}
+        categories={categories}
         clients={clients}
         onSubmit={handleAddOrder}
         onNewClient={() => setShowClientModal(true)}

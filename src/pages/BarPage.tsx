@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
 import barService from '../services/bar.service';
-import { BarProduct, BarStockItem } from '../types/bar.type';
+import { BarPaymentMethod, BarProduct, BarStockItem } from '../types/bar.type';
 
 // ─── Layout ───────────────────────────────────────────────
 import { BarHeader } from '../components/Bar/BarHeader';
@@ -97,7 +97,7 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  const handleCreateCommande = async ({ client, table, nombre_personnes, moyen_paiement, items }: { client: string; table: number; nombre_personnes: number; moyen_paiement: 'ESPECES' | 'CARTE' | 'MOBILE_MONEY' | 'CHEQUE'; items: BarCommande['items'] }) => {
+  const handleCreateCommande = async ({ client, table, nombre_personnes, moyen_paiement, items }: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; items: BarCommande['items'] }) => {
     try {
       const normalizedItems = items.map((item) => ({
         product_id: item.product_id,
@@ -146,31 +146,6 @@ export const BarPage: React.FC = () => {
       setError("Le statut de la commande bar n'a pas pu être mis à jour.");
       throw error;
     }
-  };
-
-  const handleAddItemToCommande = (cocktail: BarProduct): boolean => {
-    if (commandes.length === 0) {
-      return false;
-    }
-
-    setCommandes((prev) => {
-      const currentCommande = prev[0];
-      const normalizedPrice = Number(cocktail.prix) || 0;
-      const existingItem = currentCommande.items.find((item) => item.nom === cocktail.nom);
-      const updatedItems = existingItem
-        ? currentCommande.items.map((item) =>
-            item.nom === cocktail.nom
-              ? { ...item, quantite: item.quantite + 1, prix: normalizedPrice }
-              : item
-          )
-        : [...currentCommande.items, { nom: cocktail.nom, quantite: 1, prix: normalizedPrice }];
-
-      const total = updatedItems.reduce((sum, item) => sum + Number(item.prix || 0) * item.quantite, 0);
-      const updatedCommande = { ...currentCommande, items: updatedItems, total };
-      return [updatedCommande];
-    });
-
-    return true;
   };
 
   // Fonction pour ajouter instantanément la nouvelle boisson dans le state local
@@ -241,7 +216,6 @@ export const BarPage: React.FC = () => {
             cocktails={cocktails} 
             stockMap={stockMap} 
             onStockUpdate={fetchData} 
-            onAddToOrder={handleAddItemToCommande} 
             onProductAdded={handleProductAdded}
           />
           <BestSellers commandes={commandes} />
