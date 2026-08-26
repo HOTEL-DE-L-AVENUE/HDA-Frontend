@@ -317,13 +317,23 @@ export const CocktailMenu: React.FC<Props> = ({
                 const isOutOfStock = !stock || stock.quantite <= 0;
                 return (
                   <div key={cocktail.id} className={`group relative min-h-[104px] rounded-lg border border-base bg-emerald-500/90 p-3 text-left transition hover:-translate-y-0.5 hover:bg-emerald-400 ${isOutOfStock ? 'opacity-50 grayscale' : ''}`}>
-                    <button type="button" disabled={isOutOfStock || !onAddToOrder} onClick={() => void handleAddArticle(cocktail)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white disabled:cursor-not-allowed">
-                      <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
-                      <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
-                      <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
-                        Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
-                      </span>
-                    </button>
+                    {onAddToOrder ? (
+                      <button type="button" disabled={isOutOfStock} onClick={() => void handleAddArticle(cocktail)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white disabled:cursor-not-allowed">
+                        <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
+                        <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
+                        <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
+                          Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white">
+                        <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
+                        <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
+                        <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
+                          Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
+                        </span>
+                      </div>
+                    )}
                     <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
                       <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
                       <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>

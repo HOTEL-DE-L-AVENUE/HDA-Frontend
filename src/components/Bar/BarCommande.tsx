@@ -348,7 +348,7 @@ export const BarCommandeView: React.FC<Props> = ({
           <div>
             <p className="font-semibold text-primary">{commande.client}</p>
             <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`} · {commande.nombre_personnes || 1} pers.</p>
-            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'CARTE' ? 'Carte bancaire' : commande.moyen_paiement === 'MOBILE_MONEY' ? 'Mobile Money' : commande.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>
+            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'CARTE' ? 'Carte bancaire' : commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'EURO' ? 'Euro' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'DOLLAR' ? 'Dollar' : commande.moyen_paiement === 'VIREMENT' ? 'Virement' : commande.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>
           </div>
         </div>
       ),
@@ -520,8 +520,8 @@ export const BarCommandeView: React.FC<Props> = ({
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle Commande" size="lg">
-        <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4 max-h-[75vh] overflow-y-auto pr-2">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle commande · Bar" size="xl">
+        <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
           {feedback && (
             <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
               <span>{feedback.message}</span>
@@ -529,32 +529,31 @@ export const BarCommandeView: React.FC<Props> = ({
             </div>
           )}
 
-          <Select
-            label="Table"
-            value={table}
-            onChange={(event) => setTable(event.target.value)}
-            options={[
-              { value: '', label: 'Sélectionner une table' },
-              ...tables.map((tableItem) => ({ value: String(tableItem.id), label: tableItem.numero }))
-            ]}
-          />
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Input
-              label="Nombre de personnes"
-              type="number"
-              min="1"
-              value={nombrePersonnes}
-              onChange={(event) => setNombrePersonnes(event.target.value)}
-            />
+          <div className="grid grid-cols-1 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 sm:grid-cols-3">
             <Select
-              label="Mode de paiement prévu"
+              label="Table"
+              value={table}
+              onChange={(event) => setTable(event.target.value)}
+              options={[
+                { value: '', label: 'Choisir une table' },
+                ...tables.map((tableItem) => ({ value: String(tableItem.id), label: tableItem.numero }))
+              ]}
+            />
+            <Input label="Personnes" type="number" min="1" value={nombrePersonnes} onChange={(event) => setNombrePersonnes(event.target.value)} />
+            <Select
+              label="Paiement prévu"
               value={moyenPaiement}
               onChange={(event) => setMoyenPaiement(event.target.value as NonNullable<BarCommande['moyen_paiement']>)}
               options={[
                 { value: 'ESPECES', label: 'Espèces' },
                 { value: 'CARTE', label: 'Carte bancaire' },
-                { value: 'MOBILE_MONEY', label: 'Mobile Money' },
+                { value: 'TPE', label: 'TPE' },
+                { value: 'CREDIT', label: 'Crédit' },
+                { value: 'EURO', label: 'Euro' },
+                { value: 'ORANGE_MONEY', label: 'Orange Money' },
+                { value: 'MVOLA', label: 'MVola' },
+                { value: 'DOLLAR', label: 'Dollar' },
+                { value: 'VIREMENT', label: 'Virement' },
                 { value: 'CHEQUE', label: 'Chèque' },
               ]}
             />
@@ -625,12 +624,12 @@ export const BarCommandeView: React.FC<Props> = ({
             </div>
           )}
 
-          <div className="overflow-hidden rounded-xl border border-base bg-[#101415]">
+          <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">
             <div className="flex items-center justify-between border-b border-base px-3 py-2">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
               <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-40 text-xs" />
             </div>
-            <div className="grid min-h-[300px] grid-cols-[104px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)_190px]">
+            <div className="grid min-h-[280px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)_210px]">
               <nav className="space-y-1 border-r border-base bg-[#171b1c] p-2">
                 {menuCategories.map((category) => (
                   <button key={category} type="button" onClick={() => { setMenuCategory(category); setMenuSubcategory('Toutes'); }} className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold transition ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}>
@@ -662,7 +661,7 @@ export const BarCommandeView: React.FC<Props> = ({
           </div>
 
           {selectedItems.length > 0 && (
-            <div className="rounded-xl border border-base bg-surface-2 p-4">
+            <div className="rounded-xl border border-base bg-surface-2 p-4 sm:hidden">
               <p className="mb-2 text-sm font-medium text-slate-300">Résumé</p>
               <div className="space-y-2">
                 {selectedItems.map((item, index) => (

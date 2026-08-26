@@ -547,7 +547,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                 <div>
                   <p className="font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
                   <p className="text-xs text-muted">{order.table ? `Table ${order.table}` : 'Sans table'}{order.nombre_personnes ? ` · ${order.nombre_personnes} personne${order.nombre_personnes > 1 ? 's' : ''}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
-                  {order.moyen_paiement && <p className="text-xs text-muted">Paiement : {order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'MOBILE_MONEY' ? 'Mobile Money' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>}
+                  {order.moyen_paiement && <p className="text-xs text-muted">Paiement : {order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>}
                   {order.items && order.items.length > 0 && (
                     <div className="mt-2 space-y-1 border-l-2 border-accent/40 pl-3">
                       {order.items.map((item, index) => {
