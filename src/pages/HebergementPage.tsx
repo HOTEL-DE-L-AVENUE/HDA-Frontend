@@ -1,4 +1,6 @@
 import React from 'react';
+import { Reservation } from '../types/hebergement.type';
+import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
 import { StockManager, CaisseManager } from '../components/StockManager';
 
 // ─── Layout & UI ──────────────────────────────────────────────────────────────
@@ -29,8 +31,8 @@ import { isAdmin } from '../utils/permissions';
 
 export const HebergementPage: React.FC = () => {
   const h = useHebergement();
-  const currentUser = AuthService.getCurrentUser();
-  const userIsAdmin = isAdmin(currentUser);
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = React.useState(false);
+  const [selectedReservation, setSelectedReservation] = React.useState<Reservation | null>(null);
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
@@ -61,6 +63,10 @@ export const HebergementPage: React.FC = () => {
           onCheckOut={h.handleCheckOut}
           onCancel={h.handleCancelReservation}
           onDelete={h.handleDeleteReservation}
+          onRecordPayment={(r: Reservation) => {
+            setShowRecordPaymentModal(true);
+            setSelectedReservation(r);
+          }}
         />
       )}
 
@@ -179,6 +185,16 @@ export const HebergementPage: React.FC = () => {
         form={h.clientForm}
         onChange={h.setClientForm}
         onSave={h.handleSaveClient}
+      />
+
+      <RecordPaymentModal
+        isOpen={showRecordPaymentModal}
+        onClose={() => setShowRecordPaymentModal(false)}
+        onSuccess={() => {
+          setShowRecordPaymentModal(false);
+          setSelectedReservation(null);
+          h.refetch();
+        }}
       />
     </div>
   );
