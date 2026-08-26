@@ -6,6 +6,8 @@ import { equipmentService } from '../services/equipment.service';
 import { clientService } from '../services/client.service';
 import { housekeepingService } from '../services/housekeeping.service';
 import { maintenanceService } from '../services/maintenance.service';
+import AuthService from '../services/authService';
+import { getDefaultTabForRole } from '../utils/permissions';
 
 // ─── Valeurs par défaut des formulaires ──────────────────────────────────────
 
@@ -81,18 +83,8 @@ export function useHebergement() {
   }, [fetchData]);
 
   // ── UI ───────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState(() => {
-    try {
-      const stored = localStorage.getItem('user-data') || sessionStorage.getItem('user-data');
-      if (stored) {
-        const u = JSON.parse(stored);
-        const r = u.role?.toLowerCase();
-        if (r === 'caissier' || r === 'caisse') return 'caisse';
-        if (r === 'stock_manager') return 'stock';
-      }
-    } catch { }
-    return 'reservations';
-  });
+  const currentUser = AuthService.getCurrentUser();
+  const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('reservations', currentUser?.role));
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);

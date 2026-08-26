@@ -7,6 +7,8 @@ import {
 import * as restaurantService from '../../../services/restaurantService';
 import { Button } from '../../UI';
 import { useHDA } from '../../../context/HDAContext';
+import AuthService from '../../../services/authService';
+import { isAdmin } from '../../../utils/permissions';
 
 // ==================== TYPES ====================
 
@@ -310,6 +312,9 @@ if (loc.success) {
 
   const [prixVente, setPrixVente] = useState(0);
 
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
+
   return (
     <>
       {/* Alertes stock bas */}
@@ -364,13 +369,15 @@ if (loc.success) {
         >
           <History size={14} className="mr-1" /> Historique
         </button>
-        <button 
-          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-          style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
-          onClick={() => { setAddErr(''); setShowAddModal(true); }}
-        >
-          <Plus size={14} className="mr-1" /> Nouveau produit
-        </button>
+        {userIsAdmin && (
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+            onClick={() => { setAddErr(''); setShowAddModal(true); }}
+          >
+            <Plus size={14} className="mr-1" /> Nouveau produit
+          </button>
+        )}
       </div>
 
       {/* Grille */}
@@ -396,33 +403,46 @@ if (loc.success) {
                 </div>
                 <p className="text-xs text-muted mb-3">{stock.location_nom}</p>
                 <div className="flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => { setAdjustTarget(stock); setAdjType('ENTREE'); setAdjQty(0); setAdjErr(''); setShowAdjustModal(true); }}
-                    className={`font-bold text-sm hover:underline ${isLow ? 'text-warning' : 'text-accent'}`}
-                    title="Cliquer pour ajustement précis"
-                    style={{ color: isLow ? 'var(--color-warning, #f97316)' : undefined }}
-                  >
-                    {qty.toFixed(2)}
-                  </button>
-                  <div className="flex gap-1">
+                  {userIsAdmin ? (
                     <button
-                      onClick={() => quickAdjust(stock.product_id, -1)}
-                      className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center font-bold"
-                    >−</button>
-                    <button
-                      onClick={() => quickAdjust(stock.product_id, +1)}
-                      className="w-7 h-7 rounded-lg bg-success-bg text-success flex items-center justify-center font-bold"
-                    >+</button>
-                    {stock.id && (
+                      onClick={() => { setAdjustTarget(stock); setAdjType('ENTREE'); setAdjQty(0); setAdjErr(''); setShowAdjustModal(true); }}
+                      className={`font-bold text-sm hover:underline ${isLow ? 'text-warning' : 'text-accent'}`}
+                      title="Cliquer pour ajustement précis"
+                      style={{ color: isLow ? 'var(--color-warning, #f97316)' : undefined }}
+                    >
+                      {qty.toFixed(2)}
+                    </button>
+                  ) : (
+                    <span
+                      className={`font-bold text-sm ${isLow ? 'text-warning' : 'text-accent'}`}
+                      style={{ color: isLow ? 'var(--color-warning, #f97316)' : undefined }}
+                    >
+                      {qty.toFixed(2)}
+                    </span>
+                  )}
+                  {userIsAdmin && (
+                    <div className="flex gap-1">
                       <button
-                        onClick={() => { setDeleteTarget(stock); setShowDeleteModal(true); }}
-                        className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center"
-                        title="Supprimer du stock"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
+                        onClick={() => quickAdjust(stock.product_id, -1)}
+                        className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center font-bold"
+                        title="Diminuer stock"
+                      >−</button>
+                      <button
+                        onClick={() => quickAdjust(stock.product_id, +1)}
+                        className="w-7 h-7 rounded-lg bg-success-bg text-success flex items-center justify-center font-bold"
+                        title="Augmenter stock"
+                      >+</button>
+                      {stock.id && (
+                        <button
+                          onClick={() => { setDeleteTarget(stock); setShowDeleteModal(true); }}
+                          className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center"
+                          title="Supprimer du stock"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -736,26 +756,31 @@ const AchatsPanel: React.FC = () => {
     } catch (e) { console.error(e); }
   };
 
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
+
   return (
     <>
       <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
         <p className="text-sm text-secondary">{purchases.length} achat(s)</p>
-        <div className="flex gap-2">
-          <button 
-            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-            style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-            onClick={() => setShowSupplierModal(true)}
-          >
-            <Plus size={14} className="mr-1" /> Fournisseur
-          </button>
-          <button 
-            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
-            onClick={() => { setPurchaseErr(''); setShowPurchaseModal(true); }}
-          >
-            <Truck size={14} className="mr-1" /> Nouvel achat
-          </button>
-        </div>
+        {userIsAdmin && (
+          <div className="flex gap-2">
+            <button 
+              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+              style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+              onClick={() => setShowSupplierModal(true)}
+            >
+              <Plus size={14} className="mr-1" /> Fournisseur
+            </button>
+            <button 
+              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+              onClick={() => { setPurchaseErr(''); setShowPurchaseModal(true); }}
+            >
+              <Truck size={14} className="mr-1" /> Nouvel achat
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (

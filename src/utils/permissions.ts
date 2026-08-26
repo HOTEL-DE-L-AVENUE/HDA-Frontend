@@ -136,25 +136,39 @@ export function canAccessModule(
 }
 
 /**
+ * Vérifie si un rôle ou utilisateur correspond à l'administrateur.
+ */
+export function isAdmin(userOrRole?: { role?: string } | string | null): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  return (role || '').toLowerCase() === 'admin';
+}
+
+/**
  * Filtre les onglets/sous-sections secondaires au sein d'un module en fonction du rôle :
- * - Caissier : UNIQUEMENT l'onglet 'caisse' (ou caisses/finances)
+ * - Caisse : UNIQUEMENT accessible pour l'administrateur ('admin'). Si l'utilisateur n'est pas admin, l'onglet 'caisse' est totalement exclu.
  * - Stock Manager : UNIQUEMENT l'onglet 'stock'
- * - Admin / Manager / Autres : Tous les onglets normaux
+ * - Autres rôles non-admin : Tous les onglets sauf 'caisse'
+ * - Admin : Tous les onglets
  */
 export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?: string): T[] {
   const role = userRole?.toLowerCase() || '';
 
-  if (role === 'caissier' || role === 'caisse') {
-    const caisseTabs = tabs.filter(t => t.id === 'caisse' || t.id.includes('caisse'));
-    return caisseTabs.length > 0 ? caisseTabs : tabs;
+  // 1. Si admin : accès à tous les onglets
+  if (role === 'admin') {
+    return tabs;
   }
 
+  // 2. Si non-admin : exclure systématiquement les onglets de caisse
+  const nonCaisseTabs = tabs.filter(t => t.id !== 'caisse' && !t.id.includes('caisse'));
+
+  // 3. Stock Manager : restreindre uniquement au stock
   if (role === 'stock_manager') {
-    const stockTabs = tabs.filter(t => t.id === 'stock' || t.id.includes('stock'));
-    return stockTabs.length > 0 ? stockTabs : tabs;
+    const stockTabs = nonCaisseTabs.filter(t => t.id === 'stock' || t.id.includes('stock'));
+    return stockTabs.length > 0 ? stockTabs : nonCaisseTabs;
   }
 
-  return tabs;
+  return nonCaisseTabs;
 }
 
 /**
@@ -162,8 +176,10 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
  */
 export function getDefaultTabForRole(defaultTab: string, userRole?: string): string {
   const role = userRole?.toLowerCase() || '';
-  if (role === 'caissier' || role === 'caisse') return 'caisse';
   if (role === 'stock_manager') return 'stock';
+  if (role !== 'admin' && (defaultTab === 'caisse' || defaultTab.includes('caisse'))) {
+    return 'stock';
+  }
   return defaultTab;
 }
 
