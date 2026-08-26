@@ -30,29 +30,6 @@ export const CasinoPage: React.FC = () => {
     ...(userIsAdmin ? [["03", "Caisse", WalletCards]] : []),
   ];
 
-  return (
-    <div className="flex flex-col gap-5 md:gap-6 w-full">
-      <header className="relative overflow-hidden rounded-3xl p-5 md:p-7" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', border: '1px solid var(--color-border)' }}>
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 text-accent text-xs font-semibold uppercase tracking-[0.18em]"><Dices size={15} /> Pilotage casino</div>
-            <h1 className="text-primary text-2xl md:text-4xl font-bold mt-3" style={{ fontFamily: 'Playfair Display, serif' }}>Le casino, en trois étapes.</h1>
-            <p className="text-muted text-sm mt-2 max-w-xl">Configurez les salles, affectez une caisse à chaque table, puis échangez ou reprenez les jetons.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button icon={<Plus size={15} />} onClick={() => setShowRoomForm(true)}>Nouvelle salle</Button>
-            {userIsAdmin && (
-              <Button variant="secondary" icon={<WalletCards size={15} />} onClick={() => setActiveTab('caisse')}>Ouvrir la caisse</Button>
-            )}
-          </div>
-        </div>
-        <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
-          {steps.map(([number, label, Icon]: any) => (
-            <div key={String(label)} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,.05)' }}><span className="text-accent text-xs font-bold">{number}</span><Icon size={14} className="text-muted" /><span className="text-primary text-xs">{label}</span></div>
-          ))}
-        </div>
-      </header>
-
   useEffect(() => {
     let active = true;
     setSaveState('idle');
@@ -92,11 +69,34 @@ export const CasinoPage: React.FC = () => {
     }
   };
 
+  return (
+    <div className="flex flex-col gap-5 md:gap-6 w-full">
+      <header className="relative overflow-hidden rounded-3xl p-5 md:p-7" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', border: '1px solid var(--color-border)' }}>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-accent text-xs font-semibold uppercase tracking-[0.18em]"><Dices size={15} /> Pilotage casino</div>
+            <h1 className="text-primary text-2xl md:text-4xl font-bold mt-3" style={{ fontFamily: 'Playfair Display, serif' }}>Le casino, en trois étapes.</h1>
+            <p className="text-muted text-sm mt-2 max-w-xl">Configurez les salles, affectez une caisse à chaque table, puis échangez ou reprenez les jetons.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button icon={<Plus size={15} />} onClick={() => setShowRoomForm(true)}>Nouvelle salle</Button>
+            {userIsAdmin && (
+              <Button variant="secondary" icon={<WalletCards size={15} />} onClick={() => setActiveTab('caisse')}>Ouvrir la caisse</Button>
+            )}
+          </div>
+        </div>
+        <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
+          {steps.map(([number, label, Icon]: any) => (
+            <div key={String(label)} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,.05)' }}><span className="text-accent text-xs font-bold">{number}</span><Icon size={14} className="text-muted" /><span className="text-primary text-xs">{label}</span></div>
+          ))}
+        </div>
+      </header>
+      
       {activeTab === 'setup' && <CasinoSetupTab />}
       {activeTab === 'tokens' && <TokensTab />}
       {userIsAdmin && activeTab === 'caisse' && <CaisseTab />}
-
-  return <div className="flex flex-col gap-5 w-full">
+      
+  <div className="flex flex-col gap-5 w-full">
     <header className="rounded-3xl p-5 md:p-7 print:hidden" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', ...casinoBorder }}>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-5"><div><p className="text-accent text-xs font-bold uppercase tracking-[.18em]">Poker Night</p><h1 className="text-primary text-3xl font-bold mt-2" style={{ fontFamily: 'Playfair Display, serif' }}>Gestion casino</h1><p className="text-muted text-sm mt-2">Nouvelle interface locale basée sur les trois fiches papier.</p></div><div className="flex gap-2"><button type="button" onClick={() => window.print()} className="action secondary"><Printer size={15} /> Imprimer</button><button type="button" className="action"><Download size={15} /> Exporter</button></div></div>
     </header>
