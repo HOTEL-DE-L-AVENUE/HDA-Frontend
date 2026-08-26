@@ -133,7 +133,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative w-full ${sizeClasses[size]} bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl`}
+        className={`relative flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden ${sizeClasses[size]} bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/50">
@@ -146,7 +146,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             ×
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="min-h-0 overflow-y-auto p-4 sm:p-6">{children}</div>
       </div>
     </div>,
     document.body
