@@ -121,10 +121,10 @@ class AuthService {
 
   static async login(email: string, mot_de_passe: string): Promise<{ user: User; token: string }> {
     try {
-      const response = await api.post("/api/auth/login", { 
-        email, 
-        mot_de_passe, 
-        password: mot_de_passe 
+      const response = await api.post("/api/auth/login", {
+        email,
+        mot_de_passe,
+        password: mot_de_passe
       });
 
       const resData = response.data;
@@ -185,7 +185,7 @@ class AuthService {
     try {
       const refreshToken = SecureStorage.getItem("refresh-token");
       if (refreshToken) {
-        await api.post("/auth/logout", { refreshToken }).catch(() => {});
+        await api.post("/auth/logout", { refreshToken }).catch(() => { });
       }
     } finally {
       SecureStorage.clear();
@@ -284,7 +284,7 @@ class AuthService {
     return SecureStorage.getItem("auth-token");
   }
 
-    static isAuthenticated(): boolean {
+  static isAuthenticated(): boolean {
     const token = this.getToken();
     const user = this.getCurrentUser();
     return !!(token && user);
