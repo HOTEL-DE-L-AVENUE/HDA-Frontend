@@ -18,6 +18,7 @@ interface PlayersSheetProps {
 
 const paperInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
 const darkInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
+const paymentMethods = ['Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèque', 'Offert', 'Virement', 'Crédit'];
 
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total, totalCashing, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(players[0]?.id ?? 0);
@@ -80,7 +81,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
             <th className="border p-2 text-left font-semibold" style={casinoBorder} colSpan={2}>DATE : <input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} className="ml-1 bg-transparent font-normal outline-none" /></th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder} colSpan={3}>JOUEUR :</th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>N° D’ADHÉRANT</th>
-            <th className="border p-2 text-left font-semibold" style={casinoBorder} colSpan={3}>HEURE D’ARRIVÉE</th>
+            <th className="border p-2 text-left font-semibold" style={casinoBorder}>HEURE D’ARRIVÉE</th>
+            <th className="border p-2 text-left font-semibold" style={casinoBorder} colSpan={3}>RÉSULTATS</th>
           </tr>
           <tr style={{ backgroundColor: 'var(--color-bg)' }}>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>JOUEUR :</th>
@@ -91,6 +93,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>Caves accumulées +</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>Paye</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>non Paye</th>
+            <th className="border p-2 text-left font-semibold" style={casinoBorder}>MODE DE PAIEMENT</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>Signature</th>
           </tr>
         </thead>
@@ -105,6 +108,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
               <td className="border" style={casinoBorder}><input className={paperInput} value={accumulatedByLineId[line.id] || '0'} readOnly /></td>
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Payé'} onChange={() => onUpdate(line.id, 'payment', 'Payé')} /></td>
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} /></td>
+              <td className="border" style={casinoBorder}><select className={paperInput} value={line.paymentMethod || ''} onChange={(event) => onUpdate(line.id, 'paymentMethod', event.target.value)} style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}><option value="" className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Sélectionner</option>{paymentMethods.map((method) => <option key={method} value={method} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{method}</option>)}</select></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.signature} onChange={(event) => onUpdate(line.id, 'signature', event.target.value)} /></td>
             </tr>
           ))}
