@@ -24,9 +24,13 @@ import { ClientModal } from '../components/Hebergement/modals/ClientModal';
 
 // ─── Logic ────────────────────────────────────────────────────────────────────
 import { useHebergement } from '../hooks/useHebergement';
+import AuthService from '../services/authService';
+import { isAdmin } from '../utils/permissions';
 
 export const HebergementPage: React.FC = () => {
   const h = useHebergement();
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
@@ -108,7 +112,7 @@ export const HebergementPage: React.FC = () => {
         />
       )}
 
-      {h.activeTab === 'caisse' && (
+      {userIsAdmin && h.activeTab === 'caisse' && (
         <CaisseManager
           module="hebergement"
           categories={['Hébergement', 'Stock', 'Maintenance', 'Personnel', 'Autre']}

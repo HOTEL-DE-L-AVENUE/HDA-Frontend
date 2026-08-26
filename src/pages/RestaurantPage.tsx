@@ -29,11 +29,12 @@ import type {
 
 import AuthService from '../services/authService';
 import { clientService } from '../services/client.service';
-import { getDefaultTabForRole } from '../utils/permissions';
+import { getDefaultTabForRole, isAdmin } from '../utils/permissions';
 
 export const RestaurantPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
 
   // ---------- États ----------
   const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('commandes', currentUser?.role));
@@ -480,7 +481,7 @@ export const RestaurantPage: React.FC = () => {
           />
         )}
         {activeTab === 'stock' && <StockTab />}
-        {activeTab === 'caisse' && (
+        {userIsAdmin && activeTab === 'caisse' && (
           <CaisseTab orders={orders} onPayment={handlePayment} />
         )}
       </div>

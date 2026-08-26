@@ -1,35 +1,57 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Calculator, ClipboardList, Coins, Download, Printer } from 'lucide-react';
-import { PlayersSheet } from '../components/Casino/sheets/PlayersSheet';
-import { ChipsSheet } from '../components/Casino/sheets/ChipsSheet';
-import { FinalCalculationSheet } from '../components/Casino/sheets/FinalCalculationSheet';
-import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, casinoBorder, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
-import { playerSheetApi } from '../services/casinoTablesJeu.service';
+import React, { useState } from 'react';
+import { Building2, Coins, Dices, Plus, WalletCards } from 'lucide-react';
+import { CasinoTabs } from '../components/Casino/CasinoTabs';
+import { RoomFormModal } from '../components/Casino/modals/RoomCashierModal';
+import { ErrorBanner } from '../components/Casino/common';
+import { Button } from '../components/UI';
+
+import { CasinoSetupTab } from '../components/Casino/tabs/CasinoSetupTab';
+import { TokensTab } from '../components/Casino/tabs/TokensTab';
+import { CaisseTab } from '../components/Casino/tabs/CaisseTab';
+// Onglet Stock existant (module casino) — conservé tel quel, non réécrit ici.
+// import { StockTab } from '../components/Casino/tabs/';
+
+import AuthService from '../services/authService';
+import { getDefaultTabForRole, isAdmin } from '../utils/permissions';
 
 export const CasinoPage: React.FC = () => {
-  const [view, setView] = useState<CasinoView>('players');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [table, setTable] = useState('Table Poker Night');
-  const [players, setPlayers] = useState<PlayerLine[]>(() => Array.from({ length: 12 }, (_, index) => createPlayerLine(index + 1)));
-  const [restaurantPayments, setRestaurantPayments] = useState({ especes: false, tpe: false });
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [chips, setChips] = useState<ChipLine[]>(() => CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
-  const [finalsByPlayer, setFinalsByPlayer] = useState<Record<string, Record<string, string>>>({});
-  const [selectedFinalPlayerId, setSelectedFinalPlayerId] = useState(players[0]?.ficheId ?? players[0]?.id ?? 0);
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
+  const [activeTab, setActiveTab] = useState(() => {
+    const defaultTab = getDefaultTabForRole('setup', currentUser?.role);
+    return defaultTab === 'stock' || defaultTab === 'rooms' || defaultTab === 'tables-jeu' || (!userIsAdmin && defaultTab === 'caisse') ? 'setup' : defaultTab;
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [showRoomForm, setShowRoomForm] = useState(false);
 
-  const cavesTotal = useMemo(() => players.reduce((total, line) => total + ((Number(line.caves) || 0) * (Number(line.amount) || 0)), 0), [players]);
-  const totalCashing = useMemo(() => {
-    const cashingBySheet = new Map<number, number>();
-    players.forEach((player) => {
-      const sheetId = player.ficheId ?? player.id;
-      if (!cashingBySheet.has(sheetId) || cashingBySheet.get(sheetId) === 0) {
-        cashingBySheet.set(sheetId, parseCasinoAmount(player.cashing));
-      }
-    });
-    return Array.from(cashingBySheet.values()).reduce((total, cashing) => total + cashing, 0);
-  }, [players]);
-  const openingTotal = useMemo(() => chips.reduce((total, line) => total + line.value * (Number(line.opening) || 0), 0), [chips]);
-  const closingTotal = useMemo(() => chips.reduce((total, line) => total + line.value * (Number(line.closing) || 0), 0), [chips]);
+  const steps = [
+    ["01", "Configuration", Building2],
+    ["02", "Jetons", Coins],
+    ...(userIsAdmin ? [["03", "Caisse", WalletCards]] : []),
+  ];
+
+  return (
+    <div className="flex flex-col gap-5 md:gap-6 w-full">
+      <header className="relative overflow-hidden rounded-3xl p-5 md:p-7" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', border: '1px solid var(--color-border)' }}>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-accent text-xs font-semibold uppercase tracking-[0.18em]"><Dices size={15} /> Pilotage casino</div>
+            <h1 className="text-primary text-2xl md:text-4xl font-bold mt-3" style={{ fontFamily: 'Playfair Display, serif' }}>Le casino, en trois étapes.</h1>
+            <p className="text-muted text-sm mt-2 max-w-xl">Configurez les salles, affectez une caisse à chaque table, puis échangez ou reprenez les jetons.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button icon={<Plus size={15} />} onClick={() => setShowRoomForm(true)}>Nouvelle salle</Button>
+            {userIsAdmin && (
+              <Button variant="secondary" icon={<WalletCards size={15} />} onClick={() => setActiveTab('caisse')}>Ouvrir la caisse</Button>
+            )}
+          </div>
+        </div>
+        <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
+          {steps.map(([number, label, Icon]: any) => (
+            <div key={String(label)} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,.05)' }}><span className="text-accent text-xs font-bold">{number}</span><Icon size={14} className="text-muted" /><span className="text-primary text-xs">{label}</span></div>
+          ))}
+        </div>
+      </header>
 
   useEffect(() => {
     let active = true;
@@ -70,11 +92,9 @@ export const CasinoPage: React.FC = () => {
     }
   };
 
-  const navigation: { id: CasinoView; label: string; help: string; icon: React.ReactNode }[] = [
-    { id: 'players', label: '1. Joueurs & caves', help: 'Fiche du tournoi', icon: <ClipboardList size={18} /> },
-    { id: 'chips', label: '2. Comptage jetons', help: 'Ouverture / fermeture', icon: <Coins size={18} /> },
-    { id: 'final', label: '3. Calcul final', help: 'Clôture de caisse', icon: <Calculator size={18} /> },
-  ];
+      {activeTab === 'setup' && <CasinoSetupTab />}
+      {activeTab === 'tokens' && <TokensTab />}
+      {userIsAdmin && activeTab === 'caisse' && <CaisseTab />}
 
   return <div className="flex flex-col gap-5 w-full">
     <header className="rounded-3xl p-5 md:p-7 print:hidden" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', ...casinoBorder }}>
