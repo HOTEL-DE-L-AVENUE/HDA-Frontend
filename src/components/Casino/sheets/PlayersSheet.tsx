@@ -89,7 +89,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>HEURE :</th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>NB CAVES</th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>Montant Caves</th>
-            <th className="border p-2 text-left font-semibold" style={casinoBorder}>Total Caves +</th>
+            <th className="bo rder p-2 text-left font-semibold" style={casinoBorder}>Total Caves +</th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>Caves accumulées +</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>Paye</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>non Paye</th>
