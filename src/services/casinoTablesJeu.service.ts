@@ -18,6 +18,7 @@ import type {
   TempsJeuJour,
   FeuilleTable,
 } from '../types/casinoTablesJeu.types';
+import type { ChipLine, PlayerLine } from '../components/Casino/sheets/types';
 
 const BASE_URL = '/api/casino';
 
@@ -79,6 +80,23 @@ export const tablesJeuApi = {
 
   // Présence par table (nécessaire pour totaliser le temps de jeu)
   joueursActifs: (tableId: ID) => get<JoueurActif[]>(`/tables-jeu/${tableId}/joueurs-actifs`),
+};
+
+export type PlayerSheetData = {
+  id?: number;
+  date: string;
+  table_name: string;
+  players: PlayerLine[];
+  chips: ChipLine[];
+  restaurantPayments: { especes: boolean; tpe: boolean };
+  finals: Record<string, Record<string, string>>;
+  total_cashing_jetons?: number;
+};
+
+export const playerSheetApi = {
+  get: (date: string, tableName: string) =>
+    get<PlayerSheetData | null>(`/player-sheets${qs({ date, table_name: tableName })}`),
+  save: (payload: PlayerSheetData) => put<PlayerSheetData>('/player-sheets', payload),
 };
 
 export const tableVisitApi = {
