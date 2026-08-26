@@ -69,7 +69,7 @@ const tabs: Tab[] = [
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
 ];
 
-// Composant pour les statistiques responsive
+// Composant pour les statistiques responsives
 const StatsCard: React.FC<{
   label: string;
   value: string | number;
