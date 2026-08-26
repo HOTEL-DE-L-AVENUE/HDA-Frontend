@@ -12,16 +12,23 @@ import { CaisseTab } from '../components/Casino/tabs/CaisseTab';
 // import { StockTab } from '../components/Casino/tabs/';
 
 import AuthService from '../services/authService';
-import { getDefaultTabForRole } from '../utils/permissions';
+import { getDefaultTabForRole, isAdmin } from '../utils/permissions';
 
 export const CasinoPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
   const [activeTab, setActiveTab] = useState(() => {
     const defaultTab = getDefaultTabForRole('setup', currentUser?.role);
-    return defaultTab === 'stock' || defaultTab === 'rooms' || defaultTab === 'tables-jeu' ? 'setup' : defaultTab;
+    return defaultTab === 'stock' || defaultTab === 'rooms' || defaultTab === 'tables-jeu' || (!userIsAdmin && defaultTab === 'caisse') ? 'setup' : defaultTab;
   });
   const [error, setError] = useState<string | null>(null);
   const [showRoomForm, setShowRoomForm] = useState(false);
+
+  const steps = [
+    ["01", "Configuration", Building2],
+    ["02", "Jetons", Coins],
+    ...(userIsAdmin ? [["03", "Caisse", WalletCards]] : []),
+  ];
 
   return (
     <div className="flex flex-col gap-5 md:gap-6 w-full">
@@ -34,11 +41,13 @@ export const CasinoPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button icon={<Plus size={15} />} onClick={() => setShowRoomForm(true)}>Nouvelle salle</Button>
-            <Button variant="secondary" icon={<WalletCards size={15} />} onClick={() => setActiveTab('caisse')}>Ouvrir la caisse</Button>
+            {userIsAdmin && (
+              <Button variant="secondary" icon={<WalletCards size={15} />} onClick={() => setActiveTab('caisse')}>Ouvrir la caisse</Button>
+            )}
           </div>
         </div>
         <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
-          {[["01", "Configuration", Building2], ["02", "Jetons", Coins], ["03", "Caisse", WalletCards]].map(([number, label, Icon]) => (
+          {steps.map(([number, label, Icon]: any) => (
             <div key={String(label)} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(255,255,255,.05)' }}><span className="text-accent text-xs font-bold">{number}</span><Icon size={14} className="text-muted" /><span className="text-primary text-xs">{label}</span></div>
           ))}
         </div>
@@ -50,7 +59,7 @@ export const CasinoPage: React.FC = () => {
 
       {activeTab === 'setup' && <CasinoSetupTab />}
       {activeTab === 'tokens' && <TokensTab />}
-      {activeTab === 'caisse' && <CaisseTab />}
+      {userIsAdmin && activeTab === 'caisse' && <CaisseTab />}
 
       {showRoomForm && (
         <RoomFormModal

@@ -36,10 +36,9 @@ const moduleLabels: Record<string, string> = {
   restaurant: 'Restaurant',
   bar: 'Bar',
   casino: 'Casino',
-  finances: 'Finances',
 };
 
-const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances'];
+const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino'];
 
 const getApiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
@@ -119,7 +118,6 @@ export const UtilisateursPage: React.FC = () => {
       restaurant: 0,
       bar: 0,
       casino: 0,
-      finances: 0,
     };
 
     state.users.forEach(u => {
