@@ -31,6 +31,16 @@ export const casinoCurrency = new Intl.NumberFormat('fr-FR');
 export const casinoBorder = { borderColor: 'var(--color-border)' };
 export const casinoInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-primary outline-none placeholder:text-muted';
 
+export const parseCasinoAmount = (value: string | number | null | undefined): number => {
+  const text = String(value ?? '').trim().replace(/\s/g, '');
+  if (!text) return 0;
+  const normalized = text.includes(',')
+    ? text.replace(/\./g, '').replace(',', '.')
+    : text;
+  const amount = Number(normalized.replace(/[^\d.-]/g, ''));
+  return Number.isFinite(amount) ? amount : 0;
+};
+
 export const createPlayerLine = (id: number, ficheId = id): PlayerLine => ({
   id,
   ficheId,

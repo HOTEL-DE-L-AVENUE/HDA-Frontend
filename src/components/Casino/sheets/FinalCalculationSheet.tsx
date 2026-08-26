@@ -1,15 +1,26 @@
 import React from 'react';
 import { casinoBorder } from './types';
+import type { PlayerLine } from './types';
 
 interface FinalCalculationSheetProps {
+  players: PlayerLine[];
+  selectedPlayerId: number;
   values: Record<string, string>;
+  saveState?: 'idle' | 'saving' | 'saved' | 'error';
+  onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
+  onSave: () => void;
 }
 
-export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ values, onUpdate }) => (
+export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, saveState = 'idle', onPlayerChange, onUpdate, onSave }) => (
   <div className="text-sm text-primary">
-    <div className="mb-3 text-center">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
       <p className="font-bold tracking-[0.18em]">CALCUL FINAL</p>
+      <label className="flex items-center gap-2 text-xs font-semibold">Fiche joueur
+        <select value={selectedPlayerId} onChange={(event) => onPlayerChange(Number(event.target.value))} className="rounded border bg-transparent px-2 py-1 text-primary" style={casinoBorder}>
+          {players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id}>{player.name || `Joueur ${player.ficheId ?? player.id}`}</option>)}
+        </select>
+      </label>
     </div>
 
     <div className="overflow-x-auto">
@@ -72,6 +83,11 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ va
           </label>
         </div>
       </div>
+    </div>
+    <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
+      {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
+      {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
+      <button type="button" className="action" onClick={onSave} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}</button>
     </div>
   </div>
 );
