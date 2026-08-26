@@ -19,6 +19,8 @@ const roleLabels: Record<string, string> = {
 const formRoleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
+  caisse: 'Caissier (encaissement uniquement)',
+  water: 'Barman',
 };
 
 const roleIcons: Record<string, string> = {
@@ -39,6 +41,7 @@ const moduleLabels: Record<string, string> = {
 };
 
 const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino'];
+const cashierModules: ModuleType[] = ['bar'];
 
 const getApiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
@@ -110,33 +113,6 @@ export const UtilisateursPage: React.FC = () => {
     fetchRealUsers();
   }, [fetchRealUsers]);
 
-  // Calcul du nombre de managers par module (Max 1 manager par module, en excluant l'utilisateur en cours d'édition)
-  const getManagersCountByModule = useCallback((): Record<ModuleType, number> => {
-    const counts: Record<string, number> = {
-      hebergement: 0,
-      hotel: 0,
-      restaurant: 0,
-      bar: 0,
-      casino: 0,
-    };
-
-    state.users.forEach(u => {
-      if (u.role === 'manager') {
-        if (editUser && String(u.id) === String(editUser.id)) return;
-        const uMods = parseModules(u.module);
-        uMods.forEach(mod => {
-          if (counts[mod] !== undefined) {
-            counts[mod]++;
-          }
-        });
-      }
-    });
-
-    return counts as Record<ModuleType, number>;
-  }, [state.users, editUser]);
-
-  const managersCountByModule = getManagersCountByModule();
-
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -174,12 +150,20 @@ export const UtilisateursPage: React.FC = () => {
         return;
       }
       for (const mod of selectedMods) {
-        const count = managersCountByModule[mod] || 0;
-        if (count >= 1) {
-          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà un manager assigné.`);
-          return;
-        }
       }
+    }
+
+    if (form.role === 'caisse') {
+      const selectedCashierModules = parseModules(form.module);
+      if (selectedCashierModules.length !== 1 || !['bar', 'restaurant', 'hotel', 'hebergement'].includes(selectedCashierModules[0])) {
+        setErrorMessage('Un caissier doit être affecté à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.');
+        return;
+      }
+    }
+
+    if (form.role === 'water' && parseModules(form.module).length !== 1) {
+      setErrorMessage('Un barman doit être affecté au module Bar.');
+      return;
     }
 
     try {
@@ -236,15 +220,16 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
+    if (form.role === 'caisse') {
+      setErrorMessage('');
+      setForm(prev => ({ ...prev, module: exists ? [] : [mod] }));
+      return;
+    }
+
     if (form.role === 'manager') {
       if (!exists) {
         if (currentModules.length >= 2) {
           setErrorMessage('Un manager ne peut pas gérer plus de 2 modules.');
-          return;
-        }
-        const currentCount = managersCountByModule[mod] || 0;
-        if (currentCount >= 1) {
-          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà un manager assigné.`);
           return;
         }
       }
@@ -447,38 +432,38 @@ export const UtilisateursPage: React.FC = () => {
             </button>
           </div>
 
-          <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}
+          <Select label="Rôle" value={form.role} onChange={e => {
+            const role = e.target.value as UserRole;
+            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : form.module });
+          }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-muted text-sm font-medium">Modules autorisés (1 ou 2 max pour un manager)</label>
+              <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {allModules.map(mod => {
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
-                const managerCountForMod = managersCountByModule[mod] || 0;
-                const isTakenByOther = form.role === 'manager' && managerCountForMod >= 1 && !isSelected;
-
                 return (
                   <button
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={isTakenByOther}
+                    disabled={form.role === 'water'}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
-                      : isTakenByOther
-                        ? 'bg-surface-3/30 text-muted/40 border-base cursor-not-allowed opacity-50'
-                        : 'bg-surface-2 text-muted border-base hover:text-primary'
+                      : 'bg-surface-2 text-muted border-base hover:text-primary'
                       }`}
                   >
-                    {moduleLabels[mod]} {isTakenByOther && '(Déjà assigné)'}
+                    {moduleLabels[mod]}
                   </button>
                 );
               })}
             </div>
+            {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
+            {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
           </div>
 
           <div className="flex items-center gap-3">
