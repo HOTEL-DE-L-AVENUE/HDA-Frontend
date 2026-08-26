@@ -34,6 +34,9 @@ export const HebergementPage: React.FC = () => {
   const [showRecordPaymentModal, setShowRecordPaymentModal] = React.useState(false);
   const [selectedReservation, setSelectedReservation] = React.useState<Reservation | null>(null);
 
+  // Correction : définition de userIsAdmin
+  const userIsAdmin = isAdmin();
+
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
 
