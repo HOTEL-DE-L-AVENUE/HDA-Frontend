@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, CreditCard } from 'lucide-react';
 import { Badge, Button, DataTable } from '../../../components/UI';
 import { STATUTS_RESERVATION } from '../../../data/Hebergement.data';
 import { Reservation } from '../../../types/hebergement.type';
@@ -12,10 +12,11 @@ interface Props {
   onCheckOut: (r: Reservation) => void;
   onCancel:   (id: number) => void;
   onDelete:   (id: number) => void;
+  onRecordPayment?: (r: Reservation) => void;
 }
 
 export const ReservationsTab: React.FC<Props> = ({
-  reservations, onNew, onCheckIn, onCheckOut, onCancel, onDelete,
+  reservations, onNew, onCheckIn, onCheckOut, onCancel, onDelete, onRecordPayment,
 }) => {
   const getClientName = (reservation: Reservation) => {
     const name = [reservation.client_prenom, reservation.client_nom]
@@ -83,6 +84,13 @@ export const ReservationsTab: React.FC<Props> = ({
             {/* Si EN_COURS -> Bouton Check-out */}
             {isEnCours && (
               <Button size="sm" variant="secondary" onClick={() => onCheckOut(r)}>Check-out</Button>
+            )}
+
+            {/* Bouton Paiement */}
+            {onRecordPayment && statusNormalized !== 'TERMINEE' && statusNormalized !== 'ANNULEE' && (
+              <Button size="sm" variant="secondary" onClick={() => onRecordPayment(r)} title="Paiement">
+                <CreditCard size={14} />
+              </Button>
             )}
 
             <Button size="sm" variant="danger" onClick={() => onCancel(r.id)}>
