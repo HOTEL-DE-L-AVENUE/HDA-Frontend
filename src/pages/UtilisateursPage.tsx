@@ -6,6 +6,7 @@ import { formatDate } from '../utils/data';
 import { Modal, Input, Select, Button, Badge } from '../components/UI';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-react';
 import api from '../lib/api';
+import { clientService, Client } from '../services/client.service';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrateur',
@@ -76,6 +77,9 @@ export const UtilisateursPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [casinoPlayers, setCasinoPlayers] = useState<Client[]>([]);
+  const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [playerForm, setPlayerForm] = useState({ nom: '', prenom: '', telephone: '' });
   const [form, setForm] = useState({
     nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
@@ -109,9 +113,43 @@ export const UtilisateursPage: React.FC = () => {
     }
   }, [dispatch]);
 
+  const fetchCasinoPlayers = useCallback(async () => {
+    try {
+      setCasinoPlayers(await clientService.getClients({ is_casino_player: true }));
+    } catch (err: any) {
+      setErrorMessage(getApiErrorMessage(err, 'Impossible de charger les joueurs Casino.'));
+    }
+  }, []);
+
   useEffect(() => {
     fetchRealUsers();
-  }, [fetchRealUsers]);
+    fetchCasinoPlayers();
+  }, [fetchRealUsers, fetchCasinoPlayers]);
+
+  const createCasinoPlayer = async () => {
+    if (!playerForm.nom.trim()) {
+      setErrorMessage('Le nom du joueur est requis.');
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await clientService.createClient({
+        nom: playerForm.nom.trim(),
+        prenom: playerForm.prenom.trim() || undefined,
+        telephone: playerForm.telephone.trim() || undefined,
+        is_casino_player: true,
+        statut: 'ACTIF',
+      });
+      setPlayerForm({ nom: '', prenom: '', telephone: '' });
+      setShowPlayerModal(false);
+      await fetchCasinoPlayers();
+    } catch (err: any) {
+      setErrorMessage(getApiErrorMessage(err, 'Impossible de créer le joueur.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -386,6 +424,30 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Joueurs Casino : profils clients sans compte de connexion */}
+      <div className="bg-surface border border-base rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-base">
+          <div>
+            <h3 className="text-primary font-semibold">Joueurs Casino</h3>
+            <p className="text-muted text-xs mt-1">Fiches joueurs sans email, mot de passe ni accès à l’application.</p>
+          </div>
+          <Button icon={<Plus size={16} />} onClick={() => { setErrorMessage(''); setShowPlayerModal(true); }}>Ajouter un joueur</Button>
+        </div>
+        <div className="divide-y divide-base">
+          {casinoPlayers.length === 0 ? (
+            <p className="px-6 py-5 text-sm text-muted">Aucun joueur Casino enregistré.</p>
+          ) : casinoPlayers.map((player) => (
+            <div key={player.id} className="flex items-center justify-between gap-4 px-6 py-3">
+              <div>
+                <p className="text-primary text-sm font-medium">{player.prenom} {player.nom}</p>
+                <p className="text-muted text-xs">{player.code_client || `Joueur #${player.id}`}{player.telephone ? ` · ${player.telephone}` : ''}</p>
+              </div>
+              <Badge variant={player.statut === 'ACTIF' ? 'actif' : 'inactif'}>{player.statut}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Role Legend */}
       <div className="bg-surface border border-base rounded-2xl p-6">
         <h3 className="text-primary font-semibold mb-4 flex items-center gap-2">
@@ -479,6 +541,22 @@ export const UtilisateursPage: React.FC = () => {
             <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1">
               {isSubmitting ? 'Enregistrement…' : editUser ? 'Mettre à jour' : 'Créer le compte'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showPlayerModal} onClose={() => setShowPlayerModal(false)} title="Nouveau joueur Casino" size="md">
+        <div className="space-y-4">
+          {errorMessage && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm">{errorMessage}</div>}
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Prénom" value={playerForm.prenom} onChange={e => setPlayerForm({ ...playerForm, prenom: e.target.value })} />
+            <Input label="Nom *" value={playerForm.nom} onChange={e => setPlayerForm({ ...playerForm, nom: e.target.value })} />
+          </div>
+          <Input label="Téléphone" value={playerForm.telephone} onChange={e => setPlayerForm({ ...playerForm, telephone: e.target.value })} />
+          <p className="text-xs text-muted">Ce profil ne crée aucun compte utilisateur : le joueur ne pourra pas se connecter.</p>
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setShowPlayerModal(false)} className="flex-1">Annuler</Button>
+            <Button onClick={createCasinoPlayer} disabled={isSubmitting} className="flex-1">{isSubmitting ? 'Création…' : 'Créer la fiche'}</Button>
           </div>
         </div>
       </Modal>
