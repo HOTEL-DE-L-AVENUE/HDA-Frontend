@@ -7,6 +7,8 @@ import { formatCurrency } from '../utils/data';
 import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import api from '../lib/api';
 import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle } from 'lucide-react';
+import AuthService from '../services/authService';
+import { isAdmin } from '../utils/permissions';
 
 interface StockManagerProps {
   module: ModuleType;
@@ -200,10 +202,13 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     setShowModal(true);
   };
 
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
+
   const totalValue = items.reduce((sum, i) => sum + (i.quantite * i.prixUnitaire), 0);
   const alerts = items.filter(i => i.status !== 'disponible').length;
 
-  const columns = [
+  const baseColumns = [
     { key: 'nom', label: 'Produit', render: (item: StockItem) => (
       <div>
         <p className="text-white font-medium">{item.nom}</p>
@@ -227,9 +232,13 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         {item.status === 'disponible' ? 'Disponible' : item.status === 'faible' ? 'Faible' : 'Épuisé'}
       </Badge>
     )},
+  ];
+
+  const columns = userIsAdmin ? [
+    ...baseColumns,
     { key: 'actions', label: '', render: (item: StockItem) => (
       <div className="flex gap-2">
-        <button onClick={() => openEdit(item)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all">
+        <button onClick={() => openEdit(item)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Modifier l'article">
           <Edit2 size={14} />
         </button>
         <button onClick={async () => {
@@ -252,12 +261,12 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
           } else {
             dispatch({ type: 'DELETE_STOCK_ITEM', payload: item.id });
           }
-        }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all">
+        }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all" title="Supprimer l'article">
           <Trash2 size={14} />
         </button>
       </div>
     )},
-  ];
+  ] : baseColumns;
 
   return (
     <div className="space-y-6">
@@ -309,9 +318,11 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
                   <option value="faible">Faible</option>
                   <option value="epuise">Épuisé</option>
                 </select>
-                <Button icon={<Plus size={16} />} onClick={() => { setEditItem(null); setShowModal(true); }}>
-                  Ajouter
-                </Button>
+                {userIsAdmin && (
+                  <Button icon={<Plus size={16} />} onClick={() => { setEditItem(null); setShowModal(true); }}>
+                    Ajouter
+                  </Button>
+                )}
               </div>
             </div>
             <DataTable data={filtered} columns={columns} />
