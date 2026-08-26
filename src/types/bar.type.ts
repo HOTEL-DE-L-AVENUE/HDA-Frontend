@@ -10,6 +10,18 @@ export interface BarProduct {
   alcool: boolean;
 }
 
+export type BarPaymentMethod =
+  | 'ESPECES'
+  | 'CARTE'
+  | 'TPE'
+  | 'CREDIT'
+  | 'EURO'
+  | 'ORANGE_MONEY'
+  | 'MVOLA'
+  | 'DOLLAR'
+  | 'VIREMENT'
+  | 'CHEQUE';
+
 /** Solde caisse du module bar (issu de financial_transactions + module = 'bar') */
 export interface BarCaisseStats {
   solde: number;
@@ -36,7 +48,7 @@ export interface BarCommande {
   client: string;
   table: number;
   nombre_personnes?: number;
-  moyen_paiement?: 'ESPECES' | 'CARTE' | 'MOBILE_MONEY' | 'CHEQUE';
+  moyen_paiement?: BarPaymentMethod;
   statut: 'En attente' | 'En préparation' | 'Prête' | 'Servie' | 'Encaissée';
   total: number;
   items: BarCommandeItem[];
