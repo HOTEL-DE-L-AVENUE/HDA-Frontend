@@ -101,7 +101,7 @@ class SecureStorage {
 // ----------------------------------------------------------------------
 class AuthService {
   // Fonction utilitaire robuste pour parser les modules peu importe leur format (JSON, tableau, string)
-  private static parseModules(mod: any): string[] {
+  static parseModules(mod: any): string[] {
     if (!mod) return [];
     if (Array.isArray(mod)) {
       return mod.map(m => (typeof m === 'object' && m !== null ? m.id : String(m))).filter(Boolean);
