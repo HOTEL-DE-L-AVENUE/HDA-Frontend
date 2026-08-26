@@ -18,10 +18,11 @@ import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
 import AuthService from '../services/authService';
-import { getDefaultTabForRole } from '../utils/permissions';
+import { getDefaultTabForRole, isAdmin } from '../utils/permissions';
 
 export const BarPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
   const [activeTab, setActiveTab] = useState<BarTabId>(() => getDefaultTabForRole('bar', currentUser?.role) as BarTabId);
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
@@ -212,7 +213,7 @@ export const BarPage: React.FC = () => {
         />
       )}
 
-      {activeTab === 'caisse' && (
+      {userIsAdmin && activeTab === 'caisse' && (
         <CaisseManager
           module="bar"
           categories={['Ventes Bar', 'Stock', 'Personnel', 'Événement', 'Autre']}
