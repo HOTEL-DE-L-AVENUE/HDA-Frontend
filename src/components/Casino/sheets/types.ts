@@ -14,6 +14,9 @@ export type PlayerLine = {
   accumulated: string;
   payment: string;
   paymentMethod: string;
+  bonuses: string;
+  bonusResults: string;
+  resultPaymentOptions: string;
   signature: string;
   departure: string;
   cashing: string;
@@ -55,7 +58,10 @@ export const createPlayerLine = (id: number, ficheId = id): PlayerLine => ({
   total: '',
   accumulated: '',
   payment: 'Payé',
-    paymentMethod: '',
+  paymentMethod: '',
+  bonuses: '',
+  bonusResults: '',
+  resultPaymentOptions: '',
   signature: '',
   departure: '',
   cashing: '',
