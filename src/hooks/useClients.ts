@@ -1,7 +1,7 @@
 // src/hooks/useClients.ts
 import { useState, useEffect, useCallback } from 'react';
 import {
-  clientService, Client, ClientFormData, ClientWithDetails,
+  clientService, Client, ClientFormData, ClientWithDetails, ClientKyc, ClientKycFormData,
 } from '../services/client.service';
 
 export const useClients = () => {
@@ -112,6 +112,30 @@ export const useClients = () => {
     }
   }, []);
 
+  // Récupérer la fiche KYC d'un client
+  const loadClientKyc = useCallback(async (id: number): Promise<ClientKyc | null> => {
+    try {
+      setError(null);
+      return await clientService.getClientKyc(id);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors du chargement de la fiche KYC');
+      console.error('❌ loadClientKyc error:', err);
+      throw err;
+    }
+  }, []);
+
+  // Créer ou mettre à jour la fiche KYC d'un client
+  const saveClientKyc = useCallback(async (id: number, data: ClientKycFormData): Promise<ClientKyc> => {
+    try {
+      setError(null);
+      return await clientService.saveClientKyc(id, data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors de la sauvegarde de la fiche KYC');
+      console.error('❌ saveClientKyc error:', err);
+      throw err;
+    }
+  }, []);
+
   useEffect(() => {
     loadClients();
   }, [loadClients]);
@@ -126,5 +150,7 @@ export const useClients = () => {
     updateClient,
     deleteClient,
     loadClientWithDetails,
+    loadClientKyc,
+    saveClientKyc,
   };
 };
