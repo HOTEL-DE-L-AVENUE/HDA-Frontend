@@ -8,7 +8,7 @@ interface CaisseTabProps {
   onPayment?: (orderId: number) => void;
 }
 
-export const CaisseTab: React.FC<CaisseTabProps> = () => {
+export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment }) => {
   return (
     <div className="w-full">
       <CaisseManager
@@ -16,6 +16,17 @@ export const CaisseTab: React.FC<CaisseTabProps> = () => {
         categories={['Ventes Restaurant', 'Stock', 'Personnel', 'Autre']}
         title="Caisse Restaurant"
         gradient="from-accent to-accent-2"
+        pendingOrders={orders.filter((order) => order.statut === 'SERVIE').map((order) => ({
+          id: Number(order.id),
+          client: order.client_nom || order.client?.nom || 'Client anonyme',
+          table: order.table?.numero || order.table_numero || order.table_id,
+          total: Number(order.montant_total || 0),
+          created_at: order.created_at,
+          nombre_personnes: order.nombre_personnes,
+          moyen_paiement: order.moyen_paiement,
+          items: order.items,
+        }))}
+        onEncaisserCommande={onPayment ? async (orderId) => { await onPayment(orderId); } : undefined}
       />
     </div>
   );

@@ -5,6 +5,8 @@ import { getBarTransactions } from '../../services/bar.service';
 
 interface Transaction {
   id: number;
+  order_id?: number | null;
+  table_id?: number | null;
   product_id: number;
   quantite: number;
   prix_unitaire: number;
@@ -100,7 +102,7 @@ export default function BarTransactionsCard({ title = 'Transactions Caisse' }: B
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-medium truncate">{tx.nom}</p>
-                <p className="text-slate-500 text-xs">{tx.categorie} • {formatDate(tx.created_at)}</p>
+                <p className="text-slate-500 text-xs">{tx.categorie}{tx.order_id ? ` • Commande #${tx.order_id}` : ''}{tx.table_id ? ` • Table ${tx.table_id}` : ''} • {formatDate(tx.created_at)}</p>
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-white text-sm font-semibold">x{tx.quantite}</p>

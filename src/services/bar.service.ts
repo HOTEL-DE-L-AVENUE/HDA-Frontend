@@ -95,16 +95,16 @@ export const getBarLatestTransaction = (productId: number) =>
   get<{ id: number; product_id: number; quantite: number; prix_unitaire: number; montant: number; created_at: string }>(`/transactions/latest?product_id=${productId}`);
 
 export const getBarTransactions = () =>
-  get<{ id: number; product_id: number; quantite: number; prix_unitaire: number; montant: number; created_at: string; nom: string; categorie: string }[]>('/transactions');
+  get<{ id: number; order_id?: number | null; table_id?: number | null; product_id: number; quantite: number; prix_unitaire: number; montant: number; created_at: string; nom: string; categorie: string }[]>('/transactions');
 
-type BarOrderResponse = { id: number; client: string; table: number; statut: string; total: number; created_at?: string; items: Array<{ nom: string; quantite: number; prix: number }> };
-export type BarOrderStatus = 'EN_ATTENTE' | 'EN_PREPARATION' | 'SERVIE' | 'ENCAISSEE';
+type BarOrderResponse = { id: number; client: string; table: number; nombre_personnes?: number; moyen_paiement?: 'ESPECES' | 'CARTE' | 'MOBILE_MONEY' | 'CHEQUE'; statut: string; total: number; created_at?: string; items: Array<{ nom: string; quantite: number; prix: number }> };
+export type BarOrderStatus = 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE';
 
 export const getBarOrders = async () => {
   const response = await get<BarOrderResponse[] | { data?: BarOrderResponse[] }>('/orders');
   return Array.isArray(response) ? response : response.data ?? [];
 };
-export const createBarOrder = (data: { client: string; table: number; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
+export const createBarOrder = (data: { client: string; table: number; nombre_personnes: number; moyen_paiement: 'ESPECES' | 'CARTE' | 'MOBILE_MONEY' | 'CHEQUE'; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
   post<{ id: number; client: string; table: number; statut: string; total: number; items: Array<{ nom: string; quantite: number; prix: number }> }>('/orders', data);
 export const deleteBarOrder = (id: number) => remove<{ message: string }>('/orders/' + id);
 export const updateBarOrderStatus = (id: number, statut: BarOrderStatus) =>
