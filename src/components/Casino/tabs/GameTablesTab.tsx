@@ -388,6 +388,7 @@ export const GameTablesTab: React.FC = () => {
                 <div className="flex flex-col gap-2">
                   {tables.map((table) => {
                     const minuteur = etatMinuteur(table, now);
+                    const isTournament = table.type_jeu === 'POKER' && table.type_partie === 'TOURNOI';
 
                     return (
                       <React.Fragment key={table.id}>
@@ -423,7 +424,7 @@ export const GameTablesTab: React.FC = () => {
                                 icon={<FileText size={12} />}
                                 onClick={() => setFeuilleTarget(table)}
                               >
-                                Feuille
+                                {isTournament ? 'Suivi tournoi' : 'Feuille'}
                               </Button>
                               <Button
                                 variant="secondary"
@@ -483,12 +484,12 @@ export const GameTablesTab: React.FC = () => {
                                 Places / joueurs
                               </Button>
                               <Button
-                                variant="secondary"
+                                variant={isTournament ? 'primary' : 'secondary'}
                                 className="text-[11px] py-1"
                                 icon={<FileText size={12} />}
                                 onClick={() => setFeuilleTarget(table)}
                               >
-                                Feuille
+                                {isTournament ? 'Suivi tournoi' : 'Feuille'}
                               </Button>
                               <button
                                 onClick={() => handleToggleTable(table)}
