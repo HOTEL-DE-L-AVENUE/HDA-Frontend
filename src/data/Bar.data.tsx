@@ -5,6 +5,7 @@ export const BAR_TABS = [
   { id: 'bar', label: 'Bar & Cocktails' },
 
   { id: 'stock', label: 'Stock' },
+  { id: 'rapports', label: 'Rapports' },
   { id: 'caisse', label: 'Caisse' },
 ] as const;
   

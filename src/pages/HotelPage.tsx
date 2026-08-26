@@ -47,7 +47,7 @@ import { reservationService } from '../services/reservation.service';
 import { Room, Reservation } from '../types/hotel.types';
 import { StockManager, CaisseManager } from '../components/StockManager';
 import AuthService from '../services/authService';
-import { filterTabsByRole, getDefaultTabForRole, isAdmin } from '../utils/permissions';
+import { filterTabsByRole, getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 import api from '../lib/api';
 
 interface Tab {
@@ -155,6 +155,7 @@ const HotelPage: React.FC = () => {
 
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
+  const userIsCashier = isCashier(currentUser);
   const visibleTabs = filterTabsByRole(tabs, currentUser?.role);
 
   const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('chambres', currentUser?.role));
@@ -416,7 +417,7 @@ const HotelPage: React.FC = () => {
             />
           </div>
         )}
-        {userIsAdmin && activeTab === 'caisse' && (
+        {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
           <div className="overflow-x-auto">
             <CaisseManager
               module="hotel"

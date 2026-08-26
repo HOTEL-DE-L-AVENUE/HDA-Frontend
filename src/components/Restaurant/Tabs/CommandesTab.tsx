@@ -3,6 +3,8 @@ import { Badge, Button, DataTable } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
 import { Plus, Trash2, XCircle, Pencil } from 'lucide-react';
 import type { Order } from '../types';
+import AuthService from '../../../services/authService';
+import { isAdmin, isCashier } from '../../../utils/permissions';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
@@ -36,6 +38,9 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onEditOrder,
   onInvoice
 }) => {
+  const currentUser = AuthService.getCurrentUser();
+  const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
+  const canDeleteCommande = isAdmin(currentUser);
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => (
       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
@@ -84,7 +89,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
         {order.statut === 'EN_COURS' && (
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
-        {order.statut === 'SERVIE' && (
+        {canEncaisser && order.statut === 'SERVIE' && (
           <Button size="sm" onClick={() => onPayment(order.id)}>Encaisser</Button>
         )}
         {/* Invoice button */}
@@ -102,6 +107,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           title="Supprimer la commande"
           aria-label={`Supprimer la commande ${order.id}`}
           onClick={() => onDelete(order.id)}
+          disabled={!canDeleteCommande}
         >
           <Trash2 size={14} />
         </Button>

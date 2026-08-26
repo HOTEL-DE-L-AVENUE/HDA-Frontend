@@ -6,10 +6,12 @@ import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
 import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
+import AuthService from '../../services/authService';
+import { isAdmin, isCashier } from '../../utils/permissions';
 
 interface Props {
   commandes: BarCommande[];
-  onCreateCommande?: (commande: { client: string; table: number; items: BarCommande['items'] }) => Promise<void> | void;
+  onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; items: BarCommande['items'] }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
   onUpdateStatut?: (id: number, statut: BarCommande['statut']) => Promise<void> | void;
   cocktails?: BarProduct[];
@@ -18,7 +20,8 @@ interface Props {
 
 const statusClasses: Record<string, { label: string; variant: string }> = {
   'En attente': { label: 'En attente', variant: 'warning' },
-  'En préparation': { label: 'En préparation', variant: 'info' },
+  'En préparation': { label: 'En cours', variant: 'info' },
+  'Prête': { label: 'Prête', variant: 'success' },
   'Servie': { label: 'Servie', variant: 'success' },
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
 };
@@ -31,6 +34,9 @@ export const BarCommandeView: React.FC<Props> = ({
   cocktails = [], 
   stockMap = {} 
 }) => {
+  const currentUser = AuthService.getCurrentUser();
+  const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
+  const canDeleteCommande = isAdmin(currentUser);
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
 
   useEffect(() => {
@@ -46,10 +52,14 @@ export const BarCommandeView: React.FC<Props> = ({
   const [newClientTelephone, setNewClientTelephone] = useState('');
   const [isSavingClient, setIsSavingClient] = useState(false);
   const [table, setTable] = useState('');
+  const [nombrePersonnes, setNombrePersonnes] = useState('1');
+  const [moyenPaiement, setMoyenPaiement] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
   const [tables, setTables] = useState<BarTable[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<BarCommande['items']>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [menuCategory, setMenuCategory] = useState('Toutes');
+  const [menuSubcategory, setMenuSubcategory] = useState('Toutes');
   const [commandeSearchTerm, setCommandeSearchTerm] = useState('');
   const [isCreatingTable, setIsCreatingTable] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -74,6 +84,8 @@ export const BarCommandeView: React.FC<Props> = ({
   const resetModal = () => {
     setClient('');
     setTable('');
+    setNombrePersonnes('1');
+    setMoyenPaiement('ESPECES');
     setSelectedItems([]);
     setSearchTerm('');
     setIsCreatingTable(false);
@@ -89,6 +101,8 @@ export const BarCommandeView: React.FC<Props> = ({
   const handleOpenModal = () => {
     setClient('');
     setTable('');
+    setNombrePersonnes('1');
+    setMoyenPaiement('ESPECES');
     setSelectedItems([]);
     setSearchTerm('');
     setFeedback(null);
@@ -157,10 +171,11 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handleAjouterCommande = async (event: React.FormEvent) => {
     event.preventDefault();
-    const clientNom = client.trim();
+    const clientNom = client.trim() || 'Client anonyme';
     const tableNumber = Number(table);
+    const guestCount = Number(nombrePersonnes);
 
-    if (!clientNom || !table || Number.isNaN(tableNumber) || tableNumber <= 0 || selectedItems.length === 0) {
+    if (!table || Number.isNaN(tableNumber) || tableNumber <= 0 || !Number.isInteger(guestCount) || guestCount < 1 || selectedItems.length === 0) {
       return;
     }
 
@@ -178,6 +193,8 @@ export const BarCommandeView: React.FC<Props> = ({
       await onCreateCommande?.({
         client: clientNom,
         table: tableNumber,
+        nombre_personnes: guestCount,
+        moyen_paiement: moyenPaiement,
         items: selectedItems,
       });
       resetModal();
@@ -264,9 +281,10 @@ export const BarCommandeView: React.FC<Props> = ({
       if (onUpdateStatut) {
         await onUpdateStatut(commandeId, nouveauStatut);
       } else {
-        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'SERVIE' | 'ENCAISSEE'> = {
+        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE'> = {
           'En attente': 'EN_ATTENTE',
           'En préparation': 'EN_PREPARATION',
+          'Prête': 'PRETE',
           'Servie': 'SERVIE',
           'Encaissée': 'ENCAISSEE',
         };
@@ -329,7 +347,8 @@ export const BarCommandeView: React.FC<Props> = ({
           </div>
           <div>
             <p className="font-semibold text-primary">{commande.client}</p>
-            <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`}</p>
+            <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`} · {commande.nombre_personnes || 1} pers.</p>
+            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'CARTE' ? 'Carte bancaire' : commande.moyen_paiement === 'MOBILE_MONEY' ? 'Mobile Money' : commande.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>
           </div>
         </div>
       ),
@@ -395,17 +414,28 @@ export const BarCommandeView: React.FC<Props> = ({
                 size="sm" 
                 variant="secondary" 
                 icon={<CheckCircle2 size={14} />} 
+                onClick={() => void handleStatusChange(commande.id, 'Prête')}
+                disabled={isUpdating}
+              >
+                {isUpdating ? '...' : 'Marquer prête'}
+              </Button>
+            )}
+            {commande.statut === 'Prête' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<CheckCircle2 size={14} />}
                 onClick={() => void handleStatusChange(commande.id, 'Servie')}
                 disabled={isUpdating}
               >
                 {isUpdating ? '...' : 'Servir'}
               </Button>
             )}
-            {commande.statut === 'Servie' && (
-              <Button 
-                size="sm" 
-                variant="secondary" 
-                icon={<DollarSign size={14} />} 
+            {canEncaisser && commande.statut === 'Servie' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<DollarSign size={14} />}
                 onClick={() => void handleStatusChange(commande.id, 'Encaissée')}
                 disabled={isUpdating}
               >
@@ -413,7 +443,7 @@ export const BarCommandeView: React.FC<Props> = ({
               </Button>
             )}
             <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
-            <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id}>
+            <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={!canDeleteCommande || deletingId === commande.id} title={canDeleteCommande ? 'Supprimer la commande' : 'Suppression réservée à l’administrateur'}>
               {deletingId === commande.id ? '...' : 'Supprimer'}
             </Button>
           </>
@@ -444,6 +474,16 @@ export const BarCommandeView: React.FC<Props> = ({
     const value = searchTerm.trim().toLowerCase();
     if (!value) return true;
     return `${cocktail.nom} ${cocktail.categorie}`.toLowerCase().includes(value);
+  });
+  const menuParts = (cocktail: BarProduct) => {
+    const [category, subcategory] = (cocktail.categorie || 'Autres').split(/\s*(?:>|\/|\|)\s*/).map((part) => part.trim());
+    return { category: category || 'Autres', subcategory: subcategory || '' };
+  };
+  const menuCategories = ['Toutes', ...Array.from(new Set(cocktails.map((cocktail) => menuParts(cocktail).category)))];
+  const menuSubcategories = ['Toutes', ...Array.from(new Set(cocktails.filter((cocktail) => menuCategory === 'Toutes' || menuParts(cocktail).category === menuCategory).map((cocktail) => menuParts(cocktail).subcategory).filter(Boolean)))];
+  const menuItems = filteredCocktails.filter((cocktail) => {
+    const parts = menuParts(cocktail);
+    return (menuCategory === 'Toutes' || parts.category === menuCategory) && (menuSubcategory === 'Toutes' || parts.subcategory === menuSubcategory);
   });
 
   return (
@@ -499,6 +539,27 @@ export const BarCommandeView: React.FC<Props> = ({
             ]}
           />
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label="Nombre de personnes"
+              type="number"
+              min="1"
+              value={nombrePersonnes}
+              onChange={(event) => setNombrePersonnes(event.target.value)}
+            />
+            <Select
+              label="Mode de paiement prévu"
+              value={moyenPaiement}
+              onChange={(event) => setMoyenPaiement(event.target.value as NonNullable<BarCommande['moyen_paiement']>)}
+              options={[
+                { value: 'ESPECES', label: 'Espèces' },
+                { value: 'CARTE', label: 'Carte bancaire' },
+                { value: 'MOBILE_MONEY', label: 'Mobile Money' },
+                { value: 'CHEQUE', label: 'Chèque' },
+              ]}
+            />
+          </div>
+
           <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <p className="text-sm font-medium text-slate-300">Créer une table si besoin</p>
@@ -526,11 +587,11 @@ export const BarCommandeView: React.FC<Props> = ({
 
           <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
             <Select
-              label="Client"
+              label="Client (facultatif)"
               value={client}
               onChange={(event) => setClient(event.target.value)}
               options={[
-                { value: '', label: isLoadingClients ? 'Chargement des clients...' : 'Sélectionner un client' },
+                { value: '', label: isLoadingClients ? 'Chargement des clients...' : 'Client anonyme' },
                 ...clients.map((clientItem) => ({
                   value: `${clientItem.nom}${clientItem.prenom ? ` ${clientItem.prenom}` : ''}`,
                   label: `${clientItem.nom}${clientItem.prenom ? ` ${clientItem.prenom}` : ''}${clientItem.code_client ? ` (${clientItem.code_client})` : ''}`,
@@ -564,35 +625,39 @@ export const BarCommandeView: React.FC<Props> = ({
             </div>
           )}
 
-          <div className="rounded-xl border border-base bg-surface-2 p-3 sm:p-4">
-            <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <p className="text-sm font-medium text-slate-300">Menus</p>
-              <Input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Rechercher un article"
-                className="w-full sm:max-w-xs text-xs sm:text-sm"
-              />
+          <div className="overflow-hidden rounded-xl border border-base bg-[#101415]">
+            <div className="flex items-center justify-between border-b border-base px-3 py-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
+              <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-40 text-xs" />
             </div>
-            <div className="max-h-64 space-y-2 overflow-y-auto">
-              {filteredCocktails.length === 0 ? (
-                <p className="text-sm text-slate-500">Aucun menu disponible.</p>
-              ) : (
-                filteredCocktails.map((cocktail) => (
-                  <div key={cocktail.id} className="flex items-center justify-between rounded-lg border border-base bg-surface px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium text-primary">{cocktail.nom}</p>
-                      <p className="text-xs text-slate-500">{cocktail.categorie}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-accent">{formatCurrency(cocktail.prix)}</span>
-                      <Button size="sm" variant="secondary" type="button" onClick={() => handleAddItem(cocktail)}>
-                        +
-                      </Button>
-                    </div>
+            <div className="grid min-h-[300px] grid-cols-[104px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)_190px]">
+              <nav className="space-y-1 border-r border-base bg-[#171b1c] p-2">
+                {menuCategories.map((category) => (
+                  <button key={category} type="button" onClick={() => { setMenuCategory(category); setMenuSubcategory('Toutes'); }} className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold transition ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}>
+                    {category}
+                  </button>
+                ))}
+              </nav>
+              <div className="min-w-0 p-2 sm:p-3">
+                {menuSubcategories.length > 1 && (
+                  <div className="mb-2 flex gap-1 overflow-x-auto border-b border-base pb-2">
+                    {menuSubcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => setMenuSubcategory(subcategory)} className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold ${menuSubcategory === subcategory ? 'bg-sky-500 text-white' : 'bg-surface-2 text-muted'}`}>{subcategory}</button>)}
                   </div>
-                ))
-              )}
+                )}
+                <div className="grid max-h-[330px] grid-cols-2 gap-2 overflow-y-auto xl:grid-cols-3">
+                  {menuItems.map((cocktail) => {
+                    const stock = stockMap[cocktail.id];
+                    const unavailable = !stock || stock.quantite <= 0;
+                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[84px] flex-col items-center justify-center rounded-md border border-emerald-950 bg-emerald-500 px-2 py-2 text-center text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40`}><span className="text-xs font-bold leading-tight">{cocktail.nom}</span><span className="mt-1 text-[10px] font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span></button>;
+                  })}
+                  {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
+                </div>
+              </div>
+              <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
+                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom} ×{item.quantite}</span><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span></div>)}</div>}
+                <div className="mt-4 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
+              </aside>
             </div>
           </div>
 
