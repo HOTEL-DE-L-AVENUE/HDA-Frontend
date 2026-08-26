@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { PlayerLine, casinoBorder, casinoCurrency } from './types';
+import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 
 interface PlayersSheetProps {
   date: string;
   players: PlayerLine[];
   total: number;
+  totalCashing: number;
   restaurantPayments: { especes: boolean; tpe: boolean };
   saveState?: 'idle' | 'saving' | 'saved' | 'error';
   onUpdate: (id: number, key: keyof PlayerLine, value: string) => void;
@@ -18,11 +19,20 @@ interface PlayersSheetProps {
 const paperInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
 const darkInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
 
-export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd }) => {
+export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total, totalCashing, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(players[0]?.id ?? 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
+
+  const totalsByLineId: Record<number, number> = {};
+  const accumulatedByLineId = selectedPlayerLines.reduce<Record<number, string>>((accumulated, line, index) => {
+    const previousTotal = index > 0 ? Number(accumulated[selectedPlayerLines[index - 1].id]) || 0 : 0;
+    const currentTotal = (Number(line.caves) || 0) * (Number(line.amount) || 0);
+    totalsByLineId[line.id] = currentTotal;
+    accumulated[line.id] = String(previousTotal + currentTotal);
+    return accumulated;
+  }, {});
 
   const printPlayerSheet = () => {
     if (!selectedPlayer) return;
@@ -53,8 +63,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
       <div className="flex items-center gap-2">
         <label htmlFor="player-to-print" className="font-semibold">Fiche joueur :</label>
-        <select id="player-to-print" value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(Number(event.target.value))} className="rounded border bg-transparent px-2 py-1 text-white" style={casinoBorder} disabled={!players.length}>
-          {players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id} className="text-black">{player.name || `Joueur ${player.ficheId ?? player.id}`}</option>)}
+        <select id="player-to-print" value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(Number(event.target.value))} className="rounded border bg-transparent px-2 py-1 text-white" style={{ ...casinoBorder, color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!players.length}>
+          {players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{player.name || `Joueur ${player.ficheId ?? player.id}`}</option>)}
         </select>
       </div>
       <div className="flex gap-2">
@@ -91,8 +101,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} placeholder="h" /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.total} onChange={(event) => onUpdate(line.id, 'total', event.target.value)} /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.accumulated} onChange={(event) => onUpdate(line.id, 'accumulated', event.target.value)} /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={totalsByLineId[line.id] ? String(totalsByLineId[line.id]) : '0'} readOnly /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={accumulatedByLineId[line.id] || '0'} readOnly /></td>
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Payé'} onChange={() => onUpdate(line.id, 'payment', 'Payé')} /></td>
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.signature} onChange={(event) => onUpdate(line.id, 'signature', event.target.value)} /></td>
@@ -100,7 +110,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
           ))}
           <tr className="h-12">
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
-            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={3}>Cashing : <input className={`${paperInput} inline-block w-32`} value={selectedPlayer?.cashing || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'cashing', event.target.value)} /></td>
+            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={3}>Cashing : <input type="text" inputMode="decimal" className={`${paperInput} inline-block w-32`} value={selectedPlayer?.cashing || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'cashing', event.target.value)} placeholder="0" /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={4}>Signature : <input className={`${paperInput} inline-block w-40`} value={selectedPlayer?.signature || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'signature', event.target.value)} /></td>
           </tr>
         </tbody>
@@ -110,7 +120,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, total
     <div className="grid md:grid-cols-[1.15fr_1fr_1.15fr] mt-4 border text-white" style={{ ...casinoBorder, backgroundColor: 'var(--color-surface)' }}>
       <div className="border-r" style={casinoBorder}>
         <SheetBottomRow label="TOTAL CAVEES :" value={casinoCurrency.format(total)} />
-        <SheetBottomRow label="TOTAL CASHING EN JETONS" />
+            <SheetBottomRow label="TOTAL CASHING EN JETONS" value={casinoCurrency.format(totalCashing)} />
       </div>
       <div className="border-r" style={casinoBorder}>
         <div className="min-h-12 border-b" style={casinoBorder} />
