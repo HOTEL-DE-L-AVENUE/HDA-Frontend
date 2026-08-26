@@ -91,6 +91,7 @@ export type PlayerSheetData = {
   restaurantPayments: { especes: boolean; tpe: boolean };
   finals: Record<string, Record<string, string>>;
   total_cashing_jetons?: number;
+  cashingPaymentMethod?: string;
 };
 
 export const playerSheetApi = {
