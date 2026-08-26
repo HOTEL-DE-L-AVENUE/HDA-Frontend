@@ -6,7 +6,7 @@ import BarTransactionsCard from './Bar/BarTransactionsCard';
 import { formatCurrency } from '../utils/data';
 import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import api from '../lib/api';
-import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle, DollarSign, RefreshCw } from 'lucide-react';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
 
@@ -196,7 +196,15 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
   };
 
-  const openEdit = (item: StockItem) => {
+  const openEdit = async (item: StockItem) => {
+    const adminPassword = window.prompt('Mot de passe administrateur requis pour modifier le stock :');
+    if (!adminPassword) return;
+    try {
+      await api.post('/api/auth/verify-admin-password', { password: adminPassword });
+    } catch (err) {
+      setError(getErrorMessage(err));
+      return;
+    }
     setEditItem(item);
     setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 5, fournisseur: item.fournisseur || '' });
     setShowModal(true);
@@ -358,9 +366,21 @@ interface CaisseManagerProps {
   categories: string[];
   title?: string;
   gradient?: string;
+  pendingOrders?: Array<{
+    id: number;
+    client?: string;
+    table?: string | number;
+    total: number;
+    created_at?: string;
+    nombre_personnes?: number;
+    moyen_paiement?: string;
+    items?: Array<{ nom?: string; product_nom?: string; quantite: number; prix?: number; prix_unitaire?: number }>;
+  }>;
+  onEncaisserCommande?: (orderId: number) => Promise<void> | void;
+  onRefresh?: () => Promise<void> | void;
 }
 
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500' }) => {
+export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], onEncaisserCommande, onRefresh }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
@@ -475,7 +495,6 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         userId: state.currentUser.id,
         userName: `${state.currentUser.prenom} ${state.currentUser.nom}`,
         module,
-        heure: new Date().toISOString(),
       }
     });
     setShowModal(false);
@@ -493,6 +512,10 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       }))
     : allRestaurantTransactions;
 
+  const handleEncaisserCommande = async (orderId: number) => {
+    await onEncaisserCommande?.(orderId);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
@@ -504,8 +527,48 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       {/* Caisse Card */}
       <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
 
+      <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface">
+        <div className="flex items-center justify-between border-b border-base px-6 py-4">
+          <div>
+            <h3 className="font-semibold text-primary">Commandes à encaisser</h3>
+            <p className="text-xs text-muted">Commandes servies en attente de paiement</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{pendingOrders.length}</span>
+            {onRefresh && <button type="button" onClick={() => void onRefresh()} title="Actualiser les commandes" className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted transition hover:bg-surface-3 hover:text-primary"><RefreshCw size={14} /></button>}
+          </div>
+        </div>
+        {pendingOrders.length === 0 ? (
+          <p className="px-6 py-6 text-center text-sm text-muted">Aucune commande à encaisser.</p>
+        ) : (
+          <div className="divide-y divide-base">
+            {pendingOrders.map((order) => (
+              <div key={order.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
+                  <p className="text-xs text-muted">{order.table ? `Table ${order.table}` : 'Sans table'}{order.nombre_personnes ? ` · ${order.nombre_personnes} personne${order.nombre_personnes > 1 ? 's' : ''}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
+                  {order.moyen_paiement && <p className="text-xs text-muted">Paiement : {order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'MOBILE_MONEY' ? 'Mobile Money' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>}
+                  {order.items && order.items.length > 0 && (
+                    <div className="mt-2 space-y-1 border-l-2 border-accent/40 pl-3">
+                      {order.items.map((item, index) => {
+                        const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
+                        return <p key={`${order.id}-item-${index}`} className="text-xs text-secondary">{item.quantite} × {item.nom || item.product_nom || 'Article'} <span className="text-muted">({formatCurrency(unitPrice)} / unité = {formatCurrency(unitPrice * item.quantite)})</span></p>;
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-4 sm:justify-end">
+                  <span className="font-bold text-accent">{formatCurrency(order.total)}</span>
+                  {onEncaisserCommande && <Button size="sm" icon={<DollarSign size={14} />} onClick={() => void handleEncaisserCommande(order.id)}>Encaisser</Button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Transactions adaptées au module */}
-      {isBar && !isBackendCaisse ? (
+      {isBar ? (
         <BarTransactionsCard title={transactionTitle} />
       ) : (
         <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">

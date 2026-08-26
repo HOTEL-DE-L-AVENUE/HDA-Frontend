@@ -35,7 +35,9 @@ export interface BarCommande {
   id: number;
   client: string;
   table: number;
-  statut: 'En attente' | 'En préparation' | 'Servie' | 'Encaissée';
+  nombre_personnes?: number;
+  moyen_paiement?: 'ESPECES' | 'CARTE' | 'MOBILE_MONEY' | 'CHEQUE';
+  statut: 'En attente' | 'En préparation' | 'Prête' | 'Servie' | 'Encaissée';
   total: number;
   items: BarCommandeItem[];
   created_at?: string;
