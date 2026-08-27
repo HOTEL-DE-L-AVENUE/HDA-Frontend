@@ -50,6 +50,7 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
 
   return (
   <div className="flex flex-col gap-7">
+   
     <section><SheetTitle title="Total des prélèvements" subtitle="Nombre de jetons prélevés pour chaque valeur." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['withdrawn']} headers={['Valeur des jetons', 'Nombre de jetons', 'Valeur totale']} /></section>
     <section>
       <SheetTitle title="Horaires de la session" subtitle="L'heure du premier joueur est automatique; l'heure de fin de jeu est à saisir." />
