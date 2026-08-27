@@ -11,12 +11,12 @@ import { ModuleType, UserRole } from '../types';
  * - stock_manager : uniquement les fonctions de gestion de stock (onglets stock)
  */
 export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
-  admin: ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'casino', 'finances', 'clients', 'utilisateurs'],
-  caissier: ['finances', 'restaurant', 'bar', 'casino', 'hebergement'],
-  caisse: ['finances', 'restaurant', 'bar', 'casino', 'hebergement'],
-  stock_manager: ['hotel', 'restaurant', 'bar', 'hebergement'],
+  admin: ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'alcool', 'casino', 'finances', 'clients', 'utilisateurs'],
+  caissier: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
+  caisse: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
+  stock_manager: ['hotel', 'restaurant', 'bar', 'alcool', 'hebergement'],
   receptioniste: ['hebergement', 'hotel', 'clients'],
-  water: ['bar'],
+  water: ['bar', 'alcool'],
   housekeeping: ['hotel', 'hebergement'],
 };
 
@@ -100,7 +100,7 @@ export function canAccessModule(
     if (userModules.length > 0) {
       return userModules.includes(moduleId);
     }
-    return ['finances', 'restaurant', 'bar', 'casino', 'hebergement'].includes(moduleId);
+    return ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'].includes(moduleId);
   }
 
   // 5. Stock Manager : uniquement modules de stock (restaurant, bar, hotel, hebergement)
@@ -109,7 +109,7 @@ export function canAccessModule(
     if (userModules.length > 0) {
       return userModules.includes(moduleId);
     }
-    return ['hotel', 'restaurant', 'bar', 'hebergement'].includes(moduleId);
+    return ['hotel', 'restaurant', 'bar', 'alcool', 'hebergement'].includes(moduleId);
   }
 
   // 6. Autres rôles métiers spécifiques

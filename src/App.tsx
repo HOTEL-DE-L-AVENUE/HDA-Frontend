@@ -4,6 +4,7 @@ import ClientsPage from "./pages/ClientsPage";
 import { HebergementPage } from "./pages/HebergementPage";
 import { RestaurantPage } from "./pages/RestaurantPage";
 import { BarPage } from "./pages/BarPage";
+import { AlcoholPage } from "./pages/AlcoholPage";
 import { CasinoPage } from "./pages/CasinoPage";
 import { FinancesPage } from "./pages/FinancesPage";
 import { UtilisateursPage } from "./pages/UtilisateursPage";
@@ -81,6 +82,17 @@ function App() {
                 }
               >
                 <Route path="/bar" element={<BarPage />} />
+              </Route>
+
+              <Route
+                element={
+                  <ProtectedRoute
+                    moduleId="alcool"
+                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager']}
+                  />
+                }
+              >
+                <Route path="/alcool" element={<AlcoholPage />} />
               </Route>
 
               <Route

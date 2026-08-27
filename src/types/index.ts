@@ -1,6 +1,6 @@
 // ==================== TYPES GLOBAUX ====================
 
-export type ModuleType = 'hebergement' | 'hotel' | 'restaurant' | 'bar' | 'casino' | 'finances' | 'utilisateurs' | 'dashboard' | 'clients';
+export type ModuleType = 'hebergement' | 'hotel' | 'restaurant' | 'bar' | 'alcool' | 'casino' | 'finances' | 'utilisateurs' | 'dashboard' | 'clients';
 
 // Valeurs autorisées par l'ENUM `users.role` du backend.
 export type UserRole = 'admin' | 'manager' | 'receptioniste' | 'caisse' | 'water' | 'housekeeping';
