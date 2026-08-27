@@ -3,7 +3,7 @@ import { Calculator, ClipboardList, Coins, Download, Printer } from 'lucide-reac
 import { PlayersSheet } from '../components/Casino/sheets/PlayersSheet';
 import { ChipsSheet } from '../components/Casino/sheets/ChipsSheet';
 import { FinalCalculationSheet } from '../components/Casino/sheets/FinalCalculationSheet';
-import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, casinoBorder, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
+import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, casinoBorder, casinoCurrency, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
 import { playerSheetApi } from '../services/casinoTablesJeu.service';
 
 export const CasinoPage: React.FC = () => {
@@ -12,24 +12,36 @@ export const CasinoPage: React.FC = () => {
   const [table, setTable] = useState('Table Poker Night');
   const [players, setPlayers] = useState<PlayerLine[]>(() => Array.from({ length: 12 }, (_, index) => createPlayerLine(index + 1)));
   const [restaurantPayments, setRestaurantPayments] = useState({ especes: false, tpe: false });
+  const [cashingPaymentMethod, setCashingPaymentMethod] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [chips, setChips] = useState<ChipLine[]>(() => CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
   const [finalsByPlayer, setFinalsByPlayer] = useState<Record<string, Record<string, string>>>({});
   const [selectedFinalPlayerId, setSelectedFinalPlayerId] = useState(players[0]?.ficheId ?? players[0]?.id ?? 0);
 
-  const cavesTotal = useMemo(() => players.reduce((total, line) => total + ((Number(line.caves) || 0) * (Number(line.amount) || 0)), 0), [players]);
-  const totalCashing = useMemo(() => {
-    const cashingBySheet = new Map<number, number>();
-    players.forEach((player) => {
-      const sheetId = player.ficheId ?? player.id;
-      if (!cashingBySheet.has(sheetId) || cashingBySheet.get(sheetId) === 0) {
-        cashingBySheet.set(sheetId, parseCasinoAmount(player.cashing));
-      }
-    });
-    return Array.from(cashingBySheet.values()).reduce((total, cashing) => total + cashing, 0);
-  }, [players]);
   const openingTotal = useMemo(() => chips.reduce((total, line) => total + line.value * (Number(line.opening) || 0), 0), [chips]);
   const closingTotal = useMemo(() => chips.reduce((total, line) => total + line.value * (Number(line.closing) || 0), 0), [chips]);
+  const withdrawnTotal = useMemo(() => chips.reduce((total, line) => total + line.value * parseCasinoAmount(line.withdrawn), 0), [chips]);
+  const playerResults = useMemo(() => players
+    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+    .map((player) => {
+      const playerId = player.ficheId ?? player.id;
+      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+      const cavesTotal = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+      return {
+        name: player.name || `Joueur ${playerId}`,
+        result: cashing - cavesTotal,
+        paymentOptions: parseResultPaymentOptions(player.resultPaymentOptions),
+      };
+    }), [players]);
+  const depositResults = useMemo(() => playerResults
+    .filter(({ result, paymentOptions }) => result > 0 && paymentOptions.includes('Dépôt'))
+    .map(({ name, result }) => `${name} : ${casinoCurrency.format(result)}`)
+    .join(' - '), [playerResults]);
+  const creditResults = useMemo(() => playerResults
+    .filter(({ result, paymentOptions }) => result < 0 && paymentOptions.includes('Crédit'))
+    .map(({ name, result }) => `${name} : ${casinoCurrency.format(Math.abs(result))}`)
+    .join(' - '), [playerResults]);
 
   useEffect(() => {
     let active = true;
@@ -40,11 +52,13 @@ export const CasinoPage: React.FC = () => {
         setPlayers(sheet.players);
         setChips(sheet.chips || CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
         setRestaurantPayments(sheet.restaurantPayments || { especes: false, tpe: false });
+        setCashingPaymentMethod(sheet.cashingPaymentMethod || '');
         setFinalsByPlayer(sheet.finals || {});
       } else {
         setPlayers(Array.from({ length: 12 }, (_, index) => createPlayerLine(index + 1)));
         setChips(CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
         setRestaurantPayments({ especes: false, tpe: false });
+        setCashingPaymentMethod('');
         setFinalsByPlayer({});
       }
     }).catch(() => {
@@ -59,11 +73,11 @@ export const CasinoPage: React.FC = () => {
       const accumulatedTotals: Record<string, number> = {};
       const playersWithAccumulatedCaves = players.map((player) => {
         const ficheId = String(player.ficheId ?? player.id);
-        const lineTotal = (Number(player.caves) || 0) * (Number(player.amount) || 0);
+        const lineTotal = parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount);
         accumulatedTotals[ficheId] = (accumulatedTotals[ficheId] || 0) + lineTotal;
         return { ...player, total: String(lineTotal), accumulated: String(accumulatedTotals[ficheId]) };
       });
-      await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, restaurantPayments, finals: finalsByPlayer });
+      await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, restaurantPayments, finals: finalsByPlayer, cashingPaymentMethod });
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -84,13 +98,22 @@ export const CasinoPage: React.FC = () => {
     <main className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
       <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-3 justify-between print:hidden" style={{ borderBottom: '1px solid var(--color-border)' }}><div className="flex flex-col sm:flex-row gap-3"><label className="field">Table<input value={table} onChange={(event) => setTable(event.target.value)} /></label><label className="field">Date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label></div><p className="text-muted text-xs self-end">Fiche enregistrée dans la base de données.</p></div>
       <div className="p-4 md:p-5"><div className="hidden print:block text-center mb-5"><h1>{table}</h1><p>Date : {date}</p></div>
-        {view === 'players' && <PlayersSheet date={date} players={players} total={cavesTotal} totalCashing={totalCashing} restaurantPayments={restaurantPayments} saveState={saveState} onDateChange={(value) => { setSaveState('idle'); setDate(value); }} onUpdate={(id, key, value) => { setSaveState('idle'); setPlayers((lines) => lines.map((line) => line.id === id ? { ...line, [key]: value } : line)); }} onPaymentChange={(payment, checked) => { setSaveState('idle'); setRestaurantPayments((current) => ({ ...current, [payment]: checked })); }} onSave={savePlayerSheet} onAdd={(ficheId) => { const firstId = Math.max(0, ...players.map((line) => line.id)) + 1; const newFicheId = ficheId ?? firstId; const newLines = ficheId ? [createPlayerLine(firstId, newFicheId)] : Array.from({ length: 5 }, (_, index) => createPlayerLine(firstId + index, newFicheId)); setPlayers((lines) => [...lines, ...newLines]); return newFicheId; }} onRemove={(id) => setPlayers((lines) => lines.filter((line) => line.id !== id))} />}
-        {view === 'chips' && <ChipsSheet chips={chips} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onSave={savePlayerSheet} />}
-        {view === 'final' && <FinalCalculationSheet players={players} selectedPlayerId={selectedFinalPlayerId} values={finalsByPlayer[String(selectedFinalPlayerId)] || {}} saveState={saveState} onPlayerChange={setSelectedFinalPlayerId} onUpdate={(key, value) => { setSaveState('idle'); setFinalsByPlayer((current) => ({ ...current, [String(selectedFinalPlayerId)]: { ...(current[String(selectedFinalPlayerId)] || {}), [key]: value } })); }} onSave={savePlayerSheet} />}
+        {view === 'players' && <PlayersSheet date={date} players={players} cashingPaymentMethod={cashingPaymentMethod} restaurantPayments={restaurantPayments} saveState={saveState} onDateChange={(value) => { setSaveState('idle'); setDate(value); }} onUpdate={(id, key, value) => { setSaveState('idle'); setPlayers((lines) => lines.map((line) => line.id === id ? { ...line, [key]: value } : line)); }} onPaymentChange={(payment, checked) => { setSaveState('idle'); setRestaurantPayments((current) => ({ ...current, [payment]: checked })); }} onCashingPaymentMethodChange={(value) => { setSaveState('idle'); setCashingPaymentMethod(value); }} onSave={savePlayerSheet} onAdd={(ficheId) => { const firstId = Math.max(0, ...players.map((line) => line.id)) + 1; const newFicheId = ficheId ?? firstId; const newLines = ficheId ? [createPlayerLine(firstId, newFicheId)] : Array.from({ length: 5 }, (_, index) => createPlayerLine(firstId + index, newFicheId)); setPlayers((lines) => [...lines, ...newLines]); return newFicheId; }} onRemove={(id) => setPlayers((lines) => lines.filter((line) => line.id !== id))} />}
+        {view === 'chips' && <ChipsSheet chips={chips} players={players} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onSave={savePlayerSheet} />}
+        {view === 'final' && <FinalCalculationSheet players={players} selectedPlayerId={selectedFinalPlayerId} values={finalsByPlayer[String(selectedFinalPlayerId)] || {}} withdrawnTotal={withdrawnTotal} depositResults={depositResults} creditResults={creditResults} saveState={saveState} onPlayerChange={setSelectedFinalPlayerId} onUpdate={(key, value) => { setSaveState('idle'); setFinalsByPlayer((current) => ({ ...current, [String(selectedFinalPlayerId)]: { ...(current[String(selectedFinalPlayerId)] || {}), [key]: value } })); }} onSave={savePlayerSheet} />}
       </div>
     </main>
     <style>{`.action{display:inline-flex;align-items:center;gap:.5rem;border-radius:.75rem;padding:.65rem .9rem;font-size:.75rem;font-weight:600;background:var(--color-accent);color:#000}.action.secondary{background:var(--color-bg);color:var(--text-primary);border:1px solid var(--color-border)}.field{font-size:.75rem;color:var(--text-secondary);font-weight:600}.field input{display:block;margin-top:.25rem;padding:.5rem .65rem;border-radius:.7rem;background:var(--color-bg);border:1px solid var(--color-border);color:var(--text-primary);outline:none}@page{size:A4 portrait;margin:10mm}@media print{.print\\:hidden{display:none!important}body{background:#fff!important}.player-sheet-print{background:#fff!important;color:#000!important;width:100%!important;padding:0!important}.player-sheet-print table{min-width:0!important;width:100%!important;font-size:8px!important}.player-sheet-print th,.player-sheet-print td,.player-sheet-print label,.player-sheet-print p,.player-sheet-print span{color:#000!important}.player-sheet-print input,.player-sheet-print select{color:#000!important;background:#fff!important}.player-sheet-print input::placeholder{color:#555!important}.player-sheet-print .text-white{color:#000!important}.player-sheet-print .overflow-x-auto{overflow:visible!important}}`}</style>
   </div>;
+};
+
+const parseResultPaymentOptions = (value?: string): string[] => {
+  try {
+    const options = JSON.parse(value || '[]');
+    return Array.isArray(options) ? options.filter((option): option is string => typeof option === 'string') : [];
+  } catch {
+    return [];
+  }
 };
 
 export default CasinoPage;

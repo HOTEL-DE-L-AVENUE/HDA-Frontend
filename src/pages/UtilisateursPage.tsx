@@ -6,6 +6,7 @@ import { formatDate } from '../utils/data';
 import { Modal, Input, Select, Button, Badge } from '../components/UI';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-react';
 import api from '../lib/api';
+import { clientService, Client } from '../services/client.service';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrateur',
@@ -19,6 +20,8 @@ const roleLabels: Record<string, string> = {
 const formRoleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
+  caisse: 'Caissier (encaissement uniquement)',
+  water: 'Barman',
 };
 
 const roleIcons: Record<string, string> = {
@@ -39,6 +42,7 @@ const moduleLabels: Record<string, string> = {
 };
 
 const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino'];
+const cashierModules: ModuleType[] = ['bar'];
 
 const getApiErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
@@ -73,6 +77,9 @@ export const UtilisateursPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [casinoPlayers, setCasinoPlayers] = useState<Client[]>([]);
+  const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [playerForm, setPlayerForm] = useState({ nom: '', prenom: '', telephone: '' });
   const [form, setForm] = useState({
     nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
@@ -106,36 +113,43 @@ export const UtilisateursPage: React.FC = () => {
     }
   }, [dispatch]);
 
+  const fetchCasinoPlayers = useCallback(async () => {
+    try {
+      setCasinoPlayers(await clientService.getClients({ is_casino_player: true }));
+    } catch (err: any) {
+      setErrorMessage(getApiErrorMessage(err, 'Impossible de charger les joueurs Casino.'));
+    }
+  }, []);
+
   useEffect(() => {
     fetchRealUsers();
-  }, [fetchRealUsers]);
+    fetchCasinoPlayers();
+  }, [fetchRealUsers, fetchCasinoPlayers]);
 
-  // Calcul du nombre de managers par module (Max 1 manager par module, en excluant l'utilisateur en cours d'édition)
-  const getManagersCountByModule = useCallback((): Record<ModuleType, number> => {
-    const counts: Record<string, number> = {
-      hebergement: 0,
-      hotel: 0,
-      restaurant: 0,
-      bar: 0,
-      casino: 0,
-    };
-
-    state.users.forEach(u => {
-      if (u.role === 'manager') {
-        if (editUser && String(u.id) === String(editUser.id)) return;
-        const uMods = parseModules(u.module);
-        uMods.forEach(mod => {
-          if (counts[mod] !== undefined) {
-            counts[mod]++;
-          }
-        });
-      }
-    });
-
-    return counts as Record<ModuleType, number>;
-  }, [state.users, editUser]);
-
-  const managersCountByModule = getManagersCountByModule();
+  const createCasinoPlayer = async () => {
+    if (!playerForm.nom.trim()) {
+      setErrorMessage('Le nom du joueur est requis.');
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await clientService.createClient({
+        nom: playerForm.nom.trim(),
+        prenom: playerForm.prenom.trim() || undefined,
+        telephone: playerForm.telephone.trim() || undefined,
+        is_casino_player: true,
+        statut: 'ACTIF',
+      });
+      setPlayerForm({ nom: '', prenom: '', telephone: '' });
+      setShowPlayerModal(false);
+      await fetchCasinoPlayers();
+    } catch (err: any) {
+      setErrorMessage(getApiErrorMessage(err, 'Impossible de créer le joueur.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -174,12 +188,20 @@ export const UtilisateursPage: React.FC = () => {
         return;
       }
       for (const mod of selectedMods) {
-        const count = managersCountByModule[mod] || 0;
-        if (count >= 1) {
-          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà un manager assigné.`);
-          return;
-        }
       }
+    }
+
+    if (form.role === 'caisse') {
+      const selectedCashierModules = parseModules(form.module);
+      if (selectedCashierModules.length !== 1 || !['bar', 'restaurant', 'hotel', 'hebergement'].includes(selectedCashierModules[0])) {
+        setErrorMessage('Un caissier doit être affecté à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.');
+        return;
+      }
+    }
+
+    if (form.role === 'water' && parseModules(form.module).length !== 1) {
+      setErrorMessage('Un barman doit être affecté au module Bar.');
+      return;
     }
 
     try {
@@ -236,15 +258,16 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
+    if (form.role === 'caisse') {
+      setErrorMessage('');
+      setForm(prev => ({ ...prev, module: exists ? [] : [mod] }));
+      return;
+    }
+
     if (form.role === 'manager') {
       if (!exists) {
         if (currentModules.length >= 2) {
           setErrorMessage('Un manager ne peut pas gérer plus de 2 modules.');
-          return;
-        }
-        const currentCount = managersCountByModule[mod] || 0;
-        if (currentCount >= 1) {
-          setErrorMessage(`Le module "${moduleLabels[mod] || mod}" a déjà un manager assigné.`);
           return;
         }
       }
@@ -401,6 +424,30 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Joueurs Casino : profils clients sans compte de connexion */}
+      <div className="bg-surface border border-base rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-base">
+          <div>
+            <h3 className="text-primary font-semibold">Joueurs Casino</h3>
+            <p className="text-muted text-xs mt-1">Fiches joueurs sans email, mot de passe ni accès à l’application.</p>
+          </div>
+          <Button icon={<Plus size={16} />} onClick={() => { setErrorMessage(''); setShowPlayerModal(true); }}>Ajouter un joueur</Button>
+        </div>
+        <div className="divide-y divide-base">
+          {casinoPlayers.length === 0 ? (
+            <p className="px-6 py-5 text-sm text-muted">Aucun joueur Casino enregistré.</p>
+          ) : casinoPlayers.map((player) => (
+            <div key={player.id} className="flex items-center justify-between gap-4 px-6 py-3">
+              <div>
+                <p className="text-primary text-sm font-medium">{player.prenom} {player.nom}</p>
+                <p className="text-muted text-xs">{player.code_client || `Joueur #${player.id}`}{player.telephone ? ` · ${player.telephone}` : ''}</p>
+              </div>
+              <Badge variant={player.statut === 'ACTIF' ? 'actif' : 'inactif'}>{player.statut}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Role Legend */}
       <div className="bg-surface border border-base rounded-2xl p-6">
         <h3 className="text-primary font-semibold mb-4 flex items-center gap-2">
@@ -447,38 +494,38 @@ export const UtilisateursPage: React.FC = () => {
             </button>
           </div>
 
-          <Select label="Rôle" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as UserRole })}
+          <Select label="Rôle" value={form.role} onChange={e => {
+            const role = e.target.value as UserRole;
+            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : form.module });
+          }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-muted text-sm font-medium">Modules autorisés (1 ou 2 max pour un manager)</label>
+              <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {allModules.map(mod => {
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
-                const managerCountForMod = managersCountByModule[mod] || 0;
-                const isTakenByOther = form.role === 'manager' && managerCountForMod >= 1 && !isSelected;
-
                 return (
                   <button
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={isTakenByOther}
+                    disabled={form.role === 'water'}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
-                      : isTakenByOther
-                        ? 'bg-surface-3/30 text-muted/40 border-base cursor-not-allowed opacity-50'
-                        : 'bg-surface-2 text-muted border-base hover:text-primary'
+                      : 'bg-surface-2 text-muted border-base hover:text-primary'
                       }`}
                   >
-                    {moduleLabels[mod]} {isTakenByOther && '(Déjà assigné)'}
+                    {moduleLabels[mod]}
                   </button>
                 );
               })}
             </div>
+            {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
+            {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
           </div>
 
           <div className="flex items-center gap-3">
@@ -494,6 +541,22 @@ export const UtilisateursPage: React.FC = () => {
             <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1">
               {isSubmitting ? 'Enregistrement…' : editUser ? 'Mettre à jour' : 'Créer le compte'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showPlayerModal} onClose={() => setShowPlayerModal(false)} title="Nouveau joueur Casino" size="md">
+        <div className="space-y-4">
+          {errorMessage && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm">{errorMessage}</div>}
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Prénom" value={playerForm.prenom} onChange={e => setPlayerForm({ ...playerForm, prenom: e.target.value })} />
+            <Input label="Nom *" value={playerForm.nom} onChange={e => setPlayerForm({ ...playerForm, nom: e.target.value })} />
+          </div>
+          <Input label="Téléphone" value={playerForm.telephone} onChange={e => setPlayerForm({ ...playerForm, telephone: e.target.value })} />
+          <p className="text-xs text-muted">Ce profil ne crée aucun compte utilisateur : le joueur ne pourra pas se connecter.</p>
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setShowPlayerModal(false)} className="flex-1">Annuler</Button>
+            <Button onClick={createCasinoPlayer} disabled={isSubmitting} className="flex-1">{isSubmitting ? 'Création…' : 'Créer la fiche'}</Button>
           </div>
         </div>
       </Modal>

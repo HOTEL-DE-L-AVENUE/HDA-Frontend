@@ -1,11 +1,11 @@
 // src/components/Bar/CocktailMenu.tsx
 import React, { useState } from 'react';
-import { CocktailListItem } from './CocktailListItem';
 import { BarProduct } from '../../types/bar.type';
 import { Button, Input, Modal, Select } from '../UI';
-import { Plus } from 'lucide-react';
+import { Check, Edit3, Plus, Search, Trash2 } from 'lucide-react';
 import barService from '../../services/bar.service';
 import { useToast } from '../../context/ToastContext';
+import { formatCurrency } from '../../utils/data';
 
 interface Props {
   cocktails: BarProduct[];
@@ -27,6 +27,8 @@ export const CocktailMenu: React.FC<Props> = ({
   onProductDeleted
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Toutes');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('Toutes');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +37,7 @@ export const CocktailMenu: React.FC<Props> = ({
   // États du formulaire d'ajout
   const [nom, setNom] = useState('');
   const [categorie, setCategorie] = useState('Alcools');
+  const [sousCategorie, setSousCategorie] = useState('');
   const [prix, setPrix] = useState('');
   const [quantite, setQuantite] = useState('');
   const [seuilMinimum, setSeuilMinimum] = useState('5');
@@ -45,6 +48,7 @@ export const CocktailMenu: React.FC<Props> = ({
   const [editingProduct, setEditingProduct] = useState<BarProduct | null>(null);
   const [editNom, setEditNom] = useState('');
   const [editCategorie, setEditCategorie] = useState('Alcools');
+  const [editSousCategorie, setEditSousCategorie] = useState('');
   const [editPrix, setEditPrix] = useState('');
   const [editQuantite, setEditQuantite] = useState('');
   const [editSeuilMinimum, setEditSeuilMinimum] = useState('5');
@@ -54,6 +58,7 @@ export const CocktailMenu: React.FC<Props> = ({
   const handleOpenModal = () => {
     setNom('');
     setCategorie('Alcools');
+    setSousCategorie('');
     setPrix('');
     setQuantite('');
     setSeuilMinimum('5');
@@ -65,7 +70,9 @@ export const CocktailMenu: React.FC<Props> = ({
   const handleOpenEditModal = (cocktail: BarProduct) => {
     setEditingProduct(cocktail);
     setEditNom(cocktail.nom || '');
-    setEditCategorie(cocktail.categorie || 'Alcools');
+    const [productCategory, productSubcategory = ''] = (cocktail.categorie || 'Alcools').split(/\s*(?:>|\/|\|)\s*/);
+    setEditCategorie(productCategory || 'Alcools');
+    setEditSousCategorie(productSubcategory);
     setEditPrix(String(cocktail.prix ?? ''));
     setEditAlcool(Boolean(cocktail.alcool));
 
@@ -75,6 +82,12 @@ export const CocktailMenu: React.FC<Props> = ({
     setEditSeuilMinimum(currentStock?.seuil_minimum ? String(currentStock.seuil_minimum) : '5');
 
     setIsEditModalOpen(true);
+  };
+
+  const getSubcategories = (category: string) => {
+    if (category === 'Cocktails') return ['Avec alcool', 'Sans alcool'];
+    if (category === 'Bières & Soft') return ['PM', 'GM'];
+    return [];
   };
 
   const handleCreateProduct = async (e: React.FormEvent) => {
@@ -98,7 +111,7 @@ export const CocktailMenu: React.FC<Props> = ({
       setIsSaving(true);
       const payload = {
         nom: trimmedNom,
-        categorie,
+        categorie: sousCategorie ? `${categorie} > ${sousCategorie}` : categorie,
         prix: parsedPrix,
         alcool,
         quantite: parsedQuantite,
@@ -142,7 +155,7 @@ export const CocktailMenu: React.FC<Props> = ({
 
       const payload = {
         nom: trimmedNom,
-        categorie: editCategorie,
+        categorie: editSousCategorie ? `${editCategorie} > ${editSousCategorie}` : editCategorie,
         prix: parsedPrix,
         alcool: editAlcool,
         quantite: Number.isNaN(parsedQuantite) ? 0 : parsedQuantite,
@@ -159,7 +172,7 @@ export const CocktailMenu: React.FC<Props> = ({
           ...editingProduct,
           ...(typeof updated === 'object' && updated !== null ? updated : {}),
           nom: trimmedNom,
-          categorie: editCategorie,
+          categorie: editSousCategorie ? `${editCategorie} > ${editSousCategorie}` : editCategorie,
           prix: parsedPrix,
           alcool: editAlcool,
         });
@@ -193,32 +206,75 @@ export const CocktailMenu: React.FC<Props> = ({
     }
   };
 
-  // Filtrer les cocktails selon la barre de recherche
+  const getCategoryParts = (cocktail: BarProduct) => {
+    const [category, subcategory] = (cocktail.categorie || 'Autres')
+      .split(/\s*(?:>|\/|\|)\s*/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return { category: category || 'Autres', subcategory: subcategory || '' };
+  };
+
+  const categoryNames = ['Toutes', ...Array.from(new Set(cocktails.map((cocktail) => getCategoryParts(cocktail).category)))];
+  const subcategoryNames = ['Toutes', ...Array.from(new Set(
+    cocktails
+      .filter((cocktail) => selectedCategory === 'Toutes' || getCategoryParts(cocktail).category === selectedCategory)
+      .map((cocktail) => getCategoryParts(cocktail).subcategory)
+      .filter(Boolean)
+  ))];
+
+  // Filtrer les articles selon la recherche et la navigation du terminal.
   const filteredCocktails = cocktails.filter((cocktail) => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return true;
-    return (
-      (cocktail.nom && cocktail.nom.toLowerCase().includes(query)) ||
-      (cocktail.categorie && cocktail.categorie.toLowerCase().includes(query))
-    );
+    const parts = getCategoryParts(cocktail);
+    const matchesSearch = !query || cocktail.nom.toLowerCase().includes(query) || cocktail.categorie.toLowerCase().includes(query);
+    const matchesCategory = selectedCategory === 'Toutes' || parts.category === selectedCategory;
+    const matchesSubcategory = selectedSubcategory === 'Toutes' || parts.subcategory === selectedSubcategory;
+    return matchesSearch && matchesCategory && matchesSubcategory;
+  });
+
+  const selectCategory = (category: string) => {
+    setSelectedCategory(category);
+    setSelectedSubcategory('Toutes');
+  };
+
+  const handleAddArticle = async (cocktail: BarProduct) => {
+    const stock = stockMap?.[cocktail.id];
+    if (!stock || stock.quantite <= 0) {
+      showToast('Rupture de stock', 'error');
+      return;
+    }
+
+    try {
+      const added = await onAddToOrder?.(cocktail);
+      if (added === false) {
+        showToast("Créez d'abord une commande", 'error');
+        return;
+      }
+      showToast(`${cocktail.nom} ajouté`, 'success');
+    } catch {
+      showToast("Erreur lors de l'ajout", 'error');
+    }
+  };
+
+  const menuItems = filteredCocktails.filter((cocktail) => {
+    const parts = getCategoryParts(cocktail);
+    return (selectedCategory === 'Toutes' || parts.category === selectedCategory)
+      && (selectedSubcategory === 'Toutes' || parts.subcategory === selectedSubcategory);
   });
 
   return (
     <div className="space-y-4">
-      {/* En-tête avec Titre, Barre de recherche et Bouton "Ajouter une boisson" */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface border border-base rounded-2xl p-4 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface border border-base rounded-xl p-4 shadow-sm">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-primary">Carte des Cocktails</h2>
-          <p className="text-xs sm:text-sm text-slate-400">Gérez les boissons et alcools proposés au bar</p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-accent font-semibold">Bar & Lounge</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-primary">Terminal de vente</h2>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Rechercher une boisson..."
-            className="w-full sm:w-64 text-xs sm:text-sm"
-          />
+          <div className="relative w-full sm:w-64">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Rechercher un article" className="w-full pl-9 text-xs sm:text-sm" />
+          </div>
           <Button icon={<Plus size={18} />} onClick={handleOpenModal} className="whitespace-nowrap">
             Ajouter une boisson
           </Button>
@@ -226,22 +282,67 @@ export const CocktailMenu: React.FC<Props> = ({
       </div>
 
       {filteredCocktails.length === 0 ? (
-        <div className="rounded-2xl border border-base bg-surface text-center py-12 text-slate-500 text-sm">
+        <div className="rounded-xl border border-base bg-surface text-center py-12 text-slate-500 text-sm">
           Aucune boisson trouvée.
         </div>
       ) : (
-        <div className="rounded-xl border border-base overflow-hidden bg-surface divide-y divide-base">
-          {filteredCocktails.map((cocktail) => (
-            <CocktailListItem
-              key={cocktail.id}
-              cocktail={cocktail}
-              stock={stockMap?.[cocktail.id]}
-              onStockUpdate={onStockUpdate}
-              // onAddToOrder omis pour éviter la diminution du stock au clic sur la ligne
-              onEdit={() => handleOpenEditModal(cocktail)}
-              onDelete={() => handleDeleteProduct(cocktail.id)}
-            />
-          ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[190px_minmax(0,1fr)] gap-3 rounded-xl border border-base bg-surface p-3 shadow-sm">
+          <aside className="border-b lg:border-b-0 lg:border-r border-base pb-3 lg:pb-0 lg:pr-3">
+            <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
+              {categoryNames.map((category) => {
+                const active = selectedCategory === category;
+                return (
+                  <button key={category} type="button" onClick={() => selectCategory(category)} className={`flex shrink-0 items-center justify-between gap-2 rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${active ? 'bg-accent text-black shadow-accent' : 'bg-surface-2 text-secondary hover:bg-surface-3'}`}>
+                    <span>{category}</span>
+                    {active && <Check size={15} />}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <section className="min-w-0">
+            {subcategoryNames.length > 1 && (
+              <div className="mb-3 flex gap-2 overflow-x-auto border-b border-base pb-3">
+                {subcategoryNames.map((subcategory) => (
+                  <button key={subcategory} type="button" onClick={() => setSelectedSubcategory(subcategory)} className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition ${selectedSubcategory === subcategory ? 'bg-info text-white' : 'bg-surface-2 text-muted hover:text-primary'}`}>
+                    {subcategory}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
+              {menuItems.map((cocktail) => {
+                const stock = stockMap?.[cocktail.id];
+                const isOutOfStock = !stock || stock.quantite <= 0;
+                return (
+                  <div key={cocktail.id} className={`group relative min-h-[104px] rounded-lg border border-base bg-emerald-500/90 p-3 text-left transition hover:-translate-y-0.5 hover:bg-emerald-400 ${isOutOfStock ? 'opacity-50 grayscale' : ''}`}>
+                    {onAddToOrder ? (
+                      <button type="button" disabled={isOutOfStock} onClick={() => void handleAddArticle(cocktail)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white disabled:cursor-not-allowed">
+                        <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
+                        <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
+                        <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
+                          Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white">
+                        <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
+                        <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
+                        <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
+                          Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
+                      <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
+                      <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
       )}
 
@@ -257,15 +358,22 @@ export const CocktailMenu: React.FC<Props> = ({
           <Select
             label="Catégorie"
             value={categorie}
-            onChange={(e) => setCategorie(e.target.value)}
+            onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
             options={[
               { value: 'Alcools', label: 'Alcools' },
-              { value: 'Bières', label: 'Bières' },
+              { value: 'Bières & Soft', label: 'Bières & Soft' },
               { value: 'Cocktails', label: 'Cocktails' },
               { value: 'Sans alcool', label: 'Sans alcool' },
-              { value: 'Softs', label: 'Softs' },
             ]}
           />
+          {getSubcategories(categorie).length > 0 && (
+            <Select
+              label="Sous-catégorie"
+              value={sousCategorie}
+              onChange={(e) => setSousCategorie(e.target.value)}
+              options={[{ value: '', label: 'Sélectionner une sous-catégorie' }, ...getSubcategories(categorie).map((value) => ({ value, label: value }))]}
+            />
+          )}
           <Input
             label="Prix (MGA)"
             type="number"
@@ -331,15 +439,22 @@ export const CocktailMenu: React.FC<Props> = ({
           <Select
             label="Catégorie"
             value={editCategorie}
-            onChange={(e) => setEditCategorie(e.target.value)}
+            onChange={(e) => { setEditCategorie(e.target.value); setEditSousCategorie(''); }}
             options={[
               { value: 'Alcools', label: 'Alcools' },
-              { value: 'Bières', label: 'Bières' },
+              { value: 'Bières & Soft', label: 'Bières & Soft' },
               { value: 'Cocktails', label: 'Cocktails' },
               { value: 'Sans alcool', label: 'Sans alcool' },
-              { value: 'Softs', label: 'Softs' },
             ]}
           />
+          {getSubcategories(editCategorie).length > 0 && (
+            <Select
+              label="Sous-catégorie"
+              value={editSousCategorie}
+              onChange={(e) => setEditSousCategorie(e.target.value)}
+              options={[{ value: '', label: 'Sélectionner une sous-catégorie' }, ...getSubcategories(editCategorie).map((value) => ({ value, label: value }))]}
+            />
+          )}
           <Input
             label="Prix (MGA)"
             type="number"
