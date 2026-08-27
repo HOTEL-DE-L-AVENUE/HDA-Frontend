@@ -12,8 +12,9 @@ import { isAdmin, isCashier } from '../../utils/permissions';
 interface Props {
   commandes: BarCommande[];
   onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; items: BarCommande['items'] }) => Promise<void> | void;
+  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; items: BarCommande['items'] }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
-  onUpdateStatut?: (id: number, statut: BarCommande['statut']) => Promise<void> | void;
+  onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string }>;
 }
@@ -28,7 +29,8 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
 
 export const BarCommandeView: React.FC<Props> = ({ 
   commandes, 
-  onCreateCommande, 
+  onCreateCommande,
+  onUpdateCommande,
   onDeleteCommande, 
   onUpdateStatut, 
   cocktails = [], 
@@ -36,7 +38,9 @@ export const BarCommandeView: React.FC<Props> = ({
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
+  const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
+  const canDeleteTicketItem = isAdmin(currentUser);
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
 
   useEffect(() => {
@@ -56,6 +60,11 @@ export const BarCommandeView: React.FC<Props> = ({
   const [moyenPaiement, setMoyenPaiement] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
   const [tables, setTables] = useState<BarTable[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<BarCommande | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [selectedItems, setSelectedItems] = useState<BarCommande['items']>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [menuCategory, setMenuCategory] = useState('Toutes');
@@ -95,6 +104,8 @@ export const BarCommandeView: React.FC<Props> = ({
     setNewClientPrenom('');
     setNewClientTelephone('');
     setFeedback(null);
+    setIsEditingOrder(false);
+    setEditingOrderId(null);
     setIsModalOpen(false);
   };
 
@@ -112,6 +123,28 @@ export const BarCommandeView: React.FC<Props> = ({
     setNewClientNom('');
     setNewClientPrenom('');
     setNewClientTelephone('');
+    setIsEditingOrder(false);
+    setEditingOrderId(null);
+    setIsModalOpen(true);
+    void loadClients();
+  };
+
+  const handleOpenEditModal = (commande: BarCommande) => {
+    setClient(commande.client);
+    setTable(String(commande.table));
+    setNombrePersonnes(String(commande.nombre_personnes || 1));
+    setMoyenPaiement(commande.moyen_paiement || 'ESPECES');
+    setSelectedItems(commande.items.map((item) => ({ ...item })));
+    setSearchTerm('');
+    setFeedback(null);
+    setIsCreatingTable(false);
+    setNewTableNumber('');
+    setIsCreatingClient(false);
+    setNewClientNom('');
+    setNewClientPrenom('');
+    setNewClientTelephone('');
+    setIsEditingOrder(true);
+    setEditingOrderId(commande.id);
     setIsModalOpen(true);
     void loadClients();
   };
@@ -180,7 +213,11 @@ export const BarCommandeView: React.FC<Props> = ({
     }
 
     const unavailableItem = selectedItems.find((item) => {
-      const available = stockMap[item.product_id || 0]?.quantite;
+      const productId = Number(item.product_id ?? 0);
+      if (!Number.isFinite(productId) || productId <= 0) {
+        return false;
+      }
+      const available = stockMap[productId]?.quantite;
       return !Number.isFinite(available) || Number(item.quantite) > available;
     });
     if (unavailableItem) {
@@ -190,17 +227,28 @@ export const BarCommandeView: React.FC<Props> = ({
     }
 
     try {
-      await onCreateCommande?.({
-        client: clientNom,
-        table: tableNumber,
-        nombre_personnes: guestCount,
-        moyen_paiement: moyenPaiement,
-        items: selectedItems,
-      });
+      if (isEditingOrder && editingOrderId !== null) {
+        await onUpdateCommande?.({
+          id: editingOrderId,
+          client: clientNom,
+          table: tableNumber,
+          nombre_personnes: guestCount,
+          moyen_paiement: moyenPaiement,
+          items: selectedItems,
+        });
+      } else {
+        await onCreateCommande?.({
+          client: clientNom,
+          table: tableNumber,
+          nombre_personnes: guestCount,
+          moyen_paiement: moyenPaiement,
+          items: selectedItems,
+        });
+      }
       resetModal();
     } catch (error) {
-      console.error('Erreur création commande bar:', error);
-      setFeedback({ type: 'error', message: "La commande n'a pas pu être créée. Vérifiez les données puis réessayez." });
+      console.error('Erreur commande bar:', error);
+      setFeedback({ type: 'error', message: isEditingOrder ? "La commande n'a pas pu être modifiée. Vérifiez les données puis réessayez." : "La commande n'a pas pu être créée. Vérifiez les données puis réessayez." });
     }
   };
 
@@ -305,6 +353,35 @@ export const BarCommandeView: React.FC<Props> = ({
     }
   };
 
+  const handleOpenPaymentModal = (commande: BarCommande) => {
+    setPaymentOrder(commande);
+    setPaymentMethod(commande.moyen_paiement || 'ESPECES');
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!paymentOrder) return;
+
+    setIsPaymentModalOpen(false);
+    try {
+      setUpdatingId(paymentOrder.id);
+      if (onUpdateStatut) {
+        await onUpdateStatut(paymentOrder.id, 'Encaissée', paymentMethod);
+      } else {
+        await barService.updateBarOrderStatus(paymentOrder.id, 'ENCAISSEE', paymentMethod);
+      }
+      setLocalCommandes((prev) => prev.map((cmd) => cmd.id === paymentOrder.id ? { ...cmd, statut: 'Encaissée', moyen_paiement: paymentMethod } : cmd));
+      setFeedback({ type: 'success', message: 'Commande encaissée avec succès.' });
+    } catch (error: any) {
+      console.error('Erreur encaissement commande bar:', error);
+      const errorMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || "La commande n'a pas pu être encaissée.";
+      setFeedback({ type: 'error', message: errorMsg });
+    } finally {
+      setUpdatingId(null);
+      setPaymentOrder(null);
+    }
+  };
+
   const escapePrintHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   } as Record<string, string>)[char] || char);
@@ -348,7 +425,7 @@ export const BarCommandeView: React.FC<Props> = ({
           <div>
             <p className="font-semibold text-primary">{commande.client}</p>
             <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`} · {commande.nombre_personnes || 1} pers.</p>
-            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'CARTE' ? 'Carte bancaire' : commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'EURO' ? 'Euro' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'DOLLAR' ? 'Dollar' : commande.moyen_paiement === 'VIREMENT' ? 'Virement' : commande.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>
+            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
           </div>
         </div>
       ),
@@ -431,12 +508,23 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Servir'}
               </Button>
             )}
-            {canEncaisser && commande.statut === 'Servie' && (
+            {canModifyCommande && (
               <Button
                 size="sm"
                 variant="secondary"
+                icon={<Plus size={14} />}
+                onClick={() => handleOpenEditModal(commande)}
+                disabled={isUpdating}
+              >
+                Modifier
+              </Button>
+            )}
+            {canEncaisser && commande.statut === 'Servie' && (
+              <Button
+                size="sm"
+                variant="primary"
                 icon={<DollarSign size={14} />}
-                onClick={() => void handleStatusChange(commande.id, 'Encaissée')}
+                onClick={() => handleOpenPaymentModal(commande)}
                 disabled={isUpdating}
               >
                 {isUpdating ? '...' : 'Encaisser'}
@@ -520,7 +608,7 @@ export const BarCommandeView: React.FC<Props> = ({
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Nouvelle commande · Bar" size="xl">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? `Ajouter des articles · Commande #${editingOrderId ?? ''}` : 'Nouvelle commande · Bar'} size="xl">
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
           {feedback && (
             <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
@@ -546,15 +634,11 @@ export const BarCommandeView: React.FC<Props> = ({
               onChange={(event) => setMoyenPaiement(event.target.value as NonNullable<BarCommande['moyen_paiement']>)}
               options={[
                 { value: 'ESPECES', label: 'Espèces' },
-                { value: 'CARTE', label: 'Carte bancaire' },
-                { value: 'TPE', label: 'TPE' },
                 { value: 'CREDIT', label: 'Crédit' },
-                { value: 'EURO', label: 'Euro' },
+                { value: 'TPE', label: 'TPE' },
                 { value: 'ORANGE_MONEY', label: 'Orange Money' },
                 { value: 'MVOLA', label: 'MVola' },
-                { value: 'DOLLAR', label: 'Dollar' },
-                { value: 'VIREMENT', label: 'Virement' },
-                { value: 'CHEQUE', label: 'Chèque' },
+                { value: 'GRATUIT', label: 'Gratuit' },
               ]}
             />
           </div>
@@ -645,8 +729,9 @@ export const BarCommandeView: React.FC<Props> = ({
                 )}
                 <div className="grid max-h-[330px] grid-cols-2 gap-2 overflow-y-auto xl:grid-cols-3">
                   {menuItems.map((cocktail) => {
+                    const isSpecialBillardItem = cocktail.id <= 0;
                     const stock = stockMap[cocktail.id];
-                    const unavailable = !stock || stock.quantite <= 0;
+                    const unavailable = !isSpecialBillardItem && (!stock || stock.quantite <= 0);
                     return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[84px] flex-col items-center justify-center rounded-md border border-emerald-950 bg-emerald-500 px-2 py-2 text-center text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40`}><span className="text-xs font-bold leading-tight">{cocktail.nom}</span><span className="mt-1 text-[10px] font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span></button>;
                   })}
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
@@ -654,7 +739,7 @@ export const BarCommandeView: React.FC<Props> = ({
               </div>
               <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
-                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom} ×{item.quantite}</span><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span></div>)}</div>}
+                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom} ×{item.quantite}</span><div className="flex items-center gap-2"><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}</div>}
                 <div className="mt-4 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
               </aside>
             </div>
@@ -678,9 +763,11 @@ export const BarCommandeView: React.FC<Props> = ({
                         </button>
                       </div>
                       <span className="text-accent">{formatCurrency(item.prix * item.quantite)}</span>
-                      <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300">
-                        <XCircle size={16} />
-                      </button>
+                      {canDeleteTicketItem && (
+                        <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}>
+                          <XCircle size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -704,6 +791,32 @@ export const BarCommandeView: React.FC<Props> = ({
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isPaymentModalOpen} onClose={() => { setIsPaymentModalOpen(false); setPaymentOrder(null); }} title={`Encaisser la commande #${paymentOrder?.id ?? ''}`} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">Choisissez le mode de paiement pour confirmer cette commande.</p>
+          <Select
+            label="Mode de paiement"
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value as NonNullable<BarCommande['moyen_paiement']>)}
+            options={[
+              { value: 'ESPECES', label: 'Espèces' },
+              { value: 'CREDIT', label: 'Crédit' },
+              { value: 'TPE', label: 'TPE' },
+              { value: 'ORANGE_MONEY', label: 'Orange Money' },
+              { value: 'MVOLA', label: 'MVola' },
+              { value: 'GRATUIT', label: 'Gratuit' },
+            ]}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => { setIsPaymentModalOpen(false); setPaymentOrder(null); }} className="flex-1">Annuler</Button>
+            <Button type="button" onClick={() => void handleConfirmPayment()} disabled={updatingId === paymentOrder?.id} className="flex-1">
+              <CheckCircle2 size={16} />
+              {updatingId === paymentOrder?.id ? 'Confirmation...' : 'Confirmer'}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <div className="rounded-2xl overflow-hidden border border-base bg-surface">
@@ -758,7 +871,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 </thead>
                 <tbody>
                   {data.map((commande) => (
-                    <tr key={commande.id} className="border-t border-base hover:bg-surface-2/50 transition">
+                    <tr key={commande.id} className={`border-t border-base transition ${commande.statut === 'Encaissée' ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-surface-2/50'}`}>
                       <td className="px-3 py-3">{columns[0].render(commande)}</td>
                       <td className="px-3 py-3">{columns[1].render(commande)}</td>
                       <td className="px-3 py-3">{columns[2].render(commande)}</td>

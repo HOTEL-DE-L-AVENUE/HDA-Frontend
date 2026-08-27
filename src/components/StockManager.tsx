@@ -6,9 +6,11 @@ import BarTransactionsCard from './Bar/BarTransactionsCard';
 import { formatCurrency } from '../utils/data';
 import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import api from '../lib/api';
-import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle, DollarSign, RefreshCw } from 'lucide-react';
+import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle, DollarSign, RefreshCw, Printer, LockKeyhole } from 'lucide-react';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
+import barService from '../services/bar.service';
+import type { BarSession } from '../types/bar.type';
 
 interface StockManagerProps {
   module: ModuleType;
@@ -376,22 +378,35 @@ interface CaisseManagerProps {
     moyen_paiement?: string;
     items?: Array<{ nom?: string; product_nom?: string; quantite: number; prix?: number; prix_unitaire?: number }>;
   }>;
+  allOrders?: Array<{
+    id: number;
+    client?: string;
+    table?: string | number;
+    total: number;
+    statut?: string;
+    moyen_paiement?: string;
+    created_at?: string;
+    items?: Array<{ nom?: string; quantite: number; prix?: number; categorie?: string }>;
+  }>;
   onEncaisserCommande?: (orderId: number) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
 }
 
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], onEncaisserCommande, onRefresh }) => {
+export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onRefresh }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
   const [backendTransactions, setBackendTransactions] = useState<FinancialTransaction[]>([]);
   const [moduleStockSummary, setModuleStockSummary] = useState<{ entrees: number; sorties: number; solde: number } | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [currentBarSession, setCurrentBarSession] = useState<BarSession | null>(null);
+  const [isClosingBarSession, setIsClosingBarSession] = useState(false);
 
   const isBar = module === 'bar';
   const isHebergement = module === 'hebergement';
   const isHotel = module === 'hotel';
   const isBackendCaisse = module === 'restaurant' || module === 'hebergement' || module === 'hotel' || module === 'bar';
+  const canViewBarBalance = !isBar || isAdmin(AuthService.getCurrentUser());
   const transactionTitle = isBar
     ? 'Transactions Bar'
     : isHebergement
@@ -415,6 +430,20 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       })
       .catch(() => setBackendError('Impossible de charger les données de la caisse.'));
   }, [isBackendCaisse, module]);
+
+  useEffect(() => {
+    if (!isBar) return;
+
+    const currentUser = AuthService.getCurrentUser();
+    if (!currentUser?.id) return;
+
+    barService.getBarOpenSessions()
+      .then((sessions) => {
+        const session = sessions.find((item) => Number(item.user_id) === Number(currentUser.id));
+        setCurrentBarSession(session || null);
+      })
+      .catch(() => setCurrentBarSession(null));
+  }, [isBar]);
 
   const backendEntrees = backendTransactions
     .filter((transaction) => isFinancialInflow(transaction.type_flux))
@@ -529,16 +558,170 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     }
   };
 
+  const handlePrintAllOrders = () => {
+    const printWindow = window.open('', '_blank', 'width=760,height=720');
+    if (!printWindow) return;
+
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const generatedAt = new Date().toLocaleString('fr-FR');
+    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const allItems = allOrders.flatMap((order) => order.items || []);
+    const sales = new Map<string, { sold: number; net: number; category: string }>();
+    allItems.forEach((item) => {
+      const name = item.nom || 'Article';
+      const sold = Number(item.quantite || 0);
+      const net = sold * Number(item.prix || 0);
+      const existing = sales.get(name) || { sold: 0, net: 0, category: item.categorie || 'Bar' };
+      sales.set(name, { sold: existing.sold + sold, net: existing.net + net, category: existing.category });
+    });
+    const categories = new Map<string, { sold: number; total: number }>();
+    sales.forEach((sale) => {
+      const category = categories.get(sale.category) || { sold: 0, total: 0 };
+      categories.set(sale.category, { sold: category.sold + sale.sold, total: category.total + sale.net });
+    });
+    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'Carte', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
+    const paymentTotals = new Map<string, number>();
+    allOrders.forEach((order) => {
+      const payment = order.moyen_paiement || 'ESPECES';
+      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
+    });
+    const salesRows = Array.from(sales.entries()).map(([name, sale]) => `<div class="row"><span>${name}</span><span>${sale.sold}</span><span>${formatCurrency(sale.net)}</span><span>${formatCurrency(sale.net)}</span></div>`).join('');
+    const categoryRows = Array.from(categories.entries()).map(([name, category]) => `<div class="category"><span>${name}</span><span>${category.sold}</span><strong>${formatCurrency(category.total)}</strong></div>`).join('');
+    const paymentRows = Array.from(paymentTotals.entries()).map(([payment, amount]) => `<div class="row"><span>${paymentLabels[payment] || payment}</span><strong>${formatCurrency(amount)}</strong></div>`).join('');
+    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
+    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : (currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-');
+    const ticketLines = allItems.length;
+    printWindow.document.write(`<!doctype html><html><head><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:11px}h1{text-align:center;font-size:16px;margin:4px 0 12px}h2{text-align:center;font-size:14px;margin:14px 0 5px}.meta{margin:2px 0}.line{border-bottom:1px dashed #111;margin:7px 0}.row{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.row span:last-child,.row strong{text-align:right}.category{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.category span:last-child,.category strong{text-align:right}.total{display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px}.summary{display:flex;justify-content:space-between;padding:2px 0}</style></head><body><h1>Partial Cash Report</h1><p class="meta">Caissier : <strong>${connectedCashier}</strong></p><p class="meta">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${allOrders.length}<br>Start Date : ${startDate}<br>End Date : ${generatedAt}</p><div class="line"></div><h2>Sales</h2><div class="row"><strong>Name</strong><strong>Sold</strong><strong>Net</strong><strong>Total</strong></div>${salesRows || '<p>Aucune vente.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Product Categories</h2><div class="category"><strong>Name</strong><strong>Sold</strong><strong>Total</strong></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Lines Removed</h2><div class="category"><span>${connectedCashier}</span><span>0</span><strong>${formatCurrency(0)}</strong></div><h2>Taxes</h2><div class="category"><span>Tax Exempt</span><span></span><strong>${formatCurrency(total)}</strong></div><div class="line"></div><h2>Payments</h2><div class="category"><strong>Type</strong><span></span><strong>Total</strong></div>${paymentRows || '<div class="row"><span>Aucun paiement</span><span></span><strong>AR0</strong></div>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>SUMMARY</h2><div class="summary"><span>Tickets</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Ticket Lines</span><strong>${ticketLines}</strong></div><div class="summary"><span>Payments</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Net Sales</span><strong>${formatCurrency(total)}</strong></div><div class="summary"><span>Tax</span><strong>${formatCurrency(0)}</strong></div></body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const handlePrintCloseReport = (closedFund?: number) => {
+    const printWindow = window.open('', '_blank', 'width=760,height=720');
+    if (!printWindow) return;
+
+    const paidOrders = allOrders.filter((order) => order.statut === 'Encaissée');
+    const reportOrders = paidOrders.length > 0 ? paidOrders : allOrders;
+    const paymentTotals = new Map<string, number>();
+    reportOrders.forEach((order) => {
+      const payment = order.moyen_paiement || 'ESPECES';
+      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
+    });
+    const total = reportOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const generatedAt = new Date().toLocaleString('fr-FR');
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'Carte / TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
+    const paymentRows = Array.from(paymentTotals.entries()).map(([payment, amount]) => `<div class="row"><span>${paymentLabels[payment] || payment}</span><strong>${formatCurrency(amount)}</strong></div>`).join('');
+    const openingDate = currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-';
+    const closingDate = new Date().toLocaleString('fr-FR');
+    const finalFund = closedFund ?? currentBarSession?.fond_final;
+    const expectedFund = Number(currentBarSession?.fond_initial || 0) + total;
+    const variance = finalFund === undefined ? undefined : finalFund - expectedFund;
+    printWindow.document.write(`<!doctype html><html><head><title>Close Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:12px}h1{text-align:center;font-size:18px;margin:4px 0 12px}h2{font-size:13px;margin:14px 0 5px;border-bottom:1px dashed #111;padding-bottom:4px}.center{text-align:center}.row{display:flex;justify-content:space-between;padding:2px 0}.line{border-bottom:1px dashed #111;margin:8px 0}.label{display:flex;justify-content:space-between}.strong{font-weight:bold;font-size:15px}.small{font-size:11px;margin:3px 0}</style></head><body><h1>Close Cash Report</h1><p class="center">Caisse Bar & Lounge</p><p class="small">Caissier : <strong>${connectedCashier}</strong></p><p class="small">Session : ${currentBarSession?.id || '-'}<br>Ouverture : ${openingDate}<br>Clôture : ${closingDate}</p><h2>Payments Report <span style="float:right">Amount</span></h2>${paymentRows || '<div class="row"><span>Aucun paiement</span><strong>${formatCurrency(0)}</strong></div>'}<div class="line"></div><div class="label strong"><span>Total Sales</span><span>${formatCurrency(total)}</span></div><div class="row"><span>Number of Payments:</span><strong>${reportOrders.length}</strong></div><h2>Tax Analysis <span style="float:right">Amount</span></h2><div class="row"><span>Tax Exempt</span><strong>${formatCurrency(0)}</strong></div><div class="line"></div><div class="label strong"><span>Subtotal</span><span>${formatCurrency(total)}</span></div><div class="label"><span>Taxes</span><span>${formatCurrency(0)}</span></div><div class="label strong"><span>Totals</span><span>${formatCurrency(total)}</span></div>${finalFund !== undefined ? `<h2>Cash Control</h2><div class="row"><span>Fond initial</span><strong>${formatCurrency(Number(currentBarSession?.fond_initial || 0))}</strong></div><div class="row"><span>Fond final</span><strong>${formatCurrency(finalFund)}</strong></div><div class="row"><span>Ecart</span><strong>${formatCurrency(variance || 0)}</strong></div>` : ''}<div class="line"></div><p class="small">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${reportOrders.length}<br>Imprimé le : ${generatedAt}</p></body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const handleCloseBarSession = async () => {
+    if (!currentBarSession) return;
+    if (pendingOrders.length > 0) {
+      setBackendError('Encaissez toutes les commandes avant de clôturer la caisse.');
+      return;
+    }
+
+    const finalAmount = window.prompt('Indiquez le fond final de la caisse (MGA) :', String(Math.max(0, Math.round(solde))));
+    if (finalAmount === null) return;
+
+    const fondFinal = Number(finalAmount);
+    if (!Number.isFinite(fondFinal) || fondFinal < 0) {
+      setBackendError('Le fond final doit être un montant positif.');
+      return;
+    }
+
+    try {
+      setIsClosingBarSession(true);
+      await barService.closeBarSession({ session_id: currentBarSession.id, fond_final: fondFinal });
+      handlePrintCloseReport(fondFinal);
+      setCurrentBarSession(null);
+      setBackendError(null);
+      window.alert('La caisse Bar & Lounge a été clôturée.');
+    } catch (error: any) {
+      setBackendError(error?.response?.data?.message || error?.message || 'Impossible de clôturer la caisse.');
+    } finally {
+      setIsClosingBarSession(false);
+    }
+  };
+
+  const handleCloseAllOrders = async () => {
+    if (!onEncaisserCommande || pendingOrders.length === 0) return;
+    if (!window.confirm(`Clôturer les ${pendingOrders.length} commande(s) encore servie(s) ?`)) return;
+
+    for (const order of pendingOrders) {
+      await handleEncaisserCommande(order.id);
+    }
+    await onRefresh?.();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
-        <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
-          Nouvelle transaction
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          {isBar && currentBarSession && (
+            <>
+              <Button variant="secondary" icon={<Printer size={16} />} onClick={() => handlePrintAllOrders()}>
+                Imprimer
+              </Button>
+              <Button variant="secondary" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la caisse'}>
+                {isClosingBarSession ? 'Clôture...' : 'Clôturer'}
+              </Button>
+            </>
+          )}
+          <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
+            Nouvelle transaction
+          </Button>
+        </div>
       </div>
 
+      {isBar && (
+        <div className="overflow-hidden rounded-2xl border border-base bg-surface">
+          <div className="flex flex-col gap-3 border-b border-base px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-semibold text-primary">Clôturer et imprimer toutes les commandes</h3>
+              <p className="text-xs text-muted">{allOrders.length} commande{allOrders.length > 1 ? 's' : ''} dans la caisse · {pendingOrders.length} à clôturer</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintAllOrders()} disabled={allOrders.length === 0}>
+                Imprimer toutes
+              </Button>
+              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onEncaisserCommande || pendingOrders.length === 0}>
+                Clôturer toutes
+              </Button>
+            </div>
+          </div>
+          {allOrders.length === 0 ? (
+            <p className="px-6 py-6 text-center text-sm text-muted">Aucune commande à imprimer ou à clôturer.</p>
+          ) : (
+            <div className="divide-y divide-base">
+              {allOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between gap-3 px-6 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
+                    <p className="text-xs text-muted">{order.statut || 'Sans statut'}{order.table ? ` · Table ${order.table}` : ''}</p>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold text-accent">{formatCurrency(order.total)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Caisse Card */}
-      <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
+      {canViewBarBalance && (
+        <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface">
         <div className="flex items-center justify-between border-b border-base px-6 py-4">
