@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChipLine, PlayerLine, casinoBorder, casinoCurrency, casinoInput, parseCasinoAmount } from './types';
+import { ChipLine, PlayerLine, casinoBorder, casinoCurrency, casinoInput, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData, parseCasinoAmount } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
+import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
 
 interface ChipsSheetProps {
   chips: ChipLine[];
@@ -22,14 +23,33 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
   const totalCaves = players.reduce((sum, player) => sum + parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount), 0);
 
   useEffect(() => {
-    if (withdrawnTotal > 3_000_000) {
+    if (withdrawnTotal > IDENTITY_VERIFICATION_THRESHOLD && firstPlayer) {
       setIdentityModal({ open: true, amount: withdrawnTotal });
     }
-  }, [withdrawnTotal]);
+  }, [withdrawnTotal, firstPlayer]);
+
+  const saveExchangeVerification = async (data: IdentityVerificationData) => {
+    if (!firstPlayer) return;
+    try {
+      await identityVerificationApi.create({
+        fiche_id: firstPlayer.ficheId ?? firstPlayer.id,
+        full_name: data.fullName,
+        id_type: data.idType,
+        id_number: data.idNumber,
+        issue_date: data.issueDate,
+        transaction_type: data.transactionType.toUpperCase() as 'ACHAT' | 'APPORT' | 'ECHANGE',
+        amount: data.amount,
+      });
+      setIdentityModal({ open: false, amount: 0 });
+    } catch (error) {
+      const apiError = error as { response?: { data?: { error?: { message?: string } | string } } };
+      const responseError = apiError.response?.data?.error;
+      alert(typeof responseError === 'string' ? responseError : responseError?.message || 'Erreur lors de l’enregistrement de la vérification.');
+    }
+  };
 
   return (
   <div className="flex flex-col gap-7">
-    <section><SheetTitle title="Fiche Poker Night — jetons" subtitle="Comptage de départ et de fermeture." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['previous', 'opening', 'closing']} headers={['Valeur des jetons', 'Total de la veille', 'Valeur départ', 'Total fermeture']} /><div className="grid sm:grid-cols-2 gap-2 mt-3"><Stat label="VALEUR DÉPART" value={openingTotal} /><Stat label="VALEUR FERMETURE" value={closingTotal} /></div></section>
     <section><SheetTitle title="Total des prélèvements" subtitle="Nombre de jetons prélevés pour chaque valeur." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['withdrawn']} headers={['Valeur des jetons', 'Nombre de jetons', 'Valeur totale']} /></section>
     <section>
       <SheetTitle title="Horaires de la session" subtitle="L'heure du premier joueur est automatique; l'heure de fin de jeu est à saisir." />
@@ -52,7 +72,7 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
       amount={identityModal.amount}
       transactionType="echange"
       onClose={() => setIdentityModal({ open: false, amount: 0 })}
-      onConfirm={() => setIdentityModal({ open: false, amount: 0 })}
+      onConfirm={saveExchangeVerification}
     />
   </div>
   );

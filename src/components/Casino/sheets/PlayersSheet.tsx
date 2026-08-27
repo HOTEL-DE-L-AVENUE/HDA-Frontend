@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IdentityVerificationData } from './types';
+import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
 
@@ -16,7 +16,7 @@ interface PlayersSheetProps {
   onSave: () => void;
   onAdd: (ficheId?: number) => number;
   onRemove: (id: number) => void;
-  onIdentityVerified?: (playerId: number, data: IdentityVerificationData) => void;
+  onIdentityVerified?: (playerId: number, data: IdentityVerificationData, verificationId?: number) => void;
   showIdentityVerifications?: boolean;
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
@@ -124,6 +124,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const [rouletteNumber, setRouletteNumber] = useState<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
+  const [identityTransactionType, setIdentityTransactionType] = useState<'achat' | 'apport' | 'echange'>('achat');
   const [repeatedSignature, setRepeatedSignature] = useState('');
   const [signatureError, setSignatureError] = useState('');
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
@@ -251,16 +252,19 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   };
 
   useEffect(() => {
-    if (selectedPlayer && parseCasinoAmount(selectedPlayer.cashing) > 3_000_000 && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
-      setIdentityModal({ open: true, amount: parseCasinoAmount(selectedPlayer.cashing) });
+    const cashingAmount = parseCasinoAmount(selectedPlayer?.cashing);
+    const verificationAmount = Math.max(selectedPlayerTotal, cashingAmount);
+    if (selectedPlayer && verificationAmount > IDENTITY_VERIFICATION_THRESHOLD && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
+      setIdentityTransactionType(cashingAmount >= selectedPlayerTotal ? 'echange' : 'achat');
+      setIdentityModal({ open: true, amount: verificationAmount });
     }
-  }, [selectedPlayer?.cashing, selectedPlayer?.identityVerification, identityVerifications]);
+  }, [selectedPlayer?.id, selectedPlayer?.identityVerification, selectedPlayer?.cashing, selectedPlayerTotal, identityVerifications]);
 
   const handleIdentityConfirm = async (data: IdentityVerificationData) => {
     if (!selectedPlayer) return;
     try {
       // Call API to save verification to database
-      await identityVerificationApi.create({
+      const savedVerification = await identityVerificationApi.create({
         fiche_id: selectedPlayer.ficheId ?? selectedPlayer.id,
         full_name: data.fullName,
         id_type: data.idType,
@@ -272,7 +276,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
       
       // Update local state
       onUpdate(selectedPlayer.id, 'identityVerification', JSON.stringify(data));
-      onIdentityVerified?.(selectedPlayer.ficheId ?? selectedPlayer.id, data);
+      onIdentityVerified?.(selectedPlayer.ficheId ?? selectedPlayer.id, data, savedVerification.id);
       setIdentityModal({ open: false, amount: 0 });
     } catch (err) {
       console.error('Erreur lors de l\'enregistrement de la vérification d\'identité:', err);
@@ -429,7 +433,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     <IdentityVerificationModal
       open={identityModal.open}
       amount={identityModal.amount}
-      transactionType="apport"
+      transactionType={identityTransactionType}
       onClose={() => setIdentityModal({ open: false, amount: 0 })}
       onConfirm={handleIdentityConfirm}
     />
