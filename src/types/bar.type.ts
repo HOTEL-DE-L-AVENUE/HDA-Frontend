@@ -12,15 +12,11 @@ export interface BarProduct {
 
 export type BarPaymentMethod =
   | 'ESPECES'
-  | 'CARTE'
-  | 'TPE'
   | 'CREDIT'
-  | 'EURO'
+  | 'TPE'
   | 'ORANGE_MONEY'
   | 'MVOLA'
-  | 'DOLLAR'
-  | 'VIREMENT'
-  | 'CHEQUE';
+  | 'GRATUIT';
 
 /** Solde caisse du module bar (issu de financial_transactions + module = 'bar') */
 export interface BarCaisseStats {

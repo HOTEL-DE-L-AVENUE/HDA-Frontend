@@ -118,6 +118,31 @@ export const BarPage: React.FC = () => {
     }
   };
 
+  const handleUpdateCommande = async ({ id, client, table, nombre_personnes, moyen_paiement, items }: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; items: BarCommande['items'] }) => {
+    try {
+      const normalizedItems = items.map((item) => ({
+        product_id: item.product_id,
+        nom: item.nom,
+        quantite: Number(item.quantite) || 1,
+        prix: Number(item.prix) || 0,
+        prix_unitaire: Number(item.prix) || 0,
+      }));
+
+      await barService.updateBarOrder(id, {
+        client,
+        table,
+        nombre_personnes,
+        moyen_paiement,
+        items: normalizedItems,
+      });
+      await Promise.all([loadOrders(), fetchData()]);
+    } catch (error) {
+      console.error('Erreur modification commande bar:', error);
+      setError("La commande bar n'a pas pu être modifiée.");
+      throw error;
+    }
+  };
+
   const handleDeleteCommande = async (id: number) => {
     try {
       await barService.deleteBarOrder(id);
@@ -129,7 +154,7 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  const handleUpdateStatut = async (id: number, statut: BarCommande['statut']) => {
+  const handleUpdateStatut = async (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => {
     const statuses: Record<BarCommande['statut'], BarOrderStatus> = {
       'En attente': 'EN_ATTENTE',
       'En préparation': 'EN_PREPARATION',
@@ -139,7 +164,7 @@ export const BarPage: React.FC = () => {
     };
 
     try {
-      await barService.updateBarOrderStatus(id, statuses[statut]);
+      await barService.updateBarOrderStatus(id, statuses[statut], moyenPaiement);
       await loadOrders();
     } catch (error) {
       console.error('Erreur mise à jour statut commande bar:', error);
@@ -165,7 +190,8 @@ export const BarPage: React.FC = () => {
       ]);
       const cocktailsData = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
       const stock = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: BarStockItem[] }).data;
-      if (Array.isArray(cocktailsData)) setCocktails(cocktailsData as BarProduct[]);
+      const baseCocktails = Array.isArray(cocktailsData) ? (cocktailsData as BarProduct[]) : [];
+      setCocktails(baseCocktails);
       if (Array.isArray(stock)) {
         const map: Record<number, { quantite: number; unite: string }> = {};
         (stock as BarStockItem[]).forEach((s) => {
@@ -224,7 +250,15 @@ export const BarPage: React.FC = () => {
       )}
 
       {activeTab === 'commandes' && (
-        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} onUpdateStatut={handleUpdateStatut} cocktails={cocktails} stockMap={stockMap} />
+        <BarCommandeView
+          commandes={commandes}
+          onCreateCommande={handleCreateCommande}
+          onUpdateCommande={handleUpdateCommande}
+          onDeleteCommande={handleDeleteCommande}
+          onUpdateStatut={handleUpdateStatut}
+          cocktails={cocktails}
+          stockMap={stockMap}
+        />
       )}
 
       {activeTab === 'stock' && (
@@ -252,8 +286,26 @@ export const BarPage: React.FC = () => {
             moyen_paiement: commande.moyen_paiement,
             items: commande.items,
           }))}
+          allOrders={commandes.map((commande) => ({
+            id: commande.id,
+            client: commande.client,
+            table: commande.table,
+            total: commande.total,
+            statut: commande.statut,
+            moyen_paiement: commande.moyen_paiement,
+            created_at: commande.created_at,
+            items: commande.items.map((item) => ({
+              nom: item.nom,
+              quantite: item.quantite,
+              prix: item.prix,
+              categorie: cocktails.find((product) => product.id === item.product_id)?.categorie || 'Autre',
+            })),
+          }))}
           onEncaisserCommande={async (orderId) => {
             await handleUpdateStatut(orderId, 'Encaissée');
+          }}
+          onCloseAllOrders={async (orderIds) => {
+            await barService.closeAllBarOrders(orderIds);
           }}
           onRefresh={async () => {
             await Promise.all([loadOrders(), fetchData()]);
