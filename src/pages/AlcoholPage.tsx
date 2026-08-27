@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { StockManager, CaisseManager } from '../components/StockManager';
+import { CaisseManager } from '../components/StockManager';
+import { AlcoholStockManager } from '../components/Bar/AlcoholStockManager';
 import alcoholService from '../services/alcohol.service';
 import { BarProduct, BarStockItem } from '../types/bar.type';
 
@@ -10,8 +11,9 @@ import { BarTabs } from '../components/Bar/BarTabs';
 
 import { BarTabId } from '../data/Bar.data';
 import { CocktailMenu } from '../components/Bar/CocktailMenu';
+import { AddAlcoholModal } from '../components/Bar/AddAlcoholModal';
 import { BestSellers } from '../components/Bar/BestSellers';
-import { BarCommandeView } from '../components/Bar/BarCommande';
+import { AlcoholCommandeView } from '../components/Bar/AlcoholCommandeView';
 import type { BarCommande } from '../types/bar.type';
 import type { AlcoholOrderStatus } from '../services/alcohol.service';
 
@@ -28,9 +30,11 @@ export const AlcoholPage: React.FC = () => {
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Mise à jour des labels pour inclure 'Prête'
   const orderStatusLabels: Record<string, BarCommande['statut']> = {
     EN_ATTENTE: 'En attente',
     EN_PREPARATION: 'En préparation',
+    PRETE: 'Prête',
     SERVIE: 'Servie',
     ENCAISSEE: 'Encaissée',
   };
@@ -86,16 +90,24 @@ export const AlcoholPage: React.FC = () => {
     }
   };
 
+  // Fonction handleUpdateStatut corrigée avec 'Prête'
   const handleUpdateStatut = async (id: number, statut: BarCommande['statut']) => {
     const statuses: Record<BarCommande['statut'], AlcoholOrderStatus> = {
       'En attente': 'EN_ATTENTE',
       'En préparation': 'EN_PREPARATION',
+      'Prête': 'SERVIE',
       'Servie': 'SERVIE',
       'Encaissée': 'ENCAISSEE',
     };
 
     try {
-      await alcoholService.updateAlcoholOrderStatus(id, statuses[statut]);
+      const mappedStatus = statuses[statut];
+      if (!mappedStatus) {
+        console.error(`Statut non reconnu: ${statut}`);
+        setError(`Le statut "${statut}" n'est pas valide.`);
+        return;
+      }
+      await alcoholService.updateAlcoholOrderStatus(id, mappedStatus);
       await loadOrders();
     } catch (error) {
       console.error('Erreur mise à jour statut commande alcool:', error);
@@ -190,6 +202,11 @@ export const AlcoholPage: React.FC = () => {
 
       {activeTab === 'bar' && (
         <div className="space-y-6">
+          {userIsAdmin && (
+            <div className="flex justify-end">
+              <AddAlcoholModal onProductAdded={handleProductAdded} onStockUpdate={fetchData} />
+            </div>
+          )}
           <CocktailMenu
             cocktails={alcoholCocktails}
             stockMap={stockMap}
@@ -202,14 +219,18 @@ export const AlcoholPage: React.FC = () => {
       )}
 
       {activeTab === 'commandes' && (
-        <BarCommandeView commandes={commandes} onCreateCommande={handleCreateCommande} onDeleteCommande={handleDeleteCommande} onUpdateStatut={handleUpdateStatut} cocktails={alcoholCocktails} stockMap={stockMap} />
+        <AlcoholCommandeView 
+          commandes={commandes} 
+          onCreateCommande={handleCreateCommande} 
+          onDeleteCommande={handleDeleteCommande} 
+          onUpdateStatut={handleUpdateStatut} 
+          cocktails={alcoholCocktails} 
+          stockMap={stockMap} 
+        />
       )}
 
       {activeTab === 'stock' && (
-        <StockManager
-          module="bar"
-          categories={['Spiritueux', 'Vins', 'Bières', 'Soft', 'Sirop', 'Champagne', 'Autre']}
-        />
+        <AlcoholStockManager onStockUpdate={fetchData} />
       )}
 
       {userIsAdmin && activeTab === 'caisse' && (
