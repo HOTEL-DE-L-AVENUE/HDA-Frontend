@@ -520,14 +520,14 @@ const MobileBottomNav: React.FC = () => {
       {showMore && hasMoreItems && (
         <>
           <div
-            className="md:hidden fixed inset-0 z-40"
+            className="md:hidden fixed inset-0 z-40 print:hidden"
             style={{
               backgroundColor: 'rgba(0, 0, 0, 0.8)',
               backdropFilter: 'blur(4px)'
             }}
             onClick={() => setShowMore(false)}
           />
-          <div id="mobile-more-panel" className="md:hidden fixed bottom-20 left-0 right-0 z-50 px-4 pb-2">
+          <div id="mobile-more-panel" className="md:hidden fixed bottom-20 left-0 right-0 z-50 px-4 pb-2 print:hidden">
             <div
               style={{
                 backgroundColor: 'var(--color-surface)',
@@ -611,7 +611,7 @@ const MobileBottomNav: React.FC = () => {
 
       <nav
         id="mobile-bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 print:hidden"
         style={{
           backgroundColor: 'var(--color-surface)',
           borderTop: '1px solid var(--color-border)',
