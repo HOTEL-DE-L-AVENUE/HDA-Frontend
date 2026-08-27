@@ -389,10 +389,11 @@ interface CaisseManagerProps {
     items?: Array<{ nom?: string; quantite: number; prix?: number; categorie?: string }>;
   }>;
   onEncaisserCommande?: (orderId: number) => Promise<void> | void;
+  onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
 }
 
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onRefresh }) => {
+export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onCloseAllOrders, onRefresh }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
@@ -579,7 +580,8 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       const category = categories.get(sale.category) || { sold: 0, total: 0 };
       categories.set(sale.category, { sold: category.sold + sale.sold, total: category.total + sale.net });
     });
-    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'Carte', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
+    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
+    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
     const paymentTotals = new Map<string, number>();
     allOrders.forEach((order) => {
       const payment = order.moyen_paiement || 'ESPECES';
@@ -587,12 +589,22 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     });
     const salesRows = Array.from(sales.entries()).map(([name, sale]) => `<div class="row"><span>${name}</span><span>${sale.sold}</span><span>${formatCurrency(sale.net)}</span><span>${formatCurrency(sale.net)}</span></div>`).join('');
     const categoryRows = Array.from(categories.entries()).map(([name, category]) => `<div class="category"><span>${name}</span><span>${category.sold}</span><strong>${formatCurrency(category.total)}</strong></div>`).join('');
-    const paymentRows = Array.from(paymentTotals.entries()).map(([payment, amount]) => `<div class="row"><span>${paymentLabels[payment] || payment}</span><strong>${formatCurrency(amount)}</strong></div>`).join('');
+    const paymentRows = paymentMethods.map((payment) => `<div class="row"><span>${paymentLabels[payment]}</span><strong>${formatCurrency(paymentTotals.get(payment) || 0)}</strong></div>`).join('');
     const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
     const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : (currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-');
     const ticketLines = allItems.length;
     printWindow.document.write(`<!doctype html><html><head><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:11px}h1{text-align:center;font-size:16px;margin:4px 0 12px}h2{text-align:center;font-size:14px;margin:14px 0 5px}.meta{margin:2px 0}.line{border-bottom:1px dashed #111;margin:7px 0}.row{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.row span:last-child,.row strong{text-align:right}.category{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.category span:last-child,.category strong{text-align:right}.total{display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px}.summary{display:flex;justify-content:space-between;padding:2px 0}</style></head><body><h1>Partial Cash Report</h1><p class="meta">Caissier : <strong>${connectedCashier}</strong></p><p class="meta">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${allOrders.length}<br>Start Date : ${startDate}<br>End Date : ${generatedAt}</p><div class="line"></div><h2>Sales</h2><div class="row"><strong>Name</strong><strong>Sold</strong><strong>Net</strong><strong>Total</strong></div>${salesRows || '<p>Aucune vente.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Product Categories</h2><div class="category"><strong>Name</strong><strong>Sold</strong><strong>Total</strong></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Lines Removed</h2><div class="category"><span>${connectedCashier}</span><span>0</span><strong>${formatCurrency(0)}</strong></div><h2>Taxes</h2><div class="category"><span>Tax Exempt</span><span></span><strong>${formatCurrency(total)}</strong></div><div class="line"></div><h2>Payments</h2><div class="category"><strong>Type</strong><span></span><strong>Total</strong></div>${paymentRows || '<div class="row"><span>Aucun paiement</span><span></span><strong>AR0</strong></div>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>SUMMARY</h2><div class="summary"><span>Tickets</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Ticket Lines</span><strong>${ticketLines}</strong></div><div class="summary"><span>Payments</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Net Sales</span><strong>${formatCurrency(total)}</strong></div><div class="summary"><span>Tax</span><strong>${formatCurrency(0)}</strong></div></body></html>`);
     printWindow.document.close();
+    Array.from(printWindow.document.querySelectorAll('h2'))
+      .filter((heading) => ['Sales', 'Product Categories'].includes(heading.textContent?.trim() || ''))
+      .forEach((heading) => {
+        heading.style.display = 'none';
+        let sibling = heading.nextElementSibling;
+        while (sibling && sibling.tagName !== 'H2') {
+          sibling.style.display = 'none';
+          sibling = sibling.nextElementSibling;
+        }
+      });
     printWindow.focus();
     printWindow.print();
   };
@@ -611,8 +623,9 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const total = reportOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
     const generatedAt = new Date().toLocaleString('fr-FR');
     const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'Carte / TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
-    const paymentRows = Array.from(paymentTotals.entries()).map(([payment, amount]) => `<div class="row"><span>${paymentLabels[payment] || payment}</span><strong>${formatCurrency(amount)}</strong></div>`).join('');
+    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
+    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
+    const paymentRows = paymentMethods.map((payment) => `<div class="row"><span>${paymentLabels[payment]}</span><strong>${formatCurrency(paymentTotals.get(payment) || 0)}</strong></div>`).join('');
     const openingDate = currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-';
     const closingDate = new Date().toLocaleString('fr-FR');
     const finalFund = closedFund ?? currentBarSession?.fond_final;
@@ -655,12 +668,11 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   };
 
   const handleCloseAllOrders = async () => {
-    if (!onEncaisserCommande || pendingOrders.length === 0) return;
-    if (!window.confirm(`Clôturer les ${pendingOrders.length} commande(s) encore servie(s) ?`)) return;
+    if (!onCloseAllOrders || allOrders.length === 0) return;
+    if (!window.confirm(`Imprimer puis effacer les ${allOrders.length} commande(s) et leurs transactions ?`)) return;
 
-    for (const order of pendingOrders) {
-      await handleEncaisserCommande(order.id);
-    }
+    handlePrintAllOrders();
+    await onCloseAllOrders(allOrders.map((order) => order.id));
     await onRefresh?.();
   };
 
@@ -668,60 +680,54 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     <div className="space-y-6">
       <div className="flex justify-end">
         <div className="flex flex-wrap justify-end gap-2">
-          {isBar && currentBarSession && (
-            <>
-              <Button variant="secondary" icon={<Printer size={16} />} onClick={() => handlePrintAllOrders()}>
-                Imprimer
-              </Button>
-              <Button variant="secondary" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la caisse'}>
-                {isClosingBarSession ? 'Clôture...' : 'Clôturer'}
-              </Button>
-            </>
+          {!isBar && (
+            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
+              Nouvelle transaction
+            </Button>
           )}
-          <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
-            Nouvelle transaction
-          </Button>
         </div>
       </div>
 
-      {isBar && (
-        <div className="overflow-hidden rounded-2xl border border-base bg-surface">
-          <div className="flex flex-col gap-3 border-b border-base px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="font-semibold text-primary">Clôturer et imprimer toutes les commandes</h3>
-              <p className="text-xs text-muted">{allOrders.length} commande{allOrders.length > 1 ? 's' : ''} dans la caisse · {pendingOrders.length} à clôturer</p>
+      <div className={isBar ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
+        {/* Caisse Card */}
+        {canViewBarBalance && (
+          <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
+        )}
+        {isBar && (
+          <section className="rounded-2xl border border-accent/30 bg-surface p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-primary">Commandes de la caisse</h3>
+                <p className="mt-1 text-xs text-muted">Impression et clôture globales</p>
+              </div>
+              <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{allOrders.length}</span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintAllOrders()} disabled={allOrders.length === 0}>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintAllOrders()} disabled={allOrders.length === 0} className="justify-center">
                 Imprimer toutes
               </Button>
-              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onEncaisserCommande || pendingOrders.length === 0}>
+              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="justify-center">
                 Clôturer toutes
               </Button>
+              {currentBarSession && (
+                <Button size="sm" variant="secondary" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la session de caisse'} className="justify-center sm:col-span-2 lg:col-span-1 xl:col-span-2">
+                  {isClosingBarSession ? 'Clôture...' : 'Clôturer la caisse'}
+                </Button>
+              )}
             </div>
-          </div>
-          {allOrders.length === 0 ? (
-            <p className="px-6 py-6 text-center text-sm text-muted">Aucune commande à imprimer ou à clôturer.</p>
-          ) : (
-            <div className="divide-y divide-base">
-              {allOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between gap-3 px-6 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
-                    <p className="text-xs text-muted">{order.statut || 'Sans statut'}{order.table ? ` · Table ${order.table}` : ''}</p>
-                  </div>
-                  <span className="shrink-0 text-sm font-semibold text-accent">{formatCurrency(order.total)}</span>
-                </div>
-              ))}
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base pt-4 text-center">
+              <div>
+                <p className="text-lg font-semibold text-primary">{pendingOrders.length}</p>
+                <p className="text-[11px] text-muted">À encaisser</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => order.statut === 'Encaissée').length}</p>
+                <p className="text-[11px] text-muted">Encaissées</p>
+              </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Caisse Card */}
-      {canViewBarBalance && (
-        <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
-      )}
+          </section>
+        )}
+      </div>
 
       <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface">
         <div className="flex items-center justify-between border-b border-base px-6 py-4">

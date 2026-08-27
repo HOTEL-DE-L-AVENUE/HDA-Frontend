@@ -304,6 +304,9 @@ export const BarPage: React.FC = () => {
           onEncaisserCommande={async (orderId) => {
             await handleUpdateStatut(orderId, 'Encaissée');
           }}
+          onCloseAllOrders={async (orderIds) => {
+            await barService.closeAllBarOrders(orderIds);
+          }}
           onRefresh={async () => {
             await Promise.all([loadOrders(), fetchData()]);
           }}

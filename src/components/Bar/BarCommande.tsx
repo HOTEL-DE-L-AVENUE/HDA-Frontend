@@ -41,6 +41,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
   const canDeleteTicketItem = isAdmin(currentUser);
+  const canAdjustTicketQuantity = isAdmin(currentUser);
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
 
   useEffect(() => {
@@ -531,9 +532,11 @@ export const BarCommandeView: React.FC<Props> = ({
               </Button>
             )}
             <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
-            <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={!canDeleteCommande || deletingId === commande.id} title={canDeleteCommande ? 'Supprimer la commande' : 'Suppression réservée à l’administrateur'}>
-              {deletingId === commande.id ? '...' : 'Supprimer'}
-            </Button>
+            {canDeleteCommande && (
+              <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
+                {deletingId === commande.id ? '...' : 'Supprimer'}
+              </Button>
+            )}
           </>
         );
       },
@@ -739,7 +742,7 @@ export const BarCommandeView: React.FC<Props> = ({
               </div>
               <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
-                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom} ×{item.quantite}</span><div className="flex items-center gap-2"><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}</div>}
+                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom}</span><div className="flex items-center gap-2">{canAdjustTicketQuantity && <div className="hidden items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 sm:flex"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button><span className="min-w-5 text-center text-primary">{item.quantite}</span><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button></div>} {!canAdjustTicketQuantity && <span className="min-w-5 text-center text-primary">×{item.quantite}</span>}<span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}</div>}
                 <div className="mt-4 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
               </aside>
             </div>
@@ -753,15 +756,19 @@ export const BarCommandeView: React.FC<Props> = ({
                   <div key={`${item.nom}-${index}`} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-sm">
                     <span className="text-primary">{item.nom}</span>
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1">
-                        <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white">
-                          −
-                        </button>
-                        <span className="min-w-5 text-center text-primary">{item.quantite}</span>
-                        <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white">
-                          +
-                        </button>
-                      </div>
+                      {canAdjustTicketQuantity ? (
+                        <div className="flex items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1">
+                          <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white">
+                            −
+                          </button>
+                          <span className="min-w-5 text-center text-primary">{item.quantite}</span>
+                          <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white">
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
+                      )}
                       <span className="text-accent">{formatCurrency(item.prix * item.quantite)}</span>
                       {canDeleteTicketItem && (
                         <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}>
