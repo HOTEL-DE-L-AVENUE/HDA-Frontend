@@ -23,6 +23,7 @@ export interface Product {
   category_id: number;
   type_produit: 'MATIERE_PREMIERE' | 'PRODUIT_FINI' | 'CONSOMMABLE' | 'SERVICE';
   actif: boolean;
+  couleur?: string;
 }
 
 export interface MenuItem extends Product {

@@ -1,3 +1,4 @@
+// src/components/Restaurant/Tabs/MenuTab.tsx
 import React, { useState, useEffect } from 'react';
 import { Badge, Button } from '../../UI';
 import { formatCurrency } from '../../../utils/data';
@@ -7,7 +8,7 @@ import type { Product, Category } from '../types';
 interface MenuTabProps {
   products: Product[];
   categories: Category[];
-  userIsAdmin: boolean; // Reçoit l'état administrateur
+  userIsAdmin: boolean;
   onAddProduct: () => void;
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (id: number) => void;
@@ -157,7 +158,9 @@ export const MenuTab: React.FC<MenuTabProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredProducts.map((p) => {
                   const categoryObj = categories.find(c => c.id === p.category_id);
-                  const customBg = productColors[p.id] || productColors[p.nom] || '';
+
+                  // Récupère la couleur depuis l'objet produit (BDD) ou le localStorage en secours
+                  const customBg = p.couleur || productColors[p.id] || productColors[p.nom?.trim().toLowerCase()] || '';
 
                   return (
                     <div

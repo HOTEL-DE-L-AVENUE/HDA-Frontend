@@ -1,3 +1,4 @@
+// src/components/Restaurant/Modals/ProductModal.tsx
 import React, { useState, useEffect } from 'react';
 import { Modal, Input, Select, Button } from '../../UI';
 import type { Category, Product } from '../types';
@@ -19,8 +20,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 }) => {
   const [form, setForm] = useState({
     nom: '',
+    code: '',
     category_id: 0,
     prix_vente: 0,
+    prix_achat: 0,
     unite: 'PIECE',
     type_produit: 'PRODUIT_FINI' as const,
     actif: true,
@@ -29,58 +32,55 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
   useEffect(() => {
     if (editingProduct) {
-      // Récupère la couleur stockée localement pour ce produit
-      const savedColors = JSON.parse(localStorage.getItem('hda_product_colors') || '{}');
-      const localColor = savedColors[editingProduct.id] || savedColors[editingProduct.nom] || '';
-
       setForm({
-        nom: editingProduct.nom,
-        category_id: editingProduct.category_id,
-        prix_vente: editingProduct.prix_vente,
-        unite: editingProduct.unite,
+        nom: editingProduct.nom || '',
+        code: editingProduct.code || '',
+        category_id: editingProduct.category_id || 0,
+        prix_vente: editingProduct.prix_vente || 0,
+        prix_achat: editingProduct.prix_achat || 0,
+        unite: editingProduct.unite || 'PIECE',
         type_produit: (editingProduct.type_produit || 'PRODUIT_FINI') as any,
-        actif: editingProduct.actif,
-        couleur: localColor
+        actif: editingProduct.actif ?? true,
+        couleur: editingProduct.couleur || '' // Récupère la couleur depuis la BDD
       });
     } else {
       setForm({
         nom: '',
-        category_id: 0,
+        code: '',
+        category_id: categories[0]?.id || 0,
         prix_vente: 0,
+        prix_achat: 0,
         unite: 'PIECE',
         type_produit: 'PRODUIT_FINI',
         actif: true,
         couleur: ''
       });
     }
-  }, [editingProduct]);
+  }, [editingProduct, categories]);
 
   const handleSubmit = () => {
     if (!form.nom || !form.category_id) return;
 
-    // Sauvegarde la couleur dans le localStorage du navigateur
-    if (form.nom) {
-      const savedColors = JSON.parse(localStorage.getItem('hda_product_colors') || '{}');
-      if (editingProduct?.id) {
-        savedColors[editingProduct.id] = form.couleur;
-      }
-      savedColors[nomKey(form.nom)] = form.couleur;
-      localStorage.setItem('hda_product_colors', JSON.stringify(savedColors));
-    }
-
-    onSubmit({
+    // Prépare l'objet à envoyer en incluant l'ID si on est en mode édition
+    const payload: any = {
       nom: form.nom,
+      code: form.code,
       category_id: form.category_id,
       prix_vente: form.prix_vente,
+      prix_achat: form.prix_achat,
       unite: form.unite,
       type_produit: form.type_produit,
-      actif: form.actif
-    });
+      actif: form.actif,
+      couleur: form.couleur // Transmet la couleur choisie
+    };
 
+    if (editingProduct) {
+      payload.id = editingProduct.id; // Indispensable pour la modification !
+    }
+
+    onSubmit(payload);
     onClose();
   };
-
-  const nomKey = (name: string) => name.trim().toLowerCase();
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editingProduct ? "Modifier le plat" : "Ajouter un plat"} size="lg">
@@ -90,6 +90,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           value={form.nom}
           onChange={(e) => setForm({ ...form, nom: e.target.value })}
           placeholder="Ex: Burger Deluxe"
+        />
+
+        <Input
+          label="Code du plat (optionnel)"
+          value={form.code}
+          onChange={(e) => setForm({ ...form, code: e.target.value })}
+          placeholder="Ex: PLT001"
         />
 
         <Select
@@ -102,15 +109,26 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           ]}
         />
 
-        <Input
-          label="Prix de vente (MGA)"
-          type="number"
-          value={form.prix_vente}
-          onChange={(e) => setForm({ ...form, prix_vente: Number(e.target.value) })}
-          placeholder="0.00"
-          min={0}
-          step={0.01}
-        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Prix d'achat (MGA)"
+            type="number"
+            value={form.prix_achat}
+            onChange={(e) => setForm({ ...form, prix_achat: Number(e.target.value) })}
+            placeholder="0"
+            min={0}
+            step={1000}
+          />
+          <Input
+            label="Prix de vente (MGA)"
+            type="number"
+            value={form.prix_vente}
+            onChange={(e) => setForm({ ...form, prix_vente: Number(e.target.value) })}
+            placeholder="0"
+            min={0}
+            step={1000}
+          />
+        </div>
 
         <Select
           label="Unité"
@@ -126,7 +144,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           ]}
         />
 
-        {/* SÉLECTEUR DE COULEUR PERSONNALISABLE LIBRE */}
+        {/* SÉLECTEUR DE COULEUR PERSONNALISABLE */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-secondary block">
             Couleur de fond personnalisée
