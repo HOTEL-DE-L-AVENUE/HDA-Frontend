@@ -461,6 +461,7 @@ export const RestaurantPage: React.FC = () => {
           <MenuTab
             products={products}
             categories={categories}
+            userIsAdmin={userIsAdmin}
             onAddProduct={() => {
               setEditingProduct(null);
               setShowProductModal(true);

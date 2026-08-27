@@ -7,6 +7,7 @@ import type { Product, Category } from '../types';
 interface MenuTabProps {
   products: Product[];
   categories: Category[];
+  userIsAdmin: boolean; // Reçoit l'état administrateur
   onAddProduct: () => void;
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (id: number) => void;
@@ -15,6 +16,7 @@ interface MenuTabProps {
 export const MenuTab: React.FC<MenuTabProps> = ({
   products,
   categories,
+  userIsAdmin,
   onAddProduct,
   onEditProduct,
   onDeleteProduct
@@ -30,7 +32,6 @@ export const MenuTab: React.FC<MenuTabProps> = ({
       setProductColors(saved);
     };
     loadColors();
-    // Écouteur pour actualiser si le localStorage change
     window.addEventListener('storage', loadColors);
     return () => window.removeEventListener('storage', loadColors);
   }, [products]);
@@ -60,7 +61,9 @@ export const MenuTab: React.FC<MenuTabProps> = ({
             Gestion du Menu & Carte
           </h3>
           <p className="text-sm text-subtle mt-0.5">
-            Gérez vos plats, boissons et spécialités par catégorie.
+            {userIsAdmin
+              ? "Gérez vos plats, boissons et spécialités par catégorie."
+              : "Consultez la carte et les menus disponibles."}
           </p>
         </div>
 
@@ -81,9 +84,13 @@ export const MenuTab: React.FC<MenuTabProps> = ({
               }}
             />
           </div>
-          <Button icon={<Plus size={16} />} onClick={onAddProduct} className="text-sm h-10 whitespace-nowrap">
-            Ajouter un plat
-          </Button>
+
+          {/* Bouton d'ajout visible uniquement pour l'admin */}
+          {userIsAdmin && (
+            <Button icon={<Plus size={16} />} onClick={onAddProduct} className="text-sm h-10 whitespace-nowrap">
+              Ajouter un plat
+            </Button>
+          )}
         </div>
       </div>
 
@@ -94,7 +101,7 @@ export const MenuTab: React.FC<MenuTabProps> = ({
       >
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-          {/* Filtres verticaux */}
+          {/* Filtres verticaux (Masque les catégories à 0 et garde "Toutes") */}
           <div className="lg:col-span-1 space-y-2">
             <button
               onClick={() => setSelectedCategory('tous')}
@@ -150,8 +157,6 @@ export const MenuTab: React.FC<MenuTabProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredProducts.map((p) => {
                   const categoryObj = categories.find(c => c.id === p.category_id);
-
-                  // Récupération de la couleur depuis le localStorage
                   const customBg = productColors[p.id] || productColors[p.nom] || '';
 
                   return (
@@ -216,16 +221,19 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
-                          <Button size="sm" variant="secondary" onClick={() => onEditProduct(p)} title="Modifier">
-                            <Edit size={14} />
-                          </Button>
-                          {p.actif && (
-                            <Button size="sm" variant="danger" onClick={() => onDeleteProduct(p.id)} title="Supprimer">
-                              <Trash2 size={14} />
+                        {/* Boutons Modifier/Supprimer affichés uniquement si l'utilisateur est admin */}
+                        {userIsAdmin && (
+                          <div className="flex items-center gap-1.5">
+                            <Button size="sm" variant="secondary" onClick={() => onEditProduct(p)} title="Modifier">
+                              <Edit size={14} />
                             </Button>
-                          )}
-                        </div>
+                            {p.actif && (
+                              <Button size="sm" variant="danger" onClick={() => onDeleteProduct(p.id)} title="Supprimer">
+                                <Trash2 size={14} />
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
