@@ -127,6 +127,15 @@ export const adjustStock = (data: {
 }) =>
   api.post('/api/restaurant/stock/adjust', data).then(res => res.data);
 
+export const consumePortion = (data: {
+  product_id: number;
+  location_id: number;
+  portion_size: number;
+  portion_unit?: string;
+  reference_id?: number;
+}) =>
+  api.post('/api/restaurant/stock/consume-portion', data).then(res => res.data);
+
 export const deleteStockItem = (stockIdOrFilter: number | { product_id?: number; location_id?: number }) => {
   // Use the restaurant-scoped delete endpoint which supports deletion by id
   // or by product_id + location_id pair (convenient for the restaurant UI).
@@ -150,6 +159,9 @@ export const createProduct = (data: {
   prix_achat?: number;
   prix_vente?: number;
   category_id?: number;
+  subcategory_id?: number;
+  portion_size?: number;
+  portion_unite?: string;
 }) =>
   api.post('/api/restaurant/products', data).then(res => res.data);
 
@@ -198,3 +210,16 @@ export const getProductTypes = () =>
 // ==================== CATÉGORIES ====================
 export const getCategories = () =>
   api.get('/api/restaurant/categories').then(res => res.data);
+
+// ==================== SOUS-CATÉGORIES ====================
+export const getSubcategories = (params?: { category_id?: number }) =>
+  api.get('/api/restaurant/subcategories', { params }).then(res => res.data);
+
+export const createSubcategory = (data: { category_id: number; nom: string }) =>
+  api.post('/api/restaurant/subcategories', data).then(res => res.data);
+
+export const updateSubcategory = (id: number, data: { category_id?: number; nom?: string }) =>
+  api.put(`/api/restaurant/subcategories/${id}`, data).then(res => res.data);
+
+export const deleteSubcategory = (id: number) =>
+  api.delete(`/api/restaurant/subcategories/${id}`).then(res => res.data);

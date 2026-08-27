@@ -214,37 +214,47 @@ export const RestaurantPage: React.FC = () => {
 
   const handlePayment = async (orderId: number | string) => {
     const numericId = Number(orderId);
-    const order = orders.find(o => o.id === numericId);
+    const order = orders.find(o => Number(o.id) === numericId);
+
+    const calculatedMontant = Number(
+      order?.montant_total ||
+      (order as any)?.total ||
+      (order?.items && order.items.length > 0
+        ? order.items.reduce((s: number, i: any) => s + (Number(i.prix_unitaire || i.prix || 0) * Number(i.quantite || i.quantity || 1)), 0)
+        : 0)
+    );
 
     // 1. Appel API
     try {
       const res = await restaurantService.processPayment({
         order_id: numericId,
-        montant: order?.montant_total || 0,
+        montant: calculatedMontant > 0 ? calculatedMontant : undefined as any,
         moyen_paiement: 'ESPECES',
         client_id: order?.client_id || undefined,
       });
       if (res && res.success) {
         await fetchOrders();
+        const tablesRes = await restaurantService.getTables();
+        if (tablesRes.success) setTables(tablesRes.data);
       }
     } catch (err) {
       console.warn('API payment échoué, bascule vers mode local:', err);
     }
 
     // 2. Mise à jour de l'état local
-    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: 'PAYEE' } : o));
+    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE' } : o));
     if (order?.table) {
       setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
 
     // 3. Enregistrement dans le HDAContext (Caisse)
-    if (order) {
+    if (order || calculatedMontant > 0) {
       dispatch({
         type: 'ADD_TRANSACTION',
         payload: {
           type: 'entree',
-          montant: order.montant_total || 0,
-          description: `Encaissement Commande #${order.id} ${order.table?.numero ? '(Table ' + order.table.numero + ')' : ''}`,
+          montant: calculatedMontant,
+          description: `Encaissement Commande #${numericId} ${order?.table?.numero ? '(Table ' + order.table.numero + ')' : ''}`,
           categorie: 'Ventes Restaurant',
           module: 'restaurant',
           userName: state.currentUser ? `${state.currentUser.prenom} ${state.currentUser.nom}` : 'Caisse',
