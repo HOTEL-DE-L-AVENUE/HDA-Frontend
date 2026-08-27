@@ -27,7 +27,7 @@ const paymentMethods = ['Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèq
 
 const bonusCategories = ['7 et 2', 'Carré', 'Quinte flush', 'Quinte flush royal', 'Fetish'];
 const positiveResultOptions = ['Dépôt', 'Crédit payé', 'Espèce', 'MVola', 'Orange Money'];
-const negativeResultOptions = ['Crédit', 'TPE', 'MVola', 'Orange Money', 'Espèce'];
+const negativeResultOptions = ['Dépôt payé', 'Crédit', 'TPE', 'MVola', 'Orange Money', 'Espèce'];
 const ROULETTE_PRIZES = [10000, 5000, 100000, 20000, 10000, 0, 50000, 10000, 10000, 20000, 100000, 10000, 5000, 50000, 20000, 5000, 40000, 5000, 50000, 5000, 0, 100000, 10000, 20000];
 
 const parseBonuses = (value?: string): string[] => {
@@ -62,6 +62,56 @@ const parseBonusResults = (value?: string): Record<string, number> => {
   }
 };
 
+
+const signaturesAreCompatible = (firstSignature: string, secondSignature: string): Promise<boolean> => new Promise((resolve) => {
+  if (!firstSignature || !secondSignature) {
+    resolve(false);
+    return;
+  }
+  const size = 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    resolve(false);
+    return;
+  }
+  const firstImage = new Image();
+  const secondImage = new Image();
+  let loaded = 0;
+  const compare = () => {
+    loaded += 1;
+    if (loaded < 2) return;
+    const render = (image: HTMLImageElement) => {
+      context.clearRect(0, 0, size, size);
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, size, size);
+      context.drawImage(image, 0, 0, size, size);
+      return context.getImageData(0, 0, size, size).data;
+    };
+    const firstPixels = render(firstImage);
+    const secondPixels = render(secondImage);
+    let firstInk = 0;
+    let secondInk = 0;
+    let matchingInk = 0;
+    for (let index = 0; index < firstPixels.length; index += 4) {
+      const firstIsInk = firstPixels[index] < 220 || firstPixels[index + 1] < 220 || firstPixels[index + 2] < 220;
+      const secondIsInk = secondPixels[index] < 220 || secondPixels[index + 1] < 220 || secondPixels[index + 2] < 220;
+      if (firstIsInk) firstInk += 1;
+      if (secondIsInk) secondInk += 1;
+      if (firstIsInk && secondIsInk) matchingInk += 1;
+    }
+    const union = firstInk + secondInk - matchingInk;
+    resolve(firstInk > 0 && secondInk > 0 && matchingInk / union >= 0.10);
+  };
+  firstImage.onload = compare;
+  secondImage.onload = compare;
+  firstImage.onerror = () => resolve(false);
+  secondImage.onerror = () => resolve(false);
+  firstImage.src = firstSignature;
+  secondImage.src = secondSignature;
+});
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {} }) => {
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
     const firstPlayer = players[0];
@@ -74,6 +124,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const [rouletteNumber, setRouletteNumber] = useState<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
+  const [repeatedSignature, setRepeatedSignature] = useState('');
+  const [signatureError, setSignatureError] = useState('');
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce(
@@ -87,6 +139,28 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const selectedResultPaymentOptions = parseBonuses(selectedPlayer?.resultPaymentOptions);
   const selectedIdentityVerification = identityVerifications[selectedPlayerId];
   const resultOptions = selectedPlayerResult > 0 ? positiveResultOptions : selectedPlayerResult < 0 ? negativeResultOptions : [];
+
+  useEffect(() => {
+    setRepeatedSignature('');
+    setSignatureError('');
+  }, [selectedPlayerId]);
+
+  const saveWithSignatureCheck = async () => {
+    if (!selectedPlayer?.signature) {
+      setSignatureError('Veuillez saisir la signature du joueur.');
+      return;
+    }
+    if (!repeatedSignature) {
+      setSignatureError('Veuillez répéter la signature avant d’enregistrer.');
+      return;
+    }
+    if (!(await signaturesAreCompatible(selectedPlayer.signature, repeatedSignature))) {
+      setSignatureError('Les signatures ne correspondent pas suffisamment. Veuillez répéter la signature.');
+      return;
+    }
+    setSignatureError('');
+    onSave();
+  };
 
   // Chaque fiche possède son propre cumul : une recave ne doit jamais
   // s'ajouter au total d'un autre joueur.
@@ -254,7 +328,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             return (
             <tr key={line.id} className="h-9">
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.name} onChange={(event) => onUpdate(line.id, 'name', event.target.value)} placeholder="Nom du joueur" /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} placeholder="h" /></td>
+              <td className="border" style={casinoBorder}><input type="time" className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={totalsByLineId[line.id] ? String(totalsByLineId[line.id]) : '0'} readOnly /></td>
@@ -267,10 +341,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             );
           })}
           <tr className="h-12">
-            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
+            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input type="time" className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={3}>Cashing : <input type="text" inputMode="decimal" className={`${paperInput} inline-block w-32`} value={selectedPlayer?.cashing || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'cashing', event.target.value)} placeholder="0" /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={4}>
-              <div className="flex items-center gap-2">Signature : {selectedPlayer && <SignaturePad value={selectedPlayer.signature} onChange={(value) => onUpdate(selectedPlayer.id, 'signature', value)} />}</div>
+              <div className="flex items-center gap-2">Répéter la signature : {selectedPlayer && <SignaturePad value={repeatedSignature} onChange={(value) => { setRepeatedSignature(value); setSignatureError(''); }} />}</div>
             </td>
           </tr>
         </tbody>
@@ -346,8 +420,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     )}
     <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
-      {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
-      <button type="button" className="action" onClick={onSave} disabled={saveState === 'saving'}>
+      {(saveState === 'error' || signatureError) && <span className="text-xs text-red-400">{signatureError || 'Erreur d’enregistrement'}</span>}
+      <button type="button" className="action" onClick={saveWithSignatureCheck} disabled={saveState === 'saving'}>
         {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer la fiche'}
       </button>
     </div>
@@ -372,22 +446,22 @@ const SheetBottomRow: React.FC<{ label: string; value?: string }> = ({ label, va
 
 const BonusRouletteModal: React.FC<{ bonus: string; rotation: number; result: number | null; number: number | null; isSpinning: boolean; onSpin: () => void; onConfirm: () => void; onClose: () => void }> = ({ bonus, rotation, result, number, isSpinning, onSpin, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-label={`Roue bonus ${bonus}`}>
-    <div className="w-full max-w-lg rounded-2xl border p-5 text-white shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
+    <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border p-4 text-white shadow-2xl sm:p-5" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
       <div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-lg font-bold">Roue bonus</p><p className="text-sm text-muted">Bonus : {bonus}</p></div><button type="button" className="text-xl leading-none" onClick={onClose} disabled={isSpinning} aria-label="Fermer">×</button></div>
-      <div className="relative mx-auto mb-5 flex h-52 w-52 items-center justify-center">
+      <div className="relative mx-auto mb-5 flex h-[min(90vw,25rem,55vh)] w-[min(90vw,25rem,55vh)] max-w-full items-center justify-center">
         <span className="absolute -top-3 z-10 text-3xl text-yellow-300">▼</span>
         <div className="relative h-full w-full rounded-full border-4 border-yellow-500 transition-transform duration-[10000ms] ease-out" style={{ background: 'repeating-conic-gradient(#b91c1c 0deg 15deg, #1f2937 15deg 30deg)', transform: `rotate(${rotation}deg)` }}>
           {ROULETTE_PRIZES.map((_, index) => (
-            <span key={index} className="absolute left-1/2 top-1/2 -ml-2 -mt-2 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[8px] font-bold text-white" style={{ transform: `rotate(${index * 15}deg) translateY(-86px) rotate(${-index * 15}deg)` }}>{index + 1}</span>
+            <span key={index} className="absolute left-1/2 top-1/2 -ml-3 -mt-3 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-[9px] font-bold text-white" style={{ transform: `rotate(${index * 15}deg) translateY(calc(-1 * (min(90vw, 25rem, 55vh) / 2 - 14px))) rotate(${-index * 15}deg)` }}>{index + 1}</span>
           ))}
         </div>
-        <div className="absolute flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-500 bg-yellow-700 text-center text-xs font-bold">BONUS</div>
+        <div className="absolute flex h-32 w-32 items-center justify-center rounded-full border-4 border-yellow-500 bg-yellow-700 text-center text-sm font-bold">BONUS</div>
       </div>
-      <div className="mb-4 grid grid-cols-3 gap-1 rounded border p-2 text-[11px]" style={casinoBorder}>
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded border p-2 text-[10px] sm:grid-cols-3 sm:text-[11px]" style={casinoBorder}>
         {ROULETTE_PRIZES.map((prize, index) => <span key={index} className={prize === 0 ? 'text-red-400' : prize === 100000 ? 'text-lime-300' : ''}>{index + 1}. {casinoCurrency.format(prize)} Ar</span>)}
       </div>
       {result !== null && <p className="mb-4 rounded-lg bg-yellow-500/15 p-3 text-center font-bold text-yellow-300">Numéro {number} : {casinoCurrency.format(result)} Ar</p>}
-      <div className="flex justify-end gap-2"><button type="button" className="action secondary" onClick={onClose} disabled={isSpinning}>Annuler</button>{result === null ? <button type="button" className="action" onClick={onSpin} disabled={isSpinning}>{isSpinning ? 'La roue tourne...' : 'Tourner la roue'}</button> : <button type="button" className="action" onClick={onConfirm}>Valider le gain</button>}</div>
+      <div className="flex flex-wrap justify-end gap-2"><button type="button" className="action secondary" onClick={onClose} disabled={isSpinning}>Annuler</button>{result === null ? <button type="button" className="action" onClick={onSpin} disabled={isSpinning}>{isSpinning ? 'La roue tourne...' : 'Tourner la roue'}</button> : <button type="button" className="action" onClick={onConfirm}>Valider le gain</button>}</div>
     </div>
   </div>
 );

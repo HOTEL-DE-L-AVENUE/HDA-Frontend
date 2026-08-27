@@ -7,13 +7,38 @@ import { IdentityVerificationsManagement } from '../components/Casino/sheets/Ide
 import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, casinoBorder, casinoCurrency, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
 import { playerSheetApi, identityVerificationApi } from '../services/casinoTablesJeu.service';
 
+const getCurrentTime = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+};
+
+const createInitialPlayers = () => {
+  const players = Array.from({ length: 12 }, (_, index) => createPlayerLine(index + 1));
+  players[0].time = getCurrentTime();
+  players[0].departure = getCurrentTime();
+  return players;
+};
+
+const setFirstPlayerTimeIfMissing = (players: PlayerLine[]) => {
+  if (!players.length) return players;
+  const firstPlayer = players[0];
+  if (firstPlayer.time.trim() && firstPlayer.departure.trim()) return players;
+  const currentTime = getCurrentTime();
+  return players.map((player, index) => index === 0 ? {
+    ...player,
+    time: player.time.trim() || currentTime,
+    departure: player.departure.trim() || currentTime,
+  } : player);
+};
+
 export const CasinoPage: React.FC = () => {
   const [view, setView] = useState<CasinoView>('players');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [table, setTable] = useState('Table Poker Night');
-  const [players, setPlayers] = useState<PlayerLine[]>(() => Array.from({ length: 12 }, (_, index) => createPlayerLine(index + 1)));
+  const [players, setPlayers] = useState<PlayerLine[]>(createInitialPlayers);
   const [restaurantPayments, setRestaurantPayments] = useState({ especes: false, tpe: false });
   const [cashingPaymentMethod, setCashingPaymentMethod] = useState('');
+  const [endGameTime, setEndGameTime] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [chips, setChips] = useState<ChipLine[]>(() => CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
   const [finalsByPlayer, setFinalsByPlayer] = useState<Record<string, Record<string, string>>>({});
@@ -52,10 +77,11 @@ export const CasinoPage: React.FC = () => {
     playerSheetApi.get(date, table).then((sheet) => {
       if (!active) return;
       if (sheet) {
-        setPlayers(sheet.players);
+        setPlayers(setFirstPlayerTimeIfMissing(sheet.players));
         setChips(sheet.chips || CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
         setRestaurantPayments(sheet.restaurantPayments || { especes: false, tpe: false });
         setCashingPaymentMethod(sheet.cashingPaymentMethod || '');
+        setEndGameTime(sheet.endGameTime || '');
         const loadedFinals = sheet.finals || {};
         // Compatibilité avec les signatures précédemment enregistrées dans une fiche joueur.
         const previousSignature = Object.values(loadedFinals).find((entry) => entry?.signature)?.signature;
@@ -63,10 +89,11 @@ export const CasinoPage: React.FC = () => {
           ? { ...loadedFinals, _global: { signature: previousSignature } }
           : loadedFinals);
       } else {
-        setPlayers(Array.from({ length: 12 }, (_, index) => createPlayerLine(index + 1)));
+        setPlayers(createInitialPlayers());
         setChips(CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
         setRestaurantPayments({ especes: false, tpe: false });
         setCashingPaymentMethod('');
+        setEndGameTime('');
         setFinalsByPlayer({});
       }
     }).catch(() => {
@@ -107,7 +134,7 @@ export const CasinoPage: React.FC = () => {
         accumulatedTotals[ficheId] = (accumulatedTotals[ficheId] || 0) + lineTotal;
         return { ...player, total: String(lineTotal), accumulated: String(accumulatedTotals[ficheId]) };
       });
-      const saved = await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, restaurantPayments, finals: finalsByPlayer, cashingPaymentMethod });
+      const saved = await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, restaurantPayments, finals: finalsByPlayer, endGameTime, cashingPaymentMethod });
       // Sauvegarder les vérifications d'identité liées à cette fiche
       const sheetId = saved.id;
       if (sheetId) {
@@ -154,7 +181,7 @@ export const CasinoPage: React.FC = () => {
       <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-3 justify-between print:hidden" style={{ borderBottom: '1px solid var(--color-border)' }}><div className="flex flex-col sm:flex-row gap-3"><label className="field">Table<input value={table} onChange={(event) => setTable(event.target.value)} /></label><label className="field">Date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-semibold cursor-pointer"><input type="checkbox" checked={showIdentityVerifications} onChange={(event) => setShowIdentityVerifications(event.target.checked)} /> Vérifications identité</label><p className="text-muted text-xs self-end">Fiche enregistrée dans la base de données.</p></div></div>
       <div className="p-4 md:p-5"><div className="hidden print:block text-center mb-5"><h1>{table}</h1><p>Date : {date}</p></div>
         {view === 'players' && <PlayersSheet date={date} players={players} cashingPaymentMethod={cashingPaymentMethod} restaurantPayments={restaurantPayments} saveState={saveState} onDateChange={(value) => { setSaveState('idle'); setDate(value); }} onUpdate={(id, key, value) => { setSaveState('idle'); setPlayers((lines) => lines.map((line) => line.id === id ? { ...line, [key]: value } : line)); }} onPaymentChange={(payment, checked) => { setSaveState('idle'); setRestaurantPayments((current) => ({ ...current, [payment]: checked })); }} onCashingPaymentMethodChange={(value) => { setSaveState('idle'); setCashingPaymentMethod(value); }} onSave={savePlayerSheet} onAdd={(ficheId) => { const firstId = Math.max(0, ...players.map((line) => line.id)) + 1; const newFicheId = ficheId ?? firstId; const newLines = ficheId ? [createPlayerLine(firstId, newFicheId)] : Array.from({ length: 5 }, (_, index) => createPlayerLine(firstId + index, newFicheId)); setPlayers((lines) => [...lines, ...newLines]); return newFicheId; }} onRemove={(id) => setPlayers((lines) => lines.filter((line) => line.id !== id))} showIdentityVerifications={showIdentityVerifications} identityVerifications={identityVerifications} onIdentityVerified={(ficheId, data) => { setIdentityVerifications((current) => ({ ...current, [ficheId]: { id: current[ficheId]?.id, full_name: data.fullName, id_type: data.idType, id_number: data.idNumber, issue_date: data.issueDate, transaction_type: data.transactionType.toUpperCase(), amount: data.amount, verified_at: data.verifiedAt } })); }} />}
-        {view === 'chips' && <ChipsSheet chips={chips} players={players} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onSave={savePlayerSheet} />}
+        {view === 'chips' && <ChipsSheet chips={chips} players={players} endGameTime={endGameTime} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onEndGameTimeChange={(value) => { setSaveState('idle'); setEndGameTime(value); }} onSave={savePlayerSheet} />}
         {view === 'final' && <FinalCalculationSheet players={players} selectedPlayerId={selectedFinalPlayerId} values={{ ...(finalsByPlayer[String(selectedFinalPlayerId)] || {}), signature: finalsByPlayer._global?.signature || finalsByPlayer[String(selectedFinalPlayerId)]?.signature || '' }} withdrawnTotal={withdrawnTotal} depositResults={depositResults} creditResults={creditResults} saveState={saveState} onPlayerChange={setSelectedFinalPlayerId} onUpdate={(key, value) => { setSaveState('idle'); setFinalsByPlayer((current) => key === 'signature' ? { ...current, _global: { ...(current._global || {}), signature: value } } : { ...current, [String(selectedFinalPlayerId)]: { ...(current[String(selectedFinalPlayerId)] || {}), [key]: value } }); }} onSave={savePlayerSheet} showIdentityVerifications={showIdentityVerifications} identityVerifications={identityVerifications} />}
         {view === 'management' && <IdentityVerificationsManagement verifications={Object.entries(identityVerifications).map(([ficheId, v]) => ({ ...v, fiche_id: Number(ficheId) }))} onUpdate={(updated) => { const map: Record<number, any> = {}; for (const v of updated) { map[v.fiche_id ?? 0] = v; } setIdentityVerifications(map); }} />}
       </div>

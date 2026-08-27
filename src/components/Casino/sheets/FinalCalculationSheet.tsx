@@ -63,8 +63,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     .join(' - ');
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
+  const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
   const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
+  const depositPaidTotal = getNegativePaymentTotal(players, 'Dépôt payé');
   const creditPaymentsTotal = getNegativePaymentTotal(players, 'Crédit');
   const playerPaymentsTotal = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -88,7 +90,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + (mobilePaymentResults ? mobilePaymentsTotal : parseCasinoAmount(values.mobiles))
     + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
     + (creditResults ? creditPaymentsTotal : parseCasinoAmount(values.credit))
-    + parseCasinoAmount(values.depotPaye)
+    + (depositPaidResults ? depositPaidTotal : parseCasinoAmount(values.depotPaye))
     + parseCasinoAmount(values.offert);
   const difference = Math.abs(total2 - total1);
   const resultatFinal = difference - parseCasinoAmount(values.especes);
@@ -144,7 +146,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="DEPOT" />
             <CalculationResult value={depositResults} />
             <CalculationCell label="DEPOT PAYE" separated />
-            <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />
+            {depositPaidResults ? <CalculationResult value={depositPaidResults} /> : <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />}
 
             <CalculationCell label="RETOUR MOBILE" />
             <CalculationResult value={mobileReturnResults} />
