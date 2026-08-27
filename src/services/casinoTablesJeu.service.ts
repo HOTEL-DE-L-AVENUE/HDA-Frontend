@@ -90,6 +90,7 @@ export type PlayerSheetData = {
   chips: ChipLine[];
   restaurantPayments: { especes: boolean; tpe: boolean };
   finals: Record<string, Record<string, string>>;
+  endGameTime?: string;
   total_cashing_jetons?: number;
   cashingPaymentMethod?: string;
 };
