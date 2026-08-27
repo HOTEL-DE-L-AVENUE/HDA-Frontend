@@ -107,16 +107,19 @@ export const getBarOrders = async () => {
 };
 export const createBarOrder = (data: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
   post<{ id: number; client: string; table: number; statut: string; total: number; items: Array<{ nom: string; quantite: number; prix: number }> }>('/orders', data);
+export const updateBarOrder = (id: number, data: { client?: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
+  put<BarOrderResponse>(`/orders/${id}`, data);
 export const deleteBarOrder = (id: number) => remove<{ message: string }>('/orders/' + id);
-export const updateBarOrderStatus = (id: number, statut: BarOrderStatus) =>
-  put<BarOrderResponse>('/orders/' + id + '/status', { statut });
+export const closeAllBarOrders = (order_ids: number[]) => post<{ deleted_orders: number; cleared_transactions: boolean }>('/orders/close-all', { order_ids });
+export const updateBarOrderStatus = (id: number, statut: BarOrderStatus, moyen_paiement?: BarPaymentMethod) =>
+  put<BarOrderResponse>('/orders/' + id + '/status', { statut, moyen_paiement });
 
 const barService = {
   getBarTables, getBarTableById, createBarTable, updateBarTable, deleteBarTable, getBarTablesStats,
   getBarCashiers, getBarCashierById, createBarCashier, updateBarCashier, deleteBarCashier,
   openBarSession, closeBarSession, getBarSessions, getBarSessionById, getBarOpenSessions, getBarSessionStats, getBarCashierStatus,
   getBarProducts, getBarProductById, createBarProduct, updateBarProduct, deleteBarProduct,
-  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, createBarOrder, deleteBarOrder, updateBarOrderStatus,
+  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
 };
 
 export default barService;
