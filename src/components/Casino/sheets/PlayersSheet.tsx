@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
+import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IdentityVerificationData } from './types';
+import { IdentityVerificationModal } from './IdentityVerificationModal';
+import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
 
 interface PlayersSheetProps {
   date: string;
@@ -14,6 +16,9 @@ interface PlayersSheetProps {
   onSave: () => void;
   onAdd: (ficheId?: number) => number;
   onRemove: (id: number) => void;
+  onIdentityVerified?: (playerId: number, data: IdentityVerificationData) => void;
+  showIdentityVerifications?: boolean;
+  identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
 
 const paperInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
@@ -34,6 +39,15 @@ const parseBonuses = (value?: string): string[] => {
   }
 };
 
+const parseIdentityVerification = (value?: string) => {
+  try {
+    const data = JSON.parse(value || 'null');
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+};
+
 const parseBonusResults = (value?: string): Record<string, number> => {
   try {
     const results = JSON.parse(value || '{}');
@@ -48,14 +62,18 @@ const parseBonusResults = (value?: string): Record<string, number> => {
   }
 };
 
-export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd }) => {
-  const [selectedPlayerId, setSelectedPlayerId] = useState(players[0]?.id ?? 0);
+export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {} }) => {
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
+    const firstPlayer = players[0];
+    return firstPlayer ? (firstPlayer.ficheId ?? firstPlayer.id) : 0;
+  });
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
   const [rouletteResult, setRouletteResult] = useState<number | null>(null);
   const [rouletteNumber, setRouletteNumber] = useState<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce(
@@ -67,6 +85,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const selectedBonuses = parseBonuses(selectedPlayer?.bonuses);
   const selectedBonusResults = parseBonusResults(selectedPlayer?.bonusResults);
   const selectedResultPaymentOptions = parseBonuses(selectedPlayer?.resultPaymentOptions);
+  const selectedIdentityVerification = identityVerifications[selectedPlayerId];
   const resultOptions = selectedPlayerResult > 0 ? positiveResultOptions : selectedPlayerResult < 0 ? negativeResultOptions : [];
 
   // Chaque fiche possède son propre cumul : une recave ne doit jamais
@@ -155,6 +174,39 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     if (!selectedPlayer) return;
     const nextOptions = checked ? [option] : [];
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextOptions));
+  };
+
+  useEffect(() => {
+    if (selectedPlayer && parseCasinoAmount(selectedPlayer.cashing) > 3_000_000 && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
+      setIdentityModal({ open: true, amount: parseCasinoAmount(selectedPlayer.cashing) });
+    }
+  }, [selectedPlayer?.cashing, selectedPlayer?.identityVerification, identityVerifications]);
+
+  const handleIdentityConfirm = async (data: IdentityVerificationData) => {
+    if (!selectedPlayer) return;
+    try {
+      // Call API to save verification to database
+      await identityVerificationApi.create({
+        fiche_id: selectedPlayer.ficheId ?? selectedPlayer.id,
+        full_name: data.fullName,
+        id_type: data.idType,
+        id_number: data.idNumber,
+        issue_date: data.issueDate,
+        transaction_type: data.transactionType.toUpperCase() as 'ACHAT' | 'APPORT' | 'ECHANGE',
+        amount: data.amount,
+      });
+      
+      // Update local state
+      onUpdate(selectedPlayer.id, 'identityVerification', JSON.stringify(data));
+      onIdentityVerified?.(selectedPlayer.ficheId ?? selectedPlayer.id, data);
+      setIdentityModal({ open: false, amount: 0 });
+    } catch (err) {
+      console.error('Erreur lors de l\'enregistrement de la vérification d\'identité:', err);
+      const apiError = err as { response?: { status?: number; data?: { error?: { message?: string } | string } } };
+      const responseError = apiError.response?.data?.error;
+      const message = typeof responseError === 'string' ? responseError : responseError?.message;
+      alert(message || `Erreur lors de l'enregistrement (${apiError.response?.status || 'réseau'})`);
+    }
   };
 
   return (
@@ -273,6 +325,25 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         <SheetBottomRow label="RESTE A PAYER" />
       </div>
     </div>
+    {showIdentityVerifications && selectedIdentityVerification && (
+      <div className="mt-4 rounded-xl border p-3 text-[11px]" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
+        <p className="mb-2 font-bold text-yellow-300">VÉRIFICATION D'IDENTITÉ</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+          <span className="text-muted">Nom :</span>
+          <span className="font-semibold">{selectedIdentityVerification.full_name}</span>
+          <span className="text-muted">Pièce :</span>
+          <span className="font-semibold">{selectedIdentityVerification.id_type} n° {selectedIdentityVerification.id_number}</span>
+          <span className="text-muted">Date d'émission :</span>
+          <span className="font-semibold">{selectedIdentityVerification.issue_date}</span>
+          <span className="text-muted">Type :</span>
+          <span className="font-semibold">{selectedIdentityVerification.transaction_type.toUpperCase()}</span>
+          <span className="text-muted">Montant :</span>
+          <span className="font-semibold text-yellow-300">{casinoCurrency.format(selectedIdentityVerification.amount)} Ar</span>
+          <span className="text-muted">Vérifié le :</span>
+          <span className="font-semibold">{new Date(selectedIdentityVerification.verified_at).toLocaleString('fr-FR')}</span>
+        </div>
+      </div>
+    )}
     <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
       {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
@@ -281,6 +352,13 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
       </button>
     </div>
     {pendingBonus && <BonusRouletteModal bonus={pendingBonus} rotation={rouletteRotation} result={rouletteResult} number={rouletteNumber} isSpinning={isSpinning} onSpin={spinRoulette} onConfirm={confirmBonusResult} onClose={() => !isSpinning && setPendingBonus(null)} />}
+    <IdentityVerificationModal
+      open={identityModal.open}
+      amount={identityModal.amount}
+      transactionType="apport"
+      onClose={() => setIdentityModal({ open: false, amount: 0 })}
+      onConfirm={handleIdentityConfirm}
+    />
   </div>
   );
 };

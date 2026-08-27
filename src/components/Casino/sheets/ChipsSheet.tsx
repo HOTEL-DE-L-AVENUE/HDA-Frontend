@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChipLine, PlayerLine, casinoBorder, casinoCurrency, casinoInput, parseCasinoAmount } from './types';
+import { IdentityVerificationModal } from './IdentityVerificationModal';
 
 interface ChipsSheetProps {
   chips: ChipLine[];
@@ -11,12 +12,22 @@ interface ChipsSheetProps {
   onSave: () => void;
 }
 
-export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, openingTotal, closingTotal, saveState = 'idle', onUpdate, onSave }) => (
+export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, openingTotal, closingTotal, saveState = 'idle', onUpdate, onSave }) => {
+  const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
+  const withdrawnTotal = chips.reduce((sum, line) => sum + line.value * parseCasinoAmount(line.withdrawn), 0);
+
+  useEffect(() => {
+    if (withdrawnTotal > 3_000_000) {
+      setIdentityModal({ open: true, amount: withdrawnTotal });
+    }
+  }, [withdrawnTotal]);
+
+  return (
   <div className="flex flex-col gap-7">
     <section><SheetTitle title="Fiche Poker Night — jetons" subtitle="Comptage de départ et de fermeture." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['previous', 'opening', 'closing']} headers={['Valeur des jetons', 'Total de la veille', 'Valeur départ', 'Total fermeture']} /><div className="grid sm:grid-cols-2 gap-2 mt-3"><Stat label="VALEUR DÉPART" value={openingTotal} /><Stat label="VALEUR FERMETURE" value={closingTotal} /></div></section>
     <section><SheetTitle title="Total des prélèvements" subtitle="Nombre de jetons prélevés pour chaque valeur." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['withdrawn']} headers={['Valeur des jetons', 'Nombre de jetons', 'Valeur totale']} /></section>
     <div className="grid gap-2 sm:grid-cols-2">
-      <Stat label="RESULTAT DES PRELEVEMENTS" value={chips.reduce((sum, line) => sum + line.value * parseCasinoAmount(line.withdrawn), 0)} />
+      <Stat label="RESULTAT DES PRELEVEMENTS" value={withdrawnTotal} />
       <label className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
         <span className="block text-muted text-[11px]">JOUEURS</span>
         <input className={casinoInput} value={players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => player.name.trim()).filter(Boolean).join(' - ')} readOnly placeholder="Nom - Nom" />
@@ -27,8 +38,16 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, openingT
       {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
       <button type="button" className="action" onClick={onSave} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer les jetons'}</button>
     </div>
+    <IdentityVerificationModal
+      open={identityModal.open}
+      amount={identityModal.amount}
+      transactionType="echange"
+      onClose={() => setIdentityModal({ open: false, amount: 0 })}
+      onConfirm={() => setIdentityModal({ open: false, amount: 0 })}
+    />
   </div>
-);
+  );
+};
 
 const ChipTable: React.FC<{ chips: ChipLine[]; onUpdate: ChipsSheetProps['onUpdate']; fields: (keyof Omit<ChipLine, 'value'>)[]; headers: string[] }> = ({ chips, onUpdate, fields, headers }) => <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-xs border" style={casinoBorder}><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>{headers.map((header) => <th key={header} className="p-3 text-left text-secondary border-r last:border-r-0" style={casinoBorder}>{header}</th>)}</tr></thead><tbody>{chips.map((line) => <tr key={line.value}><td className="p-2 font-semibold text-primary border-r border-b" style={casinoBorder}>{casinoCurrency.format(line.value)} Ar</td>{fields.map((field) => <td key={field} className="border-r border-b" style={casinoBorder}><input className={casinoInput} inputMode="numeric" value={line[field]} onChange={(event) => onUpdate(line.value, field, event.target.value)} /></td>)}{fields.length === 1 && <td className="p-2 text-primary border-b" style={casinoBorder}>{casinoCurrency.format(line.value * parseCasinoAmount(line.withdrawn))} Ar</td>}</tr>)}</tbody></table></div>;
 const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}><p className="text-muted text-[11px]">{label}</p><p className="text-primary font-bold">{casinoCurrency.format(value)} Ar</p></div>;

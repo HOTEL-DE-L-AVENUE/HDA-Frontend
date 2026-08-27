@@ -3,13 +3,13 @@
 /* ===== DESIGN TOKENS — Thème Noir dominant + Jaune Premium ===== */
 :root {
   /* Couleurs de fond — Noir profond */
-  --color-bg: #0a0a0a;
+  --color-bg: #1b1d21;
   /* fond général — noir profond */
-  --color-surface: #141414;
+  --color-surface: #25282e;
   /* cartes, sidebar, header — noir élégant */
-  --color-surface-2: #1e1e1e;
+  --color-surface-2: #30343b;
   /* fond secondaire, hover léger */
-  --color-surface-3: #2a2a2a;
+  --color-surface-3: #3d424a;
   /* hover actif, inputs — gris foncé */
 
   /* Couleurs de texte — Blanc pur */
@@ -23,19 +23,19 @@
   /* hints, métadonnées — gris moyen */
 
   /* Bordures — Gris fins sur fond noir */
-  --color-border: #2a2a2a;
+  --color-border: #4a5059;
   /* bordure par défaut */
-  --color-border-2: #3a3a3a;
+  --color-border-2: #626974;
   /* bordure accentuée */
 
   /* Accent principal — JAUNE PREMIUM (touche personnalisée) */
-  --color-accent: #d4a847;
+  --color-accent: #b8bec7;
   /* jaune doré premium */
-  --color-accent-2: #c4953a;
+  --color-accent-2: #949ba6;
   /* jaune doré plus profond */
-  --color-accent-3: #e8c86a;
+  --color-accent-3: #d9dde3;
   /* jaune doré lumineux (hover) */
-  --color-accent-4: rgba(212, 168, 71, 0.12);
+  --color-accent-4: rgba(184, 190, 199, 0.16);
   /* jaune doré transparent (bg) */
 
   /* Sémantiques adaptées au thème noir */
@@ -49,10 +49,10 @@
   --color-info-bg: rgba(96, 165, 250, 0.1);
 
   /* Ombres — Sur fond noir */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(2, 55, 97, 0.2), 0 1px 2px rgba(2, 55, 97, 0.12);
+  --shadow-md: 0 4px 16px rgba(2, 55, 97, 0.24), 0 2px 6px rgba(2, 55, 97, 0.16);
+  --shadow-lg: 0 12px 32px rgba(2, 55, 97, 0.3), 0 4px 12px rgba(2, 55, 97, 0.18);
+  --shadow-xl: 0 20px 48px rgba(2, 55, 97, 0.34), 0 8px 24px rgba(2, 55, 97, 0.2);
   --shadow-accent: 0 4px 20px rgba(212, 168, 71, 0.15);
   /* ombre dorée subtile */
 }
