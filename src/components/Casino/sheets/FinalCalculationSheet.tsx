@@ -18,6 +18,8 @@ interface FinalCalculationSheetProps {
 }
 
 export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
+  const parseManualAmounts = (value?: string) => (value || '').split('+').reduce((total, amount) => total + parseCasinoAmount(amount), 0);
+  const editableNumber = (key: string, automaticValue: number) => automaticValue + parseManualAmounts(values[key]);
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const identity = identityVerifications[selectedPlayerId];
   const bonusEntries = players
@@ -42,9 +44,9 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
       const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
       const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
       const result = cashing - totalCaves;
-      const mobileMethods = parsePaymentOptions(player.resultPaymentOptions).filter((option) => option === 'MVola' || option === 'Orange Money');
+      const mobileMethods = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'MVola' || payment.option === 'Orange Money');
       return result > 0 && mobileMethods.length
-        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(result)} (${mobileMethods.join(' / ')})`]
+        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(mobileMethods.reduce((sum, payment) => sum + (payment.amount || result), 0))} (${mobileMethods.map((payment) => payment.option).join(' / ')})`]
         : [];
     })
     .join(' - ');
@@ -56,42 +58,43 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
       const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
       const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
       const result = cashing - totalCaves;
-      return result > 0 && parsePaymentOptions(player.resultPaymentOptions).includes('Crédit payé')
-        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(result)}`]
+      const creditPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'Crédit payé');
+      return result > 0 && creditPayments.length
+        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(creditPayments.reduce((sum, payment) => sum + (payment.amount || result), 0))}`]
         : [];
     })
     .join(' - ');
+  const depositPaymentResults = buildPositivePaymentResults(players, 'Dépôt');
+  const depositPaymentTotal = editableNumber('depot', getPositivePaymentTotal(players, 'Dépôt'));
+  const mobileReturnTotal = editableNumber('retourMobile', getPositivePaymentTotal(players, 'MVola', 'Orange Money'));
+  const creditPaidTotal = editableNumber('creditPaye', getPositivePaymentTotal(players, 'Crédit payé'));
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
-  const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
-  const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
-  const creditPaymentsTotal = getNegativePaymentTotal(players, 'Crédit');
-  const playerPaymentsTotal = players
-    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
-    .reduce((total, player) => {
-      const playerId = player.ficheId ?? player.id;
-      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
-      const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-      const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - totalCaves;
-      const paymentOption = parsePaymentOptions(player.resultPaymentOptions)[0];
-      return result > 0 && ['Dépôt', 'Crédit payé', 'MVola', 'Orange Money'].includes(paymentOption) ? total + result : total;
-    }, 0);
-  const total1 = withdrawnTotal
+  const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
+  const tpePaymentsTotal = editableNumber('tpe', getNegativePaymentTotal(players, 'TPE'));
+  const mobilePaymentsTotal = editableNumber('mobiles', getNegativePaymentTotal(players, 'MVola', 'Orange Money'));
+  const depositPaidTotal = editableNumber('depotPaye', getNegativePaymentTotal(players, 'Dépôt payé'));
+  const creditPaymentsTotal = editableNumber('credit', getNegativePaymentTotal(players, 'Crédit'));
+  const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
     + parseCasinoAmount(values.autre)
     + parseCasinoAmount(values.restaurant)
     + parseCasinoAmount(values.prolongation)
-    + playerPaymentsTotal
-    + (creditPaidResults ? 0 : parseCasinoAmount(values.creditPaye));
-  const total2 = (tpeResults ? tpePaymentsTotal : parseCasinoAmount(values.tpe))
+    + depositPaymentTotal
+    + mobileReturnTotal
+    + creditPaidTotal;
+  const automaticTotal2 = (tpeResults ? tpePaymentsTotal : parseCasinoAmount(values.tpe))
     + (mobilePaymentResults ? mobilePaymentsTotal : parseCasinoAmount(values.mobiles))
     + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
     + (creditResults ? creditPaymentsTotal : parseCasinoAmount(values.credit))
-    + parseCasinoAmount(values.depotPaye)
+    + (depositPaidResults ? depositPaidTotal : parseCasinoAmount(values.depotPaye))
     + parseCasinoAmount(values.offert);
+  const total1 = editableNumber('total1', automaticTotal1);
+  const total2 = editableNumber('total2', automaticTotal2);
   const difference = Math.abs(total2 - total1);
-  const resultatFinal = difference - parseCasinoAmount(values.especes);
+  const totalEspeces = parseCasinoAmount(values.especes);
+  const resultatFinal = difference - totalEspeces;
 
   return (
     <div className="text-sm text-primary">
@@ -110,7 +113,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PRELEVEMENTS" />
             <CalculationInput value={String(withdrawnTotal)} readOnly />
             <CalculationCell label="TOTAL TPE" separated />
-            {tpeResults ? <CalculationResult value={tpeResults} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
+            {tpeResults ? <CalculationResult value={tpeResults} manualValue={values.tpe} onChange={(value) => onUpdate('tpe', value)} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
 
             <CalculationCell label="TOTAL POURBOIRES" />
             <CalculationInput value={values.pourboires} onChange={(value) => onUpdate('pourboires', value)} />
@@ -120,12 +123,12 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PROLONGATION" />
             <CalculationInput value={values.prolongation} onChange={(value) => onUpdate('prolongation', value)} />
             <CalculationCell label="TOTAL MOBILES" separated />
-            {mobilePaymentResults ? <CalculationResult value={mobilePaymentResults} /> : <CalculationInput value={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} />}
+            {mobilePaymentResults ? <CalculationResult value={mobilePaymentResults} manualValue={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} /> : <CalculationInput value={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} />}
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
             <CalculationInput value={values.autres} onChange={(value) => onUpdate('autres', value)} />
             <CalculationCell label="TOTAL BONUS" separated />
-            {bonusResults ? <CalculationResult value={bonusResults} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
+            {bonusResults ? <CalculationResult value={bonusResults} manualValue={values.bonus} onChange={(value) => onUpdate('bonus', value)} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
             <CalculationInput value={values.restaurant} onChange={(value) => onUpdate('restaurant', value)} />
@@ -136,30 +139,30 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationInput value={values.autre} onChange={(value) => onUpdate('autre', value)} />
             <CalculationCell label="CREDIT" separated />
             {creditResults ? (
-              <CalculationResult value={creditResults} />
+              <CalculationResult value={creditResults} manualValue={values.credit} onChange={(value) => onUpdate('credit', value)} />
             ) : (
               <CalculationInput value={values.credit} onChange={(value) => onUpdate('credit', value)} />
             )}
 
             <CalculationCell label="DEPOT" />
-            <CalculationResult value={depositResults} />
+            <CalculationResult value={depositPaymentResults || depositResults} manualValue={values.depot} onChange={(value) => onUpdate('depot', value)} />
             <CalculationCell label="DEPOT PAYE" separated />
-            <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />
+            {depositPaidResults ? <CalculationResult value={depositPaidResults} manualValue={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} /> : <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />}
 
             <CalculationCell label="RETOUR MOBILE" />
-            <CalculationResult value={mobileReturnResults} />
+            <CalculationResult value={mobileReturnResults} manualValue={values.retourMobile} onChange={(value) => onUpdate('retourMobile', value)} />
             <BlankCell separated />
             <BlankCell separated />
 
             <CalculationCell label="CREDIT PAYE" />
-            {creditPaidResults ? <CalculationResult value={creditPaidResults} /> : <CalculationInput value={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} />}
+            {creditPaidResults ? <CalculationResult value={creditPaidResults} manualValue={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} /> : <CalculationInput value={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} />}
             <BlankCell />
             <BlankCell />
 
             <TotalCell label="TOTAL 1" />
-            <CalculationInput value={casinoCurrency.format(total1)} readOnly />
+            <CalculationInput value={casinoCurrency.format(total1)} onChange={(value) => onUpdate('total1', value)} />
             <TotalCell label="TOTAL 2" separated />
-            <CalculationInput value={casinoCurrency.format(total2)} readOnly />
+            <CalculationInput value={casinoCurrency.format(total2)} onChange={(value) => onUpdate('total2', value)} />
           </div>
 
           <div className="grid grid-cols-[1.35fr_.85fr_1.2fr] border-t" style={casinoBorder}>
@@ -214,8 +217,11 @@ const CalculationInput: React.FC<{ value?: string; onChange?: (value: string) =>
   <input className="min-h-20 w-full min-w-0 border-r border-b bg-transparent px-3 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" style={casinoBorder} inputMode={inputMode} value={value} readOnly={readOnly} onChange={(event) => onChange?.(event.target.value)} />
 );
 
-const CalculationResult: React.FC<{ value: string }> = ({ value }) => (
-  <div className="min-h-20 border-r border-b flex items-center px-3 text-sm font-semibold whitespace-pre-wrap" style={casinoBorder}>{value}</div>
+const CalculationResult: React.FC<{ value: string; manualValue?: string; onChange?: (value: string) => void }> = ({ value, manualValue = '', onChange }) => (
+  <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
+    <div className="whitespace-pre-wrap text-sm font-semibold text-primary">{value || '—'}</div>
+    <input className="mt-2 w-full rounded border bg-transparent px-2 py-1 text-sm text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" style={casinoBorder} type="text" inputMode="decimal" placeholder="Ajout manuel (Ar), ex. 190000 + 50000" value={manualValue} onChange={(event) => onChange?.(event.target.value)} />
+  </div>
 );
 
 const parseBonuses = (value?: string): string[] => {
@@ -241,10 +247,13 @@ const parseBonusResults = (value?: string): Record<string, number> => {
   }
 };
 
-const parsePaymentOptions = (value?: string): string[] => {
+const parsePaymentOptions = (value?: string): Array<{ option: string; amount: number }> => {
   try {
     const options = JSON.parse(value || '[]');
-    return Array.isArray(options) ? options.filter((option): option is string => typeof option === 'string') : [];
+    return Array.isArray(options) ? options.flatMap((option) => {
+      if (typeof option === 'string') return [{ option, amount: 0 }];
+      return option && typeof option.option === 'string' ? [{ option: option.option, amount: Number(option.amount) || 0 }] : [];
+    }) : [];
   } catch {
     return [];
   }
@@ -258,9 +267,9 @@ const buildNegativePaymentResults = (players: PlayerLine[], ...methods: string[]
     const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
     const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
     const result = cashing - totalCaves;
-    const selectedMethods = parsePaymentOptions(player.resultPaymentOptions).filter((option) => methods.includes(option));
+    const selectedMethods = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
     return result < 0 && selectedMethods.length
-      ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(Math.abs(result))} (${selectedMethods.join(' / ')})`]
+      ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(Math.abs(result))} (${selectedMethods.map((payment) => payment.option).join(' / ')})`]
       : [];
   })
   .join(' - ');
@@ -272,9 +281,35 @@ const getNegativePaymentTotal = (players: PlayerLine[], ...methods: string[]): n
     const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
     const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
     const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - totalCaves;
-    const paymentOption = parsePaymentOptions(player.resultPaymentOptions)[0];
-    return result < 0 && methods.includes(paymentOption) ? total + Math.abs(result) : total;
+    const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
+    return result < 0 && payments.length ? total + (payments.some((payment) => payment.amount > 0) ? payments.reduce((sum, payment) => sum + payment.amount, 0) : Math.abs(result)) : total;
   }, 0);
+
+const getPositivePaymentTotal = (players: PlayerLine[], ...methods: string[]): number => players
+  .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+  .reduce((total, player) => {
+    const playerId = player.ficheId ?? player.id;
+    const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+    const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+    const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - totalCaves;
+    const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
+    return result > 0 && payments.length ? total + payments.reduce((sum, payment) => sum + (payment.amount || result), 0) : total;
+  }, 0);
+
+const buildPositivePaymentResults = (players: PlayerLine[], ...methods: string[]): string => players
+  .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+  .flatMap((player) => {
+    const playerId = player.ficheId ?? player.id;
+    const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+    const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+    const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+    const result = cashing - totalCaves;
+    const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
+    return result > 0 && payments.length
+      ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(payments.reduce((sum, payment) => sum + (payment.amount || result), 0))} (${payments.map((payment) => payment.option).join(' / ')})`]
+      : [];
+  })
+  .join(' - ');
 
 const BlankCell: React.FC<{ separated?: boolean }> = ({ separated = false }) => <div className={`min-h-20 border-r border-b${separated ? ' border-l-4' : ''}`} style={casinoBorder} />;
 const TotalCell: React.FC<{ label: string; separated?: boolean }> = ({ label, separated = false }) => <div className={`min-h-14 border-r p-2 flex items-center justify-center font-bold text-[11px]${separated ? ' border-l-4' : ''}`} style={casinoBorder}>{label}</div>;

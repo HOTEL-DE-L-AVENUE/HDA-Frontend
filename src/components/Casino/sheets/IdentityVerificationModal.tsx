@@ -19,6 +19,7 @@ export const IdentityVerificationModal: React.FC<IdentityVerificationModalProps>
   const [issueDate, setIssueDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationMessage, setValidationMessage] = useState('');
+  const [selectedTransactionType, setSelectedTransactionType] = useState(transactionType);
 
   useEffect(() => {
     if (open) {
@@ -27,8 +28,9 @@ export const IdentityVerificationModal: React.FC<IdentityVerificationModalProps>
       setIssueDate('');
       setIsSubmitting(false);
       setValidationMessage('');
+      setSelectedTransactionType(transactionType);
     }
-  }, [open]);
+  }, [open, transactionType]);
 
   if (!open) return null;
 
@@ -50,7 +52,7 @@ export const IdentityVerificationModal: React.FC<IdentityVerificationModalProps>
         idType,
         idNumber: idNumber.trim(),
         issueDate,
-        transactionType,
+        transactionType: selectedTransactionType,
         amount,
         verifiedAt: new Date().toISOString(),
       });
@@ -65,7 +67,7 @@ export const IdentityVerificationModal: React.FC<IdentityVerificationModalProps>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-lg font-bold">Vérification d'identité</p>
-            <p className="text-sm text-muted">Transaction supérieure à {casinoCurrency.format(IDENTITY_VERIFICATION_THRESHOLD)} Ar</p>
+            <p className="text-sm text-muted">Transaction supérieure ou égale à {casinoCurrency.format(IDENTITY_VERIFICATION_THRESHOLD)} Ar</p>
           </div>
           <button type="button" className="text-xl leading-none" onClick={onClose} aria-label="Fermer">×</button>
         </div>
@@ -74,7 +76,12 @@ export const IdentityVerificationModal: React.FC<IdentityVerificationModalProps>
           <p className="text-sm text-yellow-300">
             Montant : <span className="font-bold">{casinoCurrency.format(amount)} Ar</span>
           </p>
-          <p className="text-xs text-yellow-200 mt-1">Type : {transactionType.toUpperCase()}</p>
+          <p className="text-xs text-yellow-200 mt-1">Type : {selectedTransactionType.toUpperCase()}</p>
+          <select className="mt-2 rounded border bg-transparent px-2 py-1 text-xs" value={selectedTransactionType} onChange={(event) => setSelectedTransactionType(event.target.value as IdentityVerificationData['transactionType'])}>
+            <option value="achat">Achat</option>
+            <option value="apport">Apport</option>
+            <option value="echange">Échange</option>
+          </select>
         </div>
 
         <div className="grid gap-3 text-xs">
