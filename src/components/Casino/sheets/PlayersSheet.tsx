@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IdentityVerificationData } from './types';
+import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
 
@@ -14,9 +14,9 @@ interface PlayersSheetProps {
   onPaymentChange: (payment: 'especes' | 'tpe', checked: boolean) => void;
   onCashingPaymentMethodChange?: (value: string) => void;
   onSave: () => void;
-  onAdd: (ficheId?: number) => number;
+  onAdd: (ficheId?: number, name?: string) => number;
   onRemove: (id: number) => void;
-  onIdentityVerified?: (playerId: number, data: IdentityVerificationData) => void;
+  onIdentityVerified?: (playerId: number, data: IdentityVerificationData, verificationId?: number) => void;
   showIdentityVerifications?: boolean;
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
@@ -27,7 +27,7 @@ const paymentMethods = ['Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèq
 
 const bonusCategories = ['7 et 2', 'Carré', 'Quinte flush', 'Quinte flush royal', 'Fetish'];
 const positiveResultOptions = ['Dépôt', 'Crédit payé', 'Espèce', 'MVola', 'Orange Money'];
-const negativeResultOptions = ['Crédit', 'TPE', 'MVola', 'Orange Money', 'Espèce'];
+const negativeResultOptions = ['Dépôt payé', 'Crédit', 'TPE', 'MVola', 'Orange Money', 'Espèce'];
 const ROULETTE_PRIZES = [10000, 5000, 100000, 20000, 10000, 0, 50000, 10000, 10000, 20000, 100000, 10000, 5000, 50000, 20000, 5000, 40000, 5000, 50000, 5000, 0, 100000, 10000, 20000];
 
 const parseBonuses = (value?: string): string[] => {
@@ -62,11 +62,24 @@ const parseBonusResults = (value?: string): Record<string, number> => {
   }
 };
 
+type ResultPayment = { option: string; amount: number };
+
+const parseResultPayments = (value?: string): ResultPayment[] => {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (typeof entry === 'string') return [{ option: entry, amount: 0 }];
+      if (entry && typeof entry.option === 'string') return [{ option: entry.option, amount: Number(entry.amount) || 0 }];
+      return [];
+    });
+  } catch {
+    return [];
+  }
+};
+
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {} }) => {
-  const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
-    const firstPlayer = players[0];
-    return firstPlayer ? (firstPlayer.ficheId ?? firstPlayer.id) : 0;
-  });
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => players[0] ? (players[0].ficheId ?? players[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
@@ -74,19 +87,35 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const [rouletteNumber, setRouletteNumber] = useState<number | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
+  const [identityTransactionType, setIdentityTransactionType] = useState<'achat' | 'apport' | 'echange'>('achat');
+  const [signatureError, setSignatureError] = useState('');
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
-  const selectedPlayerTotal = selectedPlayerLines.reduce(
-    (sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount),
-    0,
-  );
+  const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+  const selectedPlayerCaveToVerify = selectedPlayerLines.reduce((maximum, line) => Math.max(maximum, parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount)), 0);
   const selectedPlayerCashing = parseCasinoAmount(selectedPlayer?.cashing);
   const selectedPlayerResult = selectedPlayerCashing - selectedPlayerTotal;
   const selectedBonuses = parseBonuses(selectedPlayer?.bonuses);
   const selectedBonusResults = parseBonusResults(selectedPlayer?.bonusResults);
-  const selectedResultPaymentOptions = parseBonuses(selectedPlayer?.resultPaymentOptions);
+  const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions);
   const selectedIdentityVerification = identityVerifications[selectedPlayerId];
   const resultOptions = selectedPlayerResult > 0 ? positiveResultOptions : selectedPlayerResult < 0 ? negativeResultOptions : [];
+
+  const saveWithResultCheck = () => {
+    if (selectedPlayerResult !== 0 && selectedResultPayments.length > 1) {
+      if (selectedResultPayments.some((payment) => payment.amount <= 0)) {
+        setSignatureError('Veuillez saisir un montant pour chaque mode de règlement.');
+        return;
+      }
+      const allocatedTotal = selectedResultPayments.reduce((sum, payment) => sum + payment.amount, 0);
+      if (allocatedTotal !== Math.abs(selectedPlayerResult)) {
+        setSignatureError(`La somme des règlements doit être égale à ${casinoCurrency.format(Math.abs(selectedPlayerResult))} Ar.`);
+        return;
+      }
+    }
+    setSignatureError('');
+    onSave();
+  };
 
   // Chaque fiche possède son propre cumul : une recave ne doit jamais
   // s'ajouter au total d'un autre joueur.
@@ -122,8 +151,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
   const addPlayerLine = () => {
     if (!selectedPlayer) return;
-    const newLineId = onAdd(selectedPlayer.ficheId ?? selectedPlayer.id);
-    onUpdate(newLineId, 'name', selectedPlayer.name);
+    onAdd(selectedPlayer.ficheId ?? selectedPlayer.id, selectedPlayer.name);
     setSelectedPlayerId(selectedPlayer.ficheId ?? selectedPlayer.id);
   };
 
@@ -172,21 +200,33 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
     if (!selectedPlayer) return;
-    const nextOptions = checked ? [option] : [];
-    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextOptions));
+    const nextPayments = checked
+      ? [...selectedResultPayments.filter((payment) => payment.option !== option), { option, amount: 0 }]
+      : selectedResultPayments.filter((payment) => payment.option !== option);
+    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
+  };
+
+  const updateResultPaymentAmount = (option: string, amount: string) => {
+    if (!selectedPlayer) return;
+    const nextPayments = selectedResultPayments.map((payment) => payment.option === option ? { ...payment, amount: parseCasinoAmount(amount) } : payment);
+    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
   };
 
   useEffect(() => {
-    if (selectedPlayer && parseCasinoAmount(selectedPlayer.cashing) > 3_000_000 && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
-      setIdentityModal({ open: true, amount: parseCasinoAmount(selectedPlayer.cashing) });
+    const cashingAmount = parseCasinoAmount(selectedPlayer?.cashing);
+    const caveAmount = selectedPlayerCaveToVerify >= IDENTITY_VERIFICATION_THRESHOLD ? selectedPlayerCaveToVerify : 0;
+    const verificationAmount = Math.max(caveAmount, cashingAmount);
+    if (selectedPlayer && verificationAmount >= IDENTITY_VERIFICATION_THRESHOLD && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
+      setIdentityTransactionType(cashingAmount > caveAmount ? 'echange' : 'achat');
+      setIdentityModal({ open: true, amount: verificationAmount });
     }
-  }, [selectedPlayer?.cashing, selectedPlayer?.identityVerification, identityVerifications]);
+  }, [selectedPlayer?.id, selectedPlayer?.identityVerification, selectedPlayer?.cashing, selectedPlayerCaveToVerify, identityVerifications]);
 
   const handleIdentityConfirm = async (data: IdentityVerificationData) => {
     if (!selectedPlayer) return;
     try {
       // Call API to save verification to database
-      await identityVerificationApi.create({
+      const savedVerification = await identityVerificationApi.create({
         fiche_id: selectedPlayer.ficheId ?? selectedPlayer.id,
         full_name: data.fullName,
         id_type: data.idType,
@@ -198,7 +238,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
       
       // Update local state
       onUpdate(selectedPlayer.id, 'identityVerification', JSON.stringify(data));
-      onIdentityVerified?.(selectedPlayer.ficheId ?? selectedPlayer.id, data);
+      onIdentityVerified?.(selectedPlayer.ficheId ?? selectedPlayer.id, data, savedVerification.id);
       setIdentityModal({ open: false, amount: 0 });
     } catch (err) {
       console.error('Erreur lors de l\'enregistrement de la vérification d\'identité:', err);
@@ -254,7 +294,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             return (
             <tr key={line.id} className="h-9">
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.name} onChange={(event) => onUpdate(line.id, 'name', event.target.value)} placeholder="Nom du joueur" /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} placeholder="h" /></td>
+              <td className="border" style={casinoBorder}><input type="time" className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={totalsByLineId[line.id] ? String(totalsByLineId[line.id]) : '0'} readOnly /></td>
@@ -267,7 +307,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             );
           })}
           <tr className="h-12">
-            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
+            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input type="time" className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={3}>Cashing : <input type="text" inputMode="decimal" className={`${paperInput} inline-block w-32`} value={selectedPlayer?.cashing || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'cashing', event.target.value)} placeholder="0" /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={4}>
               <div className="flex items-center gap-2">Signature : {selectedPlayer && <SignaturePad value={selectedPlayer.signature} onChange={(value) => onUpdate(selectedPlayer.id, 'signature', value)} />}</div>
@@ -277,7 +317,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
       </table>
     </div>
 
-    <div className="grid md:grid-cols-[1.15fr_1fr_1.15fr] mt-4 border text-white" style={{ ...casinoBorder, backgroundColor: 'var(--color-surface)' }}>
+    <div className="mt-4 grid md:grid-cols-[1.15fr_1fr_1.15fr] border text-white" style={{ ...casinoBorder, backgroundColor: 'var(--color-surface)' }}>
       <div className="border-r" style={casinoBorder}>
         <SheetBottomRow label="TOTAL CAVEES :" value={casinoCurrency.format(selectedPlayerTotal)} />
         <SheetBottomRow label="TOTAL CASHING EN JETONS" value={casinoCurrency.format(selectedPlayerCashing)} />
@@ -288,8 +328,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
               {resultOptions.map((option) => (
                 <label key={option} className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={selectedResultPaymentOptions[0] === option} onChange={(event) => toggleResultPaymentOption(option, event.target.checked)} />
+                  <input type="checkbox" checked={selectedResultPayments.some((payment) => payment.option === option)} onChange={(event) => toggleResultPaymentOption(option, event.target.checked)} />
                   {option}
+                  {selectedResultPayments.length > 1 && selectedResultPayments.some((payment) => payment.option === option) && <input type="text" inputMode="decimal" className="w-24 rounded border bg-transparent px-2 py-1" value={selectedResultPayments.find((payment) => payment.option === option)?.amount || ''} onChange={(event) => updateResultPaymentAmount(option, event.target.value)} placeholder="Montant" />}
                 </label>
               ))}
             </div>
@@ -297,7 +338,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         )}
       </div>
       <div className="border-r" style={casinoBorder}>
-        <p className="p-2 border-b font-semibold" style={casinoBorder}>BONUS</p>
+        <p className="border-b p-2 font-semibold" style={casinoBorder}>BONUS</p>
         <div className="grid grid-cols-2 gap-x-3 gap-y-2 p-3 text-[11px]">
           {bonusCategories.map((bonus) => (
             <label key={bonus} className="inline-flex items-center gap-2">
@@ -308,11 +349,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         </div>
       </div>
       <div>
-        <p className="p-2 border-b font-semibold" style={casinoBorder}>RESTAURANT</p>
+        <p className="border-b p-2 font-semibold" style={casinoBorder}>RESTAURANT</p>
         <SheetBottomRow label="TOTAL OFFERT" />
         <SheetBottomRow label="TOTAL BON RESTAURANT" />
         <SheetBottomRow label="MONTANT PAYE" />
-        <div className="flex items-center gap-4 p-2 border-b" style={casinoBorder}>
+        <div className="flex items-center gap-4 border-b p-2" style={casinoBorder}>
           <label className="inline-flex items-center gap-1">
             <input type="checkbox" aria-label="Paiement en especes" checked={restaurantPayments.especes} onChange={(event) => onPaymentChange('especes', event.target.checked)} />
             ESPECES
@@ -325,8 +366,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         <SheetBottomRow label="RESTE A PAYER" />
       </div>
     </div>
+
     {showIdentityVerifications && selectedIdentityVerification && (
-      <div className="mt-4 rounded-xl border p-3 text-[11px]" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
+      <div className="mt-4 rounded-xl border p-3 text-[11px] print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
         <p className="mb-2 font-bold text-yellow-300">VÉRIFICATION D'IDENTITÉ</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           <span className="text-muted">Nom :</span>
@@ -346,8 +388,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     )}
     <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
-      {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
-      <button type="button" className="action" onClick={onSave} disabled={saveState === 'saving'}>
+      {(saveState === 'error' || signatureError) && <span className="text-xs text-red-400">{signatureError || 'Erreur d’enregistrement'}</span>}
+      <button type="button" className="action" onClick={saveWithResultCheck} disabled={saveState === 'saving'}>
         {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer la fiche'}
       </button>
     </div>
@@ -355,7 +397,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     <IdentityVerificationModal
       open={identityModal.open}
       amount={identityModal.amount}
-      transactionType="apport"
+      transactionType={identityTransactionType}
       onClose={() => setIdentityModal({ open: false, amount: 0 })}
       onConfirm={handleIdentityConfirm}
     />
@@ -372,22 +414,22 @@ const SheetBottomRow: React.FC<{ label: string; value?: string }> = ({ label, va
 
 const BonusRouletteModal: React.FC<{ bonus: string; rotation: number; result: number | null; number: number | null; isSpinning: boolean; onSpin: () => void; onConfirm: () => void; onClose: () => void }> = ({ bonus, rotation, result, number, isSpinning, onSpin, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-label={`Roue bonus ${bonus}`}>
-    <div className="w-full max-w-lg rounded-2xl border p-5 text-white shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
+    <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border p-4 text-white shadow-2xl sm:p-5" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
       <div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-lg font-bold">Roue bonus</p><p className="text-sm text-muted">Bonus : {bonus}</p></div><button type="button" className="text-xl leading-none" onClick={onClose} disabled={isSpinning} aria-label="Fermer">×</button></div>
-      <div className="relative mx-auto mb-5 flex h-52 w-52 items-center justify-center">
+      <div className="relative mx-auto mb-5 flex h-[min(90vw,25rem,55vh)] w-[min(90vw,25rem,55vh)] max-w-full items-center justify-center">
         <span className="absolute -top-3 z-10 text-3xl text-yellow-300">▼</span>
         <div className="relative h-full w-full rounded-full border-4 border-yellow-500 transition-transform duration-[10000ms] ease-out" style={{ background: 'repeating-conic-gradient(#b91c1c 0deg 15deg, #1f2937 15deg 30deg)', transform: `rotate(${rotation}deg)` }}>
           {ROULETTE_PRIZES.map((_, index) => (
-            <span key={index} className="absolute left-1/2 top-1/2 -ml-2 -mt-2 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[8px] font-bold text-white" style={{ transform: `rotate(${index * 15}deg) translateY(-86px) rotate(${-index * 15}deg)` }}>{index + 1}</span>
+            <span key={index} className="absolute left-1/2 top-1/2 -ml-3 -mt-3 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-[9px] font-bold text-white" style={{ transform: `rotate(${index * 15}deg) translateY(calc(-1 * (min(90vw, 25rem, 55vh) / 2 - 14px))) rotate(${-index * 15}deg)` }}>{index + 1}</span>
           ))}
         </div>
-        <div className="absolute flex h-20 w-20 items-center justify-center rounded-full border-4 border-yellow-500 bg-yellow-700 text-center text-xs font-bold">BONUS</div>
+        <div className="absolute flex h-32 w-32 items-center justify-center rounded-full border-4 border-yellow-500 bg-yellow-700 text-center text-sm font-bold">BONUS</div>
       </div>
-      <div className="mb-4 grid grid-cols-3 gap-1 rounded border p-2 text-[11px]" style={casinoBorder}>
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded border p-2 text-[10px] sm:grid-cols-3 sm:text-[11px]" style={casinoBorder}>
         {ROULETTE_PRIZES.map((prize, index) => <span key={index} className={prize === 0 ? 'text-red-400' : prize === 100000 ? 'text-lime-300' : ''}>{index + 1}. {casinoCurrency.format(prize)} Ar</span>)}
       </div>
       {result !== null && <p className="mb-4 rounded-lg bg-yellow-500/15 p-3 text-center font-bold text-yellow-300">Numéro {number} : {casinoCurrency.format(result)} Ar</p>}
-      <div className="flex justify-end gap-2"><button type="button" className="action secondary" onClick={onClose} disabled={isSpinning}>Annuler</button>{result === null ? <button type="button" className="action" onClick={onSpin} disabled={isSpinning}>{isSpinning ? 'La roue tourne...' : 'Tourner la roue'}</button> : <button type="button" className="action" onClick={onConfirm}>Valider le gain</button>}</div>
+      <div className="flex flex-wrap justify-end gap-2"><button type="button" className="action secondary" onClick={onClose} disabled={isSpinning}>Annuler</button>{result === null ? <button type="button" className="action" onClick={onSpin} disabled={isSpinning}>{isSpinning ? 'La roue tourne...' : 'Tourner la roue'}</button> : <button type="button" className="action" onClick={onConfirm}>Valider le gain</button>}</div>
     </div>
   </div>
 );
