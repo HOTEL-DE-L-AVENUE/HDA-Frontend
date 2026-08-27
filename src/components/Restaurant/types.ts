@@ -39,6 +39,7 @@ export interface Product {
   actif: boolean;
   type_produit: 'MATIERE_PREMIERE' | 'PRODUIT_FINI' | 'CONSOMMABLE' | 'SERVICE';
   category?: Category;
+  couleur?: string; // <-- Propriété de couleur ajoutée ici
 }
 
 export interface Category {
