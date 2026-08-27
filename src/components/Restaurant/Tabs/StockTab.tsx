@@ -2,13 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Package, Plus, History, X, Truck, BookOpen,
-  ChevronRight, AlertTriangle, RefreshCw, Trash2,
+  ChevronRight, AlertTriangle, RefreshCw, Trash2, Search, Loader2, Edit2, AlertCircle,
 } from 'lucide-react';
 import * as restaurantService from '../../../services/restaurantService';
-import { Button } from '../../UI';
+import { financeService } from '../../../services/finance.service';
+import { Button, DataTable, Modal, Input, Select, Badge } from '../../UI';
 import { useHDA } from '../../../context/HDAContext';
 import AuthService from '../../../services/authService';
 import { isAdmin } from '../../../utils/permissions';
+import { formatCurrency } from '../../../utils/data';
+import api from '../../../lib/api';
 
 // ==================== TYPES ====================
 
@@ -22,19 +25,32 @@ interface StockItem {
   code: string;
   location_nom: string;
   type_produit: string;
+  prix_achat?: number;
+  prix_vente?: number;
+  category_id?: number;
+  subcategory_id?: number;
+  category_nom?: string;
+  subcategory_nom?: string;
+  portion_size?: number;
+  portion_unite?: string;
 }
 
 interface StockLocation { id: number; nom: string; }
 interface Unit { id: number; code: string; nom: string; }
 interface Supplier { id: number; nom: string; telephone?: string; email?: string; }
 interface Category { id: number; nom: string; }
+interface Subcategory { id: number; category_id: number; nom: string; }
 
 interface Product {
   id: number; nom: string; unite: string;
   type_produit: string; code: string;
   prix_achat: number; prix_vente: number;
   actif: boolean; category_id: number | null;
+  subcategory_id: number | null;
   category_nom?: string;
+  subcategory_nom?: string;
+  portion_size?: number | null;
+  portion_unite?: string | null;
 }
 
 interface Purchase {
@@ -115,29 +131,36 @@ const StockPanel: React.FC = () => {
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [stocks, setStocks] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [movements, setMovements] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [histLoading, setHistLoading] = useState(false);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPortionModal, setShowPortionModal] = useState(false);
+  const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<StockItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StockItem | null>(null);
+  const [portionTarget, setPortionTarget] = useState<StockItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Ajout produit
   const [units, setUnits] = useState<Unit[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [nom, setNom] = useState('');
-  const [unite, setUnite] = useState('');
-  const [uniteCustom, setUniteCustom] = useState('');
-  const [prixAchat, setPrixAchat] = useState(0);
-  const [categoryId, setCategoryId] = useState<number | ''>('');
-  const [initQty, setInitQty] = useState(0);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [form, setForm] = useState({
+    nom: '', category_id: '', subcategory_id: '', type_produit: 'MATIERE_PREMIERE', unite: '',
+    uniteCustom: '', prix_achat: 0, prix_vente: 0, quantite: 0,
+    portion_size: 0, portion_unite: 'g'
+  });
   const [addErr, setAddErr] = useState('');
   const [addLoading, setAddLoading] = useState(false);
 
@@ -147,7 +170,34 @@ const StockPanel: React.FC = () => {
   const [adjErr, setAdjErr] = useState('');
   const [adjLoading, setAdjLoading] = useState(false);
 
+  // Portion management
+  const [portionSize, setPortionSize] = useState(0);
+  const [portionErr, setPortionErr] = useState('');
+  const [portionLoading, setPortionLoading] = useState(false);
+
   const [productTypes, setProductTypes] = useState<{ id: number; nom: string; actif: boolean }[]>([]);
+
+  const getErrorMessage = (err: unknown) => {
+    if (typeof err === 'object' && err !== null && 'response' in err) {
+      const response = (err as { response?: { data?: { message?: string; error?: { message?: string } } } }).response;
+      return response?.data?.message || response?.data?.error?.message || 'Erreur réseau';
+    }
+    return err instanceof Error ? err.message : 'Erreur de connexion';
+  };
+
+  const computeStatus = (qty: number) => {
+    if (qty === 0) return 'epuise';
+    if (qty < 5) return 'faible';
+    return 'disponible';
+  };
+
+  const notifyStockLevel = (nom: string, quantite: number, unite: string) => {
+    if (quantite <= 3) {
+      addNotification('error', `Stock critique: ${nom} (${quantite} ${unite})`, 'Restaurant', '/restaurant?tab=stock');
+    } else if (quantite <= 5) {
+      addNotification('warning', `Stock faible: ${nom} (${quantite} ${unite})`, 'Restaurant', '/restaurant?tab=stock');
+    }
+  };
 
   useEffect(() => {
     Promise.all([
@@ -155,7 +205,7 @@ const StockPanel: React.FC = () => {
       restaurantService.getUnits(),
       restaurantService.getCategories().catch(() => ({ success: false, data: [] })),
     ]).then(([loc, un, cat]) => {
-if (loc.success) {
+      if (loc.success) {
         setLocations(loc.data);
         const restaurantLocation = loc.data.find((location: StockLocation) => location.nom.toLowerCase().includes('restaurant'));
         if (restaurantLocation) setSelectedLoc(restaurantLocation.id);
@@ -163,14 +213,26 @@ if (loc.success) {
       }
       if (un.success) {
         setUnits(un.data);
-        if (un.data.length > 0) setUnite(un.data[0].code);
+        if (un.data.length > 0) setForm(prev => ({ ...prev, unite: un.data[0].code }));
       }
       if (cat.success) setCategories(cat.data);
     });
   }, []);
 
+  // Load subcategories when category changes
   useEffect(() => {
-    // Charger les types de produits
+    if (form.category_id) {
+      restaurantService.getSubcategories({ category_id: Number(form.category_id) })
+        .then(res => {
+          if (res.success) setSubcategories(res.data);
+        })
+        .catch(() => setSubcategories([]));
+    } else {
+      setSubcategories([]);
+    }
+  }, [form.category_id]);
+
+  useEffect(() => {
     restaurantService.getProductTypes()
       .then(res => {
         if (res.success) setProductTypes(res.data);
@@ -181,11 +243,18 @@ if (loc.success) {
   const loadStocks = useCallback(() => {
     if (!selectedLoc) return;
     setLoading(true);
+    setError(null);
     const params: Record<string, any> = { location_id: selectedLoc };
     if (typeFilter) params.type_produit = typeFilter;
     restaurantService.getStocks(params)
-      .then(res => { if (res.success) setStocks(res.data); })
-      .catch(console.error)
+      .then(res => { 
+        if (res.success) setStocks(res.data); 
+        else setError('Erreur lors du chargement du stock');
+      })
+      .catch(err => {
+        setError(getErrorMessage(err));
+        console.error(err);
+      })
       .finally(() => setLoading(false));
   }, [selectedLoc, typeFilter]);
 
@@ -216,15 +285,9 @@ if (loc.success) {
             s.product_id === productId ? { ...s, quantite: res.data.newQty } : s
           );
           
-          // Check if stock is now low and add notification
           const updatedItem = updated.find(s => s.product_id === productId);
           if (updatedItem && updatedItem.quantite <= 5) {
-            addNotification(
-              updatedItem.quantite <= 3 ? 'error' : 'warning',
-              `Stock faible: ${updatedItem.product_nom} (${updatedItem.quantite} ${updatedItem.unite})`,
-              'Restaurant',
-              '/restaurant?tab=stock'
-            );
+            notifyStockLevel(updatedItem.product_nom, updatedItem.quantite, updatedItem.unite);
           }
           
           return updated;
@@ -256,41 +319,85 @@ if (loc.success) {
 
   const handleAddProduct = async () => {
     if (!selectedLoc) return;
-    const finalUnite = unite === 'AUTRE' ? uniteCustom.trim() : unite;
-    if (!nom.trim()) { setAddErr('Nom requis.'); return; }
+    const finalUnite = form.unite === 'AUTRE' ? form.uniteCustom.trim() : form.unite;
+    if (!form.nom.trim()) { setAddErr('Nom requis.'); return; }
     if (!finalUnite) { setAddErr('Unité requise.'); return; }
-    if (initQty <= 0) { setAddErr('Quantité initiale > 0.'); return; }
+    if (form.quantite <= 0) { setAddErr('Quantité initiale > 0.'); return; }
     setAddLoading(true); setAddErr('');
     try {
       const prodRes = await restaurantService.createProduct({
-        nom: nom.trim(),
+        nom: form.nom.trim(),
         unite: finalUnite,
-        type_produit: selectedType,
-        prix_achat: prixAchat,
-        prix_vente: prixVente,
-        category_id: categoryId ? Number(categoryId) : undefined,
+        type_produit: form.type_produit,
+        prix_achat: form.prix_achat,
+        prix_vente: form.prix_vente,
+        category_id: form.category_id ? Number(form.category_id) : undefined,
+        subcategory_id: form.subcategory_id ? Number(form.subcategory_id) : undefined,
+        portion_size: form.portion_size > 0 ? form.portion_size : undefined,
+        portion_unite: form.portion_unite,
       });
       if (!prodRes.data) throw new Error(prodRes.message || 'Erreur');
       await restaurantService.adjustStock({
         product_id: prodRes.data.id,
         location_id: selectedLoc,
         type_mouvement: 'ENTREE',
-        quantite: initQty,
+        quantite: form.quantite,
         source_module: 'INVENTAIRE',
       });
+
+      const totalCost = form.quantite * Number(form.prix_achat || 0);
+      if (totalCost > 0) {
+        try {
+          await financeService.createTransaction({
+            module: 'RESTAURANT',
+            type_flux: 'SORTIE',
+            montant: totalCost,
+            description: `Achat initial stock - ${form.nom.trim()} (${form.quantite} ${finalUnite})`,
+          });
+        } catch (fErr) {
+          console.error('Erreur journalisation finance:', fErr);
+        }
+      }
+
       await loadStocks();
       setShowAddModal(false);
-      setNom(''); setPrixAchat(0); setInitQty(0); setCategoryId('');
+      setForm({ nom: '', category_id: '', subcategory_id: '', type_produit: 'MATIERE_PREMIERE', unite: '', uniteCustom: '', prix_achat: 0, prix_vente: 0, quantite: 0, portion_size: 0, portion_unite: 'g' });
+      notifyStockLevel(form.nom.trim(), form.quantite, finalUnite);
+      addNotification('success', `Produit ${form.nom.trim()} ajouté avec succès`, 'Restaurant');
     } catch (e: any) { setAddErr(e.message); }
     finally { setAddLoading(false); }
+  };
+
+  const openEdit = async (item: StockItem) => {
+    const adminPassword = window.prompt('Mot de passe administrateur requis pour modifier le stock :');
+    if (!adminPassword) return;
+    try {
+      await api.post('/api/auth/verify-admin-password', { password: adminPassword });
+    } catch (err) {
+      setError(getErrorMessage(err));
+      return;
+    }
+    setEditItem(item);
+    setForm({
+      nom: item.product_nom || '',
+      category_id: item.category_id ? String(item.category_id) : '',
+      subcategory_id: item.subcategory_id ? String(item.subcategory_id) : '',
+      type_produit: item.type_produit || 'MATIERE_PREMIERE',
+      unite: item.unite || '',
+      uniteCustom: '',
+      prix_achat: Number(item.prix_achat || 0),
+      prix_vente: Number(item.prix_vente || 0),
+      quantite: Number(item.quantite || 0),
+      portion_size: Number(item.portion_size || 0),
+      portion_unite: item.portion_unite || 'g',
+    });
+    setShowEditModal(true);
   };
 
   const handleDeleteStock = async () => {
     if (!deleteTarget || deleteLoading) return;
     setDeleteLoading(true);
     try {
-      // Use product_id + location_id to reliably identify the stock row
-      console.log('Deleting stock item with ID:', deleteTarget.id);
       const res = await restaurantService.deleteStockItem({ product_id: deleteTarget.product_id, location_id: deleteTarget.location_id });
       if (res.success) {
         setStocks(prev => prev.filter(s => !(s.product_id === deleteTarget.product_id && s.location_id === deleteTarget.location_id)));
@@ -306,353 +413,436 @@ if (loc.success) {
     }
   };
 
-  const stockBas = stocks.filter(s => Number(s.quantite) < 5);
-
-  const [selectedType, setSelectedType] = useState('MATIERE_PREMIERE');
-
-  const [prixVente, setPrixVente] = useState(0);
+  const handleConsumePortion = async () => {
+    if (!portionTarget || !selectedLoc || portionSize <= 0) {
+      setPortionErr('Quantité de portion invalide.');
+      return;
+    }
+    setPortionLoading(true);
+    setPortionErr('');
+    try {
+      const res = await restaurantService.consumePortion({
+        product_id: portionTarget.product_id,
+        location_id: selectedLoc,
+        portion_size: portionSize,
+        portion_unit: 'g',
+      });
+      if (res.success) {
+        setStocks(prev => prev.map(s =>
+          s.product_id === portionTarget.product_id ? { ...s, quantite: res.data.new_quantity } : s
+        ));
+        setShowPortionModal(false);
+        setPortionTarget(null);
+        setPortionSize(0);
+        addNotification('success', `Portion de ${portionSize}g consommée. Reste: ${res.data.new_quantity}g`, 'Restaurant');
+      }
+    } catch (e: any) {
+      setPortionErr(e.message || 'Erreur lors de la consommation de portion');
+    } finally {
+      setPortionLoading(false);
+    }
+  };
 
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
 
-  return (
-    <>
-      {/* Alertes stock bas */}
-      {stockBas.length > 0 && (
-        <div className="mb-4 p-3 rounded-xl flex items-start gap-2" style={{ backgroundColor: 'var(--color-warning-bg, #fff7ed)', border: '1px solid var(--color-warning, #f97316)' }}>
-          <AlertTriangle size={16} style={{ color: 'var(--color-warning, #f97316)' }} className="mt-0.5 shrink-0" />
-          <p className="text-xs" style={{ color: 'var(--color-warning, #f97316)' }}>
-            <span className="font-semibold">Stock bas :</span>{' '}
-            {stockBas.map(s => `${s.product_nom} (${Number(s.quantite).toFixed(2)} ${s.unite})`).join(' • ')}
-          </p>
-        </div>
-      )}
+  const filteredStocks = stocks.filter(item => {
+    const matchSearch = item.product_nom.toLowerCase().includes(search.toLowerCase());
+    const matchType = !typeFilter || item.type_produit === typeFilter;
+    const status = computeStatus(Number(item.quantite));
+    const matchStatus = filterStatus === 'all' || status === filterStatus;
+    return matchSearch && matchType && matchStatus;
+  });
 
-      {/* Contrôles */}
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <select
-          value={selectedLoc || ''}
-          onChange={e => setSelectedLoc(Number(e.target.value))}
-          className="h-9 px-3 rounded-xl text-primary text-sm"
-          style={inputStyle}
-        >
-          {locations.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
-        </select>
+  const enrichedStocks = filteredStocks.map(item => ({
+    ...item,
+    status: computeStatus(Number(item.quantite)),
+    prixUnitaire: Number(item.prix_achat || item.prix_vente || 0),
+    seuilMinimum: 5,
+  }));
 
-        <select
-          value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
-          className="h-9 px-3 rounded-xl text-primary text-sm"
-          style={inputStyle}
-        >
-          <option value="">Tous types</option>
-          {productTypes.map(type => (
-            <option key={type.id} value={type.nom}>{type.nom}</option>
-          ))}
-        </select>
+  const totalValue = enrichedStocks.reduce((sum, i) => sum + (Number(i.quantite) * i.prixUnitaire), 0);
+  const alerts = enrichedStocks.filter(i => i.status !== 'disponible').length;
 
-        <button
-          onClick={loadStocks}
-          className="h-9 px-3 rounded-xl text-sm flex items-center gap-1"
-          style={{ ...inputStyle, color: 'var(--color-text-secondary)' }}
-        >
+  const baseColumns = [
+    { key: 'product_nom', label: 'Produit', render: (item: any) => (
+      <div>
+        <p className="text-white font-medium">{item.product_nom}</p>
+        <p className="text-slate-500 text-xs">{item.type_produit} • {item.location_nom}</p>
+        {item.category_nom && <p className="text-slate-600 text-xs">Catégorie: {item.category_nom}</p>}
+        {item.subcategory_nom && <p className="text-slate-600 text-xs">Sous-catégorie: {item.subcategory_nom}</p>}
+      </div>
+    )},
+    { key: 'quantite', label: 'Stock', render: (item: any) => (
+      <div>
+        <p className="text-white font-semibold">{Number(item.quantite).toFixed(2)} {item.unite}</p>
+        <p className="text-slate-600 text-xs">Min: 5</p>
+      </div>
+    )},
+    { key: 'prix_achat', label: 'Prix Achat', render: (item: any) => (
+      <span className="text-white">{formatCurrency(item.prixUnitaire || item.prix_achat || 0)}</span>
+    )},
+    { key: 'valeur', label: 'Valeur', render: (item: any) => (
+      <span className="text-amber-400 font-semibold">{formatCurrency(Number(item.quantite) * (item.prixUnitaire || item.prix_achat || 0))}</span>
+    )},
+    { key: 'status', label: 'Statut', render: (item: any) => (
+      <Badge variant={item.status}>
+        {item.status === 'disponible' ? 'Disponible' : item.status === 'faible' ? 'Faible' : 'Épuisé'}
+      </Badge>
+    )},
+  ];
+
+  const columns = userIsAdmin ? [
+    ...baseColumns,
+    { key: 'actions', label: '', render: (item: any) => (
+      <div className="flex gap-2">
+        <button onClick={() => { setPortionTarget(item); setPortionSize(0); setShowPortionModal(true); }} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Consommer une portion">
+          <Package size={14} />
+        </button>
+        <button onClick={() => openEdit(item)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Modifier l'article">
+          <Edit2 size={14} />
+        </button>
+        <button onClick={() => { setAdjustTarget(item); setAdjType('ENTREE'); setAdjQty(0); setAdjErr(''); setShowAdjustModal(true); }} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Ajuster le stock">
           <RefreshCw size={14} />
         </button>
-
-        <div className="flex-1" />
-
-        <button 
-          className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-          style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-          onClick={loadHistory} 
-          disabled={histLoading}
-        >
-          <History size={14} className="mr-1" /> Historique
+        <button onClick={() => { setDeleteTarget(item); setShowDeleteModal(true); }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all" title="Supprimer l'article">
+          <Trash2 size={14} />
         </button>
-        {userIsAdmin && (
-          <button 
-            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
-            onClick={() => { setAddErr(''); setShowAddModal(true); }}
-          >
-            <Plus size={14} className="mr-1" /> Nouveau produit
-          </button>
-        )}
       </div>
+    )},
+  ] : baseColumns;
 
-      {/* Grille */}
-      {loading ? (
-        <p className="text-sm text-muted py-8 text-center">Chargement...</p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {stocks.map(stock => {
-            const qty = Number(stock.quantite);
-            const isLow = qty < 5;
-            return (
-              <div
-                key={`${stock.product_id}-${stock.location_id}`}
-                className="rounded-xl p-4 border"
-                style={{
-                  backgroundColor: 'var(--color-surface-2)',
-                  borderColor: isLow ? 'var(--color-warning, #f97316)' : 'var(--color-border)',
-                }}
-              >
-                <div className="flex justify-between items-start mb-0.5">
-                  <p className="text-secondary text-sm font-medium leading-snug">{stock.product_nom}</p>
-                  <span className="text-xs text-muted ml-1 shrink-0">{stock.unite}</span>
+  return (
+    <>
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
+          <span className="text-slate-400 text-sm">Chargement du stock...</span>
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 text-sm flex items-center gap-2">
+          <AlertCircle size={16} />
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          {/* Stats Dashboard */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[
+              { label: 'Produits', value: enrichedStocks.length, color: 'text-white', sub: 'articles total' },
+              { label: 'Valeur Totale', value: formatCurrency(totalValue), color: 'text-amber-400', sub: 'en stock' },
+              { label: 'Alertes', value: alerts, color: alerts > 0 ? 'text-amber-400' : 'text-emerald-400', sub: 'à surveiller' },
+              { label: 'Épuisés', value: enrichedStocks.filter(i => i.status === 'epuise').length, color: 'text-red-400', sub: 'rupture de stock' },
+            ].map(stat => (
+              <div key={stat.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-4">
+                <p className="text-slate-500 text-xs font-medium mb-1">{stat.label}</p>
+                <p className={`${stat.color} font-bold text-xl`}>{stat.value}</p>
+                <p className="text-slate-600 text-xs">{stat.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Controls */}
+          <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <select
+                  value={selectedLoc || ''}
+                  onChange={e => setSelectedLoc(Number(e.target.value))}
+                  className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+                >
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
+                </select>
+                <select
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value)}
+                  className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+                >
+                  <option value="">Tous types</option>
+                  {productTypes.map(type => (
+                    <option key={type.id} value={type.nom}>{type.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-none">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." className="w-full sm:w-48 h-9 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50" />
                 </div>
-                <p className="text-xs text-muted mb-3">{stock.location_nom}</p>
-                <div className="flex items-center justify-between gap-2">
-                  {userIsAdmin ? (
-                    <button
-                      onClick={() => { setAdjustTarget(stock); setAdjType('ENTREE'); setAdjQty(0); setAdjErr(''); setShowAdjustModal(true); }}
-                      className={`font-bold text-sm hover:underline ${isLow ? 'text-warning' : 'text-accent'}`}
-                      title="Cliquer pour ajustement précis"
-                      style={{ color: isLow ? 'var(--color-warning, #f97316)' : undefined }}
-                    >
-                      {qty.toFixed(2)}
-                    </button>
-                  ) : (
-                    <span
-                      className={`font-bold text-sm ${isLow ? 'text-warning' : 'text-accent'}`}
-                      style={{ color: isLow ? 'var(--color-warning, #f97316)' : undefined }}
-                    >
-                      {qty.toFixed(2)}
-                    </span>
-                  )}
-                  {userIsAdmin && (
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => quickAdjust(stock.product_id, -1)}
-                        className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center font-bold"
-                        title="Diminuer stock"
-                      >−</button>
-                      <button
-                        onClick={() => quickAdjust(stock.product_id, +1)}
-                        className="w-7 h-7 rounded-lg bg-success-bg text-success flex items-center justify-center font-bold"
-                        title="Augmenter stock"
-                      >+</button>
-                      {stock.id && (
-                        <button
-                          onClick={() => { setDeleteTarget(stock); setShowDeleteModal(true); }}
-                          className="w-7 h-7 rounded-lg bg-danger-bg text-danger flex items-center justify-center"
-                          title="Supprimer du stock"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  )}
+                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none">
+                  <option value="all">Tous</option>
+                  <option value="disponible">Disponible</option>
+                  <option value="faible">Faible</option>
+                  <option value="epuise">Épuisé</option>
+                </select>
+                <button onClick={loadStocks} className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-400 hover:text-white transition-all">
+                  <RefreshCw size={14} />
+                </button>
+                <button onClick={loadHistory} className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-400 hover:text-white transition-all flex items-center gap-2">
+                  <History size={14} /> Historique
+                </button>
+                {userIsAdmin && (
+                  <Button icon={<Plus size={16} />} onClick={() => { setAddErr(''); setShowAddModal(true); }}>
+                    Ajouter
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Data Table */}
+          <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+            <DataTable data={enrichedStocks} columns={columns} />
+          </div>
+
+          {/* Add Product Modal */}
+          <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); setForm({ nom: '', category_id: '', subcategory_id: '', type_produit: 'MATIERE_PREMIERE', unite: '', uniteCustom: '', prix_achat: 0, prix_vente: 0, quantite: 0, portion_size: 0, portion_unite: 'g' }); }} title="Ajouter un produit">
+            <div className="space-y-4">
+              <Input label="Nom du produit" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} placeholder="Ex: Poulet 200g" />
+              <Select label="Type de produit" value={form.type_produit} onChange={e => setForm({...form, type_produit: e.target.value})} options={productTypes.map(t => ({ value: t.nom, label: t.nom }))} />
+              <Select label="Catégorie" value={form.category_id} onChange={e => setForm({...form, category_id: e.target.value, subcategory_id: ''})} options={[{ value: '', label: 'Sans catégorie' }, ...categories.map(c => ({ value: String(c.id), label: c.nom }))]} />
+              {form.category_id && subcategories.length > 0 && (
+                <Select label="Sous-catégorie" value={form.subcategory_id} onChange={e => setForm({...form, subcategory_id: e.target.value})} options={[{ value: '', label: 'Sans sous-catégorie' }, ...subcategories.map(s => ({ value: String(s.id), label: s.nom }))]} />
+              )}
+              <Select label="Unité" value={form.unite} onChange={e => setForm({...form, unite: e.target.value})} options={units.map(u => ({ value: u.code, label: `${u.nom} (${u.code})` })).concat([{ value: 'AUTRE', label: 'Autre...' }])} />
+              {form.unite === 'AUTRE' && (
+                <Input label="Unité personnalisée" value={form.uniteCustom} onChange={e => setForm({...form, uniteCustom: e.target.value})} placeholder="Ex: paquet, bouteille..." />
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Prix d'achat (MGA)" type="number" value={form.prix_achat} onChange={e => setForm({...form, prix_achat: Number(e.target.value)})} />
+                <Input label="Prix de vente (MGA)" type="number" value={form.prix_vente} onChange={e => setForm({...form, prix_vente: Number(e.target.value)})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Quantité initiale" type="number" value={form.quantite} onChange={e => setForm({...form, quantite: Number(e.target.value)})} />
+                <Input label="Taille portion (ex: 150)" type="number" value={form.portion_size} onChange={e => setForm({...form, portion_size: Number(e.target.value)})} placeholder="Pour gestion par portion" />
+              </div>
+              {form.portion_size > 0 && (
+                <Select label="Unité de portion" value={form.portion_unite} onChange={e => setForm({...form, portion_unite: e.target.value})} options={[
+                  { value: 'g', label: 'Grammes (g)' },
+                  { value: 'kg', label: 'Kilogrammes (kg)' },
+                  { value: 'ml', label: 'Millilitres (ml)' },
+                  { value: 'l', label: 'Litres (l)' },
+                  { value: 'unité', label: 'Unité' }
+                ]} />
+              )}
+              {addErr && <p className="text-red-400 text-sm">{addErr}</p>}
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" onClick={() => { setShowAddModal(false); setForm({ nom: '', category_id: '', subcategory_id: '', type_produit: 'MATIERE_PREMIERE', unite: '', uniteCustom: '', prix_achat: 0, prix_vente: 0, quantite: 0, portion_size: 0, portion_unite: 'g' }); }} className="flex-1">Annuler</Button>
+                <Button onClick={handleAddProduct} className="flex-1" disabled={addLoading}>{addLoading ? 'Ajout...' : 'Ajouter'}</Button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Edit Stock Modal */}
+          <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditItem(null); }} title="Modifier le produit & stock">
+            <div className="space-y-4">
+              <Input label="Nom du produit" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Prix d'achat (MGA)" type="number" value={form.prix_achat} onChange={e => setForm({...form, prix_achat: Number(e.target.value)})} />
+                <Input label="Prix de vente (MGA)" type="number" value={form.prix_vente} onChange={e => setForm({...form, prix_vente: Number(e.target.value)})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Quantité" type="number" value={form.quantite} onChange={e => setForm({...form, quantite: Number(e.target.value)})} />
+                <Input label="Unité" value={form.unite} onChange={e => setForm({...form, unite: e.target.value})} placeholder="kg, pièce, l..." />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" onClick={() => { setShowEditModal(false); setEditItem(null); }} className="flex-1">Annuler</Button>
+                <Button onClick={async () => {
+                  if (!editItem || !selectedLoc) return;
+                  try {
+                    await restaurantService.updateProduct(editItem.product_id, {
+                      nom: form.nom,
+                      prix_achat: form.prix_achat,
+                      prix_vente: form.prix_vente,
+                      unite: form.unite,
+                    });
+
+                    const delta = form.quantite - Number(editItem.quantite);
+                    if (delta !== 0) {
+                      await restaurantService.adjustStock({
+                        product_id: editItem.product_id,
+                        location_id: selectedLoc,
+                        type_mouvement: delta > 0 ? 'ENTREE' : 'SORTIE',
+                        quantite: Math.abs(delta),
+                        source_module: 'MANUEL',
+                      });
+                    }
+                    await loadStocks();
+                    setShowEditModal(false);
+                    setEditItem(null);
+                    notifyStockLevel(form.nom, form.quantite, form.unite);
+                    addNotification('success', 'Article de stock mis à jour', 'Restaurant');
+                  } catch (e: any) {
+                    setError(e.message);
+                  }
+                }} className="flex-1">Mettre à jour</Button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Adjust Stock Modal */}
+          {showAdjustModal && adjustTarget && (
+            <ModalShell title="Ajuster le stock" onClose={() => setShowAdjustModal(false)}>
+              <div className="space-y-3">
+                <p className="text-sm text-slate-400">Produit: <span className="text-white font-medium">{adjustTarget.product_nom}</span></p>
+                <p className="text-sm text-slate-400">Stock actuel: <span className="text-white font-medium">{Number(adjustTarget.quantite).toFixed(2)} {adjustTarget.unite}</span></p>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Type de mouvement</label>
+                  <select
+                    value={adjType}
+                    onChange={e => setAdjType(e.target.value as 'ENTREE' | 'SORTIE')}
+                    className="w-full h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+                  >
+                    <option value="ENTREE">Entrée (+)</option>
+                    <option value="SORTIE">Sortie (-)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Quantité</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={adjQty}
+                    onChange={e => setAdjQty(Number(e.target.value))}
+                    className="w-full h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+                  />
+                </div>
+                {adjErr && <p className="text-red-400 text-sm">{adjErr}</p>}
+                <div className="flex gap-2 justify-end pt-1">
+                  <button 
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    onClick={() => setShowAdjustModal(false)} 
+                  >
+                    Annuler
+                  </button>
+                  <button 
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-amber-500 text-black hover:bg-amber-400"
+                    onClick={handleAdjust} 
+                    disabled={adjLoading}
+                  >
+                    {adjLoading ? 'Traitement...' : 'Confirmer'}
+                  </button>
                 </div>
               </div>
-            );
-          })}
-          {stocks.length === 0 && (
-            <div className="col-span-full text-center py-10 text-muted text-sm">
-              Aucun produit en stock pour cet emplacement
+            </ModalShell>
+          )}
+
+          {/* Delete Modal */}
+          {showDeleteModal && deleteTarget && (
+            <ModalShell title="Confirmer la suppression" onClose={() => setShowDeleteModal(false)}>
+              <div className="space-y-3">
+                <p className="text-sm text-slate-300">Êtes-vous sûr de vouloir supprimer <span className="text-white font-medium">{deleteTarget.product_nom}</span> du stock ?</p>
+                <div className="flex gap-2 justify-end pt-1">
+                  <button
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    onClick={() => setShowDeleteModal(false)}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-red-500 text-white hover:bg-red-400"
+                    onClick={handleDeleteStock}
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading ? 'Suppression...' : 'Supprimer'}
+                  </button>
+                </div>
+              </div>
+            </ModalShell>
+          )}
+
+          {/* Portion Consumption Modal */}
+          {showPortionModal && portionTarget && (
+            <ModalShell title="Consommer une portion" onClose={() => setShowPortionModal(false)}>
+              <div className="space-y-3">
+                <p className="text-sm text-slate-400">Produit: <span className="text-white font-medium">{portionTarget.product_nom}</span></p>
+                <p className="text-sm text-slate-400">Stock actuel: <span className="text-white font-medium">{Number(portionTarget.quantite).toFixed(2)} {portionTarget.unite}</span></p>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Taille de la portion (g)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={portionSize}
+                    onChange={e => setPortionSize(Number(e.target.value))}
+                    className="w-full h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+                    placeholder="Ex: 150"
+                  />
+                </div>
+                {portionSize > 0 && (
+                  <p className="text-sm text-slate-400">
+                    Stock restant après consommation: <span className="text-white font-medium">{Math.max(0, Number(portionTarget.quantite) - portionSize).toFixed(2)} {portionTarget.unite}</span>
+                  </p>
+                )}
+                {portionErr && <p className="text-red-400 text-sm">{portionErr}</p>}
+                <div className="flex gap-2 justify-end pt-1">
+                  <button
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    onClick={() => setShowPortionModal(false)}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all bg-amber-500 text-black hover:bg-amber-400"
+                    onClick={handleConsumePortion}
+                    disabled={portionLoading || portionSize <= 0}
+                  >
+                    {portionLoading ? 'Traitement...' : 'Consommer'}
+                  </button>
+                </div>
+              </div>
+            </ModalShell>
+          )}
+
+          {/* Stock History */}
+          {showHistory && (
+            <div className="mt-6 bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-800/50">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <History size={18} className="text-amber-400" />
+                  Mouvements de stock récents
+                </h3>
+                <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-white text-sm">Fermer</button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-slate-800/50">
+                      <th className="text-left p-4">Date</th>
+                      <th className="text-left p-4">Produit</th>
+                      <th className="text-left p-4">Type</th>
+                      <th className="text-left p-4">Source</th>
+                      <th className="text-right p-4">Quantité</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movements.map(m => (
+                      <tr key={m.id} className="border-b border-slate-800/30 hover:bg-slate-800/30">
+                        <td className="p-4 text-slate-300">{new Date(m.created_at).toLocaleString('fr-FR')}</td>
+                        <td className="p-4 text-white font-medium">{m.product_nom}</td>
+                        <td className="p-4">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${m.type_mouvement === 'ENTREE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {m.type_mouvement}
+                          </span>
+                        </td>
+                        <td className="p-4 text-slate-400">{m.source_module || '—'}</td>
+                        <td className="p-4 text-right text-white font-medium">{Number(m.quantite).toFixed(2)} {m.unite}</td>
+                      </tr>
+                    ))}
+                    {movements.length === 0 && (
+                      <tr><td colSpan={5} className="p-8 text-center text-slate-500">Aucun mouvement de stock</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Historique */}
-      {showHistory && (
-        <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="flex justify-between items-center mb-3">
-            <h4 className="text-sm font-semibold text-primary">Mouvements récents</h4>
-            <button onClick={() => setShowHistory(false)} className="text-xs text-muted hover:text-primary">Fermer</button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted">
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-left p-2">Produit</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Source</th>
-                  <th className="text-right p-2">Qté</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map(m => (
-                  <tr key={m.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                    <td className="p-2 text-secondary">{new Date(m.created_at).toLocaleString('fr-FR')}</td>
-                    <td className="p-2 text-primary">{m.product_nom}</td>
-                    <td className="p-2">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${m.type_mouvement === 'ENTREE' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
-                        {m.type_mouvement}
-                      </span>
-                    </td>
-                    <td className="p-2 text-muted">{m.source_module || '—'}</td>
-                    <td className="p-2 text-right">{Number(m.quantite).toFixed(2)} {m.unite}</td>
-                  </tr>
-                ))}
-                {movements.length === 0 && (
-                  <tr><td colSpan={5} className="p-4 text-center text-muted">Aucun mouvement</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL Nouveau produit */}
-      {showAddModal && (
-        <ModalShell title="Nouveau produit en stock" onClose={() => setShowAddModal(false)}>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm text-secondary mb-1">Nom <span className="text-danger">*</span></label>
-              <input type="text" placeholder="Ex : Farine de blé" value={nom}
-                onChange={e => setNom(e.target.value)} className={inputClass} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Catégorie</label>
-              <select value={categoryId} onChange={e => setCategoryId(Number(e.target.value) || '')}
-                className={inputClass} style={inputStyle}>
-                <option value="">Sans catégorie</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Type de produit <span className="text-danger">*</span></label>
-              <select
-                value={selectedType}
-                onChange={e => setSelectedType(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-              >
-                {productTypes.map(type => (
-                  <option key={type.id} value={type.nom}>{type.nom}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Unité <span className="text-danger">*</span></label>
-              <select value={unite} onChange={e => setUnite(e.target.value)} className={inputClass} style={inputStyle}>
-                {units.map(u => <option key={u.id} value={u.code}>{u.nom} ({u.code})</option>)}
-                <option value="AUTRE">Autre…</option>
-              </select>
-              {unite === 'AUTRE' && (
-                <input type="text" placeholder="Saisir l'unité" value={uniteCustom}
-                  onChange={e => setUniteCustom(e.target.value)}
-                  className={`${inputClass} mt-2`} style={inputStyle} />
-              )}
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Prix d'achat unitaire (Ar)</label>
-              <input type="number" min="0" step="any" value={prixAchat}
-                onChange={e => setPrixAchat(Number(e.target.value))} className={inputClass} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Prix de vente unitaire (Ar)</label>
-              <input type="number" min="0" step="any" value={prixVente}
-                onChange={e => setPrixVente(Number(e.target.value))}
-                className={inputClass} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Quantité initiale (inventaire) <span className="text-danger">*</span></label>
-              <input type="number" min="0" step="any" value={initQty}
-                onChange={e => setInitQty(Number(e.target.value))} className={inputClass} style={inputStyle} />
-            </div>
-            {addErr && <p className="text-xs text-danger">{addErr}</p>}
-            <div className="flex gap-2 justify-end pt-1">
-              <button 
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-                onClick={() => setShowAddModal(false)} 
-                disabled={addLoading}
-              >
-                Annuler
-              </button>
-              <button 
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
-                onClick={handleAddProduct} 
-                disabled={addLoading}
-              >
-                {addLoading ? 'Création…' : 'Créer & ajouter'}
-              </button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
-
-      {/* MODAL Ajustement précis */}
-      {showAdjustModal && adjustTarget && (
-        <ModalShell title="Ajuster le stock" onClose={() => setShowAdjustModal(false)}>
-          <p className="text-sm text-secondary mb-4">
-            <span className="font-medium text-primary">{adjustTarget.product_nom}</span>
-            {' '}— stock : <span className="text-accent font-bold">{Number(adjustTarget.quantite).toFixed(2)} {adjustTarget.unite}</span>
-          </p>
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              {(['ENTREE', 'SORTIE'] as const).map(t => (
-                <button key={t} onClick={() => setAdjType(t)} className="flex-1 h-9 rounded-xl text-sm font-medium border transition-all"
-                  style={{
-                    backgroundColor: adjType === t ? (t === 'ENTREE' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)') : 'var(--color-surface-2)',
-                    color: adjType === t ? (t === 'ENTREE' ? 'var(--color-success)' : 'var(--color-danger)') : 'var(--color-text-secondary)',
-                    borderColor: adjType === t ? (t === 'ENTREE' ? 'var(--color-success)' : 'var(--color-danger)') : 'var(--color-border)',
-                  }}>
-                  {t === 'ENTREE' ? '+ Entrée' : '− Sortie'}
-                </button>
-              ))}
-            </div>
-            <div>
-              <label className="block text-sm text-secondary mb-1">Quantité <span className="text-danger">*</span></label>
-              <input type="number" min="0.01" step="any" placeholder="Ex : 5.5"
-                value={adjQty || ''} onChange={e => setAdjQty(Number(e.target.value))}
-                className={inputClass} style={inputStyle} />
-            </div>
-            {adjErr && <p className="text-xs text-danger">{adjErr}</p>}
-            <div className="flex gap-2 justify-end pt-1">
-              <button 
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-                onClick={() => setShowAdjustModal(false)} 
-                disabled={adjLoading}
-              >
-                Annuler
-              </button>
-              <button 
-                className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
-                onClick={handleAdjust} 
-                disabled={adjLoading}
-              >
-                {adjLoading ? 'En cours…' : 'Confirmer'}
-              </button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
-
-      {/* MODAL Suppression */}
-      {showDeleteModal && deleteTarget && (
-        <ModalShell title="Supprimer du stock" onClose={() => setShowDeleteModal(false)}>
-          <p className="text-sm text-secondary mb-4">
-            Êtes-vous sûr de vouloir supprimer <span className="font-medium text-primary">{deleteTarget.product_nom}</span> du stock ?
-          </p>
-          <p className="text-xs text-muted mb-4">
-            Cette action est irréversible. Le produit sera retiré de l'emplacement <span className="font-medium">{deleteTarget.location_nom}</span>.
-          </p>
-          <div className="flex gap-2 justify-end pt-1">
-            <button
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-              style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-              onClick={() => setShowDeleteModal(false)}
-            >
-              Annuler
-            </button>
-            <button
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-              style={{ backgroundColor: deleteLoading ? 'var(--color-surface-2)' : 'var(--color-danger)', color: deleteLoading ? 'var(--color-text-secondary)' : 'white' }}
-              onClick={handleDeleteStock}
-              disabled={deleteLoading}
-            >
-              {deleteLoading ? 'Suppression…' : 'Supprimer'}
-            </button>
-          </div>
-        </ModalShell>
+        </>
       )}
     </>
   );
@@ -749,156 +939,149 @@ const AchatsPanel: React.FC = () => {
     finally { setSupLoading(false); }
   };
 
-  const openDetail = async (id: number) => {
-    try {
-      const res = await restaurantService.getPurchaseById(id);
-      if (res.success) { setSelectedPurchase(res.data); setShowDetailModal(true); }
-    } catch (e) { console.error(e); }
-  };
-
-  const currentUser = AuthService.getCurrentUser();
-  const userIsAdmin = isAdmin(currentUser);
-
   return (
-    <>
-      <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
-        <p className="text-sm text-secondary">{purchases.length} achat(s)</p>
-        {userIsAdmin && (
-          <div className="flex gap-2">
-            <button 
-              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-              style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-              onClick={() => setShowSupplierModal(true)}
-            >
-              <Plus size={14} className="mr-1" /> Fournisseur
-            </button>
-            <button 
-              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
-              onClick={() => { setPurchaseErr(''); setShowPurchaseModal(true); }}
-            >
-              <Truck size={14} className="mr-1" /> Nouvel achat
-            </button>
-          </div>
-        )}
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h4 className="text-primary font-semibold flex items-center gap-2">
+          <Truck size={16} className="text-accent" /> Gestion des Achats
+        </h4>
+        <div className="flex gap-2">
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+            onClick={() => setShowSupplierModal(true)} 
+          >
+            <Plus size={14} /> Nouveau fournisseur
+          </button>
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'black' }}
+            onClick={() => setShowPurchaseModal(true)} 
+          >
+            <Plus size={14} /> Nouvel achat
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted">Chargement...</p>
+        <p className="text-sm text-muted py-8 text-center">Chargement...</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
           <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted text-xs">
-                <th className="text-left p-2">#</th>
-                <th className="text-left p-2">Fournisseur</th>
-                <th className="text-left p-2">Statut</th>
-                <th className="text-right p-2">Total</th>
-                <th className="p-2" />
+            <thead className="text-muted" style={{ backgroundColor: 'var(--color-surface-2)' }}>
+              <tr>
+                <th className="text-left p-3">ID</th>
+                <th className="text-left p-3">Fournisseur</th>
+                <th className="text-right p-3">Montant</th>
+                <th className="text-center p-3">Statut</th>
+                <th className="text-center p-3">Actions</th>
               </tr>
             </thead>
             <tbody>
               {purchases.map(p => (
                 <tr key={p.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                  <td className="p-2 text-muted text-xs">#{p.id}</td>
-                  <td className="p-2 text-primary">{p.supplier_nom || '—'}</td>
-                  <td className="p-2">
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-success-bg text-success">{p.statut}</span>
+                  <td className="p-3 text-secondary">#{p.id}</td>
+                  <td className="p-3 text-primary font-medium">{p.supplier_nom}</td>
+                  <td className="p-3 text-right text-accent font-semibold">{formatCurrency(p.montant_total)}</td>
+                  <td className="p-3 text-center">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${p.statut === 'COMPLETED' ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning'}`}>
+                      {p.statut}
+                    </span>
                   </td>
-                  <td className="p-2 text-right font-medium text-primary">
-                    {Number(p.montant_total).toLocaleString('fr-FR')} Ar
-                  </td>
-                  <td className="p-2">
-                    <button onClick={() => openDetail(p.id)} className="text-accent hover:opacity-70">
-                      <ChevronRight size={16} />
+                  <td className="p-3 text-center">
+                    <button 
+                      className="text-xs text-muted hover:text-primary"
+                      onClick={() => { setSelectedPurchase(p); setShowDetailModal(true); }}
+                    >
+                      Détails
                     </button>
                   </td>
                 </tr>
               ))}
               {purchases.length === 0 && (
-                <tr><td colSpan={5} className="p-6 text-center text-muted">Aucun achat enregistré</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-muted">Aucun achat enregistré</td></tr>
               )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* MODAL Nouvel achat */}
+      {/* Modal Nouvel Achat */}
       {showPurchaseModal && (
-        <ModalShell title="Nouvel achat fournisseur" onClose={() => setShowPurchaseModal(false)} wide>
+        <ModalShell title="Nouvel achat" onClose={() => setShowPurchaseModal(false)} wide>
           <div className="space-y-4">
             <div>
               <label className="block text-sm text-secondary mb-1">Fournisseur <span className="text-danger">*</span></label>
-              <select value={supplierId} onChange={e => setSupplierId(Number(e.target.value))}
-                className={inputClass} style={inputStyle}>
-                <option value="">Sélectionner…</option>
+              <select 
+                value={supplierId} 
+                onChange={e => setSupplierId(Number(e.target.value) || '')}
+                className={inputClass} style={inputStyle}
+              >
+                <option value="">Sélectionner...</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
               </select>
             </div>
-
-            {/* Lignes */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm text-secondary font-medium">Produits achetés</label>
-                <button onClick={() => setLines(p => [...p, { product_id: '', location_id: '', quantite: 0, prix_unitaire: 0 }])}
-                  className="text-xs text-accent hover:underline flex items-center gap-1">
-                  <Plus size={12} /> Ajouter une ligne
-                </button>
-              </div>
-              {/* Headers */}
-              <div className="grid grid-cols-12 gap-2 mb-1 px-1">
-                {['Produit (matière)', 'Dépôt de stockage', 'Quantité', 'P.U. (Ar)', ''].map((h, i) => (
-                  <div key={i} className={`text-xs text-muted ${[4, 3, 2, 2, 1][i] === 4 ? 'col-span-4' : [4, 3, 2, 2, 1][i] === 3 ? 'col-span-3' : [4, 3, 2, 2, 1][i] === 2 ? 'col-span-2' : 'col-span-1'}`}>
-                    {h}
+            <div className="space-y-2">
+              <label className="block text-sm text-secondary mb-1">Lignes de commande</label>
+              {lines.map((l, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4">
+                    <select 
+                      value={l.product_id} 
+                      onChange={e => updateLine(i, 'product_id', e.target.value)}
+                      className={inputClass} style={inputStyle}
+                    >
+                      <option value="">Produit...</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                    </select>
                   </div>
-                ))}
-              </div>
-              <div className="space-y-2">
-                {lines.map((line, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-4">
-                      <select value={line.product_id} onChange={e => updateLine(i, 'product_id', Number(e.target.value))}
-                        className="w-full h-9 px-2 rounded-xl text-primary text-xs" style={inputStyle}>
-                        <option value="">Produit…</option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.nom} ({p.unite})</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-3">
-                      <select value={line.location_id} onChange={e => updateLine(i, 'location_id', Number(e.target.value))}
-                        className="w-full h-9 px-2 rounded-xl text-primary text-xs" style={inputStyle}>
-                        <option value="">Dépôt…</option>
-                        {locations.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <input type="number" min="0" step="any" placeholder="Qté"
-                        value={line.quantite || ''} onChange={e => updateLine(i, 'quantite', Number(e.target.value))}
-                        className="w-full h-9 px-2 rounded-xl text-primary text-xs" style={inputStyle} />
-                    </div>
-                    <div className="col-span-2">
-                      <input type="number" min="0" step="any" placeholder="Prix"
-                        value={line.prix_unitaire || ''} onChange={e => updateLine(i, 'prix_unitaire', Number(e.target.value))}
-                        className="w-full h-9 px-2 rounded-xl text-primary text-xs" style={inputStyle} />
-                    </div>
-                    <div className="col-span-1 flex justify-center">
-                      {lines.length > 1 && (
-                        <button onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} className="text-danger">
-                          <X size={16} />
-                        </button>
-                      )}
-                    </div>
+                  <div className="col-span-3">
+                    <select 
+                      value={l.location_id} 
+                      onChange={e => updateLine(i, 'location_id', e.target.value)}
+                      className={inputClass} style={inputStyle}
+                    >
+                      <option value="">Emplacement...</option>
+                      {locations.map(l => <option key={l.id} value={l.id}>{l.nom}</option>)}
+                    </select>
                   </div>
-                ))}
-              </div>
-              <div className="flex justify-end mt-2">
-                <p className="text-sm font-semibold text-primary">
-                  Total : <span className="text-accent">{total.toLocaleString('fr-FR')} Ar</span>
-                </p>
-              </div>
+                  <div className="col-span-2">
+                    <input 
+                      type="number" min="0.01" step="any" placeholder="Qté"
+                      value={l.quantite || ''} onChange={e => updateLine(i, 'quantite', Number(e.target.value))}
+                      className={inputClass} style={inputStyle}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input 
+                      type="number" min="0" step="any" placeholder="Prix"
+                      value={l.prix_unitaire || ''} onChange={e => updateLine(i, 'prix_unitaire', Number(e.target.value))}
+                      className={inputClass} style={inputStyle}
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <button 
+                      onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
+                      className="w-full h-9 rounded-lg text-danger bg-danger-bg flex items-center justify-center"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button 
+                onClick={() => setLines(prev => [...prev, { product_id: '', location_id: '', quantite: 0, prix_unitaire: 0 }])}
+                className="text-xs text-accent hover:underline"
+              >
+                + Ajouter une ligne
+              </button>
             </div>
-
+            <div className="flex justify-between items-center p-3 rounded-lg" style={{ backgroundColor: 'var(--color-surface-2)' }}>
+              <span className="text-sm text-secondary">Total estimé:</span>
+              <span className="text-lg font-bold text-accent">{formatCurrency(total)}</span>
+            </div>
             {purchaseErr && <p className="text-xs text-danger">{purchaseErr}</p>}
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-end pt-1">
               <button 
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
                 style={{ backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
@@ -913,30 +1096,41 @@ const AchatsPanel: React.FC = () => {
                 onClick={handlePurchase} 
                 disabled={purchaseLoading}
               >
-                {purchaseLoading ? 'Enregistrement…' : 'Valider l\'achat'}
+                {purchaseLoading ? 'Création…' : 'Créer'}
               </button>
             </div>
           </div>
         </ModalShell>
       )}
 
-      {/* MODAL Nouveau fournisseur */}
+      {/* Modal Nouveau Fournisseur */}
       {showSupplierModal && (
         <ModalShell title="Nouveau fournisseur" onClose={() => setShowSupplierModal(false)}>
           <div className="space-y-3">
-            {[
-              { label: 'Nom', val: supNom, set: setSupNom, req: true, placeholder: 'Nom du fournisseur', type: 'text' },
-              { label: 'Téléphone', val: supTel, set: setSupTel, req: false, placeholder: '+261 34…', type: 'text' },
-              { label: 'Email', val: supEmail, set: setSupEmail, req: false, placeholder: 'contact@…', type: 'email' },
-            ].map(f => (
-              <div key={f.label}>
-                <label className="block text-sm text-secondary mb-1">
-                  {f.label} {f.req && <span className="text-danger">*</span>}
-                </label>
-                <input type={f.type} placeholder={f.placeholder} value={f.val}
-                  onChange={e => f.set(e.target.value)} className={inputClass} style={inputStyle} />
-              </div>
-            ))}
+            <div>
+              <label className="block text-sm text-secondary mb-1">Nom <span className="text-danger">*</span></label>
+              <input 
+                type="text" placeholder="Ex: Metro Cash & Carry"
+                value={supNom} onChange={e => setSupNom(e.target.value)}
+                className={inputClass} style={inputStyle}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-secondary mb-1">Téléphone</label>
+              <input 
+                type="tel" placeholder="Ex: +261 34 00 000 00"
+                value={supTel} onChange={e => setSupTel(e.target.value)}
+                className={inputClass} style={inputStyle}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-secondary mb-1">Email</label>
+              <input 
+                type="email" placeholder="Ex: contact@fournisseur.mg"
+                value={supEmail} onChange={e => setSupEmail(e.target.value)}
+                className={inputClass} style={inputStyle}
+              />
+            </div>
             {supErr && <p className="text-xs text-danger">{supErr}</p>}
             <div className="flex gap-2 justify-end pt-1">
               <button 
@@ -959,39 +1153,6 @@ const AchatsPanel: React.FC = () => {
           </div>
         </ModalShell>
       )}
-
-      {/* MODAL Détail achat */}
-      {showDetailModal && selectedPurchase && (
-        <ModalShell title={`Achat #${selectedPurchase.id} — ${selectedPurchase.supplier_nom}`} onClose={() => setShowDetailModal(false)} wide>
-          <table className="w-full text-sm mb-4">
-            <thead>
-              <tr className="text-muted text-xs">
-                <th className="text-left p-2">Produit</th>
-                <th className="text-right p-2">Quantité</th>
-                <th className="text-right p-2">P.U. (Ar)</th>
-                <th className="text-right p-2">Sous-total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(selectedPurchase.items || []).map((item: any) => (
-                <tr key={item.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                  <td className="p-2 text-primary">{item.product_nom}</td>
-                  <td className="p-2 text-right">{item.quantite} {item.unite}</td>
-                  <td className="p-2 text-right">{Number(item.prix_unitaire).toLocaleString('fr-FR')}</td>
-                  <td className="p-2 text-right font-medium">{(item.quantite * item.prix_unitaire).toLocaleString('fr-FR')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex justify-end border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
-            <p className="font-semibold text-primary">
-              Total : <span className="text-accent">{Number(selectedPurchase.montant_total).toLocaleString('fr-FR')} Ar</span>
-            </p>
-          </div>
-        </ModalShell>
-      )}
-    </>
+    </div>
   );
 };
-
-// Recettes UI removed

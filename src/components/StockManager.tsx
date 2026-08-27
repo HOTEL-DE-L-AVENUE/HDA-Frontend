@@ -425,11 +425,9 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const localCaisse = getModuleCaisseSolde(module);
   const sortiesStock = moduleStockSummary ? Number(moduleStockSummary.sorties) : backendSorties;
   const solde = isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
-  const entrees = isBackendCaisse && moduleStockSummary
-    ? Number(moduleStockSummary.entrees)
-    : isBackendCaisse
-      ? backendEntrees
-      : localCaisse.entrees;
+  const entrees = isBackendCaisse
+    ? Math.max(Number(moduleStockSummary?.entrees || 0), backendEntrees)
+    : localCaisse.entrees;
   const sorties = isBackendCaisse ? sortiesStock : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
@@ -513,7 +511,22 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     : allRestaurantTransactions;
 
   const handleEncaisserCommande = async (orderId: number) => {
-    await onEncaisserCommande?.(orderId);
+    if (onEncaisserCommande) {
+      await onEncaisserCommande(orderId);
+      if (isBackendCaisse) {
+        try {
+          const [txs, stats] = await Promise.all([
+            financeService.getTransactions({ module: module.toUpperCase() }),
+            financeService.getFinancialStats(),
+          ]);
+          setBackendTransactions(txs);
+          const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
+          setModuleStockSummary(summary || null);
+        } catch (err) {
+          console.warn('Failed to refresh backend caisse after encaissement:', err);
+        }
+      }
+    }
   };
 
   return (
