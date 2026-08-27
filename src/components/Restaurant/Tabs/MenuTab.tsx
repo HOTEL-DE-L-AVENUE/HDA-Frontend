@@ -109,25 +109,30 @@ export const MenuTab: React.FC<MenuTabProps> = ({
               <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{menuProducts.length}</span>
             </button>
 
-            {categories.map((cat) => {
-              const count = menuProducts.filter(p => p.category_id === cat.id).length;
-              const isSelected = selectedCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex justify-between items-center ${isSelected ? 'bg-amber-500 text-white shadow-md' : 'text-primary hover:bg-surface-2'
-                    }`}
-                  style={{
-                    backgroundColor: isSelected ? '#f59e0b' : 'var(--color-surface-2)',
-                    border: '1px solid var(--color-border)',
-                  }}
-                >
-                  <span>{cat.nom}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{count}</span>
-                </button>
-              );
-            })}
+            {categories
+              .map((cat) => ({
+                ...cat,
+                count: menuProducts.filter(p => p.category_id === cat.id).length,
+              }))
+              .filter((cat) => cat.count > 0)
+              .map((cat) => {
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex justify-between items-center ${isSelected ? 'bg-amber-500 text-white shadow-md' : 'text-primary hover:bg-surface-2'
+                      }`}
+                    style={{
+                      backgroundColor: isSelected ? '#f59e0b' : 'var(--color-surface-2)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    <span>{cat.nom}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{cat.count}</span>
+                  </button>
+                );
+              })}
           </div>
 
           {/* Grille des produits */}
