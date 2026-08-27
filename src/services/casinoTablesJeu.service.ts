@@ -94,10 +94,36 @@ export type PlayerSheetData = {
   cashingPaymentMethod?: string;
 };
 
+export interface IdentityVerification {
+  id?: number;
+  player_sheet_id?: number;
+  fiche_id: number;
+  full_name: string;
+  id_type: string;
+  id_number: string;
+  issue_date: string;
+  transaction_type: 'ACHAT' | 'APPORT' | 'ECHANGE';
+  amount: number;
+  verified_at: string;
+  verified_by?: number;
+  created_at?: string;
+}
+
 export const playerSheetApi = {
   get: (date: string, tableName: string) =>
     get<PlayerSheetData | null>(`/player-sheets${qs({ date, table_name: tableName })}`),
   save: (payload: PlayerSheetData) => put<PlayerSheetData>('/player-sheets', payload),
+};
+
+export const identityVerificationApi = {
+  list: (params?: { player_sheet_id?: number; fiche_id?: number; date_from?: string; date_to?: string }) =>
+    get<IdentityVerification[]>(`/identity-verifications${qs(params || {})}`),
+  get: (id: number) => get<IdentityVerification>(`/identity-verifications/${id}`),
+  create: (payload: Omit<IdentityVerification, 'id' | 'verified_at' | 'created_at'>) =>
+    post<IdentityVerification>('/identity-verifications', payload),
+  update: (id: number, payload: Partial<IdentityVerification>) =>
+    put<IdentityVerification>(`/identity-verifications/${id}`, payload),
+  remove: (id: number) => del<void>(`/identity-verifications/${id}`),
 };
 
 export const tableVisitApi = {

@@ -1,4 +1,14 @@
-export type CasinoView = 'players' | 'chips' | 'final';
+export type CasinoView = 'players' | 'chips' | 'final' | 'management';
+
+export interface IdentityVerificationData {
+  fullName: string;
+  idType: string;
+  idNumber: string;
+  issueDate: string;
+  transactionType: 'achat' | 'apport' | 'echange';
+  amount: number;
+  verifiedAt: string;
+}
 
 export type PlayerLine = {
   id: number;
@@ -20,6 +30,7 @@ export type PlayerLine = {
   signature: string;
   departure: string;
   cashing: string;
+  identityVerification?: string;
 };
 
 export type ChipLine = {
@@ -34,6 +45,7 @@ export const CHIP_VALUES = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 50000
 export const casinoCurrency = new Intl.NumberFormat('fr-FR');
 export const casinoBorder = { borderColor: 'var(--color-border)' };
 export const casinoInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-primary outline-none placeholder:text-muted';
+export const IDENTITY_VERIFICATION_THRESHOLD = 3_000_000;
 
 export const parseCasinoAmount = (value: string | number | null | undefined): number => {
   const text = String(value ?? '').trim().replace(/\s/g, '');

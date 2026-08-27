@@ -13,9 +13,13 @@ interface FinalCalculationSheetProps {
   onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
   onSave: () => void;
+  showIdentityVerifications?: boolean;
+  identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
 
-export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave }) => {
+export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
+  const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
+  const identity = identityVerifications[selectedPlayerId];
   const bonusEntries = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -176,6 +180,23 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
           </div>
         </div>
       </div>
+      {showIdentityVerifications && identity && (
+        <div className="mt-4 rounded-xl border p-3 text-[11px]" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
+          <p className="mb-2 font-bold text-yellow-300">VÉRIFICATION D'IDENTITÉ — {identity.transaction_type.toUpperCase()}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <span className="text-muted">Joueur :</span>
+            <span className="font-semibold">{identity.full_name}</span>
+            <span className="text-muted">Pièce d'identité :</span>
+            <span className="font-semibold">{identity.id_type} n° {identity.id_number}</span>
+            <span className="text-muted">Date d'émission :</span>
+            <span className="font-semibold">{identity.issue_date}</span>
+            <span className="text-muted">Montant :</span>
+            <span className="font-semibold text-yellow-300">{casinoCurrency.format(identity.amount)} Ar</span>
+            <span className="text-muted">Vérifié le :</span>
+            <span className="font-semibold">{new Date(identity.verified_at).toLocaleString('fr-FR')}</span>
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
         {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
         {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
