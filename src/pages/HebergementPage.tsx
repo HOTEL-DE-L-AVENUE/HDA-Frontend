@@ -27,12 +27,16 @@ import { ClientModal } from '../components/Hebergement/modals/ClientModal';
 // ─── Logic ────────────────────────────────────────────────────────────────────
 import { useHebergement } from '../hooks/useHebergement';
 import AuthService from '../services/authService';
-import { isAdmin } from '../utils/permissions';
+import { isAdmin, isCashier } from '../utils/permissions';
 
 export const HebergementPage: React.FC = () => {
   const h = useHebergement();
   const [showRecordPaymentModal, setShowRecordPaymentModal] = React.useState(false);
   const [selectedReservation, setSelectedReservation] = React.useState<Reservation | null>(null);
+
+  // Correction : définition de userIsAdmin
+  const userIsAdmin = isAdmin();
+  const userIsCashier = isCashier(AuthService.getCurrentUser());
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
@@ -118,7 +122,7 @@ export const HebergementPage: React.FC = () => {
         />
       )}
 
-      {userIsAdmin && h.activeTab === 'caisse' && (
+      {(userIsAdmin || userIsCashier) && h.activeTab === 'caisse' && (
         <CaisseManager
           module="hebergement"
           categories={['Hébergement', 'Stock', 'Maintenance', 'Personnel', 'Autre']}

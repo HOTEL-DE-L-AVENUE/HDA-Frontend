@@ -55,7 +55,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="hotel"
-                    allowedRoles={['admin', 'manager', 'receptioniste', 'housekeeping', 'stock_manager']}
+                    allowedRoles={['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'stock_manager']}
                   />
                 }
               >
@@ -99,7 +99,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="casino"
-                    allowedRoles={['admin', 'manager', 'caisse', 'caissier']}
+                    allowedRoles={['admin']}
                   />
                 }
               >
@@ -140,9 +140,11 @@ function App() {
                 <Route path="/utilisateurs" element={<UtilisateursPage />} />
               </Route>
 
-              {/* Profil et paramètres : tous les utilisateurs authentifiés */}
+              {/* Profil accessible, paramètres réservés aux responsables */}
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route element={<ProtectedRoute allowedRoles={['admin', 'manager']} />}>
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
             </Route>
           </Route>
 

@@ -7,7 +7,7 @@ import { ModuleType, UserRole } from '../types';
  * Matrice stricte des modules accessibles par rôle :
  * - admin : accès total à tous les modules
  * - manager : uniquement le(s) module(s) assigné(s) lors de sa création (max 2 managers par module)
- * - caissier : uniquement les fonctions de caisse (finances, onglets caisse)
+ * - caissier : commandes et fonctions de caisse sur le module affecté
  * - stock_manager : uniquement les fonctions de gestion de stock (onglets stock)
  */
 export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
@@ -144,6 +144,12 @@ export function isAdmin(userOrRole?: { role?: string } | string | null): boolean
   return (role || '').toLowerCase() === 'admin';
 }
 
+export function isCashier(userOrRole?: { role?: string } | string | null): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  return ['caisse', 'caissier'].includes((role || '').toLowerCase());
+}
+
 /**
  * Filtre les onglets/sous-sections secondaires au sein d'un module en fonction du rôle :
  * - Caisse : UNIQUEMENT accessible pour l'administrateur ('admin'). Si l'utilisateur n'est pas admin, l'onglet 'caisse' est totalement exclu.
@@ -157,6 +163,10 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   // 1. Si admin : accès à tous les onglets
   if (role === 'admin') {
     return tabs;
+  }
+
+  if (role === 'caisse' || role === 'caissier') {
+    return tabs.filter(t => t.id === 'caisse' || t.id.includes('caisse') || t.id === 'commandes');
   }
 
   // 2. Si non-admin : exclure systématiquement les onglets de caisse
@@ -176,6 +186,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
  */
 export function getDefaultTabForRole(defaultTab: string, userRole?: string): string {
   const role = userRole?.toLowerCase() || '';
+  if (role === 'caisse' || role === 'caissier') return 'caisse';
   if (role === 'stock_manager') return 'stock';
   if (role !== 'admin' && (defaultTab === 'caisse' || defaultTab.includes('caisse'))) {
     return 'stock';

@@ -29,12 +29,13 @@ import type {
 
 import AuthService from '../services/authService';
 import { clientService } from '../services/client.service';
-import { getDefaultTabForRole, isAdmin } from '../utils/permissions';
+import { getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 
 export const RestaurantPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
+  const userIsCashier = isCashier(currentUser);
 
   // ---------- États ----------
   const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('commandes', currentUser?.role));
@@ -285,7 +286,6 @@ export const RestaurantPage: React.FC = () => {
 
   const handlePrintInvoice = (orderId: number | string) => {
     const numericId = Number(orderId);
-    // Try downloading PDF first (authenticated). Embed in a popup for in-app printing. Fallback to HTML printable view.
     (async () => {
       try {
         const arrayBuffer = await restaurantService.getInvoicePdf(numericId as number);
@@ -294,7 +294,6 @@ export const RestaurantPage: React.FC = () => {
 
         const printWindow = window.open('', '_blank', 'width=900,height=700');
         if (!printWindow) {
-          // Popup blocked - force download
           const a = document.createElement('a');
           a.href = blobUrl;
           a.download = `facture_commande_${numericId}.pdf`;
@@ -305,7 +304,6 @@ export const RestaurantPage: React.FC = () => {
           return;
         }
 
-        // Embed PDF in an iframe and trigger print from the popup so user remains inside the app
         printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Facture #${numericId}</title><style>html,body{height:100%;margin:0}iframe{border:none;width:100%;height:100%}</style></head><body><iframe src="${blobUrl}"></iframe><script>const f=document.querySelector('iframe');f.onload=function(){setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){window.print();}},300);};</script></body></html>`);
         printWindow.document.close();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
@@ -314,12 +312,10 @@ export const RestaurantPage: React.FC = () => {
         console.warn('PDF fetch failed, falling back to HTML view', err);
       }
 
-      // Fallback: fetch invoice HTML via authenticated API client then open in popup and print (same behavior as Bar)
       try {
         const html = await restaurantService.getInvoiceHtml(numericId as number);
         const printWindow = window.open('', '_blank', 'width=720,height=640');
-        if (!printWindow) return alert('Impossible d' + "'" + 'ouvrir une nouvelle fenêtre');
-        // Ensure auto-print when the content loads
+        if (!printWindow) return alert('Impossible d\'ouvrir une nouvelle fenêtre');
         const autoPrintHtml = html + `<script>window.onload=function(){setTimeout(()=>{window.focus();window.print();},300)}<\/script>`;
         printWindow.document.open();
         printWindow.document.write(autoPrintHtml);
@@ -378,7 +374,6 @@ export const RestaurantPage: React.FC = () => {
   // Clients
   const handleAddClient = async (formData: any) => {
     try {
-      // Create client via backend so subsequent orders can reference it
       const created = await clientService.createClient(formData);
       setClients(prev => [...prev, created]);
       setShowClientModal(false);
@@ -409,39 +404,41 @@ export const RestaurantPage: React.FC = () => {
       {/* Header avec statistiques */}
       <RestaurantHeader stats={stats} onNewOrder={() => setShowOrderModal(true)} />
 
-      {/* Barre de recherche et filtres */}
-      <div className="flex flex-col sm:flex-row gap-3 w-full">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            placeholder="Rechercher..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 pl-9 pr-4 rounded-xl text-primary placeholder-subtle text-sm"
+      {/* Barre de recherche et filtres - Masquée uniquement sur l'onglet menu */}
+      {activeTab !== 'menu' && (
+        <div className="flex flex-col sm:flex-row gap-3 w-full">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-10 pl-9 pr-4 rounded-xl text-primary placeholder-subtle text-sm"
+              style={{
+                backgroundColor: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="w-full sm:w-48 h-10 rounded-xl text-primary text-sm px-4"
             style={{
               backgroundColor: 'var(--color-surface-2)',
               border: '1px solid var(--color-border)',
               outline: 'none',
             }}
-          />
+          >
+            <option value="">Tous les statuts</option>
+            <option value="EN_ATTENTE">En attente</option>
+            <option value="EN_COURS">En cours</option>
+            <option value="SERVIE">Servie</option>
+            <option value="PAYEE">Payée</option>
+          </select>
         </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="w-full sm:w-48 h-10 rounded-xl text-primary text-sm px-4"
-          style={{
-            backgroundColor: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border)',
-            outline: 'none',
-          }}
-        >
-          <option value="">Tous les statuts</option>
-          <option value="EN_ATTENTE">En attente</option>
-          <option value="EN_COURS">En cours</option>
-          <option value="SERVIE">Servie</option>
-          <option value="PAYEE">Payée</option>
-        </select>
-      </div>
+      )}
 
       {/* Onglets */}
       <RestaurantTabs activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -481,7 +478,7 @@ export const RestaurantPage: React.FC = () => {
           />
         )}
         {activeTab === 'stock' && <StockTab />}
-        {userIsAdmin && activeTab === 'caisse' && (
+        {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
           <CaisseTab orders={orders} onPayment={handlePayment} />
         )}
       </div>
@@ -492,6 +489,7 @@ export const RestaurantPage: React.FC = () => {
         onClose={() => setShowOrderModal(false)}
         tables={tables}
         products={products}
+        categories={categories}
         clients={clients}
         onSubmit={handleAddOrder}
         onNewClient={() => setShowClientModal(true)}

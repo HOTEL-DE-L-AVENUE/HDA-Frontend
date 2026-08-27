@@ -36,6 +36,55 @@ export interface ClientFormData {
 
 export interface ClientWithDetails extends Client {
   solde: number | null;
+  kyc?: ClientKyc | null;
+}
+
+export interface ClientKyc {
+  id?: number;
+  client_id?: number;
+  lieu_naissance?: string | null;
+  nationalite?: string | null;
+  profession?: string | null;
+  date_delivrance_piece?: string | null;
+  date_expiration_piece?: string | null;
+  autorite_delivrance?: string | null;
+  source_revenus?: string | null;
+  revenu_mensuel_estime?: number | null;
+  mode_paiement?: string | null;
+  banque?: string | null;
+  doc_piece_identite?: boolean;
+  doc_justificatif_domicile?: boolean;
+  doc_photo_client?: boolean;
+  doc_autre?: string | null;
+  niveau_risque?: 'FAIBLE' | 'MOYEN' | 'ELEVE' | null;
+  commentaires_risque?: string | null;
+  declaration_client?: boolean;
+  agent_verificateur?: number | null;
+  date_verification?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ClientKycFormData {
+  lieu_naissance?: string;
+  nationalite?: string;
+  profession?: string;
+  date_delivrance_piece?: string;
+  date_expiration_piece?: string;
+  autorite_delivrance?: string;
+  source_revenus?: string;
+  revenu_mensuel_estime?: number;
+  mode_paiement?: string;
+  banque?: string;
+  doc_piece_identite?: boolean;
+  doc_justificatif_domicile?: boolean;
+  doc_photo_client?: boolean;
+  doc_autre?: string;
+  niveau_risque?: 'FAIBLE' | 'MOYEN' | 'ELEVE';
+  commentaires_risque?: string;
+  declaration_client?: boolean;
+  agent_verificateur?: number;
+  date_verification?: string;
 }
 
 interface ApiResponse<T> {
@@ -142,6 +191,28 @@ export const clientService = {
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur deleteClient ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Récupérer la fiche KYC d'un client
+  getClientKyc: async (id: number): Promise<ClientKyc | null> => {
+    try {
+      const response = await api.get<ApiResponse<ClientKyc | null>>(`/api/clients/${id}/kyc`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur getClientKyc ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Créer ou mettre à jour la fiche KYC d'un client
+  saveClientKyc: async (id: number, data: ClientKycFormData): Promise<ClientKyc> => {
+    try {
+      const response = await api.put<ApiResponse<ClientKyc>>(`/api/clients/${id}/kyc`, data);
+      return response.data.data;
+    } catch (error) {
+      console.error(`❌ Erreur saveClientKyc ${id}:`, error);
       throw error;
     }
   },
