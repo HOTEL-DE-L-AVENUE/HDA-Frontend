@@ -212,11 +212,12 @@ export const BarPage: React.FC = () => {
 
       {activeTab === 'bar' && (
         <div className="space-y-6">
-          <CocktailMenu 
-            cocktails={cocktails} 
-            stockMap={stockMap} 
-            onStockUpdate={fetchData} 
+          <CocktailMenu
+            cocktails={cocktails}
+            stockMap={stockMap}
+            onStockUpdate={fetchData}
             onProductAdded={handleProductAdded}
+            userIsAdmin={userIsAdmin}
           />
           <BestSellers commandes={commandes} />
         </div>

@@ -15,6 +15,7 @@ interface Props {
   onProductAdded?: (newProduct: BarProduct) => void;
   onProductUpdated?: (updatedProduct: BarProduct) => void;
   onProductDeleted?: (productId: number) => void;
+  userIsAdmin?: boolean; // Ajout de la prop
 }
 
 export const CocktailMenu: React.FC<Props> = ({
@@ -24,7 +25,8 @@ export const CocktailMenu: React.FC<Props> = ({
   onAddToOrder,
   onProductAdded,
   onProductUpdated,
-  onProductDeleted
+  onProductDeleted,
+  userIsAdmin = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Toutes');
@@ -275,9 +277,11 @@ export const CocktailMenu: React.FC<Props> = ({
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Rechercher un article" className="w-full pl-9 text-xs sm:text-sm" />
           </div>
-          <Button icon={<Plus size={18} />} onClick={handleOpenModal} className="whitespace-nowrap">
-            Ajouter une boisson
-          </Button>
+          {userIsAdmin && (
+            <Button icon={<Plus size={18} />} onClick={handleOpenModal} className="whitespace-nowrap">
+              Ajouter une boisson
+            </Button>
+          )}
         </div>
       </div>
 
@@ -334,10 +338,12 @@ export const CocktailMenu: React.FC<Props> = ({
                         </span>
                       </div>
                     )}
-                    <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
-                      <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
-                      <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>
-                    </div>
+                    {userIsAdmin && (
+                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
+                        <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
+                        <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
