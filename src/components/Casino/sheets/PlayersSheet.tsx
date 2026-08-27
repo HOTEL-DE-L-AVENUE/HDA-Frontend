@@ -14,7 +14,7 @@ interface PlayersSheetProps {
   onPaymentChange: (payment: 'especes' | 'tpe', checked: boolean) => void;
   onCashingPaymentMethodChange?: (value: string) => void;
   onSave: () => void;
-  onAdd: (ficheId?: number) => number;
+  onAdd: (ficheId?: number, name?: string) => number;
   onRemove: (id: number) => void;
   onIdentityVerified?: (playerId: number, data: IdentityVerificationData, verificationId?: number) => void;
   showIdentityVerifications?: boolean;
@@ -62,61 +62,24 @@ const parseBonusResults = (value?: string): Record<string, number> => {
   }
 };
 
+type ResultPayment = { option: string; amount: number };
 
-const signaturesAreCompatible = (firstSignature: string, secondSignature: string): Promise<boolean> => new Promise((resolve) => {
-  if (!firstSignature || !secondSignature) {
-    resolve(false);
-    return;
+const parseResultPayments = (value?: string): ResultPayment[] => {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (typeof entry === 'string') return [{ option: entry, amount: 0 }];
+      if (entry && typeof entry.option === 'string') return [{ option: entry.option, amount: Number(entry.amount) || 0 }];
+      return [];
+    });
+  } catch {
+    return [];
   }
-  const size = 32;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    resolve(false);
-    return;
-  }
-  const firstImage = new Image();
-  const secondImage = new Image();
-  let loaded = 0;
-  const compare = () => {
-    loaded += 1;
-    if (loaded < 2) return;
-    const render = (image: HTMLImageElement) => {
-      context.clearRect(0, 0, size, size);
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, size, size);
-      context.drawImage(image, 0, 0, size, size);
-      return context.getImageData(0, 0, size, size).data;
-    };
-    const firstPixels = render(firstImage);
-    const secondPixels = render(secondImage);
-    let firstInk = 0;
-    let secondInk = 0;
-    let matchingInk = 0;
-    for (let index = 0; index < firstPixels.length; index += 4) {
-      const firstIsInk = firstPixels[index] < 220 || firstPixels[index + 1] < 220 || firstPixels[index + 2] < 220;
-      const secondIsInk = secondPixels[index] < 220 || secondPixels[index + 1] < 220 || secondPixels[index + 2] < 220;
-      if (firstIsInk) firstInk += 1;
-      if (secondIsInk) secondInk += 1;
-      if (firstIsInk && secondIsInk) matchingInk += 1;
-    }
-    const union = firstInk + secondInk - matchingInk;
-    resolve(firstInk > 0 && secondInk > 0 && matchingInk / union >= 0.10);
-  };
-  firstImage.onload = compare;
-  secondImage.onload = compare;
-  firstImage.onerror = () => resolve(false);
-  secondImage.onerror = () => resolve(false);
-  firstImage.src = firstSignature;
-  secondImage.src = secondSignature;
-});
+};
+
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {} }) => {
-  const [selectedPlayerId, setSelectedPlayerId] = useState(() => {
-    const firstPlayer = players[0];
-    return firstPlayer ? (firstPlayer.ficheId ?? firstPlayer.id) : 0;
-  });
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => players[0] ? (players[0].ficheId ?? players[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
@@ -125,39 +88,30 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const [isSpinning, setIsSpinning] = useState(false);
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const [identityTransactionType, setIdentityTransactionType] = useState<'achat' | 'apport' | 'echange'>('achat');
-  const [repeatedSignature, setRepeatedSignature] = useState('');
   const [signatureError, setSignatureError] = useState('');
   const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
-  const selectedPlayerTotal = selectedPlayerLines.reduce(
-    (sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount),
-    0,
-  );
+  const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+  const selectedPlayerCaveToVerify = selectedPlayerLines.reduce((maximum, line) => Math.max(maximum, parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount)), 0);
   const selectedPlayerCashing = parseCasinoAmount(selectedPlayer?.cashing);
   const selectedPlayerResult = selectedPlayerCashing - selectedPlayerTotal;
   const selectedBonuses = parseBonuses(selectedPlayer?.bonuses);
   const selectedBonusResults = parseBonusResults(selectedPlayer?.bonusResults);
-  const selectedResultPaymentOptions = parseBonuses(selectedPlayer?.resultPaymentOptions);
+  const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions);
   const selectedIdentityVerification = identityVerifications[selectedPlayerId];
   const resultOptions = selectedPlayerResult > 0 ? positiveResultOptions : selectedPlayerResult < 0 ? negativeResultOptions : [];
 
-  useEffect(() => {
-    setRepeatedSignature('');
-    setSignatureError('');
-  }, [selectedPlayerId]);
-
-  const saveWithSignatureCheck = async () => {
-    if (!selectedPlayer?.signature) {
-      setSignatureError('Veuillez saisir la signature du joueur.');
-      return;
-    }
-    if (!repeatedSignature) {
-      setSignatureError('Veuillez répéter la signature avant d’enregistrer.');
-      return;
-    }
-    if (!(await signaturesAreCompatible(selectedPlayer.signature, repeatedSignature))) {
-      setSignatureError('Les signatures ne correspondent pas suffisamment. Veuillez répéter la signature.');
-      return;
+  const saveWithResultCheck = () => {
+    if (selectedPlayerResult !== 0 && selectedResultPayments.length > 1) {
+      if (selectedResultPayments.some((payment) => payment.amount <= 0)) {
+        setSignatureError('Veuillez saisir un montant pour chaque mode de règlement.');
+        return;
+      }
+      const allocatedTotal = selectedResultPayments.reduce((sum, payment) => sum + payment.amount, 0);
+      if (allocatedTotal !== Math.abs(selectedPlayerResult)) {
+        setSignatureError(`La somme des règlements doit être égale à ${casinoCurrency.format(Math.abs(selectedPlayerResult))} Ar.`);
+        return;
+      }
     }
     setSignatureError('');
     onSave();
@@ -197,8 +151,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
   const addPlayerLine = () => {
     if (!selectedPlayer) return;
-    const newLineId = onAdd(selectedPlayer.ficheId ?? selectedPlayer.id);
-    onUpdate(newLineId, 'name', selectedPlayer.name);
+    onAdd(selectedPlayer.ficheId ?? selectedPlayer.id, selectedPlayer.name);
     setSelectedPlayerId(selectedPlayer.ficheId ?? selectedPlayer.id);
   };
 
@@ -247,18 +200,27 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
     if (!selectedPlayer) return;
-    const nextOptions = checked ? [option] : [];
-    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextOptions));
+    const nextPayments = checked
+      ? [...selectedResultPayments.filter((payment) => payment.option !== option), { option, amount: 0 }]
+      : selectedResultPayments.filter((payment) => payment.option !== option);
+    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
+  };
+
+  const updateResultPaymentAmount = (option: string, amount: string) => {
+    if (!selectedPlayer) return;
+    const nextPayments = selectedResultPayments.map((payment) => payment.option === option ? { ...payment, amount: parseCasinoAmount(amount) } : payment);
+    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
   };
 
   useEffect(() => {
     const cashingAmount = parseCasinoAmount(selectedPlayer?.cashing);
-    const verificationAmount = Math.max(selectedPlayerTotal, cashingAmount);
-    if (selectedPlayer && verificationAmount > IDENTITY_VERIFICATION_THRESHOLD && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
-      setIdentityTransactionType(cashingAmount >= selectedPlayerTotal ? 'echange' : 'achat');
+    const caveAmount = selectedPlayerCaveToVerify >= IDENTITY_VERIFICATION_THRESHOLD ? selectedPlayerCaveToVerify : 0;
+    const verificationAmount = Math.max(caveAmount, cashingAmount);
+    if (selectedPlayer && verificationAmount >= IDENTITY_VERIFICATION_THRESHOLD && !selectedPlayer.identityVerification && !identityVerifications[selectedPlayer.ficheId ?? selectedPlayer.id]) {
+      setIdentityTransactionType(cashingAmount > caveAmount ? 'echange' : 'achat');
       setIdentityModal({ open: true, amount: verificationAmount });
     }
-  }, [selectedPlayer?.id, selectedPlayer?.identityVerification, selectedPlayer?.cashing, selectedPlayerTotal, identityVerifications]);
+  }, [selectedPlayer?.id, selectedPlayer?.identityVerification, selectedPlayer?.cashing, selectedPlayerCaveToVerify, identityVerifications]);
 
   const handleIdentityConfirm = async (data: IdentityVerificationData) => {
     if (!selectedPlayer) return;
@@ -348,14 +310,14 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input type="time" className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={3}>Cashing : <input type="text" inputMode="decimal" className={`${paperInput} inline-block w-32`} value={selectedPlayer?.cashing || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'cashing', event.target.value)} placeholder="0" /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={4}>
-              <div className="flex items-center gap-2">Répéter la signature : {selectedPlayer && <SignaturePad value={repeatedSignature} onChange={(value) => { setRepeatedSignature(value); setSignatureError(''); }} />}</div>
+              <div className="flex items-center gap-2">Signature : {selectedPlayer && <SignaturePad value={selectedPlayer.signature} onChange={(value) => onUpdate(selectedPlayer.id, 'signature', value)} />}</div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div className="grid md:grid-cols-[1.15fr_1fr_1.15fr] mt-4 border text-white" style={{ ...casinoBorder, backgroundColor: 'var(--color-surface)' }}>
+    <div className="mt-4 grid md:grid-cols-[1.15fr_1fr_1.15fr] border text-white" style={{ ...casinoBorder, backgroundColor: 'var(--color-surface)' }}>
       <div className="border-r" style={casinoBorder}>
         <SheetBottomRow label="TOTAL CAVEES :" value={casinoCurrency.format(selectedPlayerTotal)} />
         <SheetBottomRow label="TOTAL CASHING EN JETONS" value={casinoCurrency.format(selectedPlayerCashing)} />
@@ -366,8 +328,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
               {resultOptions.map((option) => (
                 <label key={option} className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={selectedResultPaymentOptions[0] === option} onChange={(event) => toggleResultPaymentOption(option, event.target.checked)} />
+                  <input type="checkbox" checked={selectedResultPayments.some((payment) => payment.option === option)} onChange={(event) => toggleResultPaymentOption(option, event.target.checked)} />
                   {option}
+                  {selectedResultPayments.length > 1 && selectedResultPayments.some((payment) => payment.option === option) && <input type="text" inputMode="decimal" className="w-24 rounded border bg-transparent px-2 py-1" value={selectedResultPayments.find((payment) => payment.option === option)?.amount || ''} onChange={(event) => updateResultPaymentAmount(option, event.target.value)} placeholder="Montant" />}
                 </label>
               ))}
             </div>
@@ -375,7 +338,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         )}
       </div>
       <div className="border-r" style={casinoBorder}>
-        <p className="p-2 border-b font-semibold" style={casinoBorder}>BONUS</p>
+        <p className="border-b p-2 font-semibold" style={casinoBorder}>BONUS</p>
         <div className="grid grid-cols-2 gap-x-3 gap-y-2 p-3 text-[11px]">
           {bonusCategories.map((bonus) => (
             <label key={bonus} className="inline-flex items-center gap-2">
@@ -386,11 +349,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         </div>
       </div>
       <div>
-        <p className="p-2 border-b font-semibold" style={casinoBorder}>RESTAURANT</p>
+        <p className="border-b p-2 font-semibold" style={casinoBorder}>RESTAURANT</p>
         <SheetBottomRow label="TOTAL OFFERT" />
         <SheetBottomRow label="TOTAL BON RESTAURANT" />
         <SheetBottomRow label="MONTANT PAYE" />
-        <div className="flex items-center gap-4 p-2 border-b" style={casinoBorder}>
+        <div className="flex items-center gap-4 border-b p-2" style={casinoBorder}>
           <label className="inline-flex items-center gap-1">
             <input type="checkbox" aria-label="Paiement en especes" checked={restaurantPayments.especes} onChange={(event) => onPaymentChange('especes', event.target.checked)} />
             ESPECES
@@ -403,8 +366,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         <SheetBottomRow label="RESTE A PAYER" />
       </div>
     </div>
+
     {showIdentityVerifications && selectedIdentityVerification && (
-      <div className="mt-4 rounded-xl border p-3 text-[11px]" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
+      <div className="mt-4 rounded-xl border p-3 text-[11px] print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
         <p className="mb-2 font-bold text-yellow-300">VÉRIFICATION D'IDENTITÉ</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           <span className="text-muted">Nom :</span>
@@ -425,7 +389,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
       {(saveState === 'error' || signatureError) && <span className="text-xs text-red-400">{signatureError || 'Erreur d’enregistrement'}</span>}
-      <button type="button" className="action" onClick={saveWithSignatureCheck} disabled={saveState === 'saving'}>
+      <button type="button" className="action" onClick={saveWithResultCheck} disabled={saveState === 'saving'}>
         {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer la fiche'}
       </button>
     </div>

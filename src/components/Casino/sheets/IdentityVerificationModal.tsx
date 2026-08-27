@@ -67,7 +67,7 @@ export const IdentityVerificationModal: React.FC<IdentityVerificationModalProps>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-lg font-bold">Vérification d'identité</p>
-            <p className="text-sm text-muted">Transaction supérieure à {casinoCurrency.format(IDENTITY_VERIFICATION_THRESHOLD)} Ar</p>
+            <p className="text-sm text-muted">Transaction supérieure ou égale à {casinoCurrency.format(IDENTITY_VERIFICATION_THRESHOLD)} Ar</p>
           </div>
           <button type="button" className="text-xl leading-none" onClick={onClose} aria-label="Fermer">×</button>
         </div>

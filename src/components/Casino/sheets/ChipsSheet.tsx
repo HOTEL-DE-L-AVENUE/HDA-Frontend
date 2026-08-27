@@ -23,7 +23,7 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
   const totalCaves = players.reduce((sum, player) => sum + parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount), 0);
 
   useEffect(() => {
-    if (withdrawnTotal > IDENTITY_VERIFICATION_THRESHOLD && firstPlayer) {
+    if (withdrawnTotal >= IDENTITY_VERIFICATION_THRESHOLD && firstPlayer) {
       setIdentityModal({ open: true, amount: withdrawnTotal });
     }
   }, [withdrawnTotal, firstPlayer]);
