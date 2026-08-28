@@ -279,7 +279,7 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { state } = useHDA(); 
+  const { state } = useHDA();
 
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
 

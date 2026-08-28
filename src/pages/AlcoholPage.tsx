@@ -127,10 +127,10 @@ export const AlcoholPage: React.FC = () => {
       const existingItem = currentCommande.items.find((item) => item.nom === cocktail.nom);
       const updatedItems = existingItem
         ? currentCommande.items.map((item) =>
-            item.nom === cocktail.nom
-              ? { ...item, quantite: item.quantite + 1, prix: normalizedPrice }
-              : item
-          )
+          item.nom === cocktail.nom
+            ? { ...item, quantite: item.quantite + 1, prix: normalizedPrice }
+            : item
+        )
         : [...currentCommande.items, { nom: cocktail.nom, quantite: 1, prix: normalizedPrice }];
 
       const total = updatedItems.reduce((sum, item) => sum + Number(item.prix || 0) * item.quantite, 0);
@@ -219,13 +219,13 @@ export const AlcoholPage: React.FC = () => {
       )}
 
       {activeTab === 'commandes' && (
-        <AlcoholCommandeView 
-          commandes={commandes} 
-          onCreateCommande={handleCreateCommande} 
-          onDeleteCommande={handleDeleteCommande} 
-          onUpdateStatut={handleUpdateStatut} 
-          cocktails={alcoholCocktails} 
-          stockMap={stockMap} 
+        <AlcoholCommandeView
+          commandes={commandes}
+          onCreateCommande={handleCreateCommande}
+          onDeleteCommande={handleDeleteCommande}
+          onUpdateStatut={handleUpdateStatut}
+          cocktails={alcoholCocktails}
+          stockMap={stockMap}
         />
       )}
 
