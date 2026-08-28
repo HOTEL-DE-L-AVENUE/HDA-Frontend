@@ -11,6 +11,7 @@ import { clientService, Client } from '../services/client.service';
 const roleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
+  gestionnaire_de_stock: 'Gestionnaire de stock',
   receptioniste: 'Réceptionniste',
   caisse: 'Caissier',
   water: 'Barman',
@@ -20,6 +21,7 @@ const roleLabels: Record<string, string> = {
 const formRoleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
+  gestionnaire_de_stock: 'Gestionnaire de stock',
   caisse: 'Caissier (encaissement uniquement)',
   water: 'Barman',
 };
@@ -27,6 +29,7 @@ const formRoleLabels: Record<string, string> = {
 const roleIcons: Record<string, string> = {
   admin: '👑',
   manager: '🎯',
+  gestionnaire_de_stock: '📦',
   receptioniste: '🛎️',
   caisse: '💰',
   water: '🍸',
@@ -126,6 +129,11 @@ export const UtilisateursPage: React.FC = () => {
     fetchCasinoPlayers();
   }, [fetchRealUsers, fetchCasinoPlayers]);
 
+  // Modules déjà pris par d'autres gestionnaires de stock
+  const modulesTakenByOtherStockManagers = state.users
+    .filter(u => (u.role as string) === 'gestionnaire_de_stock' && (!editUser || String(u.id) !== String(editUser.id)))
+    .flatMap(u => parseModules(u.module));
+
   const createCasinoPlayer = async () => {
     if (!playerForm.nom.trim()) {
       setErrorMessage('Le nom du joueur est requis.');
@@ -180,14 +188,28 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
-    // Validation : Règle des managers (1 ou 2 modules max et pas déjà pris)
     if (form.role === 'manager') {
       const selectedMods = parseModules(form.module);
       if (selectedMods.length < 1 || selectedMods.length > 2) {
         setErrorMessage('Un manager doit obligatoirement gérer 1 ou 2 modules.');
         return;
       }
-      for (const mod of selectedMods) {
+    }
+
+    if ((form.role as string) === 'gestionnaire_de_stock') {
+      const selectedMods = parseModules(form.module);
+      if (selectedMods.includes('casino')) {
+        setErrorMessage('Un gestionnaire de stock ne peut pas être affecté au module Casino.');
+        return;
+      }
+      if (selectedMods.length === 0) {
+        setErrorMessage('Un gestionnaire de stock doit être affecté à au moins un module.');
+        return;
+      }
+      const hasConflict = selectedMods.some(mod => modulesTakenByOtherStockManagers.includes(mod));
+      if (hasConflict) {
+        setErrorMessage('Un ou plusieurs modules sélectionnés sont déjà attribués à un autre gestionnaire de stock.');
+        return;
       }
     }
 
@@ -199,7 +221,7 @@ export const UtilisateursPage: React.FC = () => {
       }
     }
 
-    if (form.role === 'water' && parseModules(form.module).length !== 1) {
+    if ((form.role as string) === 'water' && parseModules(form.module).length !== 1) {
       setErrorMessage('Un barman doit être affecté au module Bar.');
       return;
     }
@@ -265,11 +287,20 @@ export const UtilisateursPage: React.FC = () => {
     }
 
     if (form.role === 'manager') {
-      if (!exists) {
-        if (currentModules.length >= 2) {
-          setErrorMessage('Un manager ne peut pas gérer plus de 2 modules.');
-          return;
-        }
+      if (!exists && currentModules.length >= 2) {
+        setErrorMessage('Un manager ne peut pas gérer plus de 2 modules.');
+        return;
+      }
+    }
+
+    if ((form.role as string) === 'gestionnaire_de_stock') {
+      if (mod === 'casino') {
+        setErrorMessage('Un gestionnaire de stock ne peut pas gérer le module Casino.');
+        return;
+      }
+      if (!exists && modulesTakenByOtherStockManagers.includes(mod)) {
+        setErrorMessage('Ce module est déjà assigné à un autre gestionnaire de stock.');
+        return;
       }
     }
 
@@ -284,7 +315,7 @@ export const UtilisateursPage: React.FC = () => {
   };
 
   const activeCount = state.users.filter(u => u.actif).length;
-  const managerCount = state.users.filter(u => u.role === 'manager').length;
+  const stockManagerCount = state.users.filter(u => (u.role as string) === 'gestionnaire_de_stock').length;
 
   return (
     <div className="space-y-6">
@@ -313,7 +344,7 @@ export const UtilisateursPage: React.FC = () => {
           { label: 'Total Utilisateurs', value: state.users.length, color: 'text-primary' },
           { label: 'Actifs', value: activeCount, color: 'text-success' },
           { label: 'Inactifs', value: state.users.length - activeCount, color: 'text-muted' },
-          { label: 'Managers', value: managerCount, color: 'text-accent' },
+          { label: 'Gestionnaires Stock', value: stockManagerCount, color: 'text-accent' },
         ].map(s => (
           <div key={s.label} className="bg-surface border border-base rounded-2xl p-5">
             <p className="text-muted text-xs mb-1">{s.label}</p>
@@ -357,8 +388,9 @@ export const UtilisateursPage: React.FC = () => {
               return (
                 <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
-                    user.role === 'caisse' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
-                      'bg-gradient-to-br from-slate-600 to-slate-700'
+                    (user.role as string) === 'gestionnaire_de_stock' ? 'bg-gradient-to-br from-amber-600 to-yellow-600' :
+                      user.role === 'caisse' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
+                        'bg-gradient-to-br from-slate-600 to-slate-700'
                     }`}>
                     <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom?.[0] || ''}</span>
                   </div>
@@ -424,7 +456,7 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Joueurs Casino : profils clients sans compte de connexion */}
+      {/* Joueurs Casino */}
       <div className="bg-surface border border-base rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-base">
           <div>
@@ -466,6 +498,9 @@ export const UtilisateursPage: React.FC = () => {
                 <p className="text-muted text-xs">
                   {role === 'admin' && 'Accès complet à tous les modules et paramètres'}
                   {role === 'manager' && 'Gestion de 1 ou 2 modules attribués'}
+                  {role === 'gestionnaire_de_stock' && 'Gestion des stocks sur les modules autorisés (hors Casino)'}
+                  {role === 'caisse' && 'Encaissement et opérations de caisse'}
+                  {role === 'water' && 'Service et gestion du bar'}
                 </p>
               </div>
             </div>
@@ -496,36 +531,69 @@ export const UtilisateursPage: React.FC = () => {
 
           <Select label="Rôle" value={form.role} onChange={e => {
             const role = e.target.value as UserRole;
-            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : form.module });
+            let newModules = form.module;
+            if (role === 'caisse') {
+              newModules = cashierModules;
+            } else if ((role as string) === 'water') {
+              newModules = ['bar'];
+            } else if ((role as string) === 'gestionnaire_de_stock') {
+              const cur = parseModules(form.module);
+              newModules = cur.filter(m => m !== 'casino');
+            } else if (role === 'manager') {
+              const cur = parseModules(form.module);
+              if (cur.length > 2) {
+                newModules = cur.slice(0, 2);
+              }
+            }
+            setForm({ ...form, role, module: newModules });
+            setErrorMessage('');
           }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
+              <label className="text-muted text-sm font-medium">
+                {form.role === 'caisse'
+                  ? 'Caisse autorisée'
+                  : (form.role as string) === 'gestionnaire_de_stock'
+                    ? 'Modules autorisés (hors Casino, modules non pris par d\'autres gestionnaires)'
+                    : 'Modules autorisés (1 ou 2 max pour un manager)'}
+              </label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'caisse'
+                ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[])
+                : (form.role as string) === 'water'
+                  ? (['bar'] as ModuleType[])
+                  : (form.role as string) === 'gestionnaire_de_stock'
+                    ? allModules.filter(m => m !== 'casino')
+                    : allModules
+              ).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
+                const isTakenByOther = (form.role as string) === 'gestionnaire_de_stock' && modulesTakenByOtherStockManagers.includes(mod);
+
                 return (
                   <button
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={form.role === 'water'}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
-                      ? 'bg-accent-4 text-accent border-accent/40'
-                      : 'bg-surface-2 text-muted border-base hover:text-primary'
+                    disabled={(form.role as string) === 'water' || isTakenByOther}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isTakenByOther
+                      ? 'bg-surface-3 text-muted/40 border-base cursor-not-allowed opacity-50'
+                      : isSelected
+                        ? 'bg-accent-4 text-accent border-accent/45'
+                        : 'bg-surface-2 text-muted border-base hover:text-primary'
                       }`}
                   >
-                    {moduleLabels[mod]}
+                    {moduleLabels[mod]} {isTakenByOther ? '(Déjà pris)' : ''}
                   </button>
                 );
               })}
             </div>
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
-            {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
+            {(form.role as string) === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
+            {(form.role as string) === 'gestionnaire_de_stock' && <p className="mt-2 text-xs text-muted">Le module Casino est exclu. Un module ne peut appartenir qu'à un seul gestionnaire de stock, mais vous pouvez cumuler plusieurs modules libres.</p>}
           </div>
 
           <div className="flex items-center gap-3">
