@@ -27,14 +27,14 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
 };
 
-export const BarCommandeView: React.FC<Props> = ({ 
-  commandes, 
+export const BarCommandeView: React.FC<Props> = ({
+  commandes,
   onCreateCommande,
   onUpdateCommande,
-  onDeleteCommande, 
-  onUpdateStatut, 
-  cocktails = [], 
-  stockMap = {} 
+  onDeleteCommande,
+  onUpdateStatut,
+  cocktails = [],
+  stockMap = {}
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
@@ -51,11 +51,6 @@ export const BarCommandeView: React.FC<Props> = ({
   const [client, setClient] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
-  const [isCreatingClient, setIsCreatingClient] = useState(false);
-  const [newClientNom, setNewClientNom] = useState('');
-  const [newClientPrenom, setNewClientPrenom] = useState('');
-  const [newClientTelephone, setNewClientTelephone] = useState('');
-  const [isSavingClient, setIsSavingClient] = useState(false);
   const [table, setTable] = useState('');
   const [nombrePersonnes, setNombrePersonnes] = useState('1');
   const [moyenPaiement, setMoyenPaiement] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
@@ -100,10 +95,6 @@ export const BarCommandeView: React.FC<Props> = ({
     setSearchTerm('');
     setIsCreatingTable(false);
     setNewTableNumber('');
-    setIsCreatingClient(false);
-    setNewClientNom('');
-    setNewClientPrenom('');
-    setNewClientTelephone('');
     setFeedback(null);
     setIsEditingOrder(false);
     setEditingOrderId(null);
@@ -120,10 +111,6 @@ export const BarCommandeView: React.FC<Props> = ({
     setFeedback(null);
     setIsCreatingTable(tables.length === 0);
     setNewTableNumber('');
-    setIsCreatingClient(false);
-    setNewClientNom('');
-    setNewClientPrenom('');
-    setNewClientTelephone('');
     setIsEditingOrder(false);
     setEditingOrderId(null);
     setIsModalOpen(true);
@@ -140,10 +127,6 @@ export const BarCommandeView: React.FC<Props> = ({
     setFeedback(null);
     setIsCreatingTable(false);
     setNewTableNumber('');
-    setIsCreatingClient(false);
-    setNewClientNom('');
-    setNewClientPrenom('');
-    setNewClientTelephone('');
     setIsEditingOrder(true);
     setEditingOrderId(commande.id);
     setIsModalOpen(true);
@@ -267,44 +250,6 @@ export const BarCommandeView: React.FC<Props> = ({
       setFeedback({ type: 'error', message: 'La liste des clients n’a pas pu être chargée.' });
     } finally {
       setIsLoadingClients(false);
-    }
-  };
-
-  const handleCreateClient = async () => {
-    const nom = newClientNom.trim();
-    const prenom = newClientPrenom.trim();
-    const telephone = newClientTelephone.trim();
-
-    if (!nom) {
-      setFeedback({ type: 'error', message: 'Le nom du client est requis.' });
-      return;
-    }
-
-    try {
-      setIsSavingClient(true);
-      const createdClient = await clientService.createClient({
-        nom,
-        prenom: prenom || undefined,
-        telephone: telephone || undefined,
-        statut: 'ACTIF',
-      });
-      const clientName = `${createdClient.nom}${createdClient.prenom ? ` ${createdClient.prenom}` : ''}`;
-      setClients((currentClients) => [...currentClients, createdClient].sort((firstClient, secondClient) => {
-        const firstName = `${firstClient.nom} ${firstClient.prenom || ''}`.trim();
-        const secondName = `${secondClient.nom} ${secondClient.prenom || ''}`.trim();
-        return firstName.localeCompare(secondName, 'fr');
-      }));
-      setClient(clientName);
-      setNewClientNom('');
-      setNewClientPrenom('');
-      setNewClientTelephone('');
-      setIsCreatingClient(false);
-      setFeedback({ type: 'success', message: 'Client ajouté et sélectionné.' });
-    } catch (error) {
-      console.error('Erreur création client bar:', error);
-      setFeedback({ type: 'error', message: 'Le client n’a pas pu être ajouté.' });
-    } finally {
-      setIsSavingClient(false);
     }
   };
 
@@ -477,10 +422,10 @@ export const BarCommandeView: React.FC<Props> = ({
         return (
           <>
             {commande.statut === 'En attente' && (
-              <Button 
-                size="sm" 
-                variant="secondary" 
-                icon={<ChefHat size={14} />} 
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<ChefHat size={14} />}
                 onClick={() => void handleStatusChange(commande.id, 'En préparation')}
                 disabled={isUpdating}
               >
@@ -488,10 +433,10 @@ export const BarCommandeView: React.FC<Props> = ({
               </Button>
             )}
             {commande.statut === 'En préparation' && (
-              <Button 
-                size="sm" 
-                variant="secondary" 
-                icon={<CheckCircle2 size={14} />} 
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<CheckCircle2 size={14} />}
                 onClick={() => void handleStatusChange(commande.id, 'Prête')}
                 disabled={isUpdating}
               >
@@ -556,7 +501,7 @@ export const BarCommandeView: React.FC<Props> = ({
 
     return searchableValue.includes(query);
   });
-  
+
   const data = filteredCommandes;
 
   const totalCommandes = localCommandes.reduce((sum, commande) => sum + commande.total, 0);
@@ -686,30 +631,7 @@ export const BarCommandeView: React.FC<Props> = ({
               disabled={isLoadingClients}
               className="flex-1"
             />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => { setIsCreatingClient((current) => !current); setFeedback(null); }}
-              className="w-full sm:w-auto"
-            >
-              <Plus size={16} />
-              Nouveau client
-            </Button>
           </div>
-
-          {isCreatingClient && (
-            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3 space-y-3">
-              <p className="text-sm font-medium text-slate-300">Ajouter un nouveau client</p>
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                <Input label="Nom" value={newClientNom} onChange={(event) => setNewClientNom(event.target.value)} placeholder="Nom" />
-                <Input label="Prénom" value={newClientPrenom} onChange={(event) => setNewClientPrenom(event.target.value)} placeholder="Prénom" />
-              </div>
-              <Input label="Téléphone" value={newClientTelephone} onChange={(event) => setNewClientTelephone(event.target.value)} placeholder="Téléphone" />
-              <Button type="button" size="sm" onClick={() => void handleCreateClient()} disabled={isSavingClient} className="w-full">
-                {isSavingClient ? 'Ajout en cours...' : 'Ajouter le client'}
-              </Button>
-            </div>
-          )}
 
           <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">
             <div className="flex items-center justify-between border-b border-base px-3 py-2">
