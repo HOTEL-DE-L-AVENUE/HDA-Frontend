@@ -475,6 +475,8 @@ export const RestaurantPage: React.FC = () => {
             onDelete={handleDeleteOrder}
             onNewOrder={() => setShowOrderModal(true)}
             onInvoice={handlePrintInvoice}
+            searchQuery={searchQuery}
+            filterStatus={filterStatus}
           />
         )}
         {activeTab === 'menu' && (

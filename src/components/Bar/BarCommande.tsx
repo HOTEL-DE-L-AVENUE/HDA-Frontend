@@ -488,7 +488,9 @@ export const BarCommandeView: React.FC<Props> = ({
     },
   ];
 
-  const filteredCommandes = localCommandes.filter((commande) => {
+  const activeCommandes = localCommandes.filter((commande) => commande.statut !== 'Encaissée');
+
+  const filteredCommandes = activeCommandes.filter((commande) => {
     const query = commandeSearchTerm.trim().toLocaleLowerCase('fr-FR');
     if (!query) return true;
 
@@ -504,8 +506,8 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const data = filteredCommandes;
 
-  const totalCommandes = localCommandes.reduce((sum, commande) => sum + commande.total, 0);
-  const commandesEnAttente = localCommandes.filter((commande) => commande.statut === 'En attente').length;
+  const totalCommandes = activeCommandes.reduce((sum, commande) => sum + commande.total, 0);
+  const commandesEnAttente = activeCommandes.filter((commande) => commande.statut === 'En attente').length;
   const filteredCocktails = cocktails.filter((cocktail) => {
     const value = searchTerm.trim().toLowerCase();
     if (!value) return true;
@@ -532,7 +534,7 @@ export const BarCommandeView: React.FC<Props> = ({
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-sm text-accent">
-              {localCommandes.length} commande{localCommandes.length > 1 ? 's' : ''} active{localCommandes.length > 1 ? 's' : ''}
+              {activeCommandes.length} commande{activeCommandes.length > 1 ? 's' : ''} active{activeCommandes.length > 1 ? 's' : ''}
             </div>
             <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
               {BAR_COMMANDES_ACTIONS.newOrderLabel}
@@ -544,7 +546,7 @@ export const BarCommandeView: React.FC<Props> = ({
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-base bg-surface p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Commandes actives</p>
-          <p className="mt-2 text-2xl font-semibold text-primary">{localCommandes.length}</p>
+          <p className="mt-2 text-2xl font-semibold text-primary">{activeCommandes.length}</p>
         </div>
         <div className="rounded-2xl border border-base bg-surface p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">En attente</p>
@@ -761,7 +763,7 @@ export const BarCommandeView: React.FC<Props> = ({
 
         {data.length === 0 ? (
           <div className="p-6 sm:p-8 text-center text-slate-500 text-sm">
-            {localCommandes.length === 0
+            {activeCommandes.length === 0
               ? `${BAR_COMMANDES_ACTIONS.emptyTitle}. ${BAR_COMMANDES_ACTIONS.emptyDescription}`
               : 'Aucune commande ne correspond à votre recherche.'}
           </div>
