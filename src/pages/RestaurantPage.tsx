@@ -64,11 +64,21 @@ export const RestaurantPage: React.FC = () => {
   const fetchOrders = async () => {
     try {
       const res = await restaurantService.getOrders();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setOrders(res.data as Order[]);
       }
     } catch (error) {
       console.warn('Erreur lors du chargement des commandes live:', error);
+    }
+  };
+
+  const handleCloseAllOrders = async (orderIds: number[]) => {
+    try {
+      await restaurantService.closeAllRestaurantOrders(orderIds);
+      await fetchOrders();
+    } catch (error) {
+      console.error('Erreur lors de la clôture des commandes restaurant:', error);
+      alert('Erreur lors de la clôture des commandes.');
     }
   };
 
@@ -490,7 +500,13 @@ export const RestaurantPage: React.FC = () => {
         )}
         {activeTab === 'stock' && <StockTab />}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
-          <CaisseTab orders={orders} onPayment={handlePayment} />
+          <CaisseTab
+            orders={orders}
+            allOrders={orders}
+            onPayment={handlePayment}
+            onCloseAllOrders={handleCloseAllOrders}
+            onRefresh={fetchOrders}
+          />
         )}
       </div>
 
