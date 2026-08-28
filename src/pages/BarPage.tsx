@@ -19,7 +19,7 @@ import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
 import AuthService from '../services/authService';
-import { getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
+import { isAdmin, isCashier } from '../utils/permissions';
 import { useToast } from '../context/ToastContext';
 
 export const BarPage: React.FC = () => {
@@ -28,7 +28,9 @@ export const BarPage: React.FC = () => {
   const userIsCashier = isCashier(currentUser);
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
-  const [activeTab, setActiveTab] = useState<BarTabId>(() => getDefaultTabForRole('bar', currentUser?.role) as BarTabId);
+
+  // Modification ici : 'commandes' défini par défaut
+  const [activeTab, setActiveTab] = useState<BarTabId>('commandes');
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
