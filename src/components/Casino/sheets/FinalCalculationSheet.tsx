@@ -13,14 +13,30 @@ interface FinalCalculationSheetProps {
   onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
   onSave: () => void;
+  isFinished?: boolean;
+  isFinishing?: boolean;
+  canFinish?: boolean;
+  onFinish: () => void;
   showIdentityVerifications?: boolean;
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
 
-export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
-  const parseManualAmounts = (value?: string) => (value || '').split('+').reduce((total, amount) => total + parseCasinoAmount(amount), 0);
-  const editableNumber = (key: string, automaticValue: number) => automaticValue + parseManualAmounts(values[key]);
-  const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
+export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, isFinished = false, isFinishing = false, canFinish = false, onFinish, showIdentityVerifications = true, identityVerifications = {} }) => {
+  const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
+  const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
+  const registeredPlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.casinoPlayerId ?? line.ficheId ?? line.id) === (player.casinoPlayerId ?? player.ficheId ?? player.id)) === index);
+  const registeredDepositTotal = registeredPlayers.reduce((total, player) => total + parseCasinoAmount(player.initialDeposit), 0);
+  const registeredCreditTotal = registeredPlayers.reduce((total, player) => total + parseCasinoAmount(player.initialCredit), 0);
+  const registeredDeposit = registeredDepositTotal;
+  const registeredCredit = registeredCreditTotal;
+  const registeredDepositDetails = registeredPlayers
+    .filter((player) => parseCasinoAmount(player.initialDeposit) > 0)
+    .map((player) => `${casinoCurrency.format(parseCasinoAmount(player.initialDeposit))} Ar (${player.name})`)
+    .join(' - ');
+  const registeredCreditDetails = registeredPlayers
+    .filter((player) => parseCasinoAmount(player.initialCredit) > 0)
+    .map((player) => `${casinoCurrency.format(parseCasinoAmount(player.initialCredit))} Ar (${player.name})`)
+    .join(' - ');
   const identity = identityVerifications[selectedPlayerId];
   const bonusEntries = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -65,16 +81,30 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     })
     .join(' - ');
   const depositPaymentResults = buildPositivePaymentResults(players, 'Dépôt');
-  const depositPaymentTotal = editableNumber('depot', getPositivePaymentTotal(players, 'Dépôt'));
-  const mobileReturnTotal = editableNumber('retourMobile', getPositivePaymentTotal(players, 'MVola', 'Orange Money'));
-  const creditPaidTotal = editableNumber('creditPaye', getPositivePaymentTotal(players, 'Crédit payé'));
+  const depositPaymentTotal = getPositivePaymentTotal(players, 'Dépôt');
+  const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
+  const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
   const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
-  const tpePaymentsTotal = editableNumber('tpe', getNegativePaymentTotal(players, 'TPE'));
-  const mobilePaymentsTotal = editableNumber('mobiles', getNegativePaymentTotal(players, 'MVola', 'Orange Money'));
-  const depositPaidTotal = editableNumber('depotPaye', getNegativePaymentTotal(players, 'Dépôt payé'));
-  const creditPaymentsTotal = editableNumber('credit', getNegativePaymentTotal(players, 'Crédit'));
+  const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
+  const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
+  const depositPaidTotal = getNegativePaymentTotal(players, 'Dépôt payé');
+  const creditPaymentsTotal = getNegativePaymentTotal(players, 'Crédit');
+  const paidCaveTpeResults = buildPaidCavePaymentResults(players, ['TPE']);
+  const paidCaveMobileResults = buildPaidCavePaymentResults(players, ['MVola', 'Orange Money']);
+  const paidCaveCreditResults = buildPaidCavePaymentResults(players, ['Crédit', 'Credit']);
+  const paidCaveOffertResults = buildPaidCavePaymentResults(players, ['Offert']);
+  const paidCaveOtherResults = buildPaidCavePaymentResults(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
+  const paidCaveTpeTotal = getPaidCavePaymentTotal(players, ['TPE']);
+  const paidCaveMobileTotal = getPaidCavePaymentTotal(players, ['MVola', 'Orange Money']);
+  const paidCaveCreditTotal = getPaidCavePaymentTotal(players, ['Crédit', 'Credit']);
+  const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
+  const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
+  const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join(' - ');
+  const mobileDisplay = [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join(' - ');
+  const creditDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join(' - ');
+  const offertDisplay = paidCaveOffertResults || values.offert;
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -82,16 +112,23 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + parseCasinoAmount(values.restaurant)
     + parseCasinoAmount(values.prolongation)
     + depositPaymentTotal
+    + registeredDeposit
     + mobileReturnTotal
     + creditPaidTotal;
   const automaticTotal2 = (tpeResults ? tpePaymentsTotal : parseCasinoAmount(values.tpe))
+    + paidCaveTpeTotal
     + (mobilePaymentResults ? mobilePaymentsTotal : parseCasinoAmount(values.mobiles))
+    + paidCaveMobileTotal
     + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
     + (creditResults ? creditPaymentsTotal : parseCasinoAmount(values.credit))
+    + paidCaveCreditTotal
+    + registeredCredit
     + (depositPaidResults ? depositPaidTotal : parseCasinoAmount(values.depotPaye))
-    + parseCasinoAmount(values.offert);
-  const total1 = editableNumber('total1', automaticTotal1);
-  const total2 = editableNumber('total2', automaticTotal2);
+    + parseCasinoAmount(values.offert)
+    + paidCaveOffertTotal
+    + paidCaveOtherTotal;
+  const total1 = automaticTotal1;
+  const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
   const totalEspeces = parseCasinoAmount(values.especes);
   const resultatFinal = difference - totalEspeces;
@@ -101,11 +138,18 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <p className="font-bold tracking-[0.18em]">CALCUL FINAL</p>
         <label className="flex items-center gap-2 text-xs font-semibold">Fiche joueur
+          {!activePlayers.length ? (
+            <select value={0} className="rounded border bg-transparent px-2 py-1 text-primary" style={casinoBorder} disabled>
+              <option value={0} aria-label="Aucun joueur en jeu" />
+            </select>
+          ) : <>
           <select value={selectedPlayerId} onChange={(event) => onPlayerChange(Number(event.target.value))} className="rounded border bg-transparent px-2 py-1 text-primary" style={casinoBorder}>
-            {players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id}>{player.name || `Joueur ${player.ficheId ?? player.id}`}</option>)}
+            {activePlayers.map((player, index) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id}>Fiche {index + 1} — {player.name}</option>)}
           </select>
+          </>}
         </label>
       </div>
+
 
       <div className="overflow-x-auto">
         <div className="min-w-[760px] border" style={casinoBorder}>
@@ -113,7 +157,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PRELEVEMENTS" />
             <CalculationInput value={String(withdrawnTotal)} readOnly />
             <CalculationCell label="TOTAL TPE" separated />
-            {tpeResults ? <CalculationResult value={tpeResults} manualValue={values.tpe} onChange={(value) => onUpdate('tpe', value)} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
+            {tpeDisplay ? <CalculationResult value={tpeDisplay} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
 
             <CalculationCell label="TOTAL POURBOIRES" />
             <CalculationInput value={values.pourboires} onChange={(value) => onUpdate('pourboires', value)} />
@@ -123,41 +167,51 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PROLONGATION" />
             <CalculationInput value={values.prolongation} onChange={(value) => onUpdate('prolongation', value)} />
             <CalculationCell label="TOTAL MOBILES" separated />
-            {mobilePaymentResults ? <CalculationResult value={mobilePaymentResults} manualValue={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} /> : <CalculationInput value={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} />}
+            {mobileDisplay ? <CalculationResult value={mobileDisplay} /> : <CalculationInput value={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} />}
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
             <CalculationInput value={values.autres} onChange={(value) => onUpdate('autres', value)} />
             <CalculationCell label="TOTAL BONUS" separated />
-            {bonusResults ? <CalculationResult value={bonusResults} manualValue={values.bonus} onChange={(value) => onUpdate('bonus', value)} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
+            {bonusResults ? <CalculationResult value={bonusResults} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
             <CalculationInput value={values.restaurant} onChange={(value) => onUpdate('restaurant', value)} />
             <CalculationCell label="TOTAL OFFERT" separated />
-            <CalculationInput value={values.offert} onChange={(value) => onUpdate('offert', value)} />
+            {paidCaveOffertResults ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => onUpdate('offert', value)} />}
 
             <CalculationCell label="AUTRE" />
             <CalculationInput value={values.autre} onChange={(value) => onUpdate('autre', value)} />
             <CalculationCell label="CREDIT" separated />
-            {creditResults ? (
-              <CalculationResult value={creditResults} manualValue={values.credit} onChange={(value) => onUpdate('credit', value)} />
+            {creditDisplay ? (
+              <CalculationResult value={creditDisplay} />
             ) : (
               <CalculationInput value={values.credit} onChange={(value) => onUpdate('credit', value)} />
             )}
 
             <CalculationCell label="DEPOT" />
-            <CalculationResult value={depositPaymentResults || depositResults} manualValue={values.depot} onChange={(value) => onUpdate('depot', value)} />
+            <CalculationResult value={depositPaymentResults || depositResults} />
             <CalculationCell label="DEPOT PAYE" separated />
-            {depositPaidResults ? <CalculationResult value={depositPaidResults} manualValue={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} /> : <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />}
+            {depositPaidResults ? <CalculationResult value={depositPaidResults} /> : <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />}
 
             <CalculationCell label="RETOUR MOBILE" />
-            <CalculationResult value={mobileReturnResults} manualValue={values.retourMobile} onChange={(value) => onUpdate('retourMobile', value)} />
+            <CalculationResult value={mobileReturnResults} />
             <BlankCell separated />
             <BlankCell separated />
 
             <CalculationCell label="CREDIT PAYE" />
-            {creditPaidResults ? <CalculationResult value={creditPaidResults} manualValue={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} /> : <CalculationInput value={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} />}
+            {creditPaidResults ? <CalculationResult value={creditPaidResults} /> : <CalculationInput value={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} />}
             <BlankCell />
             <BlankCell />
+
+            <BlankCell />
+            <BlankCell />
+            <CalculationCell label="AUTRES PAIEMENTS CAVES" separated />
+            <CalculationResult value={paidCaveOtherResults} />
+
+            <CalculationCell label="DEPOT ANTERIEUR" />
+            <CalculationInput value={registeredDepositDetails || '0'} readOnly />
+            <CalculationCell label="CREDIT ANTERIEUR" separated />
+            <CalculationInput value={registeredCreditDetails || '0'} readOnly />
 
             <TotalCell label="TOTAL 1" />
             <CalculationInput value={casinoCurrency.format(total1)} onChange={(value) => onUpdate('total1', value)} />
@@ -201,9 +255,11 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         </div>
       )}
       <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
+        {isFinished && <span className="text-xs text-green-700">Jeu terminé</span>}
         {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
         {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
-        <button type="button" className="action" onClick={onSave} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}</button>
+        <button type="button" className="action" onClick={() => onSave()} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}</button>
+        {canFinish && <button type="button" className="action secondary" onClick={onFinish} disabled={isFinished || isFinishing || saveState === 'saving'}>{isFinishing ? 'Clôture...' : isFinished ? 'Jeu terminé' : 'Fin de jeu'}</button>}
       </div>
     </div>
   );
@@ -217,10 +273,9 @@ const CalculationInput: React.FC<{ value?: string; onChange?: (value: string) =>
   <input className="min-h-20 w-full min-w-0 border-r border-b bg-transparent px-3 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" style={casinoBorder} inputMode={inputMode} value={value} readOnly={readOnly} onChange={(event) => onChange?.(event.target.value)} />
 );
 
-const CalculationResult: React.FC<{ value: string; manualValue?: string; onChange?: (value: string) => void }> = ({ value, manualValue = '', onChange }) => (
+const CalculationResult: React.FC<{ value: string }> = ({ value }) => (
   <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
     <div className="whitespace-pre-wrap text-sm font-semibold text-primary">{value || '—'}</div>
-    <input className="mt-2 w-full rounded border bg-transparent px-2 py-1 text-sm text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" style={casinoBorder} type="text" inputMode="decimal" placeholder="Ajout manuel (Ar), ex. 190000 + 50000" value={manualValue} onChange={(event) => onChange?.(event.target.value)} />
   </div>
 );
 
@@ -257,6 +312,38 @@ const parsePaymentOptions = (value?: string): Array<{ option: string; amount: nu
   } catch {
     return [];
   }
+};
+
+const isPaidCave = (payment?: string) => {
+  const normalized = String(payment || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  // Accepte aussi les anciennes fiches enregistrées avec « PayÃ© ».
+  return normalized.startsWith('pay') && !normalized.includes('non');
+};
+
+const getPaidCavePaymentTotal = (players: PlayerLine[], methods?: string[]): number => players.reduce(
+  (total, line) => isPaidCave(line.payment) && line.paymentMethod.trim() && (!methods || methods.includes(line.paymentMethod.trim()))
+    ? total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount)
+    : total,
+  0,
+);
+
+const buildPaidCavePaymentResults = (players: PlayerLine[], methods?: string[]): string => {
+  const paymentsByMethod = new Map<string, Array<{ name: string; amount: number }>>();
+  players.forEach((line) => {
+    const amount = parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount);
+    const method = line.paymentMethod.trim();
+    if (!isPaidCave(line.payment) || !method || amount <= 0 || (methods && !methods.includes(method))) return;
+    const entries = paymentsByMethod.get(method) || [];
+    entries.push({ name: line.name || `Joueur ${line.ficheId ?? line.id}`, amount });
+    paymentsByMethod.set(method, entries);
+  });
+  return Array.from(paymentsByMethod.entries())
+    .map(([method, entries]) => `${method} : ${entries.map(({ name, amount }) => `${name} ${casinoCurrency.format(amount)} Ar`).join(', ')}`)
+    .join(' - ');
 };
 
 const buildNegativePaymentResults = (players: PlayerLine[], ...methods: string[]): string => players

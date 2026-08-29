@@ -18,7 +18,8 @@ interface ChipsSheetProps {
 export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameTime, openingTotal, closingTotal, saveState = 'idle', onUpdate, onEndGameTimeChange, onSave }) => {
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const withdrawnTotal = chips.reduce((sum, line) => sum + line.value * parseCasinoAmount(line.withdrawn), 0);
-  const firstPlayer = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)[0];
+  const playersWithStartTime = players.filter((player) => Boolean(player.name.trim() || player.caves.trim() || player.amount.trim()) && Boolean(player.time || player.arrival));
+  const firstPlayer = getEarliestPlayer(playersWithStartTime) || getEarliestPlayer(players);
   const firstArrival = firstPlayer?.time || firstPlayer?.arrival || '';
   const totalCaves = players.reduce((sum, player) => sum + parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount), 0);
 
@@ -60,14 +61,14 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
     <div className="grid gap-2 sm:grid-cols-2">
       <Stat label="RESULTAT DES PRELEVEMENTS" value={withdrawnTotal} />
       <label className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
-        <span className="block text-muted text-[11px]">JOUEURS</span>
+        <span className="block text-muted text-[11px]">JOUEURS</span>   
         <input className={casinoInput} value={players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => player.name.trim()).filter(Boolean).join(' - ')} readOnly placeholder="Nom - Nom" />
       </label>
     </div>
     <div className="flex items-center justify-end gap-3 print:hidden">
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
       {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
-      <button type="button" className="action" onClick={onSave} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer les jetons'}</button>
+      <button type="button" className="action" onClick={() => onSave()} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer les jetons'}</button>
     </div>
     <IdentityVerificationModal
       open={identityModal.open}
@@ -83,6 +84,19 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
 const ChipTable: React.FC<{ chips: ChipLine[]; onUpdate: ChipsSheetProps['onUpdate']; fields: (keyof Omit<ChipLine, 'value'>)[]; headers: string[] }> = ({ chips, onUpdate, fields, headers }) => <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-xs border" style={casinoBorder}><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>{headers.map((header) => <th key={header} className="p-3 text-left text-secondary border-r last:border-r-0" style={casinoBorder}>{header}</th>)}</tr></thead><tbody>{chips.map((line) => <tr key={line.value}><td className="p-2 font-semibold text-primary border-r border-b" style={casinoBorder}>{casinoCurrency.format(line.value)} Ar</td>{fields.map((field) => <td key={field} className="border-r border-b" style={casinoBorder}><input className={casinoInput} inputMode="numeric" value={line[field]} onChange={(event) => onUpdate(line.value, field, event.target.value)} /></td>)}{fields.length === 1 && <td className="p-2 text-primary border-b" style={casinoBorder}>{casinoCurrency.format(line.value * parseCasinoAmount(line.withdrawn))} Ar</td>}</tr>)}</tbody></table></div>;
 const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}><p className="text-muted text-[11px]">{label}</p><p className="text-primary font-bold">{casinoCurrency.format(value)} Ar</p></div>;
 const SheetTitle: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => <div className="mb-4"><h2 className="text-primary text-xl font-bold" style={{ fontFamily: 'Playfair Display, serif' }}>{title}</h2><p className="text-muted text-xs mt-1">{subtitle}</p></div>;
+
+const getTimeMinutes = (value?: string): number | null => {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60 ? hours * 60 + minutes : null;
+};
+
+const getEarliestPlayer = (players: PlayerLine[]): PlayerLine | undefined => players
+  .map((player) => ({ player, minutes: getTimeMinutes(player.time || player.arrival) }))
+  .filter((entry): entry is { player: PlayerLine; minutes: number } => entry.minutes !== null)
+  .sort((a, b) => a.minutes - b.minutes)[0]?.player;
 
 const getPlayDurationMinutes = (arrival: string, departure: string): number | null => {
   if (!arrival || !departure) return null;
