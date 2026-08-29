@@ -19,6 +19,7 @@ export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
   receptioniste: ['hebergement', 'hotel', 'clients'],
   water: ['bar', 'alcool'],
   housekeeping: ['hotel', 'hebergement'],
+  croupier: ['casino'],
 };
 
 /**
@@ -195,6 +196,8 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
 
   // Replis par défaut selon le rôle
   switch (role) {
+    case 'croupier':
+      return '/casino';
     case 'caissier':
     case 'caisse':
       return '/finances';

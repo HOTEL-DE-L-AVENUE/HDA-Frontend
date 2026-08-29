@@ -16,6 +16,7 @@ const roleLabels: Record<string, string> = {
   caisse: 'Caissier',
   water: 'Barman',
   housekeeping: 'Personnel d’entretien',
+  croupier: 'Croupier',
 };
 
 const formRoleLabels: Record<string, string> = {
@@ -24,6 +25,7 @@ const formRoleLabels: Record<string, string> = {
   gestionnaire_de_stock: 'Gestionnaire de stock',
   caisse: 'Caissier (encaissement uniquement)',
   water: 'Barman',
+  croupier: 'Croupier (accès au casino)',
 };
 
 const roleIcons: Record<string, string> = {
@@ -34,6 +36,7 @@ const roleIcons: Record<string, string> = {
   caisse: '💰',
   water: '🍸',
   housekeeping: '🧹',
+  croupier: '🎲',
 };
 
 const moduleLabels: Record<string, string> = {
@@ -226,6 +229,11 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
+    if (form.role === 'croupier' && (parseModules(form.module).length !== 1 || parseModules(form.module)[0] !== 'casino')) {
+      setErrorMessage('Un croupier est affecté uniquement au module Casino.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage('');
@@ -279,6 +287,8 @@ export const UtilisateursPage: React.FC = () => {
   const toggleModule = (mod: ModuleType) => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
+
+    if (form.role === 'croupier') return;
 
     if (form.role === 'caisse') {
       setErrorMessage('');
@@ -531,22 +541,7 @@ export const UtilisateursPage: React.FC = () => {
 
           <Select label="Rôle" value={form.role} onChange={e => {
             const role = e.target.value as UserRole;
-            let newModules = form.module;
-            if (role === 'caisse') {
-              newModules = cashierModules;
-            } else if ((role as string) === 'water') {
-              newModules = ['bar'];
-            } else if ((role as string) === 'gestionnaire_de_stock') {
-              const cur = parseModules(form.module);
-              newModules = cur.filter(m => m !== 'casino');
-            } else if (role === 'manager') {
-              const cur = parseModules(form.module);
-              if (cur.length > 2) {
-                newModules = cur.slice(0, 2);
-              }
-            }
-            setForm({ ...form, role, module: newModules });
-            setErrorMessage('');
+            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : role === 'croupier' ? ['casino'] : form.module });
           }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
@@ -561,14 +556,7 @@ export const UtilisateursPage: React.FC = () => {
               </label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse'
-                ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[])
-                : (form.role as string) === 'water'
-                  ? (['bar'] as ModuleType[])
-                  : (form.role as string) === 'gestionnaire_de_stock'
-                    ? allModules.filter(m => m !== 'casino')
-                    : allModules
-              ).map(mod => {
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 const isTakenByOther = (form.role as string) === 'gestionnaire_de_stock' && modulesTakenByOtherStockManagers.includes(mod);
@@ -578,12 +566,10 @@ export const UtilisateursPage: React.FC = () => {
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={(form.role as string) === 'water' || isTakenByOther}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isTakenByOther
-                      ? 'bg-surface-3 text-muted/40 border-base cursor-not-allowed opacity-50'
-                      : isSelected
-                        ? 'bg-accent-4 text-accent border-accent/45'
-                        : 'bg-surface-2 text-muted border-base hover:text-primary'
+                    disabled={form.role === 'water' || form.role === 'croupier'}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
+                      ? 'bg-accent-4 text-accent border-accent/40'
+                      : 'bg-surface-2 text-muted border-base hover:text-primary'
                       }`}
                   >
                     {moduleLabels[mod]} {isTakenByOther ? '(Déjà pris)' : ''}
@@ -592,8 +578,8 @@ export const UtilisateursPage: React.FC = () => {
               })}
             </div>
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
-            {(form.role as string) === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
-            {(form.role as string) === 'gestionnaire_de_stock' && <p className="mt-2 text-xs text-muted">Le module Casino est exclu. Un module ne peut appartenir qu'à un seul gestionnaire de stock, mais vous pouvez cumuler plusieurs modules libres.</p>}
+            {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
+            {form.role === 'croupier' && <p className="mt-2 text-xs text-muted">Le croupier travaille uniquement dans le module Casino.</p>}
           </div>
 
           <div className="flex items-center gap-3">
