@@ -1,5 +1,5 @@
 // src/components/Sidebar.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useHDA } from '../context/HDAContext';
 import AuthService from '../services/authService';
 import { ModuleType } from '../types';
@@ -273,13 +273,12 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
   );
 };
 
-
 /* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { state } = useHDA(); 
+  const { state } = useHDA();
 
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
 
@@ -289,10 +288,10 @@ export const Sidebar: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
-  const filteredNavItems = navItems.filter(item =>
-    canAccessModule(currentUser, item.id, item.roles)
-  );
+  // FILTRAGE DES MODULES AVEC canAccessModule ET useMemo POUR PERFORMANCE
+  const filteredNavItems = useMemo(() => {
+    return navItems.filter(item => canAccessModule(currentUser, item.id, item.roles));
+  }, [currentUser]);
 
   const unreadCount = state.notifications.length;
 
@@ -482,10 +481,10 @@ const MobileBottomNav: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
-  const filteredNavItems = navItems.filter(item =>
-    canAccessModule(currentUser, item.id, item.roles)
-  );
+  // FILTRAGE DES MODULES AVEC canAccessModule ET useMemo
+  const filteredNavItems = useMemo(() => {
+    return navItems.filter(item => canAccessModule(currentUser, item.id, item.roles));
+  }, [currentUser]);
 
   const bottomNavItems = filteredNavItems.slice(0, 4);
   const moreNavItems = filteredNavItems.slice(4);

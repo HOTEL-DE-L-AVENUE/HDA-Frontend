@@ -1,3 +1,4 @@
+// src/pages/BarPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
@@ -26,16 +27,18 @@ export const BarPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
   const userIsCashier = isCashier(currentUser);
+  const isStockManager = (currentUser as any)?.role === 'gestionnaire_de_stock';
+
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
 
-  // Modification ici : 'commandes' défini par défaut
-  const [activeTab, setActiveTab] = useState<BarTabId>('commandes');
+  const [activeTab, setActiveTab] = useState<BarTabId>(isStockManager ? 'stock' : 'commandes');
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const orderStatusLabels: Record<string, BarCommande['statut']> = {
     EN_ATTENTE: 'En attente',
@@ -69,6 +72,7 @@ export const BarPage: React.FC = () => {
   };
 
   const loadOrders = async () => {
+    if (isStockManager) return;
     try {
       const data = await barService.getBarOrders();
       const nextOrders = Array.isArray(data) ? data.map((order) => ({
@@ -175,12 +179,9 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  // Fonction pour ajouter instantanément la nouvelle boisson dans le state local
   const handleProductAdded = (newProduct: BarProduct) => {
     setCocktails((prev) => [...prev, newProduct]);
   };
-
-  const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
@@ -210,10 +211,24 @@ export const BarPage: React.FC = () => {
 
   useEffect(() => {
     void fetchData();
-    void loadOrders();
-    const refreshOrders = window.setInterval(() => void loadOrders(), 15000);
-    return () => window.clearInterval(refreshOrders);
-  }, []);
+    if (!isStockManager) {
+      void loadOrders();
+      const refreshOrders = window.setInterval(() => void loadOrders(), 15000);
+      return () => window.clearInterval(refreshOrders);
+    }
+  }, [isStockManager]);
+
+  if (isStockManager) {
+    return (
+      <div className="space-y-6">
+        <BarHeader />
+        <StockManager
+          module="bar"
+          categories={['Spiritueux', 'Vins', 'Bières', 'Soft', 'Sirop', 'Champagne', 'Autre']}
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -228,7 +243,7 @@ export const BarPage: React.FC = () => {
       <BarHeader />
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           <AlertCircle size={16} />
           <span>{error}</span>
         </div>
