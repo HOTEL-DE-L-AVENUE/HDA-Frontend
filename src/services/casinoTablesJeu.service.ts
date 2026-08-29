@@ -91,9 +91,37 @@ export type PlayerSheetData = {
   restaurantPayments: { especes: boolean; tpe: boolean };
   finals: Record<string, Record<string, string>>;
   endGameTime?: string;
+  isFinished?: boolean;
+  finishedAt?: string;
   total_cashing_jetons?: number;
   cashingPaymentMethod?: string;
 };
+
+export interface CasinoRegisteredPlayer {
+  id: number;
+  nom: string;
+  prenom?: string | null;
+  email?: string | null;
+  telephone?: string | null;
+  date_inscription?: string | null;
+  depot: number | string;
+  credit: number | string;
+  mode_jeu?: 'EN_ATTENTE' | 'EN_JEU';
+  statut: 'ACTIF' | 'INACTIF';
+  statut_jeu?: 'EN_JEU' | 'ARRETE';
+}
+
+export interface CasinoPlayerGame {
+  id: number;
+  casino_player_id: number;
+  game_date: string;
+  table_name: string;
+  depot: number | string;
+  credit: number | string;
+  nom: string;
+  prenom?: string | null;
+  email?: string | null;
+}
 
 export interface IdentityVerification {
   id?: number;
@@ -114,6 +142,23 @@ export const playerSheetApi = {
   get: (date: string, tableName: string) =>
     get<PlayerSheetData | null>(`/player-sheets${qs({ date, table_name: tableName })}`),
   save: (payload: PlayerSheetData) => put<PlayerSheetData>('/player-sheets', payload),
+  finish: (date: string, tableName: string) =>
+    post<{ finishedAt: string; playerIds: number[] }>('/player-sheets/finish', { date, table_name: tableName }),
+};
+
+export const casinoPlayersApi = {
+  list: async () => unwrapCasinoPlayerResponse<CasinoRegisteredPlayer[]>(await get<CasinoRegisteredPlayer[] | { data?: CasinoRegisteredPlayer[] }>('/players')) || [],
+  create: async (payload: Omit<CasinoRegisteredPlayer, 'id' | 'statut'> & { statut?: 'ACTIF' | 'INACTIF' }) => unwrapCasinoPlayerResponse<CasinoRegisteredPlayer>(await post<CasinoRegisteredPlayer | { data?: CasinoRegisteredPlayer }>('/players', payload)),
+  update: async (id: number, payload: Partial<Omit<CasinoRegisteredPlayer, 'id'>>) => unwrapCasinoPlayerResponse<CasinoRegisteredPlayer>(await put<CasinoRegisteredPlayer | { data?: CasinoRegisteredPlayer }>(`/players/${id}`, payload)),
+  play: async (id: number, payload: { game_date: string; table_name: string; depot: number; credit: number }) => unwrapCasinoPlayerResponse<CasinoPlayerGame>(await post<CasinoPlayerGame | { data?: CasinoPlayerGame }>(`/players/${id}/play`, payload)),
+  remove: (id: number) => del<void>(`/players/${id}`),
+};
+
+const unwrapCasinoPlayerResponse = <T,>(response: T | { data?: T }): T => {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data?: T }).data as T;
+  }
+  return response as T;
 };
 
 export const identityVerificationApi = {

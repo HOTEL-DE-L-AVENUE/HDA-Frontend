@@ -15,6 +15,7 @@ const roleLabels: Record<string, string> = {
   caisse: 'Caissier',
   water: 'Barman',
   housekeeping: 'Personnel d’entretien',
+  croupier: 'Croupier',
 };
 
 const formRoleLabels: Record<string, string> = {
@@ -22,6 +23,7 @@ const formRoleLabels: Record<string, string> = {
   manager: 'Manager',
   caisse: 'Caissier (encaissement uniquement)',
   water: 'Barman',
+  croupier: 'Croupier (accès au casino)',
 };
 
 const roleIcons: Record<string, string> = {
@@ -31,6 +33,7 @@ const roleIcons: Record<string, string> = {
   caisse: '💰',
   water: '🍸',
   housekeeping: '🧹',
+  croupier: '🎲',
 };
 
 const moduleLabels: Record<string, string> = {
@@ -204,6 +207,11 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
+    if (form.role === 'croupier' && (parseModules(form.module).length !== 1 || parseModules(form.module)[0] !== 'casino')) {
+      setErrorMessage('Un croupier est affecté uniquement au module Casino.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage('');
@@ -257,6 +265,8 @@ export const UtilisateursPage: React.FC = () => {
   const toggleModule = (mod: ModuleType) => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
+
+    if (form.role === 'croupier') return;
 
     if (form.role === 'caisse') {
       setErrorMessage('');
@@ -496,7 +506,7 @@ export const UtilisateursPage: React.FC = () => {
 
           <Select label="Rôle" value={form.role} onChange={e => {
             const role = e.target.value as UserRole;
-            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : form.module });
+            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : role === 'croupier' ? ['casino'] : form.module });
           }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
@@ -505,7 +515,7 @@ export const UtilisateursPage: React.FC = () => {
               <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (
@@ -513,7 +523,7 @@ export const UtilisateursPage: React.FC = () => {
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={form.role === 'water'}
+                    disabled={form.role === 'water' || form.role === 'croupier'}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
                       : 'bg-surface-2 text-muted border-base hover:text-primary'
@@ -526,6 +536,7 @@ export const UtilisateursPage: React.FC = () => {
             </div>
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
             {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
+            {form.role === 'croupier' && <p className="mt-2 text-xs text-muted">Le croupier travaille uniquement dans le module Casino.</p>}
           </div>
 
           <div className="flex items-center gap-3">

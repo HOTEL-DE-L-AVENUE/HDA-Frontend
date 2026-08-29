@@ -1,4 +1,4 @@
-export type CasinoView = 'players' | 'chips' | 'final' | 'management';
+export type CasinoView = 'setup' | 'players' | 'chips' | 'final' | 'management' | 'report';
 
 export interface IdentityVerificationData {
   fullName: string;
@@ -13,9 +13,14 @@ export interface IdentityVerificationData {
 export type PlayerLine = {
   id: number;
   ficheId?: number;
+  casinoPlayerId?: number;
+  casinoPlayerGameId?: number;
   time: string;
   playerTime: string;
   name: string;
+  email: string;
+  initialDeposit: string;
+  initialCredit: string;
   member: string;
   arrival: string;
   caves: string;
@@ -26,8 +31,10 @@ export type PlayerLine = {
   paymentMethod: string;
   bonuses: string;
   bonusResults: string;
+  bonusSignature: string;
   resultPaymentOptions: string;
   signature: string;
+  finalSignature: string;
   departure: string;
   cashing: string;
   identityVerification?: string;
@@ -63,6 +70,9 @@ export const createPlayerLine = (id: number, ficheId = id): PlayerLine => ({
   time: '',
   playerTime: '',
   name: '',
+  email: '',
+  initialDeposit: '',
+  initialCredit: '',
   member: '',
   arrival: '',
   caves: '',
@@ -73,8 +83,10 @@ export const createPlayerLine = (id: number, ficheId = id): PlayerLine => ({
   paymentMethod: '',
   bonuses: '',
   bonusResults: '',
+  bonusSignature: '',
   resultPaymentOptions: '',
   signature: '',
+  finalSignature: '',
   departure: '',
   cashing: '',
 });
