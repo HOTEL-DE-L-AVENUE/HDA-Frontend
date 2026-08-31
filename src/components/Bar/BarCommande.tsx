@@ -675,21 +675,30 @@ export const BarCommandeView: React.FC<Props> = ({
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
               <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-40 text-xs" />
             </div>
-            <div className="grid min-h-[280px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)_210px]">
-              <nav className="space-y-1 border-r border-base bg-[#171b1c] p-2">
+            <div className="grid h-[480px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)_210px]">
+              <nav className="space-y-1 border-r border-base bg-[#171b1c] p-2 overflow-y-auto">
                 {menuCategories.map((category) => (
-                  <button key={category} type="button" onClick={() => { setMenuCategory(category); setMenuSubcategory('Toutes'); }} className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold transition ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}>
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => {
+                      setMenuCategory(category);
+                      setMenuSubcategory('Toutes');
+                      setSearchTerm('');
+                    }}
+                    className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold transition ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}
+                  >
                     {category}
                   </button>
                 ))}
               </nav>
-              <div className="min-w-0 p-2 sm:p-3">
+              <div className="min-w-0 p-2 sm:p-3 flex flex-col h-full min-h-0">
                 {menuSubcategories.length > 1 && (
-                  <div className="mb-2 flex gap-1 overflow-x-auto border-b border-base pb-2">
+                  <div className="mb-2 flex gap-1 overflow-x-auto border-b border-base pb-2 shrink-0">
                     {menuSubcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => setMenuSubcategory(subcategory)} className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold ${menuSubcategory === subcategory ? 'bg-sky-500 text-white' : 'bg-surface-2 text-muted'}`}>{subcategory}</button>)}
                   </div>
                 )}
-                <div className="grid max-h-[330px] grid-cols-2 gap-2 overflow-y-auto xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 overflow-y-auto xl:grid-cols-3 flex-1 content-start pr-1 min-h-0">
                   {menuItems.map((cocktail) => {
                     const isSpecialBillardItem = cocktail.id <= 0;
                     const stock = stockMap[cocktail.id];
@@ -699,10 +708,12 @@ export const BarCommandeView: React.FC<Props> = ({
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
                 </div>
               </div>
-              <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0">
+              <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0 flex flex-col h-full overflow-y-auto">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
-                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom}</span><div className="flex items-center gap-2">{canAdjustTicketQuantity && <div className="hidden items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 sm:flex"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button><input type="number" min="1" step="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Quantité de ${item.nom}`} /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button></div>} {!canAdjustTicketQuantity && <span className="min-w-5 text-center text-primary">×{item.quantite}</span>}<span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}</div>}
-                <div className="mt-4 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                  {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom}</span><div className="flex items-center gap-2">{canAdjustTicketQuantity && <div className="hidden items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 sm:flex"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button><input type="number" min="1" step="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Quantité de ${item.nom}`} /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button></div>} {!canAdjustTicketQuantity && <span className="min-w-5 text-center text-primary">×{item.quantite}</span>}<span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}
+                </div>
+                <div className="mt-auto pt-3 border-t border-base flex items-center justify-between text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
               </aside>
             </div>
           </div>
