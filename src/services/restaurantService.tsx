@@ -67,7 +67,8 @@ export const getInvoicePdf = (id: number) =>
 export const createOrder = (data: {
   client_id?: number;
   table_id?: number;
-  items: { product_id: number; quantite: number; prix_unitaire: number }[];
+  items: { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[];
+  notes?: string;
 }) =>
   api.post<ApiResponse<Order>>('/api/restaurant/orders', data).then(res => res.data);
 

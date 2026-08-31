@@ -176,7 +176,9 @@ export const RestaurantPage: React.FC = () => {
           product_id: item.product_id,
           quantite: item.quantite,
           prix_unitaire: item.prix_unitaire,
+          cuisson: item.cuisson,
         })),
+        notes: formData.notes,
       });
       if (res.success) {
         await fetchOrders();
@@ -195,10 +197,12 @@ export const RestaurantPage: React.FC = () => {
       statut: 'EN_ATTENTE',
       created_at: new Date().toISOString(),
       table: table,
+      notes: formData.notes,
       items: (formData.items || []).map((item: any) => ({
         id: Date.now(),
         order_id: orders.length + 1,
         ...item,
+        product_nom: products.find(p => p.id === item.product_id)?.nom,
       })),
     };
     setOrders(prev => [...prev, newOrder]);
