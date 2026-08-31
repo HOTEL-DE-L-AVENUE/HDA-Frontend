@@ -54,7 +54,6 @@ export const BarCommandeView: React.FC<Props> = ({
   const [table, setTable] = useState('');
   const [nombrePersonnes, setNombrePersonnes] = useState('1');
   const [moyenPaiement, setMoyenPaiement] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
-  const [observation, setObservation] = useState('');
   const [tables, setTables] = useState<BarTable[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -92,7 +91,6 @@ export const BarCommandeView: React.FC<Props> = ({
     setTable('');
     setNombrePersonnes('1');
     setMoyenPaiement('ESPECES');
-    setObservation('');
     setSelectedItems([]);
     setSearchTerm('');
     setIsCreatingTable(false);
@@ -108,7 +106,6 @@ export const BarCommandeView: React.FC<Props> = ({
     setTable('');
     setNombrePersonnes('1');
     setMoyenPaiement('ESPECES');
-    setObservation('');
     setSelectedItems([]);
     setSearchTerm('');
     setFeedback(null);
@@ -125,7 +122,6 @@ export const BarCommandeView: React.FC<Props> = ({
     setTable(String(commande.table));
     setNombrePersonnes(String(commande.nombre_personnes || 1));
     setMoyenPaiement(commande.moyen_paiement || 'ESPECES');
-    setObservation(commande.observation || '');
     setSelectedItems(commande.items.map((item) => ({ ...item })));
     setSearchTerm('');
     setFeedback(null);
@@ -159,17 +155,6 @@ export const BarCommandeView: React.FC<Props> = ({
         if (itemIndex !== index) return [item];
         const nextQuantity = item.quantite + delta;
         return nextQuantity > 0 ? [{ ...item, quantite: nextQuantity }] : [];
-      })
-    );
-  };
-
-  const handleSetItemQuantity = (index: number, nextQuantity: number) => {
-    const safeQuantity = Number.isFinite(nextQuantity) ? Math.max(1, Math.floor(nextQuantity)) : 1;
-
-    setSelectedItems((prev) =>
-      prev.flatMap((item, itemIndex) => {
-        if (itemIndex !== index) return [item];
-        return safeQuantity > 0 ? [{ ...item, quantite: safeQuantity }] : [];
       })
     );
   };
@@ -233,7 +218,6 @@ export const BarCommandeView: React.FC<Props> = ({
           table: tableNumber,
           nombre_personnes: guestCount,
           moyen_paiement: moyenPaiement,
-          observation: observation.trim(),
           items: selectedItems,
         });
       } else {
@@ -242,7 +226,6 @@ export const BarCommandeView: React.FC<Props> = ({
           table: tableNumber,
           nombre_personnes: guestCount,
           moyen_paiement: moyenPaiement,
-          observation: observation.trim(),
           items: selectedItems,
         });
       }
@@ -359,11 +342,10 @@ export const BarCommandeView: React.FC<Props> = ({
     const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
     const items = commande.items.map((item) => `
       <tr><td>${escapePrintHtml(item.nom)}</td><td class="number">${item.quantite}</td><td class="number">${formatCurrency(item.prix)}</td><td class="number">${formatCurrency(item.prix * item.quantite)}</td></tr>`).join('');
-    const observationText = commande.observation?.trim();
 
     printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Commande #${commande.id}</title><style>
-      body { font-family: Arial, sans-serif; color: #111; margin: 32px; } h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 4px 0; } table { width: 100%; border-collapse: collapse; margin-top: 24px; } th, td { padding: 9px 4px; border-bottom: 1px solid #ddd; text-align: left; } .number { text-align: right; } .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 16px; } .muted { color: #555; font-size: 12px; } .note { margin-top: 12px; padding: 10px 12px; background: #f7f7f7; border-left: 4px solid #f59e0b; border-radius: 6px; } @media print { body { margin: 12px; } }
-    </style></head><body><h1>Commande Bar #${commande.id}</h1><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p>${observationText ? `<p class="note"><strong>Observation :</strong> ${escapePrintHtml(observationText)}</p>` : ''}<table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
+      body { font-family: Arial, sans-serif; color: #111; margin: 32px; } h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 4px 0; } table { width: 100%; border-collapse: collapse; margin-top: 24px; } th, td { padding: 9px 4px; border-bottom: 1px solid #ddd; text-align: left; } .number { text-align: right; } .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 16px; } .muted { color: #555; font-size: 12px; } @media print { body { margin: 12px; } }
+    </style></head><body><h1>Commande Bar #${commande.id}</h1><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
@@ -398,7 +380,7 @@ export const BarCommandeView: React.FC<Props> = ({
       key: 'items',
       label: 'Articles',
       render: (commande: BarCommande) => (
-        <div className="space-y-1.5">
+        <div>
           {commande.items.length === 0 ? (
             <span className="text-sm text-slate-500">—</span>
           ) : (
@@ -410,11 +392,6 @@ export const BarCommandeView: React.FC<Props> = ({
               ))}
               {commande.items.length > 2 && <p className="text-xs text-slate-500">+{commande.items.length - 2} autres</p>}
             </>
-          )}
-          {commande.observation && (
-            <p className="max-w-xs text-[11px] text-amber-300/90 italic">
-              Obs: {commande.observation}
-            </p>
           )}
         </div>
       ),
@@ -511,9 +488,7 @@ export const BarCommandeView: React.FC<Props> = ({
     },
   ];
 
-  const activeCommandes = localCommandes.filter((commande) => commande.statut !== 'Encaissée');
-
-  const filteredCommandes = activeCommandes.filter((commande) => {
+  const filteredCommandes = localCommandes.filter((commande) => {
     const query = commandeSearchTerm.trim().toLocaleLowerCase('fr-FR');
     if (!query) return true;
 
@@ -521,7 +496,6 @@ export const BarCommandeView: React.FC<Props> = ({
       commande.client,
       tables.find((tableItem) => tableItem.id === commande.table)?.numero || String(commande.table),
       formatCommandeDate(commande.created_at),
-      commande.observation || '',
       ...commande.items.map((item) => item.nom),
     ].join(' ').toLocaleLowerCase('fr-FR');
 
@@ -530,8 +504,8 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const data = filteredCommandes;
 
-  const totalCommandes = activeCommandes.reduce((sum, commande) => sum + commande.total, 0);
-  const commandesEnAttente = activeCommandes.filter((commande) => commande.statut === 'En attente').length;
+  const totalCommandes = localCommandes.reduce((sum, commande) => sum + commande.total, 0);
+  const commandesEnAttente = localCommandes.filter((commande) => commande.statut === 'En attente').length;
   const filteredCocktails = cocktails.filter((cocktail) => {
     const value = searchTerm.trim().toLowerCase();
     if (!value) return true;
@@ -558,7 +532,7 @@ export const BarCommandeView: React.FC<Props> = ({
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-sm text-accent">
-              {activeCommandes.length} commande{activeCommandes.length > 1 ? 's' : ''} active{activeCommandes.length > 1 ? 's' : ''}
+              {localCommandes.length} commande{localCommandes.length > 1 ? 's' : ''} active{localCommandes.length > 1 ? 's' : ''}
             </div>
             <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
               {BAR_COMMANDES_ACTIONS.newOrderLabel}
@@ -570,7 +544,7 @@ export const BarCommandeView: React.FC<Props> = ({
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-base bg-surface p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Commandes actives</p>
-          <p className="mt-2 text-2xl font-semibold text-primary">{activeCommandes.length}</p>
+          <p className="mt-2 text-2xl font-semibold text-primary">{localCommandes.length}</p>
         </div>
         <div className="rounded-2xl border border-base bg-surface p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">En attente</p>
@@ -659,17 +633,6 @@ export const BarCommandeView: React.FC<Props> = ({
             />
           </div>
 
-          <div className="rounded-xl border border-base bg-surface-2 p-3">
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-accent">Observation</label>
-            <textarea
-              value={observation}
-              onChange={(event) => setObservation(event.target.value)}
-              rows={3}
-              placeholder="Ajouter une remarque pour la commande..."
-              className="w-full rounded-xl border border-base bg-[#101415] px-3 py-2 text-sm text-primary outline-none transition placeholder:text-slate-500 focus:border-accent"
-            />
-          </div>
-
           <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">
             <div className="flex items-center justify-between border-b border-base px-3 py-2">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
@@ -701,7 +664,7 @@ export const BarCommandeView: React.FC<Props> = ({
               </div>
               <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
-                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom}</span><div className="flex items-center gap-2">{canAdjustTicketQuantity && <div className="hidden items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 sm:flex"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button><input type="number" min="1" step="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Quantité de ${item.nom}`} /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button></div>} {!canAdjustTicketQuantity && <span className="min-w-5 text-center text-primary">×{item.quantite}</span>}<span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}</div>}
+                {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom}</span><div className="flex items-center gap-2">{canAdjustTicketQuantity && <div className="hidden items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 sm:flex"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button><span className="min-w-5 text-center text-primary">{item.quantite}</span><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button></div>} {!canAdjustTicketQuantity && <span className="min-w-5 text-center text-primary">×{item.quantite}</span>}<span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}</div>}
                 <div className="mt-4 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
               </aside>
             </div>
@@ -717,19 +680,11 @@ export const BarCommandeView: React.FC<Props> = ({
                     <div className="flex items-center gap-2">
                       {canAdjustTicketQuantity ? (
                         <div className="flex items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1">
-                          <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>
+                          <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white">
                             −
                           </button>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={item.quantite}
-                            onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))}
-                            className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            aria-label={`Quantité de ${item.nom}`}
-                          />
-                          <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>
+                          <span className="min-w-5 text-center text-primary">{item.quantite}</span>
+                          <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white">
                             +
                           </button>
                         </div>
@@ -806,7 +761,7 @@ export const BarCommandeView: React.FC<Props> = ({
 
         {data.length === 0 ? (
           <div className="p-6 sm:p-8 text-center text-slate-500 text-sm">
-            {activeCommandes.length === 0
+            {localCommandes.length === 0
               ? `${BAR_COMMANDES_ACTIONS.emptyTitle}. ${BAR_COMMANDES_ACTIONS.emptyDescription}`
               : 'Aucune commande ne correspond à votre recherche.'}
           </div>

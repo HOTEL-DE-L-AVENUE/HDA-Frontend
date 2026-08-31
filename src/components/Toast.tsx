@@ -1,4 +1,4 @@
-// src/components/Toast.tsx (Version avec animation améliorée)
+// src/components/Toast.tsx (Version avec animation améliorée - TOASTS EN HAUT À DROITE)
 import React, { useEffect, useState } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
@@ -62,15 +62,19 @@ const Toast: React.FC<ToastProps> = ({
     }
   };
 
+  // Animation d'entrée depuis la droite
+  const getAnimationClass = () => {
+    if (isExiting) {
+      return 'translate-x-full opacity-0 scale-95'; // Sortie vers la droite
+    }
+    return 'translate-x-0 opacity-100 scale-100'; // Entrée depuis la droite
+  };
+
   if (!isVisible) return null;
 
   return (
     <div
-      className={`transform transition-all duration-300 ${
-        isExiting 
-          ? 'translate-x-full opacity-0 scale-95' 
-          : 'translate-x-0 opacity-100 scale-100'
-      }`}
+      className={`transform transition-all duration-300 ease-out ${getAnimationClass()}`}
     >
       <div
         className={`flex items-start gap-3 p-4 rounded-xl border ${getBackgroundColor()} backdrop-blur-xl bg-surface/90 shadow-2xl min-w-[320px] max-w-md`}
@@ -117,9 +121,11 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove }) => {
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none">
+    // Position: en haut à droite
+    <div className="fixed top-20 right-6 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none">
       <div className="pointer-events-auto flex flex-col gap-3">
-        {toasts.map((toast) => (
+        {/* Nouveaux toasts en haut (ordre inversé) */}
+        {[...toasts].reverse().map((toast) => (
           <Toast
             key={toast.id}
             message={toast.message}

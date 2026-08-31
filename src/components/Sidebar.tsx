@@ -1,5 +1,5 @@
 // src/components/Sidebar.tsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
 import AuthService from '../services/authService';
 import { ModuleType } from '../types';
@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
   { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager'] },
   { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
   // { id: 'alcool', label: 'Alcool', icon: <Martini size={20} />, gradient: 'from-amber-500 to-orange-500', path: "/alcool", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
-  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier', 'croupier'] },
+  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier'] },
   { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
   { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier'] },
   { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs", roles: ['admin'] },
@@ -273,12 +273,13 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
   );
 };
 
+
 /* ─── SIDEBAR DESKTOP ─── */
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { state } = useHDA();
+  const { state } = useHDA(); 
 
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
 
@@ -288,10 +289,10 @@ export const Sidebar: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  // FILTRAGE DES MODULES AVEC canAccessModule ET useMemo POUR PERFORMANCE
-  const filteredNavItems = useMemo(() => {
-    return navItems.filter(item => canAccessModule(currentUser, item.id, item.roles));
-  }, [currentUser]);
+  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
+  const filteredNavItems = navItems.filter(item =>
+    canAccessModule(currentUser, item.id, item.roles)
+  );
 
   const unreadCount = state.notifications.length;
 
@@ -481,10 +482,10 @@ const MobileBottomNav: React.FC = () => {
     return () => window.removeEventListener('auth-change', updateUser);
   }, []);
 
-  // FILTRAGE DES MODULES AVEC canAccessModule ET useMemo
-  const filteredNavItems = useMemo(() => {
-    return navItems.filter(item => canAccessModule(currentUser, item.id, item.roles));
-  }, [currentUser]);
+  // FILTRAGE DES MODULES AVEC canAccessModule CENTRALISÉ
+  const filteredNavItems = navItems.filter(item =>
+    canAccessModule(currentUser, item.id, item.roles)
+  );
 
   const bottomNavItems = filteredNavItems.slice(0, 4);
   const moreNavItems = filteredNavItems.slice(4);

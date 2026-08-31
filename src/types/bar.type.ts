@@ -45,7 +45,6 @@ export interface BarCommande {
   table: number;
   nombre_personnes?: number;
   moyen_paiement?: BarPaymentMethod;
-  observation?: string;
   statut: 'En attente' | 'En préparation' | 'Prête' | 'Servie' | 'Encaissée';
   total: number;
   items: BarCommandeItem[];

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
@@ -16,19 +15,14 @@ interface PlayersSheetProps {
   onCashingPaymentMethodChange?: (value: string) => void;
   onSave: () => void;
   onAdd: (ficheId?: number, name?: string) => number;
-  onGoToRegisteredPlayers: () => void;
   onRemove: (id: number) => void;
   onIdentityVerified?: (playerId: number, data: IdentityVerificationData, verificationId?: number) => void;
   showIdentityVerifications?: boolean;
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
-  isAdmin?: boolean;
-  canDeletePlayerLine?: boolean;
 }
 
 const paperInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
 const darkInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
-const sheetActionPrimary = 'action inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-xs font-bold shadow-lg shadow-amber-500/10 transition duration-200 hover:-translate-y-0.5 hover:shadow-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-50';
-const sheetActionSecondary = 'action secondary inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-xs font-bold transition duration-200 hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-300/10 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-50';
 const paymentMethods = ['Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèque', 'Offert', 'Virement', 'Crédit'];
 
 const bonusCategories = ['7 et 2', 'Carré', 'Quinte flush', 'Quinte flush royal', 'Fetish'];
@@ -84,9 +78,8 @@ const parseResultPayments = (value?: string): ResultPayment[] => {
   }
 };
 
-export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
-  const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
-  const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
+export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {} }) => {
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => players[0] ? (players[0].ficheId ?? players[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
@@ -96,13 +89,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const [identityTransactionType, setIdentityTransactionType] = useState<'achat' | 'apport' | 'echange'>('achat');
   const [signatureError, setSignatureError] = useState('');
-  const [signatureConfirmationOpen, setSignatureConfirmationOpen] = useState(false);
-  const [confirmedSignatures, setConfirmedSignatures] = useState<string[]>([]);
-  const [lineSignatureModal, setLineSignatureModal] = useState<{ id: number; name: string; value: string } | null>(null);
-  const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
+  const selectedPlayer = players.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-  const selectedPlayerCaveToVerify = selectedPlayerTotal;
+  const selectedPlayerCaveToVerify = selectedPlayerLines.reduce((maximum, line) => Math.max(maximum, parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount)), 0);
   const selectedPlayerCashing = parseCasinoAmount(selectedPlayer?.cashing);
   const selectedPlayerResult = selectedPlayerCashing - selectedPlayerTotal;
   const selectedBonuses = parseBonuses(selectedPlayer?.bonuses);
@@ -110,21 +100,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions);
   const selectedIdentityVerification = identityVerifications[selectedPlayerId];
   const resultOptions = selectedPlayerResult > 0 ? positiveResultOptions : selectedPlayerResult < 0 ? negativeResultOptions : [];
-  const caveLinesToSign = selectedPlayerLines.filter((line) => line.caves.trim() || line.amount.trim());
-  const ficheIdsToSign = selectedPlayer ? [selectedPlayerId] : [];
-  const signatureConfirmationItems = [
-    ...caveLinesToSign.map((line) => ({ key: `cave-${line.id}`, label: `Cave ${line.caves || '—'} × ${line.amount || '—'} — ${line.name || `Joueur ${line.ficheId ?? line.id}`}` })),
-    ...(selectedBonuses.length ? [{ key: `bonus-${selectedPlayerId}`, label: `Signature bonus — ${selectedPlayer?.name || `Joueur ${selectedPlayerId}`}` }] : []),
-    ...ficheIdsToSign.map((ficheId) => {
-      const player = players.find((line) => (line.ficheId ?? line.id) === ficheId);
-      return { key: `final-${ficheId}`, label: `Signature finale — ${player?.name || `Joueur ${ficheId}`}` };
-    }),
-  ];
-
-  useEffect(() => {
-    if (activePlayers.some((player) => (player.ficheId ?? player.id) === selectedPlayerId)) return;
-    setSelectedPlayerId(activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
-  }, [activePlayers, selectedPlayerId]);
 
   const saveWithResultCheck = () => {
     if (selectedPlayerResult !== 0 && selectedResultPayments.length > 1) {
@@ -138,32 +113,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         return;
       }
     }
-    const unsignedCave = caveLinesToSign.find((line) => !line.signature);
-    if (unsignedCave) {
-      const ficheId = unsignedCave.ficheId ?? unsignedCave.id;
-      setSelectedPlayerId(ficheId);
-      setSignatureError(`La signature est obligatoire pour la cave du joueur ${unsignedCave.name || ficheId}.`);
-      return;
-    }
-    const unsignedFinalSignature = ficheIdsToSign.find((ficheId) => !players.find((line) => (line.ficheId ?? line.id) === ficheId)?.finalSignature);
-    if (unsignedFinalSignature !== undefined) {
-      setSelectedPlayerId(unsignedFinalSignature);
-      const player = players.find((line) => (line.ficheId ?? line.id) === unsignedFinalSignature);
-      setSignatureError(`La signature finale est obligatoire pour ${player?.name || `le joueur ${unsignedFinalSignature}`}.`);
-      return;
-    }
-    if (selectedBonuses.length && !selectedPlayer?.bonusSignature) {
-      setSignatureError(`La signature bonus est obligatoire pour ${selectedPlayer?.name || 'ce joueur'}.`);
-      return;
-    }
     setSignatureError('');
-    setConfirmedSignatures([]);
-    setSignatureConfirmationOpen(true);
-  };
-
-  const confirmSignaturesAndSave = () => {
-    if (confirmedSignatures.length !== signatureConfirmationItems.length) return;
-    setSignatureConfirmationOpen(false);
     onSave();
   };
 
@@ -192,6 +142,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
       };
       window.print();
     }, 0);
+  };
+
+  const addPlayer = () => {
+    const newPlayerId = onAdd();
+    setSelectedPlayerId(newPlayerId);
   };
 
   const addPlayerLine = () => {
@@ -296,27 +251,21 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
   return (
   <div className="player-sheet-print p-2 text-xs text-white" style={{ backgroundColor: 'var(--color-surface)' }}>
-    <div className="mb-4 flex flex-col items-stretch justify-between gap-3 rounded-2xl border p-3 shadow-sm sm:flex-row sm:items-center print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 print:hidden">
+      <div className="flex items-center gap-2">
         <label htmlFor="player-to-print" className="font-semibold">Fiche joueur :</label>
-        {!activePlayers.length ? (
-          <select id="player-to-print" value={0} className="w-full rounded border bg-transparent px-2 py-1 text-white sm:w-auto" style={{ ...casinoBorder, color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled>
-            <option value={0} aria-label="Aucun joueur en jeu" />
-          </select>
-        ) : <>
-        <select id="player-to-print" value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(Number(event.target.value))} className="w-full rounded border bg-transparent px-2 py-1 text-white sm:w-auto" style={{ ...casinoBorder, color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!players.length}>
-          {activePlayers.map((player, index) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Fiche {index + 1} — {player.name}</option>)}
+        <select id="player-to-print" value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(Number(event.target.value))} className="rounded border bg-transparent px-2 py-1 text-white" style={{ ...casinoBorder, color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!players.length}>
+          {players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).map((player) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{player.name || `Joueur ${player.ficheId ?? player.id}`}</option>)}
         </select>
-        </>}
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-        {isAdmin && <button type="button" className={sheetActionSecondary} onClick={onGoToRegisteredPlayers}>Ajouter un joueur</button>}
-        {isAdmin && <button type="button" className={sheetActionSecondary} onClick={addPlayerLine} disabled={!selectedPlayer}>Ajouter une ligne</button>}
-        <button type="button" className={sheetActionSecondary} onClick={printPlayerSheet} disabled={!selectedPlayer}>Imprimer la fiche</button>
+      <div className="flex gap-2">
+        <button type="button" className="action secondary" onClick={addPlayer}>Ajouter un joueur</button>
+        <button type="button" className="action secondary" onClick={addPlayerLine} disabled={!selectedPlayer}>Ajouter une ligne</button>
+        <button type="button" className="action secondary" onClick={printPlayerSheet} disabled={!selectedPlayer}>Imprimer la fiche</button>
       </div>
     </div>
-    <div className="-mx-2 overflow-x-auto px-2 pb-2 sm:mx-0 sm:px-0">
-      <table className="w-full min-w-[980px] table-fixed border-collapse border sm:min-w-[1080px] xl:min-w-[1180px]" style={casinoBorder}>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1180px] table-fixed border-collapse border" style={casinoBorder}>
         <thead>
           <tr style={{ backgroundColor: 'var(--color-bg)' }}>
             <th className="border p-2 text-left font-semibold" style={casinoBorder} colSpan={2}>DATE : <input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} className="ml-1 bg-transparent font-normal outline-none" /></th>
@@ -336,7 +285,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>non Paye</th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>MODE DE PAIEMENT</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>Signature</th>
-            {canDeletePlayerLine && <th className="border p-2 text-center font-semibold print:hidden" style={casinoBorder}>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -345,28 +293,25 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
             return (
             <tr key={line.id} className="h-9">
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.name} onChange={(event) => onUpdate(line.id, 'name', event.target.value)} placeholder="Nom du joueur" disabled={!isAdmin} /></td>
-              <td className="border" style={casinoBorder}><input type="time" className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} disabled={!isAdmin} /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} disabled={!isAdmin} /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} disabled={!isAdmin} /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={line.name} onChange={(event) => onUpdate(line.id, 'name', event.target.value)} placeholder="Nom du joueur" /></td>
+              <td className="border" style={casinoBorder}><input type="time" className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={totalsByLineId[line.id] ? String(totalsByLineId[line.id]) : '0'} readOnly /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={isEmptyCaveLine ? '' : accumulatedByLineId[line.id] || '0'} readOnly /></td>
-              <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Payé'} onChange={() => onUpdate(line.id, 'payment', 'Payé')} disabled={!isAdmin} /></td>
-              <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} disabled={!isAdmin} /></td>
-              <td className="border" style={casinoBorder}><select className={paperInput} value={line.paymentMethod || ''} onChange={(event) => onUpdate(line.id, 'paymentMethod', event.target.value)} style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!isAdmin}><option value="" className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Sélectionner</option>{paymentMethods.map((method) => <option key={method} value={method} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{method}</option>)}</select></td>
-              <td className="border p-1" style={casinoBorder}>
-                <button type="button" className="flex min-h-14 w-full items-center justify-center rounded border border-dashed px-1 text-[10px] text-yellow-200 transition hover:border-yellow-300 hover:bg-yellow-300/10 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: line.id, name: line.name || `Joueur ${line.ficheId ?? line.id}`, value: line.signature || '' })} disabled={!isAdmin} aria-label={`Signer pour ${line.name || 'ce joueur'}`}>
-                  {line.signature ? <img src={line.signature} alt="Signature du joueur" className="max-h-12 max-w-full object-contain" /> : 'Cliquer pour signer'}
-                </button>
-              </td>
-              {canDeletePlayerLine && <td className="border p-1 text-center print:hidden" style={casinoBorder}><button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-400" onClick={() => window.confirm(`Supprimer la ligne de ${line.name || 'ce joueur'} ?`) && onRemove(line.id)} title="Supprimer la ligne" aria-label={`Supprimer la ligne de ${line.name || 'ce joueur'}`}><Trash2 size={16} /></button></td>}
+              <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Payé'} onChange={() => onUpdate(line.id, 'payment', 'Payé')} /></td>
+              <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} /></td>
+              <td className="border" style={casinoBorder}><select className={paperInput} value={line.paymentMethod || ''} onChange={(event) => onUpdate(line.id, 'paymentMethod', event.target.value)} style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}><option value="" className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Sélectionner</option>{paymentMethods.map((method) => <option key={method} value={method} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{method}</option>)}</select></td>
+              <td className="border p-1" style={casinoBorder}><SignaturePad value={line.signature} onChange={(value) => onUpdate(line.id, 'signature', value)} compact /></td>
             </tr>
             );
           })}
           <tr className="h-12">
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={2}>HEURE DE DEPART : <input type="time" className={`${paperInput} inline-block w-28`} value={selectedPlayer?.departure || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'departure', event.target.value)} /></td>
             <td className="border p-2 font-semibold" style={casinoBorder} colSpan={3}>Cashing : <input type="text" inputMode="decimal" className={`${paperInput} inline-block w-32`} value={selectedPlayer?.cashing || ''} onChange={(event) => selectedPlayer && onUpdate(selectedPlayer.id, 'cashing', event.target.value)} placeholder="0" /></td>
-            <td className="border p-2" style={casinoBorder} colSpan={isAdmin ? 6 : 5} />
+            <td className="border p-2 font-semibold" style={casinoBorder} colSpan={4}>
+              <div className="flex items-center gap-2">Signature : {selectedPlayer && <SignaturePad value={selectedPlayer.signature} onChange={(value) => onUpdate(selectedPlayer.id, 'signature', value)} />}</div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -391,10 +336,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             </div>
           </div>
         )}
-        <div className="flex flex-col gap-2 border-b p-3" style={casinoBorder}>
-          <p className="text-[10px] font-semibold tracking-[0.12em] text-yellow-200">SIGNATURE FINALE</p>
-          {selectedPlayer && <SignaturePad value={selectedPlayer.finalSignature || ''} onChange={(value) => onUpdate(selectedPlayer.id, 'finalSignature', value)} disabled={!isAdmin} />}
-        </div>
       </div>
       <div className="border-r" style={casinoBorder}>
         <p className="border-b p-2 font-semibold" style={casinoBorder}>BONUS</p>
@@ -405,10 +346,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
               {bonus}
             </label>
           ))}
-        </div>
-        <div className="flex flex-col gap-2 border-t p-3" style={casinoBorder}>
-          <p className="text-[10px] font-semibold tracking-[0.12em] text-yellow-200">SIGNATURE BONUS</p>
-          {selectedPlayer && <SignaturePad value={selectedPlayer.bonusSignature || ''} onChange={(value) => onUpdate(selectedPlayer.id, 'bonusSignature', value)} disabled={!isAdmin} />}
         </div>
       </div>
       <div>
@@ -449,16 +386,14 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         </div>
       </div>
     )}
-    <div className="mt-5 flex flex-col items-stretch gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center sm:justify-end print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
+    <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
       {(saveState === 'error' || signatureError) && <span className="text-xs text-red-400">{signatureError || 'Erreur d’enregistrement'}</span>}
-      <button type="button" className={sheetActionPrimary} onClick={saveWithResultCheck} disabled={saveState === 'saving'}>
+      <button type="button" className="action" onClick={saveWithResultCheck} disabled={saveState === 'saving'}>
         {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer la fiche'}
       </button>
     </div>
     {pendingBonus && <BonusRouletteModal bonus={pendingBonus} rotation={rouletteRotation} result={rouletteResult} number={rouletteNumber} isSpinning={isSpinning} onSpin={spinRoulette} onConfirm={confirmBonusResult} onClose={() => !isSpinning && setPendingBonus(null)} />}
-    {signatureConfirmationOpen && <SignatureConfirmationModal items={signatureConfirmationItems} confirmedKeys={confirmedSignatures} onToggle={(key, checked) => setConfirmedSignatures((current) => checked ? [...current, key] : current.filter((item) => item !== key))} onClose={() => setSignatureConfirmationOpen(false)} onConfirm={confirmSignaturesAndSave} />}
-    {lineSignatureModal && <LineSignatureModal playerName={lineSignatureModal.name} value={lineSignatureModal.value} onClose={() => setLineSignatureModal(null)} onValidate={(value) => { onUpdate(lineSignatureModal.id, 'signature', value); setLineSignatureModal(null); }} />}
     <IdentityVerificationModal
       open={identityModal.open}
       amount={identityModal.amount}
@@ -470,55 +405,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   );
 };
 
-const SignatureConfirmationModal: React.FC<{
-  items: { key: string; label: string }[];
-  confirmedKeys: string[];
-  onToggle: (key: string, checked: boolean) => void;
-  onClose: () => void;
-  onConfirm: () => void;
-}> = ({ items, confirmedKeys, onToggle, onClose, onConfirm }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="signature-confirmation-title">
-    <div className="w-full max-w-xl rounded-2xl border p-5 text-white shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
-      <h2 id="signature-confirmation-title" className="text-lg font-bold">Confirmation des signatures</h2>
-      <p className="mt-2 text-sm text-muted">Le joueur doit confirmer que chaque signature ci-dessous est bien la sienne avant l’enregistrement de la fiche.</p>
-      <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
-        {items.map((item) => <label key={item.key} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm" style={casinoBorder}>
-          <input type="checkbox" className="mt-0.5" checked={confirmedKeys.includes(item.key)} onChange={(event) => onToggle(item.key, event.target.checked)} />
-          <span>Je confirme : {item.label}</span>
-        </label>)}
-      </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <button type="button" className="action secondary" onClick={onClose}>Annuler</button>
-        <button type="button" className="action" onClick={onConfirm} disabled={confirmedKeys.length !== items.length}>Confirmer et enregistrer</button>
-      </div>
-    </div>
-  </div>
-);
-
-const LineSignatureModal: React.FC<{ playerName: string; value: string; onClose: () => void; onValidate: (value: string) => void }> = ({ playerName, value, onClose, onValidate }) => {
-  const [draftSignature, setDraftSignature] = useState(value);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="line-signature-title">
-      <div className="w-full max-w-3xl rounded-2xl border p-5 text-white shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
-        <h2 id="line-signature-title" className="text-lg font-bold">Signature du joueur</h2>
-        <p className="mt-1 text-sm text-muted">{playerName}</p>
-        <div className="mt-4 rounded-xl border bg-white p-2" style={casinoBorder}>
-          <SignaturePad value={draftSignature} onChange={setDraftSignature} large />
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="action secondary" onClick={onClose}>Annuler</button>
-          <button type="button" className="action" onClick={() => onValidate(draftSignature)} disabled={!draftSignature}>Valider la signature</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const SheetBottomRow: React.FC<{ label: string; value?: string }> = ({ label, value = '' }) => (
   <label className="grid grid-cols-[1.45fr_1fr] min-h-12 border-b last:border-b-0" style={casinoBorder}>
     <span className="p-2 flex items-center font-semibold text-[10px] leading-tight border-r" style={casinoBorder}>{label}</span>
-    <input className={darkInput} value={value} readOnly />
+    <input className={darkInput} value={value} readOnly={!!value} />
   </label>
 );
 
@@ -544,12 +434,12 @@ const BonusRouletteModal: React.FC<{ bonus: string; rotation: number; result: nu
   </div>
 );
 
-const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void; compact?: boolean; large?: boolean; disabled?: boolean }> = ({ value = '', onChange, compact = false, large = false, disabled = false }) => {
+const SignaturePad: React.FC<{ value: string; onChange: (value: string) => void; compact?: boolean }> = ({ value, onChange, compact = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const [hasSignature, setHasSignature] = useState(Boolean(value));
-  const width = large ? 760 : compact ? 180 : 210;
-  const height = large ? 260 : compact ? 58 : 56;
+  const width = compact ? 150 : 210;
+  const height = compact ? 38 : 56;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -557,13 +447,12 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
     if (!canvas || !context) return;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
-    const signatureValue = value || '';
-    setHasSignature(Boolean(signatureValue));
-    if (!signatureValue.startsWith('data:image/')) return;
+    setHasSignature(Boolean(value));
+    if (!value.startsWith('data:image/')) return;
 
     const image = new Image();
     image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    image.src = signatureValue;
+    image.src = value;
   }, [value]);
 
   const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -576,7 +465,6 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
   };
 
   const startDrawing = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled) return;
     const context = canvasRef.current?.getContext('2d');
     if (!context) return;
     const { x, y } = point(event);
@@ -587,7 +475,7 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
   };
 
   const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled || !isDrawingRef.current) return;
+    if (!isDrawingRef.current) return;
     const context = canvasRef.current?.getContext('2d');
     if (!context) return;
     const { x, y } = point(event);
@@ -596,7 +484,7 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
   };
 
   const finishDrawing = () => {
-    if (disabled || !isDrawingRef.current) return;
+    if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
     const signature = canvasRef.current?.toDataURL('image/png') || '';
     setHasSignature(Boolean(signature));
@@ -604,7 +492,6 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
   };
 
   const clear = () => {
-    if (disabled) return;
     const canvas = canvasRef.current;
     canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
@@ -612,22 +499,21 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
   };
 
   return (
-    <span className={`relative flex w-full ${large ? 'max-w-none' : 'max-w-[250px]'} rounded-xl border p-1.5 shadow-inner transition ${hasSignature ? 'border-emerald-400/50 bg-emerald-500/5' : 'border-white/20 bg-black/10 hover:border-amber-300/70'}`} style={{ borderColor: hasSignature ? undefined : 'var(--color-border)' }}>
+    <span className="inline-flex items-center gap-1">
       <canvas
         ref={canvasRef}
         width={width}
         height={height}
         aria-label="Zone de signature tactile"
-        className="h-auto w-full rounded-lg bg-white touch-none"
-        style={{ touchAction: 'none', cursor: disabled ? 'not-allowed' : 'crosshair', opacity: disabled ? 0.65 : 1 }}
+        className="rounded border bg-white touch-none"
+        style={{ borderColor: 'var(--color-border)', touchAction: 'none', cursor: 'crosshair' }}
         onPointerDown={startDrawing}
         onPointerMove={draw}
         onPointerUp={finishDrawing}
         onPointerCancel={finishDrawing}
         onPointerLeave={finishDrawing}
       />
-      {!hasSignature && <span className="pointer-events-none absolute inset-x-3 bottom-2 text-center text-[9px] font-semibold tracking-[0.14em] text-slate-500">SIGNER ICI</span>}
-      {hasSignature && !disabled && <button type="button" className="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-red-400/40 bg-red-500/90 text-white shadow-lg transition hover:scale-105 hover:bg-red-500 print:hidden" onClick={clear} title="Effacer la signature" aria-label="Effacer la signature"><Trash2 size={13} /></button>}
+      {hasSignature && <button type="button" className="text-[10px] text-muted print:hidden" onClick={clear}>Effacer</button>}
     </span>
   );
 };

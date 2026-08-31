@@ -23,10 +23,8 @@ interface CommandesTabProps {
   onCancel: (orderId: number) => void;
   onDelete: (orderId: number) => void;
   onNewOrder: () => void;
-  onEditOrder?: (order: Order) => void;
+  onEditOrder: (order: Order) => void;
   onInvoice?: (orderId: number) => void;
-  searchQuery?: string;
-  filterStatus?: string;
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
@@ -38,9 +36,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onDelete,
   onNewOrder,
   onEditOrder,
-  onInvoice,
-  searchQuery = '',
-  filterStatus = '',
+  onInvoice
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
@@ -81,7 +77,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     )},
     { key: 'actions', label: '', render: (order: Order) => (
       <div className="flex items-center gap-2">
-        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && onEditOrder && (
+        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
             <Pencil size={14} />
           </Button>
@@ -119,28 +115,8 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     )},
   ];
 
-  // Masquer les commandes encaissées/payées de la liste active des commandes
-  const activeOrders = orders.filter((order) => {
-    if (order.statut === 'PAYEE' || order.statut === 'PAYE' || order.statut === 'ENCAISSEE') {
-      return false;
-    }
-    if (filterStatus && order.statut !== filterStatus) {
-      return false;
-    }
-    if (searchQuery && searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      const clientName = (order.client_nom || order.client?.nom || '').toLowerCase();
-      const tableName = String(order.table?.numero || order.table_numero || order.table_id || '').toLowerCase();
-      const orderId = String(order.id);
-      const items = (order.items || []).map((i: any) => i.product_nom || i.product?.nom || products.find(p => p.id === i.product_id)?.nom || '').join(' ').toLowerCase();
-      const match = clientName.includes(q) || tableName.includes(q) || orderId.includes(q) || items.includes(q);
-      if (!match) return false;
-    }
-    return true;
-  });
-
   // Tri des commandes : les plus récentes (plus grandes dates/IDs) en premier
-  const sortedOrders = [...activeOrders].sort((a, b) => {
+  const sortedOrders = [...orders].sort((a, b) => {
     const timeA = new Date(a.created_at || 0).getTime();
     const timeB = new Date(b.created_at || 0).getTime();
     if (timeA !== timeB) return timeB - timeA; // Tri par date décroissante

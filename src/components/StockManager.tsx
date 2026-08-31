@@ -568,12 +568,11 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
     const allItems = allOrders.flatMap((order) => order.items || []);
     const sales = new Map<string, { sold: number; net: number; category: string }>();
-    const defaultCategory = module === 'restaurant' ? 'Restaurant' : 'Bar';
     allItems.forEach((item) => {
       const name = item.nom || 'Article';
       const sold = Number(item.quantite || 0);
       const net = sold * Number(item.prix || 0);
-      const existing = sales.get(name) || { sold: 0, net: 0, category: item.categorie || defaultCategory };
+      const existing = sales.get(name) || { sold: 0, net: 0, category: item.categorie || 'Bar' };
       sales.set(name, { sold: existing.sold + sold, net: existing.net + net, category: existing.category });
     });
     const categories = new Map<string, { sold: number; total: number }>();
@@ -594,16 +593,15 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
     const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : (currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-');
     const ticketLines = allItems.length;
-    const terminalCode = module === 'restaurant' ? 'REST' : 'BAR';
-    printWindow.document.write(`<!doctype html><html><head><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:11px}h1{text-align:center;font-size:16px;margin:4px 0 12px}h2{text-align:center;font-size:14px;margin:14px 0 5px}.meta{margin:2px 0}.line{border-bottom:1px dashed #111;margin:7px 0}.row{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.row span:last-child,.row strong{text-align:right}.category{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.category span:last-child,.category strong{text-align:right}.total{display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px}.summary{display:flex;justify-content:space-between;padding:2px 0}</style></head><body><h1>Partial Cash Report</h1><p class="meta">Caissier : <strong>${connectedCashier}</strong></p><p class="meta">Terminal : ${terminalCode}-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${allOrders.length}<br>Start Date : ${startDate}<br>End Date : ${generatedAt}</p><div class="line"></div><h2>Sales</h2><div class="row"><strong>Name</strong><strong>Sold</strong><strong>Net</strong><strong>Total</strong></div>${salesRows || '<p>Aucune vente.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Product Categories</h2><div class="category"><strong>Name</strong><strong>Sold</strong><strong>Total</strong></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Lines Removed</h2><div class="category"><span>${connectedCashier}</span><span>0</span><strong>${formatCurrency(0)}</strong></div><h2>Taxes</h2><div class="category"><span>Tax Exempt</span><span></span><strong>${formatCurrency(total)}</strong></div><div class="line"></div><h2>Payments</h2><div class="category"><strong>Type</strong><span></span><strong>Total</strong></div>${paymentRows || '<div class="row"><span>Aucun paiement</span><span></span><strong>AR0</strong></div>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>SUMMARY</h2><div class="summary"><span>Tickets</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Ticket Lines</span><strong>${ticketLines}</strong></div><div class="summary"><span>Payments</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Net Sales</span><strong>${formatCurrency(total)}</strong></div><div class="summary"><span>Tax</span><strong>${formatCurrency(0)}</strong></div></body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:11px}h1{text-align:center;font-size:16px;margin:4px 0 12px}h2{text-align:center;font-size:14px;margin:14px 0 5px}.meta{margin:2px 0}.line{border-bottom:1px dashed #111;margin:7px 0}.row{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.row span:last-child,.row strong{text-align:right}.category{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.category span:last-child,.category strong{text-align:right}.total{display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px}.summary{display:flex;justify-content:space-between;padding:2px 0}</style></head><body><h1>Partial Cash Report</h1><p class="meta">Caissier : <strong>${connectedCashier}</strong></p><p class="meta">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${allOrders.length}<br>Start Date : ${startDate}<br>End Date : ${generatedAt}</p><div class="line"></div><h2>Sales</h2><div class="row"><strong>Name</strong><strong>Sold</strong><strong>Net</strong><strong>Total</strong></div>${salesRows || '<p>Aucune vente.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Product Categories</h2><div class="category"><strong>Name</strong><strong>Sold</strong><strong>Total</strong></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Lines Removed</h2><div class="category"><span>${connectedCashier}</span><span>0</span><strong>${formatCurrency(0)}</strong></div><h2>Taxes</h2><div class="category"><span>Tax Exempt</span><span></span><strong>${formatCurrency(total)}</strong></div><div class="line"></div><h2>Payments</h2><div class="category"><strong>Type</strong><span></span><strong>Total</strong></div>${paymentRows || '<div class="row"><span>Aucun paiement</span><span></span><strong>AR0</strong></div>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>SUMMARY</h2><div class="summary"><span>Tickets</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Ticket Lines</span><strong>${ticketLines}</strong></div><div class="summary"><span>Payments</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Net Sales</span><strong>${formatCurrency(total)}</strong></div><div class="summary"><span>Tax</span><strong>${formatCurrency(0)}</strong></div></body></html>`);
     printWindow.document.close();
     Array.from(printWindow.document.querySelectorAll('h2'))
       .filter((heading) => ['Sales', 'Product Categories'].includes(heading.textContent?.trim() || ''))
       .forEach((heading) => {
-        (heading as HTMLElement).style.display = 'none';
+        heading.style.display = 'none';
         let sibling = heading.nextElementSibling;
         while (sibling && sibling.tagName !== 'H2') {
-          (sibling as HTMLElement).style.display = 'none';
+          sibling.style.display = 'none';
           sibling = sibling.nextElementSibling;
         }
       });
@@ -615,7 +613,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const printWindow = window.open('', '_blank', 'width=760,height=720');
     if (!printWindow) return;
 
-    const paidOrders = allOrders.filter((order) => order.statut === 'Encaissée' || order.statut === 'PAYEE' || order.statut === 'PAYE');
+    const paidOrders = allOrders.filter((order) => order.statut === 'Encaissée');
     const reportOrders = paidOrders.length > 0 ? paidOrders : allOrders;
     const paymentTotals = new Map<string, number>();
     reportOrders.forEach((order) => {
@@ -633,9 +631,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const finalFund = closedFund ?? currentBarSession?.fond_final;
     const expectedFund = Number(currentBarSession?.fond_initial || 0) + total;
     const variance = finalFund === undefined ? undefined : finalFund - expectedFund;
-    const moduleTitle = module === 'restaurant' ? 'Caisse Restaurant' : 'Caisse Bar & Lounge';
-    const terminalCode = module === 'restaurant' ? 'REST' : 'BAR';
-    printWindow.document.write(`<!doctype html><html><head><title>Close Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:12px}h1{text-align:center;font-size:18px;margin:4px 0 12px}h2{font-size:13px;margin:14px 0 5px;border-bottom:1px dashed #111;padding-bottom:4px}.center{text-align:center}.row{display:flex;justify-content:space-between;padding:2px 0}.line{border-bottom:1px dashed #111;margin:8px 0}.label{display:flex;justify-content:space-between}.strong{font-weight:bold;font-size:15px}.small{font-size:11px;margin:3px 0}</style></head><body><h1>Close Cash Report</h1><p class="center">${moduleTitle}</p><p class="small">Caissier : <strong>${connectedCashier}</strong></p><p class="small">Session : ${currentBarSession?.id || '-'}<br>Ouverture : ${openingDate}<br>Clôture : ${closingDate}</p><h2>Payments Report <span style="float:right">Amount</span></h2>${paymentRows || '<div class="row"><span>Aucun paiement</span><strong>${formatCurrency(0)}</strong></div>'}<div class="line"></div><div class="label strong"><span>Total Sales</span><span>${formatCurrency(total)}</span></div><div class="row"><span>Number of Payments:</span><strong>${reportOrders.length}</strong></div><h2>Tax Analysis <span style="float:right">Amount</span></h2><div class="row"><span>Tax Exempt</span><strong>${formatCurrency(0)}</strong></div><div class="line"></div><div class="label strong"><span>Subtotal</span><span>${formatCurrency(total)}</span></div><div class="label"><span>Taxes</span><span>${formatCurrency(0)}</span></div><div class="label strong"><span>Totals</span><span>${formatCurrency(total)}</span></div>${finalFund !== undefined ? `<h2>Cash Control</h2><div class="row"><span>Fond initial</span><strong>${formatCurrency(Number(currentBarSession?.fond_initial || 0))}</strong></div><div class="row"><span>Fond final</span><strong>${formatCurrency(finalFund)}</strong></div><div class="row"><span>Ecart</span><strong>${formatCurrency(variance || 0)}</strong></div>` : ''}<div class="line"></div><p class="small">Terminal : ${terminalCode}-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${reportOrders.length}<br>Imprimé le : ${generatedAt}</p></body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><title>Close Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:12px}h1{text-align:center;font-size:18px;margin:4px 0 12px}h2{font-size:13px;margin:14px 0 5px;border-bottom:1px dashed #111;padding-bottom:4px}.center{text-align:center}.row{display:flex;justify-content:space-between;padding:2px 0}.line{border-bottom:1px dashed #111;margin:8px 0}.label{display:flex;justify-content:space-between}.strong{font-weight:bold;font-size:15px}.small{font-size:11px;margin:3px 0}</style></head><body><h1>Close Cash Report</h1><p class="center">Caisse Bar & Lounge</p><p class="small">Caissier : <strong>${connectedCashier}</strong></p><p class="small">Session : ${currentBarSession?.id || '-'}<br>Ouverture : ${openingDate}<br>Clôture : ${closingDate}</p><h2>Payments Report <span style="float:right">Amount</span></h2>${paymentRows || '<div class="row"><span>Aucun paiement</span><strong>${formatCurrency(0)}</strong></div>'}<div class="line"></div><div class="label strong"><span>Total Sales</span><span>${formatCurrency(total)}</span></div><div class="row"><span>Number of Payments:</span><strong>${reportOrders.length}</strong></div><h2>Tax Analysis <span style="float:right">Amount</span></h2><div class="row"><span>Tax Exempt</span><strong>${formatCurrency(0)}</strong></div><div class="line"></div><div class="label strong"><span>Subtotal</span><span>${formatCurrency(total)}</span></div><div class="label"><span>Taxes</span><span>${formatCurrency(0)}</span></div><div class="label strong"><span>Totals</span><span>${formatCurrency(total)}</span></div>${finalFund !== undefined ? `<h2>Cash Control</h2><div class="row"><span>Fond initial</span><strong>${formatCurrency(Number(currentBarSession?.fond_initial || 0))}</strong></div><div class="row"><span>Fond final</span><strong>${formatCurrency(finalFund)}</strong></div><div class="row"><span>Ecart</span><strong>${formatCurrency(variance || 0)}</strong></div>` : ''}<div class="line"></div><p class="small">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${reportOrders.length}<br>Imprimé le : ${generatedAt}</p></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
@@ -673,26 +669,10 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
-    const moduleLabel = module === 'restaurant' ? 'du Restaurant' : 'du Bar & Lounge';
-    if (!window.confirm(`Imprimer le rapport de caisse puis clôturer les ${allOrders.length} commande(s) ${moduleLabel} ?\nLes commandes et transactions quotidiennes seront archivées et masquées de la caisse.`)) return;
+    if (!window.confirm(`Imprimer puis effacer les ${allOrders.length} commande(s) et leurs transactions ?`)) return;
 
     handlePrintAllOrders();
     await onCloseAllOrders(allOrders.map((order) => order.id));
-
-    if (isBackendCaisse) {
-      try {
-        const [txs, stats] = await Promise.all([
-          financeService.getTransactions({ module: module.toUpperCase() }),
-          financeService.getFinancialStats(),
-        ]);
-        setBackendTransactions(txs);
-        const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
-        setModuleStockSummary(summary || null);
-      } catch (err) {
-        console.warn('Failed to refresh backend transactions after closing all orders:', err);
-      }
-    }
-
     await onRefresh?.();
   };
 
@@ -708,12 +688,12 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         </div>
       </div>
 
-      <div className={(isBar || module === 'restaurant') ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
+      <div className={isBar ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
         {/* Caisse Card */}
         {canViewBarBalance && (
           <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
         )}
-        {(isBar || module === 'restaurant') && (
+        {isBar && (
           <section className="rounded-2xl border border-accent/30 bg-surface p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -741,7 +721,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                 <p className="text-[11px] text-muted">À encaisser</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => order.statut === 'Encaissée' || order.statut === 'PAYEE' || order.statut === 'PAYE').length}</p>
+                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => order.statut === 'Encaissée').length}</p>
                 <p className="text-[11px] text-muted">Encaissées</p>
               </div>
             </div>

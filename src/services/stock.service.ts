@@ -33,27 +33,6 @@ export const stockService = {
     return response.data?.data || response.data || [];
   },
 
-  // Get all stocks across all locations (Utile pour le gestionnaire de stock global)
-  async getAllStock(): Promise<StockItem[]> {
-    try {
-      const locations = await this.getLocations();
-      if (!locations || locations.length === 0) {
-        // Fallback sur une location par défaut si les localisations ne répondent pas
-        return this.getByLocation(5);
-      }
-
-      // Récupérer le stock de toutes les localisations en parallèle
-      const promises = locations.map((loc) => this.getByLocation(loc.id).catch(() => []));
-      const results = await Promise.all(promises);
-
-      // Aplatir les tableaux de résultats
-      return results.flat();
-    } catch (err) {
-      console.error('Erreur lors de la récupération globale des stocks', err);
-      return [];
-    }
-  },
-
   // Get stock by product
   async getByProduct(productId: number): Promise<StockItem[]> {
     const response = await api.get(`/api/stock/products/${productId}/stock`);
@@ -78,7 +57,8 @@ export const stockService = {
     return response.data;
   },
 
-  // Create a supplier purchase for the selected module.
+  // Create a supplier purchase for the selected module. The financial report
+  // values the stock currently available in that module as its outflow.
   async createPurchase(data: {
     supplier_id: number;
     location_id: number;
