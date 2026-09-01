@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Copy, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
@@ -16,6 +16,7 @@ interface PlayersSheetProps {
   onCashingPaymentMethodChange?: (value: string) => void;
   onSave: () => void;
   onAdd: (ficheId?: number, name?: string) => number;
+  onDuplicate: (line: PlayerLine) => void;
   onGoToRegisteredPlayers: () => void;
   onRemove: (id: number) => void;
   onIdentityVerified?: (playerId: number, data: IdentityVerificationData, verificationId?: number) => void;
@@ -84,7 +85,7 @@ const parseResultPayments = (value?: string): ResultPayment[] => {
   }
 };
 
-export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
+export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
@@ -98,7 +99,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
   const [signatureError, setSignatureError] = useState('');
   const [signatureConfirmationOpen, setSignatureConfirmationOpen] = useState(false);
   const [confirmedSignatures, setConfirmedSignatures] = useState<string[]>([]);
-  const [lineSignatureModal, setLineSignatureModal] = useState<{ id: number; name: string; value: string } | null>(null);
+  const [lineSignatureModal, setLineSignatureModal] = useState<{ id: number; name: string; value: string; field: 'signature' | 'finalSignature' } | null>(null);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
@@ -336,7 +337,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>non Paye</th>
             <th className="border p-2 text-left font-semibold" style={casinoBorder}>MODE DE PAIEMENT</th>
             <th className="border p-2 text-center font-semibold" style={casinoBorder}>Signature</th>
-            {canDeletePlayerLine && <th className="border p-2 text-center font-semibold print:hidden" style={casinoBorder}>Actions</th>}
+            {isAdmin && <th className="border p-2 text-center font-semibold print:hidden" style={casinoBorder}>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -355,11 +356,16 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><select className={paperInput} value={line.paymentMethod || ''} onChange={(event) => onUpdate(line.id, 'paymentMethod', event.target.value)} style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!isAdmin}><option value="" className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Sélectionner</option>{paymentMethods.map((method) => <option key={method} value={method} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{method}</option>)}</select></td>
               <td className="border p-1" style={casinoBorder}>
-                <button type="button" className="flex min-h-14 w-full items-center justify-center rounded border border-dashed px-1 text-[10px] text-yellow-200 transition hover:border-yellow-300 hover:bg-yellow-300/10 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: line.id, name: line.name || `Joueur ${line.ficheId ?? line.id}`, value: line.signature || '' })} disabled={!isAdmin} aria-label={`Signer pour ${line.name || 'ce joueur'}`}>
+                <button type="button" className="flex min-h-14 w-full items-center justify-center rounded border border-dashed px-1 text-[10px] text-yellow-200 transition hover:border-yellow-300 hover:bg-yellow-300/10 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: line.id, name: line.name || `Joueur ${line.ficheId ?? line.id}`, value: line.signature || '', field: 'signature' })} disabled={!isAdmin} aria-label={`Signer pour ${line.name || 'ce joueur'}`}>
                   {line.signature ? <img src={line.signature} alt="Signature du joueur" className="max-h-12 max-w-full object-contain" /> : 'Cliquer pour signer'}
                 </button>
               </td>
-              {canDeletePlayerLine && <td className="border p-1 text-center print:hidden" style={casinoBorder}><button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-400" onClick={() => window.confirm(`Supprimer la ligne de ${line.name || 'ce joueur'} ?`) && onRemove(line.id)} title="Supprimer la ligne" aria-label={`Supprimer la ligne de ${line.name || 'ce joueur'}`}><Trash2 size={16} /></button></td>}
+              {isAdmin && <td className="border p-1 text-center print:hidden" style={casinoBorder}>
+                <div className="flex justify-center gap-1">
+                  <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-500/10 p-2 text-amber-200 transition hover:bg-amber-500/20 hover:text-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onDuplicate(line)} title="Copier cette ligne" aria-label={`Copier la ligne de ${line.name || 'ce joueur'}`} disabled={isEmptyCaveLine}><Copy size={16} /></button>
+                  {canDeletePlayerLine && <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-400" onClick={() => window.confirm(`Supprimer la ligne de ${line.name || 'ce joueur'} ?`) && onRemove(line.id)} title="Supprimer la ligne" aria-label={`Supprimer la ligne de ${line.name || 'ce joueur'}`}><Trash2 size={16} /></button>}
+                </div>
+              </td>}
             </tr>
             );
           })}
@@ -393,7 +399,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
         )}
         <div className="flex flex-col gap-2 border-b p-3" style={casinoBorder}>
           <p className="text-[10px] font-semibold tracking-[0.12em] text-yellow-200">SIGNATURE FINALE</p>
-          {selectedPlayer && <SignaturePad value={selectedPlayer.finalSignature || ''} onChange={(value) => onUpdate(selectedPlayer.id, 'finalSignature', value)} disabled={!isAdmin} />}
+          {selectedPlayer && <button type="button" className="flex min-h-16 w-full items-center justify-center rounded border border-dashed bg-white px-2 text-[10px] text-slate-600 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: selectedPlayer.id, name: selectedPlayer.name || `Joueur ${selectedPlayer.ficheId ?? selectedPlayer.id}`, value: selectedPlayer.finalSignature || '', field: 'finalSignature' })} disabled={!isAdmin} aria-label={`Signer la fiche finale de ${selectedPlayer.name || 'ce joueur'}`}>
+            {selectedPlayer.finalSignature ? <img src={selectedPlayer.finalSignature} alt="Signature finale du joueur" className="max-h-14 max-w-full object-contain" /> : 'Cliquer pour signer'}
+          </button>}
         </div>
       </div>
       <div className="border-r" style={casinoBorder}>
@@ -458,7 +466,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
     </div>
     {pendingBonus && <BonusRouletteModal bonus={pendingBonus} rotation={rouletteRotation} result={rouletteResult} number={rouletteNumber} isSpinning={isSpinning} onSpin={spinRoulette} onConfirm={confirmBonusResult} onClose={() => !isSpinning && setPendingBonus(null)} />}
     {signatureConfirmationOpen && <SignatureConfirmationModal items={signatureConfirmationItems} confirmedKeys={confirmedSignatures} onToggle={(key, checked) => setConfirmedSignatures((current) => checked ? [...current, key] : current.filter((item) => item !== key))} onClose={() => setSignatureConfirmationOpen(false)} onConfirm={confirmSignaturesAndSave} />}
-    {lineSignatureModal && <LineSignatureModal playerName={lineSignatureModal.name} value={lineSignatureModal.value} onClose={() => setLineSignatureModal(null)} onValidate={(value) => { onUpdate(lineSignatureModal.id, 'signature', value); setLineSignatureModal(null); }} />}
+    {lineSignatureModal && <LineSignatureModal playerName={lineSignatureModal.name} value={lineSignatureModal.value} onClose={() => setLineSignatureModal(null)} onValidate={(value) => { onUpdate(lineSignatureModal.id, lineSignatureModal.field, value); setLineSignatureModal(null); }} />}
     <IdentityVerificationModal
       open={identityModal.open}
       amount={identityModal.amount}

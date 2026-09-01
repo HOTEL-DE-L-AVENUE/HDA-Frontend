@@ -22,21 +22,9 @@ interface FinalCalculationSheetProps {
 }
 
 export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, isFinished = false, isFinishing = false, canFinish = false, onFinish, showIdentityVerifications = true, identityVerifications = {} }) => {
-  const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
+  const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
+  const activePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
-  const registeredPlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.casinoPlayerId ?? line.ficheId ?? line.id) === (player.casinoPlayerId ?? player.ficheId ?? player.id)) === index);
-  const registeredDepositTotal = registeredPlayers.reduce((total, player) => total + parseCasinoAmount(player.initialDeposit), 0);
-  const registeredCreditTotal = registeredPlayers.reduce((total, player) => total + parseCasinoAmount(player.initialCredit), 0);
-  const registeredDeposit = registeredDepositTotal;
-  const registeredCredit = registeredCreditTotal;
-  const registeredDepositDetails = registeredPlayers
-    .filter((player) => parseCasinoAmount(player.initialDeposit) > 0)
-    .map((player) => `${casinoCurrency.format(parseCasinoAmount(player.initialDeposit))} Ar (${player.name})`)
-    .join(' - ');
-  const registeredCreditDetails = registeredPlayers
-    .filter((player) => parseCasinoAmount(player.initialCredit) > 0)
-    .map((player) => `${casinoCurrency.format(parseCasinoAmount(player.initialCredit))} Ar (${player.name})`)
-    .join(' - ');
   const identity = identityVerifications[selectedPlayerId];
   const bonusEntries = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -65,7 +53,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(mobileMethods.reduce((sum, payment) => sum + (payment.amount || result), 0))} (${mobileMethods.map((payment) => payment.option).join(' / ')})`]
         : [];
     })
-    .join(' - ');
+    .join('\n');
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -101,9 +89,9 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveCreditTotal = getPaidCavePaymentTotal(players, ['Crédit', 'Credit']);
   const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
-  const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join(' - ');
-  const mobileDisplay = [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join(' - ');
-  const creditDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join(' - ');
+  const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
+  const mobileDisplay = [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
+  const creditDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
   const offertDisplay = paidCaveOffertResults || values.offert;
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
@@ -112,7 +100,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + parseCasinoAmount(values.restaurant)
     + parseCasinoAmount(values.prolongation)
     + depositPaymentTotal
-    + registeredDeposit
     + mobileReturnTotal
     + creditPaidTotal;
   const automaticTotal2 = (tpeResults ? tpePaymentsTotal : parseCasinoAmount(values.tpe))
@@ -122,7 +109,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
     + (creditResults ? creditPaymentsTotal : parseCasinoAmount(values.credit))
     + paidCaveCreditTotal
-    + registeredCredit
     + (depositPaidResults ? depositPaidTotal : parseCasinoAmount(values.depotPaye))
     + parseCasinoAmount(values.offert)
     + paidCaveOffertTotal
@@ -208,11 +194,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="AUTRES PAIEMENTS CAVES" separated />
             <CalculationResult value={paidCaveOtherResults} />
 
-            <CalculationCell label="DEPOT ANTERIEUR" />
-            <CalculationInput value={registeredDepositDetails || '0'} readOnly />
-            <CalculationCell label="CREDIT ANTERIEUR" separated />
-            <CalculationInput value={registeredCreditDetails || '0'} readOnly />
-
             <TotalCell label="TOTAL 1" />
             <CalculationInput value={casinoCurrency.format(total1)} onChange={(value) => onUpdate('total1', value)} />
             <TotalCell label="TOTAL 2" separated />
@@ -259,8 +240,18 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
         {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
         <button type="button" className="action" onClick={() => onSave()} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}</button>
+        <button type="button" className="action secondary" onClick={() => setPaymentConfirmationOpen(true)} disabled={saveState === 'saving' || activePlayers.length === 0}>Paiement dépôt / crédit</button>
         {canFinish && <button type="button" className="action secondary" onClick={onFinish} disabled={isFinished || isFinishing || saveState === 'saving'}>{isFinishing ? 'Clôture...' : isFinished ? 'Jeu terminé' : 'Fin de jeu'}</button>}
       </div>
+      {paymentConfirmationOpen && (activePlayers.length > 0 ? (
+        <PlayerPaymentConfirmationModal
+          players={activePlayers}
+          onClose={() => setPaymentConfirmationOpen(false)}
+          onConfirm={() => { setPaymentConfirmationOpen(false); onSave(); }}
+        />
+      ) : (
+        <EmptyPaymentPlayersModal onClose={() => setPaymentConfirmationOpen(false)} />
+      ))}
     </div>
   );
 };
@@ -278,6 +269,174 @@ const CalculationResult: React.FC<{ value: string }> = ({ value }) => (
     <div className="whitespace-pre-wrap text-sm font-semibold text-primary">{value || '—'}</div>
   </div>
 );
+
+const EmptyPaymentPlayersModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="payment-confirmation-title">
+    <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
+      <h2 id="payment-confirmation-title" className="text-lg font-bold text-primary">Validation du paiement</h2>
+      <p className="mt-3 text-sm text-muted">Aucun joueur n’est inscrit dans cette partie pour le moment.</p>
+      <div className="mt-5 flex justify-end">
+        <button type="button" className="action secondary" onClick={onClose}>Fermer</button>
+      </div>
+    </div>
+  </div>
+);
+
+const PlayerPaymentConfirmationModal: React.FC<{
+  players: PlayerLine[];
+  onClose: () => void;
+  onConfirm: () => void;
+}> = ({ players, onClose, onConfirm }) => {
+  const [playerStates, setPlayerStates] = useState(() => players.map((player) => ({
+    id: player.ficheId ?? player.id,
+    name: player.name || `Joueur ${player.ficheId ?? player.id}`,
+    deposit: parseCasinoAmount(player.initialDeposit),
+    credit: parseCasinoAmount(player.initialCredit),
+    depositStatus: '',
+    creditStatus: '',
+    depositAmount: '',
+    creditAmount: '',
+    depositMethod: 'Espèces',
+    creditMethod: 'Crédit',
+  })));
+
+  useEffect(() => {
+    setPlayerStates(players.map((player) => ({
+      id: player.ficheId ?? player.id,
+      name: player.name || `Joueur ${player.ficheId ?? player.id}`,
+      deposit: parseCasinoAmount(player.initialDeposit),
+      credit: parseCasinoAmount(player.initialCredit),
+      depositStatus: '',
+      creditStatus: '',
+      depositAmount: '',
+      creditAmount: '',
+      depositMethod: 'Espèces',
+      creditMethod: 'Crédit',
+    })));
+  }, [players]);
+
+  const updateEntry = (playerId: number, field: 'depositStatus' | 'creditStatus' | 'depositAmount' | 'creditAmount' | 'depositMethod' | 'creditMethod', value: string) => {
+    setPlayerStates((current) => current.map((entry) => entry.id === playerId ? { ...entry, [field]: value } : entry));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="payment-confirmation-title">
+      <div className="w-full max-w-5xl rounded-2xl border p-5 shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 id="payment-confirmation-title" className="text-lg font-bold text-primary">Validation du paiement</h2>
+            <p className="mt-1 text-sm text-muted">Liste des joueurs actifs pour le dépôt et le crédit.</p>
+          </div>
+          <button type="button" className="action secondary" onClick={onClose}>Fermer</button>
+        </div>
+
+        <div className="mt-5 max-h-[70vh] space-y-3 overflow-y-auto pr-1">
+          {playerStates.map((entry) => (
+            <div key={entry.id} className="rounded-xl border p-3" style={casinoBorder}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-sm font-bold text-primary">{entry.name}</p>
+                <span className="rounded-full border border-yellow-400/40 bg-yellow-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-yellow-300">Joueur actif</span>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <PaymentStatusRow
+                  label="Dépôt de la partie"
+                  amount={entry.deposit}
+                  status={entry.depositStatus}
+                  amountValue={entry.depositAmount}
+                  paymentMethod={entry.depositMethod}
+                  onStatusChange={(status) => updateEntry(entry.id, 'depositStatus', status)}
+                  onAmountChange={(value) => updateEntry(entry.id, 'depositAmount', value)}
+                  onMethodChange={(value) => updateEntry(entry.id, 'depositMethod', value)}
+                />
+                <PaymentStatusRow
+                  label="Crédit de la partie"
+                  amount={entry.credit}
+                  status={entry.creditStatus}
+                  amountValue={entry.creditAmount}
+                  paymentMethod={entry.creditMethod}
+                  onStatusChange={(status) => updateEntry(entry.id, 'creditStatus', status)}
+                  onAmountChange={(value) => updateEntry(entry.id, 'creditAmount', value)}
+                  onMethodChange={(value) => updateEntry(entry.id, 'creditMethod', value)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" className="action secondary" onClick={onClose}>Annuler</button>
+          <button type="button" className="action" onClick={onConfirm}>Enregistrer le calcul</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PaymentStatusRow: React.FC<{
+  label: string;
+  amount: number;
+  status: string;
+  amountValue: string;
+  paymentMethod: string;
+  onStatusChange: (status: 'Payé' | 'Non payé') => void;
+  onAmountChange: (amount: string) => void;
+  onMethodChange: (method: string) => void;
+}> = ({ label, amount, status, amountValue, paymentMethod, onStatusChange, onAmountChange, onMethodChange }) => {
+  const displayedAmount = Number.parseFloat(amountValue || '0') || amount;
+
+  return (
+    <div className="rounded-xl border p-3" style={casinoBorder}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-primary">{label}</p>
+          <p className="mt-1 text-sm font-bold text-yellow-300">{casinoCurrency.format(amount)} Ar</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" className={`rounded-lg border px-3 py-2 text-xs font-semibold ${status === 'Payé' ? 'border-green-400 bg-green-500/20 text-green-300' : 'text-primary'}`} style={casinoBorder} onClick={() => onStatusChange('Payé')}>Payé</button>
+          <button type="button" className={`rounded-lg border px-3 py-2 text-xs font-semibold ${status === 'Non payé' ? 'border-red-400 bg-red-500/20 text-red-300' : 'text-primary'}`} style={casinoBorder} onClick={() => onStatusChange('Non payé')}>Non payé</button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr]">
+        <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+          Mode de paiement
+          <select
+            value={paymentMethod}
+            onChange={(event) => onMethodChange(event.target.value)}
+            className="mt-1 w-full rounded-lg border bg-transparent px-2 py-2 text-sm text-primary outline-none"
+            style={casinoBorder}
+          >
+            <option value="Espèces">Espèces</option>
+            <option value="TPE">TPE</option>
+            <option value="Orange Money">Orange Money</option>
+            <option value="MVola">MVola</option>
+            <option value="Virement">Virement</option>
+            <option value="Crédit">Crédit</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </label>
+
+        <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+          Montant manuel
+          <input
+            type="text"
+            inputMode="decimal"
+            value={amountValue}
+            onChange={(event) => onAmountChange(event.target.value)}
+            placeholder="0"
+            className="mt-1 w-full rounded-lg border bg-transparent px-2 py-2 text-sm text-primary outline-none placeholder:text-muted"
+            style={casinoBorder}
+          />
+        </label>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-2 py-2 text-[11px] text-yellow-200">
+        <span className="font-semibold">Montant + mode :</span> {casinoCurrency.format(displayedAmount)} Ar — {paymentMethod}
+      </div>
+    </div>
+  );
+};
 
 const parseBonuses = (value?: string): string[] => {
   try {
@@ -332,18 +491,16 @@ const getPaidCavePaymentTotal = (players: PlayerLine[], methods?: string[]): num
 );
 
 const buildPaidCavePaymentResults = (players: PlayerLine[], methods?: string[]): string => {
-  const paymentsByMethod = new Map<string, Array<{ name: string; amount: number }>>();
+  const payments: Array<{ name: string; amount: number; method: string }> = [];
   players.forEach((line) => {
     const amount = parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount);
     const method = line.paymentMethod.trim();
     if (!isPaidCave(line.payment) || !method || amount <= 0 || (methods && !methods.includes(method))) return;
-    const entries = paymentsByMethod.get(method) || [];
-    entries.push({ name: line.name || `Joueur ${line.ficheId ?? line.id}`, amount });
-    paymentsByMethod.set(method, entries);
+    payments.push({ name: line.name || `Joueur ${line.ficheId ?? line.id}`, amount, method });
   });
-  return Array.from(paymentsByMethod.entries())
-    .map(([method, entries]) => `${method} : ${entries.map(({ name, amount }) => `${name} ${casinoCurrency.format(amount)} Ar`).join(', ')}`)
-    .join(' - ');
+  return payments
+    .map(({ name, amount, method }) => `${name} : ${casinoCurrency.format(amount)} Ar (${method})`)
+    .join('\n');
 };
 
 const buildNegativePaymentResults = (players: PlayerLine[], ...methods: string[]): string => players
@@ -355,11 +512,14 @@ const buildNegativePaymentResults = (players: PlayerLine[], ...methods: string[]
     const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
     const result = cashing - totalCaves;
     const selectedMethods = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
+    const amount = selectedMethods.some((payment) => payment.amount > 0)
+      ? selectedMethods.reduce((sum, payment) => sum + payment.amount, 0)
+      : Math.abs(result);
     return result < 0 && selectedMethods.length
-      ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(Math.abs(result))} (${selectedMethods.map((payment) => payment.option).join(' / ')})`]
+      ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(amount)} (${selectedMethods.map((payment) => payment.option).join(' / ')})`]
       : [];
   })
-  .join(' - ');
+  .join('\n');
 
 const getNegativePaymentTotal = (players: PlayerLine[], ...methods: string[]): number => players
   .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
