@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Play, Trash2 } from 'lucide-react';
+import { Edit2, Play, Search, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder } from './types';
 import { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 import { Modal } from '../common';
@@ -30,6 +30,18 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
   const [error, setError] = useState('');
   const [editingPlayer, setEditingPlayer] = useState<CasinoRegisteredPlayer | null>(null);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState('');
+  const normalizedSearch = playerSearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const filteredRegisteredPlayers = registeredPlayers.filter((player) => {
+    if (!normalizedSearch) return true;
+    return [player.nom, player.prenom, player.email, player.telephone]
+      .filter(Boolean)
+      .join(' ')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .includes(normalizedSearch);
+  });
 
   const register = async () => {
     if (!newPlayer.nom.trim()) { setError('Le nom du joueur est obligatoire.'); return; }
@@ -61,11 +73,17 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
 
     {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
 
-    <h3 className="mb-2 font-semibold">Joueurs inscrits</h3>
+    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <h3 className="font-semibold">Joueurs inscrits</h3>
+      <label className="flex w-full items-center gap-2 rounded-lg border px-2 py-1 sm:max-w-sm" style={casinoBorder}>
+        <Search size={16} className="text-muted" aria-hidden="true" />
+        <input className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-400" value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Rechercher un joueur" aria-label="Rechercher un joueur inscrit" />
+      </label>
+    </div>
     <div className="mb-5 overflow-x-auto rounded-xl border" style={casinoBorder}>
       <table className="w-full min-w-[820px] border-collapse text-xs sm:text-sm"><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>
         <th className="border p-2 text-left" style={casinoBorder}>Joueur</th><th className="border p-2 text-left" style={casinoBorder}>E-mail</th><th className="border p-2 text-left" style={casinoBorder}>Inscrit le</th><th className="border p-2 text-left" style={casinoBorder}>Dépôt de la partie</th><th className="border p-2 text-left" style={casinoBorder}>Crédit de la partie</th>{isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
-      </tr></thead><tbody>{registeredPlayers.map((player) => {
+      </tr></thead><tbody>{filteredRegisteredPlayers.map((player) => {
         const amount = amounts[player.id] || { deposit: String(player.depot || ''), credit: String(player.credit || '') };
         const alreadyPlaying = playerList.some((line) => line.casinoPlayerId === player.id);
         return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.email || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' })}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;

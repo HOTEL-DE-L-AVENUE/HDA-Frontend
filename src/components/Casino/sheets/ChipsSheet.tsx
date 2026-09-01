@@ -21,7 +21,6 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
   const playersWithStartTime = players.filter((player) => Boolean(player.name.trim() || player.caves.trim() || player.amount.trim()) && Boolean(player.time || player.arrival));
   const firstPlayer = getEarliestPlayer(playersWithStartTime) || getEarliestPlayer(players);
   const firstArrival = firstPlayer?.time || firstPlayer?.arrival || '';
-  const totalCaves = players.reduce((sum, player) => sum + parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount), 0);
 
   useEffect(() => {
     if (withdrawnTotal >= IDENTITY_VERIFICATION_THRESHOLD && firstPlayer) {
@@ -56,7 +55,7 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ chips, players, endGameT
     <section><SheetTitle title="Total des prélèvements" subtitle="Nombre de jetons prélevés pour chaque valeur." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['withdrawn']} headers={['Valeur des jetons', 'Nombre de jetons', 'Valeur totale']} /></section>
     <section>
       <SheetTitle title="Horaires de la session" subtitle="L'heure du premier joueur est automatique; l'heure de fin de jeu est à saisir." />
-      <SessionTimeTable firstArrival={firstArrival} endGameTime={endGameTime} totalCaves={totalCaves} onEndGameTimeChange={onEndGameTimeChange} />
+      <SessionTimeTable firstArrival={firstArrival} endGameTime={endGameTime} withdrawnTotal={withdrawnTotal} onEndGameTimeChange={onEndGameTimeChange} />
     </section>
     <div className="grid gap-2 sm:grid-cols-2">
       <Stat label="RESULTAT DES PRELEVEMENTS" value={withdrawnTotal} />
@@ -114,13 +113,13 @@ const getPlayDuration = (arrival: string, departure: string): string => {
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 };
 
-const getHourlyAverage = (arrival: string, departure: string, totalCaves: number): string => {
+const getHourlyAverage = (arrival: string, departure: string, withdrawnTotal: number): string => {
   const minutes = getPlayDurationMinutes(arrival, departure);
   if (!minutes) return '—';
-  return `${casinoCurrency.format(Math.round(totalCaves / (minutes / 60)))} Ar/h`;
+  return `${casinoCurrency.format(Math.round(withdrawnTotal / (minutes / 60)))} Ar/h`;
 };
 
-const SessionTimeTable: React.FC<{ firstArrival: string; endGameTime: string; totalCaves: number; onEndGameTimeChange: (value: string) => void }> = ({ firstArrival, endGameTime, totalCaves, onEndGameTimeChange }) => (
+const SessionTimeTable: React.FC<{ firstArrival: string; endGameTime: string; withdrawnTotal: number; onEndGameTimeChange: (value: string) => void }> = ({ firstArrival, endGameTime, withdrawnTotal, onEndGameTimeChange }) => (
   <div className="overflow-x-auto">
     <table className="w-full min-w-[620px] text-xs border" style={casinoBorder}>
       <thead style={{ backgroundColor: 'var(--color-bg)' }}>
@@ -133,7 +132,7 @@ const SessionTimeTable: React.FC<{ firstArrival: string; endGameTime: string; to
           <td className="p-3 font-semibold text-primary border-r border-b" style={casinoBorder}>{firstArrival || '—'}</td>
           <td className="p-3 font-semibold text-primary border-r border-b" style={casinoBorder}><input type="time" className={casinoInput} value={endGameTime} onChange={(event) => onEndGameTimeChange(event.target.value)} /></td>
           <td className="p-3 font-semibold text-primary border-r border-b" style={casinoBorder}>{getPlayDuration(firstArrival, endGameTime)}</td>
-          <td className="p-3 font-semibold text-primary border-b" style={casinoBorder}>{getHourlyAverage(firstArrival, endGameTime, totalCaves)}</td>
+          <td className="p-3 font-semibold text-primary border-b" style={casinoBorder}>{getHourlyAverage(firstArrival, endGameTime, withdrawnTotal)}</td>
         </tr>
       </tbody>
     </table>
