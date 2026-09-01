@@ -58,10 +58,16 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
             {order.items.slice(0, 2).map((item, i) => (
               <p key={i} className="text-secondary text-sm">
                 {item.product_nom || item.product?.nom || products.find(p => p.id === item.product_id)?.nom || `Article #${item.product_id}`} x{item.quantite}
+                {item.cuisson && <span className="ml-1 text-[10px] bg-accent/10 text-accent px-1 rounded">{item.cuisson}</span>}
               </p>
             ))}
             {order.items.length > 2 && <p className="text-subtle text-xs">+{order.items.length - 2} autres</p>}
           </>
+        )}
+        {order.notes && (
+          <p className="text-subtle text-xs mt-1 italic truncate max-w-[200px]" title={order.notes}>
+            📝 {order.notes}
+          </p>
         )}
       </div>
     )},

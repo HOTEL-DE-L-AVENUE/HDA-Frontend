@@ -41,6 +41,7 @@ export interface OrderItem {
   product_nom?: string;
   product_code?: string;
   product_unite?: string;
+  cuisson?: string;
 }
 
 export interface Order {
@@ -53,6 +54,7 @@ export interface Order {
   client_nom?: string;
   client_prenom?: string;
   items?: OrderItem[];
+  notes?: string;
 }
 
 export interface RecipeIngredient {

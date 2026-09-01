@@ -16,6 +16,7 @@ export interface Order {
   table_numero?: string;
   table?: TableRestaurant;
   items?: OrderItem[];
+  notes?: string;
 }
 
 export interface OrderItem {
@@ -26,6 +27,7 @@ export interface OrderItem {
   prix_unitaire: number;
   product_nom?: string;
   product?: Product;
+  cuisson?: string;
 }
 
 export interface Product {
