@@ -159,6 +159,16 @@ export const BarCommandeView: React.FC<Props> = ({
     );
   };
 
+  const handleSetItemQuantity = (index: number, value: number) => {
+    setSelectedItems((prev) =>
+      prev.flatMap((item, itemIndex) => {
+        if (itemIndex !== index) return [item];
+        const nextQuantity = Math.max(1, value);
+        return [{ ...item, quantite: nextQuantity }];
+      })
+    );
+  };
+
   const handleRemoveItem = (index: number) => {
     setSelectedItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
@@ -556,7 +566,7 @@ export const BarCommandeView: React.FC<Props> = ({
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? `Ajouter des articles · Commande #${editingOrderId ?? ''}` : 'Nouvelle commande · Bar'} size="xl">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? `Ajouter des articles · Commande #${editingOrderId ?? ''}` : 'Nouvelle commande · Bar'} size="full">
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
           {feedback && (
             <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>

@@ -153,10 +153,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   };
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      size="xl"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="full"
       title={orderToEdit ? "Modifier la commande" : "Nouvelle commande · Restaurant"}
     >
       <div className="flex flex-col bg-background rounded-xl overflow-hidden">
