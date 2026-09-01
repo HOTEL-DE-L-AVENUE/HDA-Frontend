@@ -64,21 +64,11 @@ export const RestaurantPage: React.FC = () => {
   const fetchOrders = async () => {
     try {
       const res = await restaurantService.getOrders();
-      if (res.success && Array.isArray(res.data)) {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setOrders(res.data as Order[]);
       }
     } catch (error) {
       console.warn('Erreur lors du chargement des commandes live:', error);
-    }
-  };
-
-  const handleCloseAllOrders = async (orderIds: number[]) => {
-    try {
-      await restaurantService.closeAllRestaurantOrders(orderIds);
-      await fetchOrders();
-    } catch (error) {
-      console.error('Erreur lors de la clôture des commandes restaurant:', error);
-      alert('Erreur lors de la clôture des commandes.');
     }
   };
 
@@ -176,7 +166,9 @@ export const RestaurantPage: React.FC = () => {
           product_id: item.product_id,
           quantite: item.quantite,
           prix_unitaire: item.prix_unitaire,
+          cuisson: item.cuisson,
         })),
+        notes: formData.notes,
       });
       if (res.success) {
         await fetchOrders();
@@ -195,10 +187,12 @@ export const RestaurantPage: React.FC = () => {
       statut: 'EN_ATTENTE',
       created_at: new Date().toISOString(),
       table: table,
+      notes: formData.notes,
       items: (formData.items || []).map((item: any) => ({
         id: Date.now(),
         order_id: orders.length + 1,
         ...item,
+        product_nom: products.find(p => p.id === item.product_id)?.nom,
       })),
     };
     setOrders(prev => [...prev, newOrder]);
@@ -475,8 +469,6 @@ export const RestaurantPage: React.FC = () => {
             onDelete={handleDeleteOrder}
             onNewOrder={() => setShowOrderModal(true)}
             onInvoice={handlePrintInvoice}
-            searchQuery={searchQuery}
-            filterStatus={filterStatus}
           />
         )}
         {activeTab === 'menu' && (
@@ -502,13 +494,7 @@ export const RestaurantPage: React.FC = () => {
         )}
         {activeTab === 'stock' && <StockTab />}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
-          <CaisseTab
-            orders={orders}
-            allOrders={orders}
-            onPayment={handlePayment}
-            onCloseAllOrders={handleCloseAllOrders}
-            onRefresh={fetchOrders}
-          />
+          <CaisseTab orders={orders} onPayment={handlePayment} />
         )}
       </div>
 

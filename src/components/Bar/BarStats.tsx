@@ -9,7 +9,7 @@ interface Props {
 
 export const BarStats: React.FC<Props> = ({ commandes, stockMap }) => {
   const revenu = commandes.reduce((total, commande) => total + Number(commande.total || 0), 0);
-  const commandesActives = commandes.filter((commande) => commande.statut !== 'Encaissée').length;
+  const commandesActives = commandes.filter((commande) => commande.statut !== 'Servie').length;
   const stockFaible = Object.values(stockMap).filter((stock) => Number(stock.quantite) <= 5).length;
   const items = [
     { label: 'Revenu des commandes', value: formatCurrency(revenu), className: 'text-primary' },

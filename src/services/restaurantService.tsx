@@ -67,7 +67,8 @@ export const getInvoicePdf = (id: number) =>
 export const createOrder = (data: {
   client_id?: number;
   table_id?: number;
-  items: { product_id: number; quantite: number; prix_unitaire: number }[];
+  items: { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[];
+  notes?: string;
 }) =>
   api.post<ApiResponse<Order>>('/api/restaurant/orders', data).then(res => res.data);
 
@@ -76,9 +77,6 @@ export const updateOrderStatus = (id: number, statut: string) =>
 
 export const deleteOrder = (id: number) =>
   api.delete<ApiResponse<null>>(`/api/restaurant/orders/${id}`).then(res => res.data);
-
-export const closeAllRestaurantOrders = (orderIds?: number[]) =>
-  api.post<ApiResponse<{ closed_orders: number }>>('/api/restaurant/orders/close-all', { order_ids: orderIds }).then(res => res.data);
 
 // ==================== PAIEMENTS ====================
 

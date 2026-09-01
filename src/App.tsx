@@ -27,7 +27,7 @@ function App() {
           {/* Routes protégées — authentification obligatoire */}
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
-              {/* Dashboard : Réservé uniquement à l'admin et au manager (gestionnaires de stock exclus) */}
+              {/* Dashboard : protégé avec restriction selon le rôle et les modules */}
               <Route
                 element={
                   <ProtectedRoute
@@ -44,7 +44,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="hebergement"
-                    allowedRoles={['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager', 'gestionnaire_de_stock']}
+                    allowedRoles={['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager']}
                   />
                 }
               >
@@ -55,7 +55,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="hotel"
-                    allowedRoles={['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'stock_manager', 'gestionnaire_de_stock']}
+                    allowedRoles={['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'stock_manager']}
                   />
                 }
               >
@@ -66,7 +66,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="restaurant"
-                    allowedRoles={['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager', 'gestionnaire_de_stock']}
+                    allowedRoles={['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager']}
                   />
                 }
               >
@@ -77,7 +77,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="bar"
-                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager', 'gestionnaire_de_stock']}
+                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager']}
                   />
                 }
               >
@@ -88,7 +88,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="alcool"
-                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager', 'gestionnaire_de_stock']}
+                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager']}
                   />
                 }
               >
@@ -99,7 +99,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="casino"
-                    allowedRoles={['admin', 'croupier']}
+                    allowedRoles={['admin']}
                   />
                 }
               >

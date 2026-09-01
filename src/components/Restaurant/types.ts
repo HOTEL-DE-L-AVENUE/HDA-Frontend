@@ -8,16 +8,15 @@ export interface TableRestaurant {
 export interface Order {
   id: number;
   client_id: number | null;
-  table_id?: number | null;
+  table_id: number | null;
   source_module: 'RESTAURANT' | 'BAR' | 'CASINO' | 'HOTEL';
   montant_total: number;
-  statut: 'EN_ATTENTE' | 'EN_COURS' | 'SERVIE' | 'PAYE' | 'PAYEE' | 'ANNULEE' | 'ENCAISSEE';
+  statut: 'EN_ATTENTE' | 'EN_COURS' | 'SERVIE' | 'PAYE' | 'PAYEE' | 'ANNULEE';
   created_at: string;
   table_numero?: string;
-  client_nom?: string;
-  client?: Client;
   table?: TableRestaurant;
   items?: OrderItem[];
+  notes?: string;
 }
 
 export interface OrderItem {
@@ -28,6 +27,7 @@ export interface OrderItem {
   prix_unitaire: number;
   product_nom?: string;
   product?: Product;
+  cuisson?: string;
 }
 
 export interface Product {
