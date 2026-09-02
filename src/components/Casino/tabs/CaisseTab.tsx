@@ -242,6 +242,16 @@ export const CaisseTab: React.FC = () => {
                   <p className="text-muted">
                     Théorique {formatAriary(row.fond_final_theorique)} · Déclaré {formatAriary(row.fond_final_declare)}
                   </p>
+                  {row.cash_check != null && row.cash_check > 0 && (
+                    <p className="text-muted text-red-400">
+                      Cash check : {formatAriary(row.cash_check)}
+                    </p>
+                  )}
+                  {row.rack_check_manquant != null && row.rack_check_manquant > 0 && (
+                    <p className="text-muted text-violet-300">
+                      Rack check : manque {formatAriary(row.rack_check_manquant)}
+                    </p>
+                  )}
                   <p className="text-muted">
                     {formatDateTime(row.ouverture_at)} → {formatDateTime(row.fermeture_at)}
                   </p>

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Edit2, Play, Search, Trash2 } from 'lucide-react';
-import { PlayerLine, casinoBorder } from './types';
+import { PlayerLine, casinoBorder, parseCasinoAmount } from './types';
 import { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 import { Modal } from '../common';
 
@@ -43,6 +43,19 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       .includes(normalizedSearch);
   });
 
+  useEffect(() => {
+    players.forEach((player) => {
+      if (!player.casinoPlayerId || parseCasinoAmount(player.initialDeposit) > 0) return;
+      const registeredPlayer = registeredPlayers.find((item) => item.id === player.casinoPlayerId);
+      const registeredDeposit = parseCasinoAmount(registeredPlayer?.depot);
+      const paymentOptions = player.resultPaymentOptions || '';
+      const depositWasPaid = paymentOptions.includes('Dépôt payé');
+      if (registeredDeposit > 0 && !depositWasPaid) {
+        onUpdate(player.id, 'initialDeposit', String(registeredDeposit));
+      }
+    });
+  }, [players, registeredPlayers, onUpdate]);
+
   const register = async () => {
     if (!newPlayer.nom.trim()) { setError('Le nom du joueur est obligatoire.'); return; }
     try { setError(''); await onRegister(newPlayer); setNewPlayer(emptyPlayer); setShowRegistrationModal(false); } catch { setError('Impossible d’enregistrer le joueur.'); }
@@ -84,8 +97,12 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       <table className="w-full min-w-[820px] border-collapse text-xs sm:text-sm"><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>
         <th className="border p-2 text-left" style={casinoBorder}>Joueur</th><th className="border p-2 text-left" style={casinoBorder}>E-mail</th><th className="border p-2 text-left" style={casinoBorder}>Inscrit le</th><th className="border p-2 text-left" style={casinoBorder}>Dépôt de la partie</th><th className="border p-2 text-left" style={casinoBorder}>Crédit de la partie</th>{isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
       </tr></thead><tbody>{filteredRegisteredPlayers.map((player) => {
-        const amount = amounts[player.id] || { deposit: String(player.depot || ''), credit: String(player.credit || '') };
-        const alreadyPlaying = playerList.some((line) => line.casinoPlayerId === player.id);
+        const playerInGame = playerList.find((line) => line.casinoPlayerId === player.id);
+        const alreadyPlaying = Boolean(playerInGame);
+        const amount = amounts[player.id] || {
+          deposit: playerInGame ? playerInGame.initialDeposit : String(player.depot || ''),
+          credit: playerInGame ? playerInGame.initialCredit : String(player.credit || ''),
+        };
         return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.email || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' })}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
       })}</tbody></table>
     </div>

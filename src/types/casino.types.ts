@@ -87,6 +87,16 @@ export interface CashSession {
   fond_final_theorique?: number | null;
   fond_final_declare: number | null;
   ecart?: number | null;
+  cash_check?: number | null;
+  cashing_verifie?: number | boolean | null;
+  cashing_verifie_le?: string | null;
+  cashing_verifie_par?: ID | null;
+  cashing_montant_verifie?: number | null;
+  rack_check_verifie?: number | boolean | null;
+  rack_check_montant?: number | null;
+  rack_check_manquant?: number | null;
+  rack_check_le?: string | null;
+  rack_check_par?: ID | null;
   statut: StatutSession;
   commentaire?: string | null;
 }
@@ -311,6 +321,14 @@ export interface EcartCaisseRow {
   fond_final_theorique: number;
   fond_final_declare: number | null;
   ecart: number | null;
+  cash_check?: number | null;
+  cashing_verifie?: number | boolean | null;
+  cashing_verifie_le?: string | null;
+  cashing_verifie_par?: ID | null;
+  cashing_montant_verifie?: number | null;
+  rack_check_verifie?: number | boolean | null;
+  rack_check_montant?: number | null;
+  rack_check_manquant?: number | null;
 }
 
 export interface EncoursCreditRow {
@@ -340,6 +358,12 @@ export interface OpenSessionPayload {
 
 export interface CloseSessionPayload {
   fond_final_declare: number;
+  cash_check?: number;
+  cashing_verifie?: boolean;
+  cashing_montant?: number;
+  rack_check_verifie?: boolean;
+  rack_check_montant?: number;
+  rack_check_manquant?: number;
   commentaire?: string;
 }
 
