@@ -248,30 +248,48 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
 
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
     if (!selectedPlayer) return;
-    const wasAlreadySelected = selectedResultPayments.some((payment) => payment.option === option);
     const nextPayments = checked
       ? [...selectedResultPayments.filter((payment) => payment.option !== option), { option, amount: 0 }]
       : selectedResultPayments.filter((payment) => payment.option !== option);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
-    if (option === 'Dépôt payé' && checked && !wasAlreadySelected && selectedPlayerResult < 0) {
-      const registeredDeposit = parseCasinoAmount(registeredPlayers.find((player) => player.id === selectedPlayer.casinoPlayerId)?.depot);
-      const depositBeforeResult = Math.max(parseCasinoAmount(selectedPlayer.initialDeposit), registeredDeposit);
-      const nextDeposit = Math.max(0, depositBeforeResult - Math.abs(selectedPlayerResult));
-      onUpdate(selectedPlayer.id, 'initialDeposit', String(nextDeposit));
-    }
-    if (option === 'Crédit payé' && checked && !wasAlreadySelected && selectedPlayerResult > 0) {
-      const registeredCredit = parseCasinoAmount(registeredPlayers.find((player) => player.id === selectedPlayer.casinoPlayerId)?.credit);
-      const creditToSettle = Math.max(parseCasinoAmount(selectedPlayer.initialCredit), registeredCredit);
-      const nextDeposit = Math.max(0, selectedPlayerResult - creditToSettle);
-      onUpdate(selectedPlayer.id, 'initialDeposit', String(nextDeposit));
-      onUpdate(selectedPlayer.id, 'initialCredit', '0');
-    }
+
+    const previousDepositPaidAmount = selectedResultPayments
+      .filter((payment) => payment.option === 'Dépôt payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const previousCreditPaidAmount = selectedResultPayments
+      .filter((payment) => payment.option === 'Crédit payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const nextDepositPaidAmount = nextPayments
+      .filter((payment) => payment.option === 'Dépôt payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const nextCreditPaidAmount = nextPayments
+      .filter((payment) => payment.option === 'Crédit payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+
+    onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) + previousDepositPaidAmount - nextDepositPaidAmount)));
+    onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialCredit) + previousCreditPaidAmount - nextCreditPaidAmount)));
   };
 
   const updateResultPaymentAmount = (option: string, amount: string) => {
     if (!selectedPlayer) return;
     const nextPayments = selectedResultPayments.map((payment) => payment.option === option ? { ...payment, amount: parseCasinoAmount(amount) } : payment);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
+
+    const previousDepositPaidAmount = selectedResultPayments
+      .filter((payment) => payment.option === 'Dépôt payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const previousCreditPaidAmount = selectedResultPayments
+      .filter((payment) => payment.option === 'Crédit payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const nextDepositPaidAmount = nextPayments
+      .filter((payment) => payment.option === 'Dépôt payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const nextCreditPaidAmount = nextPayments
+      .filter((payment) => payment.option === 'Crédit payé')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+
+    onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) + previousDepositPaidAmount - nextDepositPaidAmount)));
+    onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialCredit) + previousCreditPaidAmount - nextCreditPaidAmount)));
   };
 
   useEffect(() => {
