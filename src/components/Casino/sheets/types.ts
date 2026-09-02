@@ -48,6 +48,16 @@ export type ChipLine = {
   withdrawn: string;
 };
 
+export type RackCheck = {
+  id: number;
+  time: string;
+  type: 'Entrée' | 'Contrôle périodique' | 'Sortie';
+  expected: number;
+  actual: string;
+  missing: string;
+  verified: boolean;
+};
+
 export const CHIP_VALUES = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000];
 export const casinoCurrency = new Intl.NumberFormat('fr-FR');
 export const casinoBorder = { borderColor: 'var(--color-border)' };

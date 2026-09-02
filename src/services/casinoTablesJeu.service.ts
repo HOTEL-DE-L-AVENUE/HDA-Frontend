@@ -18,7 +18,7 @@ import type {
   TempsJeuJour,
   FeuilleTable,
 } from '../types/casinoTablesJeu.types';
-import type { ChipLine, PlayerLine } from '../components/Casino/sheets/types';
+import type { ChipLine, PlayerLine, RackCheck } from '../components/Casino/sheets/types';
 
 const BASE_URL = '/api/casino';
 
@@ -88,6 +88,7 @@ export type PlayerSheetData = {
   table_name: string;
   players: PlayerLine[];
   chips: ChipLine[];
+  rackChecks?: RackCheck[];
   restaurantPayments: { especes: boolean; tpe: boolean };
   finals: Record<string, Record<string, string>>;
   endGameTime?: string;
