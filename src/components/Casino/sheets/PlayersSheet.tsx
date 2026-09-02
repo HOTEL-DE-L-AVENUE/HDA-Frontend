@@ -246,10 +246,15 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
 
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
     if (!selectedPlayer) return;
+    const wasAlreadySelected = selectedResultPayments.some((payment) => payment.option === option);
     const nextPayments = checked
       ? [...selectedResultPayments.filter((payment) => payment.option !== option), { option, amount: 0 }]
       : selectedResultPayments.filter((payment) => payment.option !== option);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
+    if (option === 'Dépôt payé' && checked && !wasAlreadySelected && selectedPlayerResult < 0) {
+      const nextDeposit = Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) - Math.abs(selectedPlayerResult));
+      onUpdate(selectedPlayer.id, 'initialDeposit', String(nextDeposit));
+    }
   };
 
   const updateResultPaymentAmount = (option: string, amount: string) => {

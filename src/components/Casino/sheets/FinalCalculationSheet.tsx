@@ -12,6 +12,7 @@ interface FinalCalculationSheetProps {
   saveState?: 'idle' | 'saving' | 'saved' | 'error';
   onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
+  onPlayerUpdate?: (id: number, key: keyof PlayerLine, value: string) => void;
   onSave: () => void;
   isFinished?: boolean;
   isFinishing?: boolean;
@@ -21,7 +22,7 @@ interface FinalCalculationSheetProps {
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
 
-export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, isFinished = false, isFinishing = false, canFinish = false, onFinish, showIdentityVerifications = true, identityVerifications = {} }) => {
+export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onPlayerUpdate, onSave, isFinished = false, isFinishing = false, canFinish = false, onFinish, showIdentityVerifications = true, identityVerifications = {} }) => {
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
   const activePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
@@ -247,7 +248,36 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         <PlayerPaymentConfirmationModal
           players={activePlayers}
           onClose={() => setPaymentConfirmationOpen(false)}
-          onConfirm={() => { setPaymentConfirmationOpen(false); onSave(); }}
+          onConfirm={(entries) => {
+            entries.forEach((entry) => {
+              const player = players.find((item) => (item.ficheId ?? item.id) === entry.id);
+              if (!player) return;
+              const playerId = player.ficheId ?? player.id;
+              const playerLines = players.filter((item) => (item.ficheId ?? item.id) === playerId);
+              const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+              const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+              const loss = totalCaves - cashing;
+              const depositWasAlreadyPaid = parsePaymentOptions(player.resultPaymentOptions).some((payment) => payment.option === 'Dépôt payé');
+              const payments: Array<{ option: string; amount: number }> = [];
+              if (entry.depositStatus === 'Payé') {
+                const amount = parseCasinoAmount(entry.lossAmount || entry.depositAmount || String(entry.deposit));
+                if (amount > 0) payments.push({ option: 'Dépôt payé', amount });
+              }
+              if (entry.creditStatus === 'Payé') {
+                const amount = parseCasinoAmount(entry.creditAmount || String(entry.credit));
+                if (amount > 0) payments.push({ option: 'Crédit payé', amount });
+              }
+              if (payments.length) {
+                onPlayerUpdate?.(player.id, 'resultPaymentOptions', JSON.stringify(payments));
+              }
+              if (entry.depositStatus === 'Payé' && !depositWasAlreadyPaid && loss > 0) {
+                const nextDeposit = Math.max(0, parseCasinoAmount(player.initialDeposit) - loss);
+                onPlayerUpdate?.(player.id, 'initialDeposit', String(nextDeposit));
+              }
+            });
+            setPaymentConfirmationOpen(false);
+            onSave();
+          }}
         />
       ) : (
         <EmptyPaymentPlayersModal onClose={() => setPaymentConfirmationOpen(false)} />
@@ -285,7 +315,19 @@ const EmptyPaymentPlayersModal: React.FC<{ onClose: () => void }> = ({ onClose }
 const PlayerPaymentConfirmationModal: React.FC<{
   players: PlayerLine[];
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (entries: Array<{
+    id: number;
+    name: string;
+    deposit: number;
+    credit: number;
+    depositStatus: string;
+    creditStatus: string;
+    depositAmount: string;
+    creditAmount: string;
+    lossAmount: string;
+    depositMethod: string;
+    creditMethod: string;
+  }>) => void;
 }> = ({ players, onClose, onConfirm }) => {
   const [playerStates, setPlayerStates] = useState(() => players.map((player) => ({
     id: player.ficheId ?? player.id,
@@ -296,6 +338,7 @@ const PlayerPaymentConfirmationModal: React.FC<{
     creditStatus: '',
     depositAmount: '',
     creditAmount: '',
+    lossAmount: '',
     depositMethod: 'Espèces',
     creditMethod: 'Crédit',
   })));
@@ -310,12 +353,13 @@ const PlayerPaymentConfirmationModal: React.FC<{
       creditStatus: '',
       depositAmount: '',
       creditAmount: '',
+      lossAmount: '',
       depositMethod: 'Espèces',
       creditMethod: 'Crédit',
     })));
   }, [players]);
 
-  const updateEntry = (playerId: number, field: 'depositStatus' | 'creditStatus' | 'depositAmount' | 'creditAmount' | 'depositMethod' | 'creditMethod', value: string) => {
+  const updateEntry = (playerId: number, field: 'depositStatus' | 'creditStatus' | 'depositAmount' | 'creditAmount' | 'lossAmount' | 'depositMethod' | 'creditMethod', value: string) => {
     setPlayerStates((current) => current.map((entry) => entry.id === playerId ? { ...entry, [field]: value } : entry));
   };
 
@@ -344,9 +388,13 @@ const PlayerPaymentConfirmationModal: React.FC<{
                   amount={entry.deposit}
                   status={entry.depositStatus}
                   amountValue={entry.depositAmount}
+                  extraAmountValue={entry.lossAmount}
                   paymentMethod={entry.depositMethod}
+                  showExtraAmount={entry.deposit > 0}
+                  extraAmountLabel="Montant perdu"
                   onStatusChange={(status) => updateEntry(entry.id, 'depositStatus', status)}
                   onAmountChange={(value) => updateEntry(entry.id, 'depositAmount', value)}
+                  onExtraAmountChange={(value) => updateEntry(entry.id, 'lossAmount', value)}
                   onMethodChange={(value) => updateEntry(entry.id, 'depositMethod', value)}
                 />
                 <PaymentStatusRow
@@ -366,7 +414,7 @@ const PlayerPaymentConfirmationModal: React.FC<{
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="action secondary" onClick={onClose}>Annuler</button>
-          <button type="button" className="action" onClick={onConfirm}>Enregistrer le calcul</button>
+          <button type="button" className="action" onClick={() => onConfirm(playerStates)}>Enregistrer le calcul</button>
         </div>
       </div>
     </div>
@@ -378,11 +426,15 @@ const PaymentStatusRow: React.FC<{
   amount: number;
   status: string;
   amountValue: string;
+  extraAmountValue?: string;
   paymentMethod: string;
+  showExtraAmount?: boolean;
+  extraAmountLabel?: string;
   onStatusChange: (status: 'Payé' | 'Non payé') => void;
   onAmountChange: (amount: string) => void;
+  onExtraAmountChange?: (amount: string) => void;
   onMethodChange: (method: string) => void;
-}> = ({ label, amount, status, amountValue, paymentMethod, onStatusChange, onAmountChange, onMethodChange }) => {
+}> = ({ label, amount, status, amountValue, extraAmountValue = '', paymentMethod, showExtraAmount = false, extraAmountLabel = 'Montant additionnel', onStatusChange, onAmountChange, onExtraAmountChange, onMethodChange }) => {
   const displayedAmount = Number.parseFloat(amountValue || '0') || amount;
 
   return (
@@ -430,6 +482,23 @@ const PaymentStatusRow: React.FC<{
           />
         </label>
       </div>
+
+      {showExtraAmount && onExtraAmountChange && (
+        <div className="mt-3">
+          <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+            {extraAmountLabel}
+            <input
+              type="text"
+              inputMode="decimal"
+              value={extraAmountValue}
+              onChange={(event) => onExtraAmountChange(event.target.value)}
+              placeholder="0"
+              className="mt-1 w-full rounded-lg border bg-transparent px-2 py-2 text-sm text-primary outline-none placeholder:text-muted"
+              style={casinoBorder}
+            />
+          </label>
+        </div>
+      )}
 
       <div className="mt-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-2 py-2 text-[11px] text-yellow-200">
         <span className="font-semibold">Montant + mode :</span> {casinoCurrency.format(displayedAmount)} Ar — {paymentMethod}
@@ -529,7 +598,13 @@ const getNegativePaymentTotal = (players: PlayerLine[], ...methods: string[]): n
     const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
     const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - totalCaves;
     const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
-    return result < 0 && payments.length ? total + (payments.some((payment) => payment.amount > 0) ? payments.reduce((sum, payment) => sum + payment.amount, 0) : Math.abs(result)) : total;
+    const hasAdvancedDepositLoss = methods.includes('Dépôt payé') && result < 0 && parseCasinoAmount(player.initialDeposit) > 0;
+    const amount = payments.some((payment) => payment.amount > 0)
+      ? payments.reduce((sum, payment) => sum + payment.amount, 0)
+      : hasAdvancedDepositLoss
+        ? Math.min(Math.abs(result), parseCasinoAmount(player.initialDeposit))
+        : Math.abs(result);
+    return result < 0 && (payments.length || hasAdvancedDepositLoss) ? total + amount : total;
   }, 0);
 
 const getPositivePaymentTotal = (players: PlayerLine[], ...methods: string[]): number => players

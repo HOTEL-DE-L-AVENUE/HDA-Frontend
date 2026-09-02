@@ -1,4 +1,4 @@
-export type CasinoView = 'setup' | 'players' | 'chips' | 'final' | 'management' | 'report';
+export type CasinoView = 'setup' | 'players' | 'chips' | 'final' | 'management' | 'caisse' | 'report';
 
 export interface IdentityVerificationData {
   fullName: string;

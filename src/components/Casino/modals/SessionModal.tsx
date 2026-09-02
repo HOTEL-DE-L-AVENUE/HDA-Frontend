@@ -78,17 +78,32 @@ interface CloseSessionModalProps {
 }
 
 export const CloseSessionModal: React.FC<CloseSessionModalProps> = ({ session, summary, onClose, onSuccess }) => {
-  const [fondDeclare, setFondDeclare] = useState('');
-  const [commentaire, setCommentaire] = useState('');
+  const [fondDeclare, setFondDeclare] = useState(String(session.fond_final_declare ?? ''));
+  const [cashCheck, setCashCheck] = useState(String(session.cash_check ?? ''));
+  const [cashingVerified, setCashingVerified] = useState(Boolean(session.cashing_verifie));
+  const [cashingAmount, setCashingAmount] = useState(String(session.cashing_montant_verifie ?? session.fond_final_declare ?? ''));
+  const [rackCheckVerified, setRackCheckVerified] = useState(Boolean(session.rack_check_verifie));
+  const [rackCheckAmount, setRackCheckAmount] = useState(String(session.rack_check_montant ?? 220000));
+  const [rackCheckMissing, setRackCheckMissing] = useState(String(session.rack_check_manquant ?? ''));
+  const [commentaire, setCommentaire] = useState(session.commentaire || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const theorique = summary?.solde_theorique ?? null;
   const ecartPrevisionnel = theorique !== null && fondDeclare ? Number(fondDeclare) - theorique : null;
+  const cashCheckManquant = Number(cashCheck || 0) || (ecartPrevisionnel !== null && ecartPrevisionnel < 0 ? Math.abs(ecartPrevisionnel) : 0);
 
   async function handleSubmit() {
     if (!fondDeclare) {
       setError('Le fond final déclaré est requis.');
+      return;
+    }
+    if (cashingVerified && (!cashingAmount || Number(cashingAmount) <= 0)) {
+      setError('Le montant vérifié en espèces est requis pour valider le cashing.');
+      return;
+    }
+    if (rackCheckVerified && (!rackCheckAmount || Number(rackCheckAmount) <= 0)) {
+      setError('Le montant du rack vérifié est requis pour valider le rack check.');
       return;
     }
     setLoading(true);
@@ -96,6 +111,12 @@ export const CloseSessionModal: React.FC<CloseSessionModalProps> = ({ session, s
     try {
       const updated = await sessionsApi.close(session.id, {
         fond_final_declare: Number(fondDeclare),
+        cash_check: Number(cashCheck || 0) || undefined,
+        cashing_verifie: cashingVerified,
+        cashing_montant: cashingVerified ? Number(cashingAmount) : undefined,
+        rack_check_verifie: rackCheckVerified,
+        rack_check_montant: rackCheckVerified ? Number(rackCheckAmount) : undefined,
+        rack_check_manquant: rackCheckVerified ? Number(rackCheckMissing || 0) : undefined,
         commentaire: commentaire.trim() || undefined,
       });
       onSuccess(updated);
@@ -163,6 +184,75 @@ export const CloseSessionModal: React.FC<CloseSessionModalProps> = ({ session, s
           >
             Écart prévisionnel : {ecartPrevisionnel > 0 ? '+' : ''}
             {formatAriary(ecartPrevisionnel)}
+          </p>
+        )}
+
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/5 p-3 text-sm">
+          <label className="flex items-center gap-3 text-primary font-medium">
+            <input
+              type="checkbox"
+              checked={cashingVerified}
+              onChange={(e) => setCashingVerified(e.target.checked)}
+            />
+            Le caissier confirme que le montant en espèces en caisse est bien vérifié.
+          </label>
+        </div>
+
+        {cashingVerified && (
+          <Field label="Montant vérifié en espèces (Ariary)">
+            <NumberInput
+              value={cashingAmount}
+              onChange={(e) => setCashingAmount(e.target.value)}
+              placeholder={String(fondDeclare || 0)}
+              min={0}
+            />
+          </Field>
+        )}
+
+        <div className="rounded-xl border border-violet-400/30 bg-violet-500/5 p-3 text-sm">
+          <label className="flex items-center gap-3 text-primary font-medium">
+            <input
+              type="checkbox"
+              checked={rackCheckVerified}
+              onChange={(e) => setRackCheckVerified(e.target.checked)}
+            />
+            Le caissier confirme que le rack du croupier contient bien 220 000 Ariary en jetons.
+          </label>
+        </div>
+
+        {rackCheckVerified && (
+          <>
+            <Field label="Montant vérifié dans le rack (Ariary)">
+              <NumberInput
+                value={rackCheckAmount}
+                onChange={(e) => setRackCheckAmount(e.target.value)}
+                placeholder="220000"
+                min={0}
+              />
+            </Field>
+            <Field label="Manque de jetons dans le rack (Ariary)">
+              <NumberInput
+                value={rackCheckMissing}
+                onChange={(e) => setRackCheckMissing(e.target.value)}
+                placeholder="0"
+                min={0}
+              />
+            </Field>
+          </>
+        )}
+
+        <Field label="Cash check / manque de caisse (Ariary)">
+          <NumberInput
+            value={cashCheck}
+            onChange={(e) => setCashCheck(e.target.value)}
+            placeholder="15000"
+            min={0}
+          />
+        </Field>
+
+        {cashCheckManquant > 0 && (
+          <p className="text-sm font-semibold text-red-400">
+            Manque de caisse à relever : {formatAriary(cashCheckManquant)}
           </p>
         )}
 

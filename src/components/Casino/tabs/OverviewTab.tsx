@@ -131,9 +131,17 @@ export const OverviewTab: React.FC = () => {
                     </p>
                     <p className="text-muted">{formatDateTime(row.fermeture_at || row.ouverture_at)}</p>
                   </div>
-                  <Badge tone={!row.ecart ? 'success' : row.ecart > 0 ? 'info' : 'danger'}>
-                    {row.ecart == null ? '—' : `${row.ecart > 0 ? '+' : ''}${formatAriary(row.ecart)}`}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge tone={!row.ecart ? 'success' : row.ecart > 0 ? 'info' : 'danger'}>
+                      {row.ecart == null ? '—' : `${row.ecart > 0 ? '+' : ''}${formatAriary(row.ecart)}`}
+                    </Badge>
+                    {row.cash_check != null && row.cash_check > 0 && (
+                      <span className="text-[10px] font-semibold text-red-400">Cash check {formatAriary(row.cash_check)}</span>
+                    )}
+                    {row.rack_check_manquant != null && row.rack_check_manquant > 0 && (
+                      <span className="text-[10px] font-semibold text-violet-300">Rack check {formatAriary(row.rack_check_manquant)}</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
