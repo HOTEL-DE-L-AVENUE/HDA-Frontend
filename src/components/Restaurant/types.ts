@@ -11,7 +11,7 @@ export interface Order {
   table_id: number | null;
   source_module: 'RESTAURANT' | 'BAR' | 'CASINO' | 'HOTEL';
   montant_total: number;
-  statut: 'EN_ATTENTE' | 'EN_COURS' | 'SERVIE' | 'PAYE' | 'PAYEE' | 'ANNULEE';
+  statut: 'EN_ATTENTE' | 'EN_COURS' | 'PRETE' | 'SERVIE' | 'PAYE' | 'PAYEE' | 'ANNULEE';
   created_at: string;
   table_numero?: string;
   table?: TableRestaurant;

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Badge, Button, DataTable } from '../../UI';
+import { Badge, Button, DataTable, Modal, Select } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, Trash2, XCircle, Pencil } from 'lucide-react';
+import { Plus, Trash2, XCircle, CheckCircle2 } from 'lucide-react';
 import type { Order } from '../types';
 import AuthService from '../../../services/authService';
 import { isAdmin, isCashier } from '../../../utils/permissions';
@@ -9,6 +9,7 @@ import { isAdmin, isCashier } from '../../../utils/permissions';
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
   EN_COURS: { label: 'En cours', variant: 'info' },
+  PRETE: { label: 'Prête', variant: 'info' },
   SERVIE: { label: 'Servie', variant: 'success' },
   PAYE: { label: 'Payée', variant: 'success' },
   PAYEE: { label: 'Payée', variant: 'success' },
@@ -19,7 +20,7 @@ interface CommandesTabProps {
   orders: Order[];
   products: any[];
   onUpdateStatus: (orderId: number, status: Order['statut']) => void;
-  onPayment: (orderId: number) => void;
+  onPayment: (orderId: number, moyenPaiement?: string) => void;
   onCancel: (orderId: number) => void;
   onDelete: (orderId: number) => void;
   onNewOrder: () => void;
@@ -40,7 +41,22 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
+  const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
+  const [paymentOrder, setPaymentOrder] = React.useState<Order | null>(null);
+  const [paymentMethod, setPaymentMethod] = React.useState('ESPECES');
+
+  const handleOpenPaymentModal = (order: Order) => {
+    setPaymentOrder(order);
+    setPaymentMethod((order as Order & { moyen_paiement?: string }).moyen_paiement || 'ESPECES');
+  };
+
+  const handleConfirmPayment = () => {
+    if (!paymentOrder) return;
+    onPayment(paymentOrder.id, paymentMethod);
+    setPaymentOrder(null);
+  };
+
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => (
       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
@@ -83,9 +99,9 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     )},
     { key: 'actions', label: '', render: (order: Order) => (
       <div className="flex items-center gap-2">
-        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
-          <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
-            <Pencil size={14} />
+        {canModifyCommande && !['PAYE', 'PAYEE', 'ANNULEE'].includes(order.statut) && (
+          <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => onEditOrder(order)}>
+            Modifier
           </Button>
         )}
 
@@ -93,10 +109,13 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'EN_COURS')}>Démarrer</Button>
         )}
         {order.statut === 'EN_COURS' && (
+          <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'PRETE')}>Marquer prête</Button>
+        )}
+        {order.statut === 'PRETE' && (
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
-          <Button size="sm" onClick={() => onPayment(order.id)}>Encaisser</Button>
+          <Button size="sm" onClick={() => handleOpenPaymentModal(order)}>Encaisser</Button>
         )}
         {/* Invoice button */}
         {onInvoice && (
@@ -132,7 +151,34 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   const data = sortedOrders.map(order => ({ ...order, id: String(order.id) }));
 
   return (
-    <div className="rounded-2xl overflow-hidden w-full" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+    <>
+      <Modal isOpen={paymentOrder !== null} onClose={() => setPaymentOrder(null)} title={`Encaisser la commande #${paymentOrder?.id ?? ''}`} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">Choisissez le mode de paiement pour confirmer cette commande.</p>
+          <Select
+            label="Mode de paiement"
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value)}
+            options={[
+              { value: 'ESPECES', label: 'Espèces' },
+              { value: 'CREDIT', label: 'Crédit' },
+              { value: 'TPE', label: 'TPE' },
+              { value: 'ORANGE_MONEY', label: 'Orange Money' },
+              { value: 'MVOLA', label: 'MVola' },
+              { value: 'GRATUIT', label: 'Gratuit' },
+            ]}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setPaymentOrder(null)} className="flex-1">Annuler</Button>
+            <Button type="button" onClick={handleConfirmPayment} className="flex-1">
+              <CheckCircle2 size={16} />
+              Confirmer
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <div className="rounded-2xl overflow-hidden w-full" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <h3 className="text-primary font-semibold text-sm sm:text-base flex items-center gap-2">
           Commandes
@@ -144,6 +190,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
       <div className="overflow-x-auto">
         <DataTable data={data} columns={columns as any} />
       </div>
-    </div>
+      </div>
+    </>
   );
 };

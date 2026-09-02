@@ -16,7 +16,7 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment }) 
         categories={['Ventes Restaurant', 'Stock', 'Personnel', 'Autre']}
         title="Caisse Restaurant"
         gradient="from-accent to-accent-2"
-        pendingOrders={orders.filter((order) => order.statut !== 'PAYEE' && order.statut !== 'PAYE' && order.statut !== 'ANNULEE').map((order) => ({
+        pendingOrders={orders.filter((order) => order.statut === 'SERVIE').map((order) => ({
           id: Number(order.id),
           client: order.client_nom || order.client?.nom || 'Client anonyme',
           table: order.table?.numero || order.table_numero || order.table_id,
