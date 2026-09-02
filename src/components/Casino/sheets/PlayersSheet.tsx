@@ -3,10 +3,12 @@ import { Copy, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
+import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 
 interface PlayersSheetProps {
   date: string;
   players: PlayerLine[];
+  registeredPlayers?: CasinoRegisteredPlayer[];
   cashingPaymentMethod?: string;
   restaurantPayments: { especes: boolean; tpe: boolean };
   saveState?: 'idle' | 'saving' | 'saved' | 'error';
@@ -85,7 +87,7 @@ const parseResultPayments = (value?: string): ResultPayment[] => {
   }
 };
 
-export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
+export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, registeredPlayers = [], restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
@@ -252,8 +254,17 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, resta
       : selectedResultPayments.filter((payment) => payment.option !== option);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
     if (option === 'Dépôt payé' && checked && !wasAlreadySelected && selectedPlayerResult < 0) {
-      const nextDeposit = Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) - Math.abs(selectedPlayerResult));
+      const registeredDeposit = parseCasinoAmount(registeredPlayers.find((player) => player.id === selectedPlayer.casinoPlayerId)?.depot);
+      const depositBeforeResult = Math.max(parseCasinoAmount(selectedPlayer.initialDeposit), registeredDeposit);
+      const nextDeposit = Math.max(0, depositBeforeResult - Math.abs(selectedPlayerResult));
       onUpdate(selectedPlayer.id, 'initialDeposit', String(nextDeposit));
+    }
+    if (option === 'Crédit payé' && checked && !wasAlreadySelected && selectedPlayerResult > 0) {
+      const registeredCredit = parseCasinoAmount(registeredPlayers.find((player) => player.id === selectedPlayer.casinoPlayerId)?.credit);
+      const creditToSettle = Math.max(parseCasinoAmount(selectedPlayer.initialCredit), registeredCredit);
+      const nextDeposit = Math.max(0, selectedPlayerResult - creditToSettle);
+      onUpdate(selectedPlayer.id, 'initialDeposit', String(nextDeposit));
+      onUpdate(selectedPlayer.id, 'initialCredit', '0');
     }
   };
 
