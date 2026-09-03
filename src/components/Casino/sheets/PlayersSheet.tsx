@@ -77,14 +77,21 @@ const parseResultPayments = (value?: string): ResultPayment[] => {
   try {
     const parsed = JSON.parse(value || '[]');
     if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry) => {
+    const payments = parsed.flatMap((entry) => {
       if (typeof entry === 'string') return [{ option: entry, amount: 0 }];
       if (entry && typeof entry.option === 'string') return [{ option: entry.option, amount: Number(entry.amount) || 0 }];
       return [];
     });
+    return [...new Map(payments.map((payment) => [payment.option, payment])).values()];
   } catch {
     return [];
   }
+};
+
+const getPaymentAmount = (payments: ResultPayment[], result: number, option: string): number => {
+  const selected = payments.filter((payment) => payment.option === option);
+  if (!selected.length) return 0;
+  return payments.length === 1 && selected[0].amount <= 0 ? Math.abs(result) : selected.reduce((sum, payment) => sum + payment.amount, 0);
 };
 
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, registeredPlayers = [], restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
@@ -110,9 +117,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const selectedPlayerResult = selectedPlayerCashing - selectedPlayerTotal;
   const selectedBonuses = parseBonuses(selectedPlayer?.bonuses);
   const selectedBonusResults = parseBonusResults(selectedPlayer?.bonusResults);
-  const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions);
   const selectedIdentityVerification = identityVerifications[selectedPlayerId];
   const resultOptions = selectedPlayerResult > 0 ? positiveResultOptions : selectedPlayerResult < 0 ? negativeResultOptions : [];
+  const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions)
+    .filter((payment) => resultOptions.includes(payment.option));
   const caveLinesToSign = selectedPlayerLines.filter((line) => line.caves.trim() || line.amount.trim());
   const ficheIdsToSign = selectedPlayer ? [selectedPlayerId] : [];
   const signatureConfirmationItems = [
@@ -130,7 +138,14 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   }, [activePlayers, selectedPlayerId]);
 
   const saveWithResultCheck = () => {
-    if (selectedPlayerResult !== 0 && selectedResultPayments.length > 1) {
+    if (!selectedPlayer || selectedPlayerResult === 0) {
+      setSignatureError('');
+    } else if (selectedResultPayments.length === 1) {
+      const payment = selectedResultPayments[0];
+      if (payment.amount <= 0) {
+        onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify([{ ...payment, amount: Math.abs(selectedPlayerResult) }]));
+      }
+    } else if (selectedResultPayments.length > 1) {
       if (selectedResultPayments.some((payment) => payment.amount <= 0)) {
         setSignatureError('Veuillez saisir un montant pour chaque mode de règlement.');
         return;
@@ -253,18 +268,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       : selectedResultPayments.filter((payment) => payment.option !== option);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
 
-    const previousDepositPaidAmount = selectedResultPayments
-      .filter((payment) => payment.option === 'Dépôt payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const previousCreditPaidAmount = selectedResultPayments
-      .filter((payment) => payment.option === 'Crédit payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const nextDepositPaidAmount = nextPayments
-      .filter((payment) => payment.option === 'Dépôt payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const nextCreditPaidAmount = nextPayments
-      .filter((payment) => payment.option === 'Crédit payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
+    const previousDepositPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Dépôt payé');
+    const previousCreditPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Crédit payé');
+    const nextDepositPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Dépôt payé');
+    const nextCreditPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Crédit payé');
 
     onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) + previousDepositPaidAmount - nextDepositPaidAmount)));
     onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialCredit) + previousCreditPaidAmount - nextCreditPaidAmount)));
@@ -275,18 +282,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     const nextPayments = selectedResultPayments.map((payment) => payment.option === option ? { ...payment, amount: parseCasinoAmount(amount) } : payment);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
 
-    const previousDepositPaidAmount = selectedResultPayments
-      .filter((payment) => payment.option === 'Dépôt payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const previousCreditPaidAmount = selectedResultPayments
-      .filter((payment) => payment.option === 'Crédit payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const nextDepositPaidAmount = nextPayments
-      .filter((payment) => payment.option === 'Dépôt payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const nextCreditPaidAmount = nextPayments
-      .filter((payment) => payment.option === 'Crédit payé')
-      .reduce((sum, payment) => sum + payment.amount, 0);
+    const previousDepositPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Dépôt payé');
+    const previousCreditPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Crédit payé');
+    const nextDepositPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Dépôt payé');
+    const nextCreditPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Crédit payé');
 
     onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) + previousDepositPaidAmount - nextDepositPaidAmount)));
     onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialCredit) + previousCreditPaidAmount - nextCreditPaidAmount)));

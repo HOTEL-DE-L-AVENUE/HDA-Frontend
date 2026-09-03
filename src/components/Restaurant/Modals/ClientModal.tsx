@@ -68,7 +68,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSub
             onChange={(e) => setForm({...form, type_piece: e.target.value})}
             options={[
               { value: '', label: 'Sélectionner' },
-              { value: 'CNI', label: 'CNI' },
+              { value: 'CIN', label: 'CIN' },
               { value: 'PASSEPORT', label: 'Passeport' },
               { value: 'PERMIS', label: 'Permis de conduire' },
             ]}
