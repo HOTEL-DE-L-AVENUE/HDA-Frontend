@@ -1182,7 +1182,7 @@ const ClientsPage: React.FC = () => {
                     disabled={isSubmitting}
                   >
                     <option value="">Sélectionner</option>
-                    <option value="CNI">Carte d'identité</option>
+                    <option value="CIN">Carte d'identité</option>
                     <option value="Passeport">Passeport</option>
                     <option value="Permis">Permis de conduire</option>
                   </select>

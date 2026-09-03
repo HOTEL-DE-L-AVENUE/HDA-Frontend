@@ -204,14 +204,36 @@ export const CasinoPage: React.FC = () => {
 
   const updatePlayerLine = (id: number, key: keyof PlayerLine, value: string) => {
     setSaveState('idle');
-    const casinoPlayerId = playersRef.current.find((line) => line.id === id)?.casinoPlayerId;
-    const nextPlayers = playersRef.current.map((line) => line.id === id ? { ...line, [key]: value } : line);
+    const sourceLine = playersRef.current.find((line) => line.id === id);
+    const casinoPlayerId = sourceLine?.casinoPlayerId;
+    const ficheId = sourceLine?.ficheId ?? sourceLine?.id;
+    const isDeposit = key === 'initialDeposit';
+    const isCredit = key === 'initialCredit';
+    const enteredAmount = parseCasinoAmount(value);
+    const nextPlayers = playersRef.current.map((line) => {
+      const sameFiche = (line.ficheId ?? line.id) === ficheId;
+      if ((isDeposit || isCredit) && sameFiche) {
+        return {
+          ...line,
+          [key]: value,
+          ...(enteredAmount > 0
+            ? { [isDeposit ? 'initialCredit' : 'initialDeposit']: '0' }
+            : {}),
+        };
+      }
+      return key === 'resultPaymentOptions' && sameFiche
+        ? { ...line, [key]: value }
+        : line.id === id ? { ...line, [key]: value } : line;
+    });
     playersRef.current = nextPlayers;
     setPlayers(nextPlayers);
-    if (!casinoPlayerId || (key !== 'initialDeposit' && key !== 'initialCredit')) return;
-    const amount = parseCasinoAmount(value);
+    if (!casinoPlayerId || (!isDeposit && !isCredit)) return;
     setRegisteredPlayers((current) => current.map((player) => player.id === casinoPlayerId
-      ? { ...player, [key === 'initialDeposit' ? 'depot' : 'credit']: amount }
+      ? {
+          ...player,
+          ...(isDeposit ? { depot: enteredAmount, ...(enteredAmount > 0 ? { credit: 0 } : {}) } : {}),
+          ...(isCredit ? { credit: enteredAmount, ...(enteredAmount > 0 ? { depot: 0 } : {}) } : {}),
+        }
       : player
     ));
   };
