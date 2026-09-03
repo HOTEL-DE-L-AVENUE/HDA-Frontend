@@ -46,10 +46,12 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     ? '/api/bar/stock'
     : module === 'hotel'
       ? '/api/stock/stocks/with-products?location_id=5'
-      : '/api/hebergement/stock';
+      // : '/api/hebergement/stock'; // COMMENTED OUT
+      : '/api/stock/stocks/with-products?location_id=5'; // Fallback for disabled hebergement
 
   const isBar = module === 'bar';
-  const isHebergement = module === 'hebergement';
+  // const isHebergement = module === 'hebergement'; // COMMENTED OUT
+  const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
   const useBackend = isBar || isHebergement || isHotel;
 
@@ -98,7 +100,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         seuilMinimum: bs.seuil_minimum ?? 5,
         fournisseur: '',
         status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
-        module: isBar ? 'bar' : isHotel ? 'hotel' : 'hebergement' as ModuleType,
+        module: isBar ? 'bar' : isHotel ? 'hotel' : 'restaurant' as ModuleType, // Changed hebergement to restaurant as fallback
         createdAt: '',
         updatedAt: '',
       })) as unknown as StockItem[]
@@ -404,9 +406,10 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [isClosingBarSession, setIsClosingBarSession] = useState(false);
 
   const isBar = module === 'bar';
-  const isHebergement = module === 'hebergement';
+  // const isHebergement = module === 'hebergement'; // COMMENTED OUT
+  const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
-  const isBackendCaisse = module === 'restaurant' || module === 'hebergement' || module === 'hotel' || module === 'bar';
+  const isBackendCaisse = module === 'restaurant' /* || module === 'hebergement' */ || module === 'hotel' || module === 'bar'; // COMMENTED OUT hebergement
   const canViewBarBalance = !isBar || isAdmin(AuthService.getCurrentUser());
   const transactionTitle = isBar
     ? 'Transactions Bar'

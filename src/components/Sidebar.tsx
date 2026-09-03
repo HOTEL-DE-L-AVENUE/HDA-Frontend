@@ -24,7 +24,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2', path: "/dashboard", roles: ['admin', 'manager'] },
-  { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager'] },
+  // Hébergement module temporarily disabled - commented out from navigation
+  // { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager'] },
   { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'stock_manager'] },
   { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager'] },
   { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },

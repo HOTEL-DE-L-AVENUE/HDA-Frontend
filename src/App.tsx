@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import HotelPage from "./pages/HotelPage";
 import ClientsPage from "./pages/ClientsPage";
-import { HebergementPage } from "./pages/HebergementPage";
+// Hébergement module temporarily disabled - import and route commented out
+// import { HebergementPage } from "./pages/HebergementPage";
 import { RestaurantPage } from "./pages/RestaurantPage";
 import { BarPage } from "./pages/BarPage";
 import { AlcoholPage } from "./pages/AlcoholPage";
@@ -40,7 +41,8 @@ function App() {
               </Route>
 
               {/* Modules avec vérification d'accès par module */}
-              <Route
+              {/* Hébergement module temporarily disabled - route commented out */}
+              {/* <Route
                 element={
                   <ProtectedRoute
                     moduleId="hebergement"
@@ -49,7 +51,7 @@ function App() {
                 }
               >
                 <Route path="/hebergement" element={<HebergementPage />} />
-              </Route>
+              </Route> */}
 
               <Route
                 element={

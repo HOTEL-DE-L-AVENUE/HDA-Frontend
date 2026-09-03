@@ -1,3 +1,31 @@
+// Accommodation service is currently disabled
+// Providing empty exports to prevent import errors
+
+import { RoomMaintenance } from '../types/hotel.types';
+
+export interface MaintenanceFormData {
+  room_id: number;
+  equipment_id?: number | null;
+  type_intervention: 'PREVENTIVE' | 'CORRECTIVE' | 'URGENCE';
+  description?: string;
+  statut?: 'OUVERT' | 'EN_COURS' | 'TERMINE' | 'ANNULE';
+  date_declaration?: string;
+  cout?: number;
+  created_by?: number | null;
+}
+
+export const maintenanceService = {
+  getMaintenances: async (filters?: any): Promise<RoomMaintenance[]> => [],
+  getMaintenanceById: async (id: number): Promise<RoomMaintenance> => null as any,
+  createMaintenance: async (data: MaintenanceFormData): Promise<RoomMaintenance> => null as any,
+  updateMaintenance: async (id: number, data: Partial<MaintenanceFormData>): Promise<RoomMaintenance> => null as any,
+  updateMaintenanceStatus: async (id: number, statut: string): Promise<RoomMaintenance> => null as any,
+  deleteMaintenance: async (id: number): Promise<void> => {},
+  getMaintenanceStats: async (): Promise<any> => null,
+};
+
+/*
+// Original accommodation service code (commented out)
 // src/services/maintenance.service.ts
 import api from '../lib/api';
 import { RoomMaintenance } from '../types/hotel.types';
@@ -110,3 +138,4 @@ export const maintenanceService = {
     }
   }
 };
+*/

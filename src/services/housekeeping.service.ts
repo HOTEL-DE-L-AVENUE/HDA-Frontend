@@ -1,3 +1,29 @@
+// Accommodation service is currently disabled
+// Providing empty exports to prevent import errors
+
+import { HousekeepingTask } from '../types/hotel.types';
+
+export interface HousekeepingFormData {
+  room_id: number;
+  assigned_user_id?: number | null;
+  type_tache: 'NETTOYAGE' | 'DESINFECTION' | 'CHANGEMENT_DRAPS' | 'CONTROLE';
+  statut?: 'A_FAIRE' | 'EN_COURS' | 'TERMINE';
+  commentaire?: string;
+  planned_at?: string;
+}
+
+export const housekeepingService = {
+  getTasks: async (filters?: any): Promise<HousekeepingTask[]> => [],
+  getTaskById: async (id: number): Promise<HousekeepingTask> => null as any,
+  createTask: async (data: HousekeepingFormData): Promise<HousekeepingTask> => null as any,
+  updateTask: async (id: number, data: Partial<HousekeepingFormData>): Promise<HousekeepingTask> => null as any,
+  updateTaskStatus: async (id: number, statut: string): Promise<HousekeepingTask> => null as any,
+  deleteTask: async (id: number): Promise<void> => {},
+  getTaskStats: async (): Promise<any> => null,
+};
+
+/*
+// Original accommodation service code (commented out)
 // src/services/housekeeping.service.ts
 //
 // Les tâches de housekeeping vivent sous le domaine "hébergement" côté backend
@@ -116,3 +142,4 @@ export const housekeepingService = {
     }
   }
 };
+*/

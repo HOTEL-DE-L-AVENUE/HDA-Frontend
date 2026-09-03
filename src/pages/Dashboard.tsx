@@ -3,9 +3,9 @@ import { useHDA } from '../context/HDAContext';
 import { StatCard } from '../components/UI';
 import { formatCurrency } from '../utils/data';
 import financeService, { FinancialStats, FinancialTransaction, isFinancialInflow } from '../services/finance.service';
-import { 
-  DollarSign, TrendingUp, TrendingDown, Package, 
-  AlertTriangle, Activity, BedDouble, Hotel, 
+import {
+  DollarSign, TrendingUp, TrendingDown, Package,
+  AlertTriangle, Activity, Hotel,
   UtensilsCrossed, Wine, Dices, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
@@ -15,22 +15,30 @@ const EMPTY_FINANCIAL_STATS: FinancialStats = {
   totalRevenu: 0, totalDepenses: 0, soldeGlobal: 0, modules: [],
 };
 
-const normalizeModule = (module?: string) => String(module || 'general')
-  .trim()
-  .toLowerCase()
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '');
+const normalizeModule = (module?: string) => {
+  const normalized = String(module || 'general')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
+  // Map disabled hebergement to hotel for display purposes
+  if (normalized.includes('hebergement')) return 'hotel';
+  return normalized;
+};
+
+// Revenue data for dashboard charts - hébergement removed from display as module is disabled
+// Historical hébergement data is preserved in backend but not shown in UI
 const revenueData = [
-  { mois: 'Jan', hebergement: 42000, hotel: 38000, restaurant: 28000, bar: 18000, casino: 95000 },
-  { mois: 'Fév', hebergement: 38000, hotel: 42000, restaurant: 31000, bar: 22000, casino: 88000 },
-  { mois: 'Mar', hebergement: 55000, hotel: 48000, restaurant: 35000, bar: 25000, casino: 112000 },
-  { mois: 'Avr', hebergement: 62000, hotel: 55000, restaurant: 40000, bar: 28000, casino: 125000 },
-  { mois: 'Mai', hebergement: 58000, hotel: 52000, restaurant: 38000, bar: 26000, casino: 108000 },
-  { mois: 'Jun', hebergement: 75000, hotel: 68000, restaurant: 48000, bar: 34000, casino: 145000 },
+  { mois: 'Jan', hotel: 38000, restaurant: 28000, bar: 18000, casino: 95000 },
+  { mois: 'Fév', hotel: 42000, restaurant: 31000, bar: 22000, casino: 88000 },
+  { mois: 'Mar', hotel: 48000, restaurant: 35000, bar: 25000, casino: 112000 },
+  { mois: 'Avr', hotel: 55000, restaurant: 40000, bar: 28000, casino: 125000 },
+  { mois: 'Mai', hotel: 52000, restaurant: 38000, bar: 26000, casino: 108000 },
+  { mois: 'Jun', hotel: 68000, restaurant: 48000, bar: 34000, casino: 145000 },
 ];
 
-const COLORS = ['#d4a847', '#c4953a', '#e8c86a', '#f5e4a0', '#b8860b'];
+const COLORS = ['#d4a847', '#c4953a', '#e8c86a', '#f5e4a0'];
 
 export const Dashboard: React.FC = () => {
   const { state } = useHDA();
@@ -60,7 +68,7 @@ export const Dashboard: React.FC = () => {
       }),
       { module, entrees: 0, sorties: 0, solde: 0 }
     );
-  const hebergement = moduleSummary('hebergement');
+  // Note: 'hebergement' module removed from display as it's disabled
   const hotel = moduleSummary('hotel');
   const restaurant = moduleSummary('restaurant');
   const bar = moduleSummary('bar');
@@ -70,7 +78,6 @@ export const Dashboard: React.FC = () => {
   const totalStockValue = state.stockItems.reduce((sum, s) => sum + (s.quantite * s.prixUnitaire), 0);
 
   const pieData = [
-    { name: 'Hébergement', value: hebergement.entrees },
     { name: 'Hôtel', value: hotel.entrees },
     { name: 'Restaurant', value: restaurant.entrees },
     { name: 'Bar', value: bar.entrees },
@@ -78,7 +85,6 @@ export const Dashboard: React.FC = () => {
   ];
 
   const moduleCards = [
-    { label: 'Hébergement', solde: hebergement.solde, entrees: hebergement.entrees, sorties: hebergement.sorties, icon: <BedDouble size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
     { label: 'Hôtel', solde: hotel.solde, entrees: hotel.entrees, sorties: hotel.sorties, icon: <Hotel size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
     { label: 'Restaurant', solde: restaurant.solde, entrees: restaurant.entrees, sorties: restaurant.sorties, icon: <UtensilsCrossed size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },
     { label: 'Bar & Lounge', solde: bar.solde, entrees: bar.entrees, sorties: bar.sorties, icon: <Wine size={16} className="text-black" />, gradient: 'from-accent to-accent-2' },

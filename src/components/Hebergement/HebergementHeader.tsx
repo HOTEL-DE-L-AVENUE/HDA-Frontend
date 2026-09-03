@@ -1,3 +1,28 @@
+// Accommodation component is currently disabled
+import React from 'react';
+
+interface Props {
+  onNewReservation: () => void;
+}
+
+export const HebergementHeader: React.FC<Props> = ({ onNewReservation }) => (
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-4">
+    <div className="min-w-0 flex-1">
+      <h2
+        className="text-primary text-xl md:text-2xl font-bold truncate"
+        style={{ fontFamily: 'Playfair Display, serif' }}
+      >
+        Hébergement (Disabled)
+      </h2>
+      <p className="text-muted text-xs md:text-sm mt-1 truncate">
+        Accommodation module is currently disabled
+      </p>
+    </div>
+  </div>
+);
+
+/*
+// Original accommodation component code (commented out)
 import React from 'react';
 import { BedDouble, Plus } from 'lucide-react';
 import { Button } from '../../components/UI';
@@ -33,3 +58,4 @@ export const HebergementHeader: React.FC<Props> = ({ onNewReservation }) => (
     </div>
   </div>
 );
+*/

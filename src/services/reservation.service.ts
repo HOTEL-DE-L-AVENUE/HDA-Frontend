@@ -1,3 +1,47 @@
+// Accommodation service is currently disabled
+// Providing empty exports to prevent import errors
+
+import { Reservation } from '../types/hotel.types';
+
+export interface ReservationFormData {
+  client_id: number;
+  room_id: number;
+  date_arrivee: string;
+  date_depart: string;
+  montant_total: number;
+  statut?: 'CONFIRMEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE';
+}
+
+export interface Stay {
+  id: number;
+  reservation_id: number;
+  checkin_at: string | null;
+  checkout_at: string | null;
+  room_id?: number;
+  created_at?: string;
+  updated_at?: string;
+  invoice?: {
+    id: number;
+    montant_total: number;
+    statut: string;
+  } | null;
+}
+
+export const reservationService = {
+  getReservations: async (filters?: any): Promise<Reservation[]> => [],
+  getReservationById: async (id: number): Promise<Reservation> => null as any,
+  createReservation: async (data: ReservationFormData): Promise<Reservation> => null as any,
+  updateReservation: async (id: number, data: Partial<ReservationFormData>): Promise<Reservation> => null as any,
+  updateReservationStatus: async (id: number, statut: string): Promise<Reservation> => null as any,
+  deleteReservation: async (id: number): Promise<void> => {},
+  getStays: async (filters?: any): Promise<Stay[]> => [],
+  checkIn: async (reservationId: number): Promise<Stay> => null as any,
+  checkOut: async (stayId: number): Promise<Stay> => null as any,
+  getReservationStats: async (): Promise<any> => null,
+};
+
+/*
+// Original accommodation service code (commented out)
 // src/services/reservation.service.ts
 import api from '../lib/api';
 import { Reservation } from '../types/hotel.types';
@@ -106,7 +150,7 @@ export const reservationService = {
       const params = new URLSearchParams();
       if (filters?.reservation_id) params.append('reservation_id', String(filters.reservation_id));
       if (filters?.room_id) params.append('room_id', String(filters.room_id));
-      if (filters?.checkin_at) params.append('checkin_at', filters.checkin_at);
+      if (filters?.checkin_at) params.append('checkin_at', filters.checkin_at));
       if (filters?.checkout_at) params.append('checkout_at', filters.checkout_at);
 
       const url = `${BASE_URL.replace('/reservations', '/stays')}${params.toString() ? `?${params.toString()}` : ''}`;
@@ -166,3 +210,4 @@ export interface Stay {
     statut: string;
   } | null;
 }
+*/

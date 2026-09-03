@@ -9,22 +9,28 @@ import { Modal } from '../components/ui/Modal';
 import { toast } from 'react-hot-toast';
 import { useHDA } from '../context/HDAContext';
 
+// Module configuration for financial tracking and reporting
+// Note: 'hebergement' module removed from display as it's disabled in the main application
+// Kept in normalizeModuleKey for historical data processing but hidden from UI
 const moduleConfig: Record<string, { label: string; gradient: string; color: string }> = {
-  hebergement: { label: 'Hébergement', gradient: 'from-blue-500 to-cyan-600', color: '#3b82f6' },
   hotel: { label: 'Hôtel', gradient: 'from-indigo-500 to-blue-600', color: '#6366f1' },
   restaurant: { label: 'Restaurant', gradient: 'from-orange-500 to-amber-600', color: '#f97316' },
   bar: { label: 'Bar & Lounge', gradient: 'from-rose-500 to-pink-600', color: '#f43f5e' },
   casino: { label: 'Casino', gradient: 'from-emerald-500 to-green-600', color: '#10b981' },
-  // Removed General and Facturation
+  // Removed General, Facturation, and Hébergement (disabled)
 };
 
 const financeModules = Object.keys(moduleConfig);
 const defaultModuleConfig = { label: 'Module', gradient: 'from-gray-500 to-gray-600', color: '#6b7280' };
 
+// Normalizes module names to consistent keys for financial data processing
+// Handles various naming conventions and historical data references
+// Note: 'hebergement' is still processed for historical data but mapped to 'hotel' for display
 const normalizeModuleKey = (value?: string): string => {
   const raw = String(value || 'general').trim().toLowerCase();
 
-  if (raw.includes('hebergement')) return 'hebergement';
+  // Map disabled hebergement to hotel for display purposes
+  if (raw.includes('hebergement')) return 'hotel';
   if (raw.includes('hotel')) return 'hotel';
   if (raw.includes('restaurant')) return 'restaurant';
   if (raw.includes('bar')) return 'bar';

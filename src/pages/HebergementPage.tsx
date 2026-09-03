@@ -1,3 +1,12 @@
+// Accommodation module is currently disabled
+import React from 'react';
+
+export const HebergementPage: React.FC = () => {
+  return <div>Accommodation module is currently disabled</div>;
+};
+
+/*
+// Original accommodation page code (commented out)
 import React from 'react';
 import { Reservation } from '../types/hebergement.type';
 import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
@@ -203,3 +212,4 @@ export const HebergementPage: React.FC = () => {
     </div>
   );
 };
+*/
