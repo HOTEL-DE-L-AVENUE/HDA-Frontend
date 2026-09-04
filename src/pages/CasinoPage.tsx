@@ -34,8 +34,9 @@ const setFirstPlayerTimeIfMissing = (players: PlayerLine[]) => {
 
 export const CasinoPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
+  const userRole = currentUser?.role?.toLowerCase() || '';
   const userIsAdmin = isAdmin(currentUser);
-  const canManageCasino = userIsAdmin || currentUser?.role === 'croupier';
+  const canManageCasino = userIsAdmin || ['croupier', 'manager', 'caisse', 'caissier'].includes(userRole);
   const [view, setView] = useState<CasinoView>('setup');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [table, setTable] = useState('Table Poker Night');
@@ -170,10 +171,10 @@ export const CasinoPage: React.FC = () => {
     setPlayers((current) => current.map((line) =>
       line.casinoPlayerId === id
         ? {
-            ...line,
-            initialDeposit: nextDeposit,
-            initialCredit: nextCredit,
-          }
+          ...line,
+          initialDeposit: nextDeposit,
+          initialCredit: nextCredit,
+        }
         : line
     ));
   };
@@ -230,10 +231,10 @@ export const CasinoPage: React.FC = () => {
     if (!casinoPlayerId || (!isDeposit && !isCredit)) return;
     setRegisteredPlayers((current) => current.map((player) => player.id === casinoPlayerId
       ? {
-          ...player,
-          ...(isDeposit ? { depot: enteredAmount, ...(enteredAmount > 0 ? { credit: 0 } : {}) } : {}),
-          ...(isCredit ? { credit: enteredAmount, ...(enteredAmount > 0 ? { depot: 0 } : {}) } : {}),
-        }
+        ...player,
+        ...(isDeposit ? { depot: enteredAmount, ...(enteredAmount > 0 ? { credit: 0 } : {}) } : {}),
+        ...(isCredit ? { credit: enteredAmount, ...(enteredAmount > 0 ? { depot: 0 } : {}) } : {}),
+      }
       : player
     ));
   };
@@ -256,7 +257,7 @@ export const CasinoPage: React.FC = () => {
         };
       }
       setIdentityVerifications(map);
-    }).catch(() => {});
+    }).catch(() => { });
     return () => { active = false; };
   }, [date, table]);
 
