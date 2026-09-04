@@ -14,7 +14,7 @@ import {
   Edit,
   Trash2
 } from 'lucide-react';
-import { Client } from '../../types/hebergement.type';
+import { Client } from '../../services/client.service';
 import { useClients } from '../../hooks/useClients';
 import { toast } from 'react-hot-toast';
 

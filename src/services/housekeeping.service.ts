@@ -1,38 +1,12 @@
-// Accommodation service is currently disabled
-// Providing empty exports to prevent import errors
-
+import api from '../lib/api';
 import { HousekeepingTask } from '../types/hotel.types';
 
-export interface HousekeepingFormData {
-  room_id: number;
-  assigned_user_id?: number | null;
-  type_tache: 'NETTOYAGE' | 'DESINFECTION' | 'CHANGEMENT_DRAPS' | 'CONTROLE';
-  statut?: 'A_FAIRE' | 'EN_COURS' | 'TERMINE';
-  commentaire?: string;
-  planned_at?: string;
-}
-
-export const housekeepingService = {
-  getTasks: async (filters?: any): Promise<HousekeepingTask[]> => [],
-  getTaskById: async (id: number): Promise<HousekeepingTask> => null as any,
-  createTask: async (data: HousekeepingFormData): Promise<HousekeepingTask> => null as any,
-  updateTask: async (id: number, data: Partial<HousekeepingFormData>): Promise<HousekeepingTask> => null as any,
-  updateTaskStatus: async (id: number, statut: string): Promise<HousekeepingTask> => null as any,
-  deleteTask: async (id: number): Promise<void> => {},
-  getTaskStats: async (): Promise<any> => null,
-};
-
-/*
-// Original accommodation service code (commented out)
 // src/services/housekeeping.service.ts
 //
 // Les tâches de housekeeping vivent sous le domaine "hébergement" côté backend
 // (routes/hebergementRoutes.js, montées sous /api/hebergement), pas sous
 // /api/housekeeping à la racine. Toutes les URLs ci-dessous ont été corrigées
 // en conséquence (même remarque que pour reservation.service.ts).
-import api from '../lib/api';
-import { HousekeepingTask } from '../types/hotel.types';
-
 const BASE_URL = '/api/hebergement/housekeeping';
 
 interface ApiResponse<T> {
@@ -45,7 +19,7 @@ interface ApiResponse<T> {
 export interface HousekeepingFormData {
   room_id: number;
   assigned_user_id?: number | null;
-  type_tache: 'NETTOYAGE' | 'DESINFECTION' | 'CHANGEMENT_DRAPS' | 'CONTROLE';
+  type_tache: HousekeepingTask['type_tache'];
   statut?: 'A_FAIRE' | 'EN_COURS' | 'TERMINE';
   commentaire?: string;
   planned_at?: string;
@@ -142,4 +116,3 @@ export const housekeepingService = {
     }
   }
 };
-*/

@@ -40,6 +40,8 @@ export interface StockItem {
   module: ModuleType;
   createdAt: string;
   updatedAt: string;
+  typeProduit?: 'CONSOMMABLE' | 'NON_CONSOMMABLE';
+  etat?: 'DISPONIBLE' | 'EN_LAVAGE' | 'USE' | 'ENDOMMAGE' | 'REBUT' | 'PERDU';
 }
 
 export interface StockMovement {

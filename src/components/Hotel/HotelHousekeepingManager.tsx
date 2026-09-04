@@ -19,7 +19,12 @@ import { useRooms } from '../../hooks/useRooms';
 import { HousekeepingFormModal } from './Modal/HousekeepingFormModal';
 import { toast } from 'react-hot-toast';
 
-export const HousekeepingManager: React.FC = () => {
+interface HousekeepingManagerProps {
+  initialRoomId?: number | null;
+  onTaskCompleted?: () => void;
+}
+
+export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initialRoomId = null, onTaskCompleted }) => {
   const {
     tasks,
     stats,
@@ -32,7 +37,7 @@ export const HousekeepingManager: React.FC = () => {
     deleteTask
   } = useHousekeeping();
 
-  const { rooms, loadRooms } = useRooms();
+  const { rooms, loadRooms, updateRoomStatus } = useRooms();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<HousekeepingTask | null>(null);
@@ -41,6 +46,13 @@ export const HousekeepingManager: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<HousekeepingTask | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (initialRoomId) {
+      setSelectedTask(null);
+      setIsModalOpen(true);
+    }
+  }, [initialRoomId]);
 
   // Charger les données
   useEffect(() => {
@@ -82,6 +94,11 @@ export const HousekeepingManager: React.FC = () => {
   const handleStatusChange = async (id: number, statut: string) => {
     try {
       await updateStatus(id, statut);
+      if (statut === 'TERMINE') {
+        const task = tasks.find((item) => item.id === id);
+        if (task) await updateRoomStatus(task.room_id, 'LIBRE');
+        onTaskCompleted?.();
+      }
       toast.success(`Statut mis à jour: ${statut}`);
       await loadAll();
     } catch (error: any) {
@@ -127,19 +144,31 @@ export const HousekeepingManager: React.FC = () => {
 
   const getTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
-      NETTOYAGE: 'bg-emerald-500/20 text-emerald-400',
-      DESINFECTION: 'bg-blue-500/20 text-blue-400',
-      CHANGEMENT_DRAPS: 'bg-purple-500/20 text-purple-400',
-      CONTROLE: 'bg-orange-500/20 text-orange-400'
+      CHAMBRE: 'bg-emerald-500/20 text-emerald-400',
+      ESCALIER_RAMPE: 'bg-blue-500/20 text-blue-400',
+      DECORATIONS: 'bg-purple-500/20 text-purple-400',
+      MUR: 'bg-orange-500/20 text-orange-400',
+      PLAFOND: 'bg-orange-500/20 text-orange-400',
+      SOL_MOQUETTE: 'bg-orange-500/20 text-orange-400',
+      MEUBLES: 'bg-orange-500/20 text-orange-400',
+      COULOIR: 'bg-orange-500/20 text-orange-400',
+      TERASSE: 'bg-orange-500/20 text-orange-400',
+      TOILETTES: 'bg-orange-500/20 text-orange-400'
     };
     const labels: Record<string, string> = {
-      NETTOYAGE: '🧹 Nettoyage',
-      DESINFECTION: '🧪 Désinfection',
-      CHANGEMENT_DRAPS: '🛏️ Draps',
-      CONTROLE: '🔍 Contrôle'
+      CHAMBRE: 'Chambre',
+      ESCALIER_RAMPE: 'Escalier/rampe',
+      DECORATIONS: 'Décorations',
+      MUR: 'Mur',
+      PLAFOND: 'Plafond',
+      SOL_MOQUETTE: 'Sol/moquette',
+      MEUBLES: 'Meubles',
+      COULOIR: 'Couloir',
+      TERASSE: 'Terrasse',
+      TOILETTES: 'Toilettes'
     };
     return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${colors[type] || colors.NETTOYAGE}`}>
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${colors[type] || colors.CHAMBRE}`}>
         {labels[type] || type}
       </span>
     );
@@ -233,10 +262,16 @@ export const HousekeepingManager: React.FC = () => {
           className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-accent text-sm"
         >
           <option value="TOUS">Tous les types</option>
-          <option value="NETTOYAGE">Nettoyage</option>
-          <option value="DESINFECTION">Désinfection</option>
-          <option value="CHANGEMENT_DRAPS">Changement draps</option>
-          <option value="CONTROLE">Contrôle</option>
+          <option value="CHAMBRE">Chambre</option>
+          <option value="ESCALIER_RAMPE">Escalier/rampe</option>
+          <option value="DECORATIONS">Décorations</option>
+          <option value="MUR">Mur</option>
+          <option value="PLAFOND">Plafond</option>
+          <option value="SOL_MOQUETTE">Sol/moquette</option>
+          <option value="MEUBLES">Meubles</option>
+          <option value="COULOIR">Couloir</option>
+          <option value="TERASSE">Terrasse</option>
+          <option value="TOILETTES">Toilettes</option>
         </select>
         <button
           onClick={() => {
@@ -336,6 +371,7 @@ export const HousekeepingManager: React.FC = () => {
         }}
         initialData={selectedTask}
         rooms={rooms}
+        defaultRoomId={initialRoomId || undefined}
         onSave={handleSave}
       />
 

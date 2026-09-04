@@ -9,7 +9,11 @@ import { useRooms } from '../../hooks/useRooms';
 import { toast } from 'react-hot-toast';
 import { EquipmentFormModal } from './Modal/EquipmentFormModal';
 
-export const EquipmentManager: React.FC = () => {
+interface EquipmentManagerProps {
+  initialRoomId?: number | null;
+}
+
+export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomId = null }) => {
   const { 
     equipments, 
     roomEquipments, 
@@ -33,6 +37,11 @@ export const EquipmentManager: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [stats, setStats] = useState<any>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | ''>('');
+
+  useEffect(() => {
+    if (initialRoomId) setSelectedRoomId(initialRoomId);
+  }, [initialRoomId]);
 
   // Charger les données
   useEffect(() => {
@@ -73,7 +82,7 @@ export const EquipmentManager: React.FC = () => {
   };
 
   // Gestion de l'assignation
-  const handleAssign = async (roomId: number, quantity: number) => {
+  const handleAssign = async (roomId: number, quantity: number, zone: 'CHAMBRE' | 'SALLE_DE_BAIN') => {
     if (!selectedEquipment) return;
     
     try {
@@ -81,6 +90,7 @@ export const EquipmentManager: React.FC = () => {
         room_id: roomId,
         equipment_id: selectedEquipment.id,
         quantite: quantity,
+        zone,
         statut: 'BON'
       });
       toast.success('Équipement assigné avec succès');
@@ -138,6 +148,30 @@ export const EquipmentManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <div className="bg-surface border border-base rounded-xl p-4">
+        <label className="block text-sm font-medium text-primary mb-2">Voir les équipements par chambre</label>
+        <select value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value ? Number(e.target.value) : '')} className="input-field w-full md:max-w-sm">
+          <option value="">Sélectionner une chambre</option>
+          {rooms.map(room => <option key={room.id} value={room.id}>Chambre {room.numero}</option>)}
+        </select>
+        {selectedRoomId !== '' && (() => {
+          const assigned = roomEquipments.filter(item => item.room_id === selectedRoomId);
+          const renderZone = (zone: 'CHAMBRE' | 'SALLE_DE_BAIN') => assigned.filter(item => (item.zone || 'CHAMBRE') === zone);
+          return (
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              {(['CHAMBRE', 'SALLE_DE_BAIN'] as const).map(zone => (
+                <div key={zone} className="rounded-lg border border-base p-3">
+                  <h4 className="font-semibold text-primary mb-2">{zone === 'CHAMBRE' ? 'Chambre' : 'Salle de bain'}</h4>
+                  {renderZone(zone).length === 0 ? <p className="text-sm text-muted">Aucun équipement</p> : renderZone(zone).map(item => {
+                    const equipment = equipments.find(entry => entry.id === item.equipment_id);
+                    return <div key={item.id} className="flex justify-between text-sm py-1"><span>{equipment?.nom || `Équipement #${item.equipment_id}`}</span><span className="text-muted">x{item.quantite}</span></div>;
+                  })}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

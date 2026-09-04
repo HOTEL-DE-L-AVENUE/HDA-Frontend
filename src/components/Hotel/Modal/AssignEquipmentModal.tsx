@@ -22,11 +22,12 @@ export const AssignEquipmentModal: React.FC<AssignEquipmentModalProps> = ({
 }) => {
   const [roomId, setRoomId] = useState<number | ''>('');
   const [quantity, setQuantity] = useState(1);
+  const [zone, setZone] = useState<'CHAMBRE' | 'SALLE_DE_BAIN'>('CHAMBRE');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomId && equipment) {
-      onAssign(Number(roomId), quantity);
+      onAssign(Number(roomId), quantity, zone);
     }
   };
 
@@ -43,6 +44,14 @@ export const AssignEquipmentModal: React.FC<AssignEquipmentModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-primary mb-1.5">Zone *</label>
+            <select value={zone} onChange={(e) => setZone(e.target.value as 'CHAMBRE' | 'SALLE_DE_BAIN')} className="input-field w-full" required>
+              <option value="CHAMBRE">Chambre</option>
+              <option value="SALLE_DE_BAIN">Salle de bain</option>
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-primary mb-1.5">
               Chambre *

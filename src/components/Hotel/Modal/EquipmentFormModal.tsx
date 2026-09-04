@@ -24,6 +24,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     nom: '',
     categorie: '',
     description: '',
+    zone: 'CHAMBRE' as 'CHAMBRE' | 'SALLE_DE_BAIN',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -35,6 +36,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         nom: initialData.nom || '',
         categorie: initialData.categorie || '',
         description: initialData.description || '',
+        zone: initialData.zone || 'CHAMBRE',
       });
     } else {
       setFormData({
@@ -42,6 +44,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         nom: '',
         categorie: '',
         description: '',
+        zone: 'CHAMBRE',
       });
     }
     setErrors({});
@@ -83,6 +86,30 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Emplacement de l’équipement</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, zone: 'CHAMBRE' })}
+                className={`rounded-lg border p-3 text-left transition ${formData.zone === 'CHAMBRE' ? 'border-accent bg-accent/10 text-accent' : 'border-gray-700 text-gray-300 hover:bg-gray-800'}`}
+                disabled={isSubmitting}
+              >
+                <span className="block text-sm font-semibold">Chambre</span>
+                <span className="block text-xs opacity-70">Équipement de la chambre</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, zone: 'SALLE_DE_BAIN' })}
+                className={`rounded-lg border p-3 text-left transition ${formData.zone === 'SALLE_DE_BAIN' ? 'border-accent bg-accent/10 text-accent' : 'border-gray-700 text-gray-300 hover:bg-gray-800'}`}
+                disabled={isSubmitting}
+              >
+                <span className="block text-sm font-semibold">Salle de bain</span>
+                <span className="block text-xs opacity-70">Équipement de la salle de bain</span>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
               Nom <span className="text-red-400">*</span>

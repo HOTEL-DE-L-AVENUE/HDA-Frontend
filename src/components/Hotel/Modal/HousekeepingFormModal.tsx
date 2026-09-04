@@ -9,6 +9,7 @@ interface HousekeepingFormModalProps {
   onClose: () => void;
   initialData: HousekeepingTask | null;
   rooms: Room[];
+  defaultRoomId?: number;
   onSave: (data: any) => void;
 }
 
@@ -17,11 +18,12 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
   onClose,
   initialData,
   rooms,
+  defaultRoomId,
   onSave,
 }) => {
   const [formData, setFormData] = useState({
     room_id: 0,
-    type_tache: 'NETTOYAGE' as 'NETTOYAGE' | 'DESINFECTION' | 'CHANGEMENT_DRAPS' | 'CONTROLE',
+    type_tache: 'CHAMBRE' as HousekeepingTask['type_tache'],
     statut: 'A_FAIRE' as 'A_FAIRE' | 'EN_COURS' | 'TERMINE',
     commentaire: '',
     planned_at: '',
@@ -40,15 +42,15 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
       });
     } else {
       setFormData({
-        room_id: 0,
-        type_tache: 'NETTOYAGE',
+        room_id: defaultRoomId || 0,
+        type_tache: 'CHAMBRE',
         statut: 'A_FAIRE',
         commentaire: '',
         planned_at: new Date().toISOString().split('T')[0],
       });
     }
     setErrors({});
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, defaultRoomId]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -120,10 +122,16 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
               className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
               disabled={isSubmitting}
             >
-              <option value="NETTOYAGE">🧹 Nettoyage</option>
-              <option value="DESINFECTION">🧪 Désinfection</option>
-              <option value="CHANGEMENT_DRAPS">🛏️ Changement draps</option>
-              <option value="CONTROLE">🔍 Contrôle</option>
+              <option value="CHAMBRE">Chambre</option>
+              <option value="ESCALIER_RAMPE">Escalier/rampe</option>
+              <option value="DECORATIONS">Décorations</option>
+              <option value="MUR">Mur</option>
+              <option value="PLAFOND">Plafond</option>
+              <option value="SOL_MOQUETTE">Sol/moquette</option>
+              <option value="MEUBLES">Meubles</option>
+              <option value="COULOIR">Couloir</option>
+              <option value="TERASSE">Terrasse</option>
+              <option value="TOILETTES">Toilettes</option>
             </select>
           </div>
 

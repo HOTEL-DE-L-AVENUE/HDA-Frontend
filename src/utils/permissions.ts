@@ -223,7 +223,7 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
     case 'stock_manager':
       return '/restaurant';
     case 'receptioniste':
-      return '/hebergement';
+      return '/hotel';
     case 'water':
       return '/bar';
     case 'housekeeping':

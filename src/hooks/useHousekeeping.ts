@@ -21,7 +21,7 @@ export const useHousekeeping = () => {
       setLoading(true);
       setError(null);
       const data = await housekeepingService.getTasks(filters);
-      setTasks(data);
+      setTasks(Array.isArray(data) ? data.filter(Boolean) : []);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors du chargement des tâches');
       console.error('❌ loadTasks error:', err);
@@ -47,7 +47,7 @@ export const useHousekeeping = () => {
     try {
       setError(null);
       const newTask = await housekeepingService.createTask(data);
-      setTasks(prev => [...prev, newTask]);
+      if (newTask) setTasks(prev => [...prev, newTask]);
       return newTask;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la création');
@@ -61,7 +61,7 @@ export const useHousekeeping = () => {
     try {
       setError(null);
       const updated = await housekeepingService.updateTask(id, data);
-      setTasks(prev => prev.map(t => t.id === id ? updated : t));
+      if (updated) setTasks(prev => prev.map(t => t.id === id ? updated : t));
       return updated;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la mise à jour');
@@ -75,7 +75,7 @@ export const useHousekeeping = () => {
     try {
       setError(null);
       const updated = await housekeepingService.updateTaskStatus(id, statut);
-      setTasks(prev => prev.map(t => t.id === id ? updated : t));
+      if (updated) setTasks(prev => prev.map(t => t.id === id ? updated : t));
       return updated;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la mise à jour du statut');

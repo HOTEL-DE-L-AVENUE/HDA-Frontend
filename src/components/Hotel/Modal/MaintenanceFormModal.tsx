@@ -1,6 +1,6 @@
 // components/Hotel/Modal/MaintenanceFormModal.tsx
 import React, { useState, useEffect } from 'react';
-import { RoomMaintenance, Room, Equipment } from '../../../types/hotel.types';
+import { RoomMaintenance, Room, Equipment, MaintenanceWorker } from '../../../types/hotel.types';
 import { X, Loader, AlertCircle } from 'lucide-react';
 import { Modal } from '../../Modal';
 
@@ -10,6 +10,8 @@ interface MaintenanceFormModalProps {
   initialData: RoomMaintenance | null;
   rooms: Room[];
   equipments: Equipment[];
+  workers?: MaintenanceWorker[];
+  defaultRoomId?: number;
   onSave: (data: any) => void;
 }
 
@@ -19,15 +21,24 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
   initialData,
   rooms,
   equipments,
+  workers = [],
+  defaultRoomId,
   onSave,
 }) => {
   const [formData, setFormData] = useState({
     room_id: 0,
     equipment_id: null as number | null,
-    type_intervention: 'CORRECTIVE' as 'PREVENTIVE' | 'CORRECTIVE' | 'URGENCE',
+    type_intervention: 'PLOMBERIE' as RoomMaintenance['type_intervention'],
     description: '',
     statut: 'OUVERT' as 'OUVERT' | 'EN_COURS' | 'TERMINE' | 'ANNULE',
     cout: 0,
+    location: '',
+    equipment_label: '',
+    worker_id: null as number | null,
+    execution_date: '',
+    finish_date: '',
+    materials_cost: 0,
+    labor_cost: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -41,25 +52,32 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
         description: initialData.description || '',
         statut: initialData.statut,
         cout: initialData.cout || 0,
+        location: initialData.location || '',
+        equipment_label: initialData.equipment_label || '',
+        worker_id: initialData.worker_id || null,
+        execution_date: initialData.execution_date || '',
+        finish_date: initialData.finish_date || '',
+        materials_cost: initialData.materials_cost || 0,
+        labor_cost: initialData.labor_cost || 0,
       });
     } else {
       setFormData({
-        room_id: 0,
+        room_id: defaultRoomId || 0,
         equipment_id: null,
-        type_intervention: 'CORRECTIVE',
+        type_intervention: 'PLOMBERIE',
         description: '',
         statut: 'OUVERT',
         cout: 0,
+        location: '', equipment_label: '', worker_id: null,
+        execution_date: '', finish_date: '', materials_cost: 0, labor_cost: 0,
       });
     }
     setErrors({});
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, defaultRoomId]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!formData.room_id) {
-      newErrors.room_id = 'Veuillez sélectionner une chambre';
-    }
+    if (!formData.location.trim()) newErrors.location = 'Veuillez saisir le lieu de l’intervention';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -94,7 +112,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
           {/* Chambre */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Chambre <span className="text-red-400">*</span>
+              Chambre de référence
             </label>
             <select
               value={formData.room_id}
@@ -109,9 +127,14 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
                 </option>
               ))}
             </select>
-            {errors.room_id && (
-              <p className="text-red-400 text-xs mt-1">{errors.room_id}</p>
-            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Endroit exact *</label>
+            <input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="Ex. Toilettes femmes, 1er étage" className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white" />
+            {errors.location && <p className="text-red-400 text-xs mt-1">{errors.location}</p>}
+            <label className="block text-sm font-medium text-gray-300 mb-1.5 mt-3">Équipement concerné</label>
+            <input value={formData.equipment_label} onChange={(e) => setFormData({ ...formData, equipment_label: e.target.value })} placeholder="Ex. Robinet, climatiseur..." className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white" />
           </div>
 
           {/* Équipement */}
@@ -143,10 +166,25 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
               className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
               disabled={isSubmitting}
             >
-              <option value="PREVENTIVE">🛠️ Préventive</option>
-              <option value="CORRECTIVE">🔧 Corrective</option>
-              <option value="URGENCE">🚨 Urgence</option>
+              <option value="PLOMBERIE">Plomberie</option>
+              <option value="ELECTRICITE">Électricité</option>
+              <option value="MACONNERIE">Maçonnerie</option>
+              <option value="CLIMATISATION">Climatisation</option>
+              <option value="AUTRE">Autres</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Ouvrier responsable</label>
+            <select value={formData.worker_id || ''} onChange={(e) => setFormData({ ...formData, worker_id: e.target.value ? Number(e.target.value) : null })} className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white">
+              <option value="">{workers.length ? 'Sélectionner un ouvrier' : 'Aucun ouvrier enregistré'}</option>
+              {workers.filter(worker => worker.statut === 'ACTIF').map(worker => <option key={worker.id} value={worker.id}>{worker.prenom} {worker.nom}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm text-gray-300 mb-1.5">Date d’exécution</label><input type="date" value={formData.execution_date} onChange={(e) => setFormData({ ...formData, execution_date: e.target.value })} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
+            <div><label className="block text-sm text-gray-300 mb-1.5">Date de finition</label><input type="date" value={formData.finish_date} onChange={(e) => setFormData({ ...formData, finish_date: e.target.value })} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white" /></div>
           </div>
 
           {/* Statut */}
@@ -180,19 +218,13 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
             />
           </div>
 
-          {/* Coût */}
+          {/* Coûts */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Coût (Ar)</label>
-            <input
-              type="number"
-              value={formData.cout}
-              onChange={(e) => setFormData({ ...formData, cout: Number(e.target.value) })}
-              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-              min="0"
-              step="100"
-              placeholder="0"
-              disabled={isSubmitting}
-            />
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Coût des matériaux</label>
+            <input type="number" value={formData.materials_cost} onChange={(e) => setFormData({ ...formData, materials_cost: Number(e.target.value) })} className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white" min="0" />
+            <label className="block text-sm font-medium text-gray-300 mb-1.5 mt-3">Main d’œuvre</label>
+            <input type="number" value={formData.labor_cost} onChange={(e) => setFormData({ ...formData, labor_cost: Number(e.target.value) })} className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white" min="0" />
+            <p className="text-accent font-semibold mt-2">Total estimé : {(Number(formData.materials_cost) + Number(formData.labor_cost)).toLocaleString('fr-FR')} Ar</p>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-gray-800">

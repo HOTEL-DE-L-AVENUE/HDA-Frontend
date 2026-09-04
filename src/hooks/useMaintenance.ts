@@ -14,12 +14,14 @@ export const useMaintenance = () => {
     statut?: string;
     room_id?: number;
     type_intervention?: string;
+    from?: string;
+    to?: string;
   }) => {
     try {
       setLoading(true);
       setError(null);
       const data = await maintenanceService.getMaintenances(filters);
-      setMaintenances(data);
+      setMaintenances(Array.isArray(data) ? data.filter(Boolean) : []);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors du chargement des maintenances');
       console.error('❌ loadMaintenances error:', err);
@@ -54,7 +56,7 @@ export const useMaintenance = () => {
     try {
       setError(null);
       const newMaintenance = await maintenanceService.createMaintenance(data);
-      setMaintenances(prev => [...prev, newMaintenance]);
+      if (newMaintenance) setMaintenances(prev => [...prev, newMaintenance]);
       return newMaintenance;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la création');
@@ -68,7 +70,7 @@ export const useMaintenance = () => {
     try {
       setError(null);
       const updated = await maintenanceService.updateMaintenance(id, data);
-      setMaintenances(prev => prev.map(m => m.id === id ? updated : m));
+      if (updated) setMaintenances(prev => prev.map(m => m.id === id ? updated : m));
       return updated;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la mise à jour');
@@ -82,7 +84,7 @@ export const useMaintenance = () => {
     try {
       setError(null);
       const updated = await maintenanceService.updateMaintenanceStatus(id, statut);
-      setMaintenances(prev => prev.map(m => m.id === id ? updated : m));
+      if (updated) setMaintenances(prev => prev.map(m => m.id === id ? updated : m));
       return updated;
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors de la mise à jour du statut');

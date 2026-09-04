@@ -1,51 +1,30 @@
-// Accommodation service is currently disabled
-// Providing empty exports to prevent import errors
-
+import api from '../lib/api';
 import { RoomMaintenance } from '../types/hotel.types';
 
 export interface MaintenanceFormData {
   room_id: number;
   equipment_id?: number | null;
-  type_intervention: 'PREVENTIVE' | 'CORRECTIVE' | 'URGENCE';
+  type_intervention: 'PLOMBERIE' | 'ELECTRICITE' | 'MACONNERIE' | 'CLIMATISATION' | 'AUTRE';
   description?: string;
   statut?: 'OUVERT' | 'EN_COURS' | 'TERMINE' | 'ANNULE';
   date_declaration?: string;
   cout?: number;
   created_by?: number | null;
+  location?: string;
+  equipment_label?: string;
+  worker_id?: number | null;
+  execution_date?: string;
+  finish_date?: string;
+  materials_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
 }
-
-export const maintenanceService = {
-  getMaintenances: async (filters?: any): Promise<RoomMaintenance[]> => [],
-  getMaintenanceById: async (id: number): Promise<RoomMaintenance> => null as any,
-  createMaintenance: async (data: MaintenanceFormData): Promise<RoomMaintenance> => null as any,
-  updateMaintenance: async (id: number, data: Partial<MaintenanceFormData>): Promise<RoomMaintenance> => null as any,
-  updateMaintenanceStatus: async (id: number, statut: string): Promise<RoomMaintenance> => null as any,
-  deleteMaintenance: async (id: number): Promise<void> => {},
-  getMaintenanceStats: async (): Promise<any> => null,
-};
-
-/*
-// Original accommodation service code (commented out)
-// src/services/maintenance.service.ts
-import api from '../lib/api';
-import { RoomMaintenance } from '../types/hotel.types';
 
 interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
   count?: number;
-}
-
-export interface MaintenanceFormData {
-  room_id: number;
-  equipment_id?: number | null;
-  type_intervention: 'PREVENTIVE' | 'CORRECTIVE' | 'URGENCE';
-  description?: string;
-  statut?: 'OUVERT' | 'EN_COURS' | 'TERMINE' | 'ANNULE';
-  date_declaration?: string;
-  cout?: number;
-  created_by?: number | null;
 }
 
 // La table est room_maintenance, montée sous /api/hebergement/room-maintenance (README §5.5)
@@ -57,12 +36,16 @@ export const maintenanceService = {
     statut?: string;
     room_id?: number;
     type_intervention?: string;
+    from?: string;
+    to?: string;
   }): Promise<RoomMaintenance[]> => {
     try {
       const params = new URLSearchParams();
       if (filters?.statut) params.append('statut', filters.statut);
       if (filters?.room_id) params.append('room_id', String(filters.room_id));
       if (filters?.type_intervention) params.append('type_intervention', filters.type_intervention);
+      if (filters?.from) params.append('from', filters.from);
+      if (filters?.to) params.append('to', filters.to);
 
       const url = `${BASE_URL}${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await api.get<ApiResponse<RoomMaintenance[]>>(url);
@@ -138,4 +121,3 @@ export const maintenanceService = {
     }
   }
 };
-*/
