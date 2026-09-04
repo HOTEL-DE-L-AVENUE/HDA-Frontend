@@ -1,3 +1,40 @@
+// Accommodation service is currently disabled
+// Providing empty exports to prevent import errors
+
+import { Equipment, RoomEquipment } from '../types/hotel.types';
+
+export interface EquipmentFormData {
+  code?: string;
+  nom: string;
+  categorie?: string;
+  description?: string;
+}
+
+export interface RoomEquipmentFormData {
+  room_id: number;
+  equipment_id: number;
+  quantite: number;
+  statut?: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
+}
+
+export const equipmentService = {
+  getEquipments: async (filters?: any): Promise<Equipment[]> => [],
+  getEquipmentById: async (id: number): Promise<Equipment> => null as any,
+  getEquipmentByCode: async (code: string): Promise<Equipment> => null as any,
+  getEquipmentCategories: async (): Promise<string[]> => [],
+  createEquipment: async (data: EquipmentFormData): Promise<Equipment> => null as any,
+  updateEquipment: async (id: number, data: EquipmentFormData): Promise<Equipment> => null as any,
+  deleteEquipment: async (id: number): Promise<void> => {},
+  getEquipmentStats: async (): Promise<any> => null,
+  getRoomEquipments: async (filters?: any): Promise<RoomEquipment[]> => [],
+  assignEquipment: async (data: RoomEquipmentFormData): Promise<RoomEquipment> => null as any,
+  updateRoomEquipment: async (id: number, data: Partial<RoomEquipmentFormData>): Promise<RoomEquipment> => null as any,
+  deleteRoomEquipment: async (id: number): Promise<void> => {},
+  updateRoomEquipmentStatus: async (id: number, statut: string): Promise<RoomEquipment> => null as any,
+};
+
+/*
+// Original accommodation service code (commented out)
 // src/services/equipment.service.ts
 import api from '../lib/api';
 import { Equipment, RoomEquipment } from '../types/hotel.types';
@@ -23,7 +60,7 @@ export interface RoomEquipmentFormData {
   statut?: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
 }
 
-// Toutes les routes ci-dessous sont montées sous /api/hebergement (voir README §5.5)
+// Toutes ci-dessous sont montées sous /api/hebergement (voir README §5.5)
 const BASE_URL = '/api/hebergement';
 
 export const equipmentService = {
@@ -191,3 +228,4 @@ export const equipmentService = {
     }
   }
 };
+*/

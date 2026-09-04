@@ -36,15 +36,19 @@ const roleIcons: Record<string, string> = {
   croupier: '🎲',
 };
 
+// Module labels for user interface display
+// Note: 'hebergement' module removed as it's disabled in the main application
 const moduleLabels: Record<string, string> = {
-  hebergement: 'Hébergement',
   hotel: 'Hôtel',
   restaurant: 'Restaurant',
   bar: 'Bar',
   casino: 'Casino',
 };
 
-const allModules: ModuleType[] = ['hebergement', 'hotel', 'restaurant', 'bar', 'casino'];
+// Available modules for user role assignments
+// Note: 'hebergement' removed as the accommodation feature is currently disabled
+const allModules: ModuleType[] = ['hotel', 'restaurant', 'bar', 'casino'];
+// Cashiers are currently only assigned to bar module (can be extended)
 const cashierModules: ModuleType[] = ['bar'];
 
 const getApiErrorMessage = (error: any, fallback: string) => {
@@ -194,10 +198,11 @@ export const UtilisateursPage: React.FC = () => {
       }
     }
 
+    // Validation for cashier role: must be assigned to exactly one valid module
     if (form.role === 'caisse') {
       const selectedCashierModules = parseModules(form.module);
-      if (selectedCashierModules.length !== 1 || !['bar', 'restaurant', 'hotel', 'hebergement'].includes(selectedCashierModules[0])) {
-        setErrorMessage('Un caissier doit être affecté à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.');
+      if (selectedCashierModules.length !== 1 || !['bar', 'restaurant', 'hotel'].includes(selectedCashierModules[0])) {
+        setErrorMessage('Un caissier doit être affecté à une seule caisse : Bar, Restaurant ou Hôtel.');
         return;
       }
     }
@@ -515,7 +520,7 @@ export const UtilisateursPage: React.FC = () => {
               <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'hebergement'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (

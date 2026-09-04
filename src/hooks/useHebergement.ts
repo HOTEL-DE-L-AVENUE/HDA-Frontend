@@ -1,3 +1,83 @@
+// Accommodation hook is currently disabled
+// Providing empty hook implementation to prevent import errors
+
+import { useState } from 'react';
+import { Client, ClientForm, Equipment, EquipmentForm, HousekeepingForm, HousekeepingTask, MaintenanceForm, Reservation, ReservationForm, Room, RoomEquipment, RoomForm, RoomMaintenance, RoomType } from '../types/hebergement.type';
+
+export function useHebergement() {
+  return {
+    roomTypes: [],
+    clients: [],
+    equipments: [],
+    rooms: [],
+    reservations: [],
+    roomEquipments: [],
+    housekeepingTasks: [],
+    maintenances: [],
+    loading: false,
+    error: null,
+    refetch: () => {},
+    activeTab: 'reservations',
+    setActiveTab: () => {},
+    searchQuery: '',
+    setSearchQuery: () => {},
+    filterStatus: '',
+    setFilterStatus: () => {},
+    editingId: null,
+    stats: { totalReservations: 0, enCours: 0, chambresOccupees: 0, chambresLibres: 0 },
+    showReservationModal: false,
+    setShowReservationModal: () => {},
+    showRoomModal: false,
+    setShowRoomModal: () => {},
+    showEquipmentModal: false,
+    setShowEquipmentModal: () => {},
+    showHousekeepingModal: false,
+    setShowHousekeepingModal: () => {},
+    showMaintenanceModal: false,
+    setShowMaintenanceModal: () => {},
+    showClientModal: false,
+    setShowClientModal: () => {},
+    reservationForm: {} as ReservationForm,
+    setReservationForm: () => {},
+    roomForm: {} as RoomForm,
+    setRoomForm: () => {},
+    equipmentForm: {} as EquipmentForm,
+    setEquipmentForm: () => {},
+    housekeepingForm: {} as HousekeepingForm,
+    setHousekeepingForm: () => {},
+    maintenanceForm: {} as MaintenanceForm,
+    setMaintenanceForm: () => {},
+    clientForm: {} as ClientForm,
+    setClientForm: () => {},
+    handleCheckIn: () => {},
+    handleCheckOut: () => {},
+    handleCancelReservation: () => {},
+    handleDeleteReservation: () => {},
+    handleSaveReservation: () => {},
+    handleEditRoom: () => {},
+    handleDeleteRoom: () => {},
+    handleSaveRoom: () => {},
+    openNewRoomModal: () => {},
+    handleEditRoomEquipment: () => {},
+    handleDeleteRoomEquipment: () => {},
+    handleSaveEquipment: () => {},
+    openNewEquipmentModal: () => {},
+    handleStartTask: () => {},
+    handleCompleteTask: () => {},
+    handleDeleteTask: () => {},
+    handleSaveHousekeeping: () => {},
+    openNewHousekeepingModal: () => {},
+    handleStartMaintenance: () => {},
+    handleCompleteMaintenance: () => {},
+    handleDeleteMaintenance: () => {},
+    handleSaveMaintenance: () => {},
+    openNewMaintenanceModal: () => {},
+    handleSaveClient: () => {},
+  };
+}
+
+/*
+// Original accommodation hook code (commented out)
 import { useState, useEffect, useCallback } from 'react';
 import { Client, ClientForm, Equipment, EquipmentForm, HousekeepingForm, HousekeepingTask, MaintenanceForm, Reservation, ReservationForm, Room, RoomEquipment, RoomForm, RoomMaintenance, RoomType } from '../types/hebergement.type';
 import { roomService, roomTypeService } from '../services/room.service';
@@ -71,8 +151,8 @@ export function useHebergement() {
       setHousekeepingTasks(Array.isArray(housekeepingData) ? housekeepingData as HousekeepingTask[] : []);
       setMaintenances(Array.isArray(maintenancesData) ? maintenancesData as RoomMaintenance[] : []);
     } catch (err: any) {
-      console.error('Erreur lors du chargement des données d’hébergement :', err);
-      setError('Erreur lors du chargement des données d’hébergement.');
+      console.error('Erreur lors du chargement des données d'hébergement :', err);
+      setError('Erreur lors du chargement des données d'hébergement.');
     } finally {
       setLoading(false);
     }
@@ -421,3 +501,4 @@ export function useHebergement() {
     handleSaveClient,
   };
 }
+*/

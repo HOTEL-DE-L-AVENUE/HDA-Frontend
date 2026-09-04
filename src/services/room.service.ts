@@ -1,3 +1,33 @@
+// Accommodation service is currently disabled
+// Providing empty exports to prevent import errors
+
+import { Room, RoomType } from '../types/hotel.types';
+
+export const roomTypeService = {
+  getRoomTypes: async (): Promise<RoomType[]> => [],
+  getRoomTypeById: async (id: number): Promise<RoomType> => null as any,
+  createRoomType: async (data: { nom: string; description?: string }): Promise<RoomType> => null as any,
+  updateRoomType: async (id: number, data: { nom: string; description?: string }): Promise<RoomType> => null as any,
+  deleteRoomType: async (id: number): Promise<void> => {},
+};
+
+export const roomService = {
+  getRooms: async (): Promise<Room[]> => [],
+  getRoomById: async (id: number): Promise<Room> => null as any,
+  createRoom: async (data: Omit<Room, 'id' | 'room_type'>): Promise<Room> => null as any,
+  updateRoom: async (id: number, data: Partial<Room>): Promise<Room> => null as any,
+  updateRoomStatus: async (roomId: number, status: string): Promise<Room> => null as any,
+  deleteRoom: async (roomId: number): Promise<void> => {},
+  getRoomStats: async (): Promise<any> => null,
+};
+
+export default {
+  roomService,
+  roomTypeService
+};
+
+/*
+// Original accommodation service code (commented out)
 // src/services/room.service.ts
 import api from '../lib/api';
 import { Room, RoomType } from '../types/hotel.types';
@@ -141,3 +171,4 @@ export default {
   roomService,
   roomTypeService
 };
+*/
