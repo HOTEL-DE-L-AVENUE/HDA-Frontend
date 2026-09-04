@@ -187,22 +187,20 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
-    // Validation : Règle des managers (1 ou 2 modules max et pas déjà pris)
+    // Validation : Règle des managers (au moins 1 module)
     if (form.role === 'manager') {
       const selectedMods = parseModules(form.module);
-      if (selectedMods.length < 1 || selectedMods.length > 2) {
-        setErrorMessage('Un manager doit obligatoirement gérer 1 ou 2 modules.');
+      if (selectedMods.length < 1) {
+        setErrorMessage('Un manager doit obligatoirement gérer au moins 1 module.');
         return;
-      }
-      for (const mod of selectedMods) {
       }
     }
 
-    // Validation for cashier role: must be assigned to exactly one valid module
+    // Validation for cashier role: must be assigned to valid cashier modules (bar, restaurant, hotel, casino)
     if (form.role === 'caisse') {
       const selectedCashierModules = parseModules(form.module);
-      if (selectedCashierModules.length !== 1 || !['bar', 'restaurant', 'hotel'].includes(selectedCashierModules[0])) {
-        setErrorMessage('Un caissier doit être affecté à une seule caisse : Bar, Restaurant ou Hôtel.');
+      if (selectedCashierModules.length < 1 || selectedCashierModules.some(m => !['bar', 'restaurant', 'hotel', 'casino'].includes(m))) {
+        setErrorMessage('Un caissier doit être affecté à au moins une caisse : Bar, Restaurant, Hôtel ou Casino.');
         return;
       }
     }
@@ -272,21 +270,6 @@ export const UtilisateursPage: React.FC = () => {
     const exists = currentModules.includes(mod);
 
     if (form.role === 'croupier') return;
-
-    if (form.role === 'caisse') {
-      setErrorMessage('');
-      setForm(prev => ({ ...prev, module: exists ? [] : [mod] }));
-      return;
-    }
-
-    if (form.role === 'manager') {
-      if (!exists) {
-        if (currentModules.length >= 2) {
-          setErrorMessage('Un manager ne peut pas gérer plus de 2 modules.');
-          return;
-        }
-      }
-    }
 
     setErrorMessage('');
     setForm(prev => {
@@ -517,10 +500,10 @@ export const UtilisateursPage: React.FC = () => {
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
+              <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse(s) autorisée(s)' : 'Modules autorisés'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel', 'casino'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (
@@ -539,7 +522,7 @@ export const UtilisateursPage: React.FC = () => {
                 );
               })}
             </div>
-            {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
+            {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier peut être affecté à : Bar, Restaurant, Hôtel ou Casino.</p>}
             {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
             {form.role === 'croupier' && <p className="mt-2 text-xs text-muted">Le croupier travaille uniquement dans le module Casino.</p>}
           </div>
