@@ -29,9 +29,12 @@ interface RoomListProps {
   onDelete?: (roomId: number) => void;
   onStatusChange?: (roomId: number, newStatus: string) => void;
   refreshTrigger?: number;
+  onViewEquipment?: (room: Room) => void;
+  onViewHousekeeping?: (room: Room) => void;
+  onViewMaintenance?: (room: Room) => void;
 }
 
-export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTrigger }) => {
+export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTrigger, onViewEquipment, onViewHousekeeping, onViewMaintenance }) => {
   const {
     rooms,
     loading,
@@ -315,7 +318,19 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
               const isProcessing = processingId === room.id;
 
               return (
-                <div key={room.id} className="card card-gold-hover p-5">
+                <div
+                  key={room.id}
+                  className="card card-gold-hover p-5 cursor-pointer"
+                  onClick={() => room.statut === 'NETTOYAGE' ? onViewHousekeeping?.(room) : room.statut === 'MAINTENANCE' ? onViewMaintenance?.(room) : onViewEquipment?.(room)}
+                  role={onViewEquipment || onViewHousekeeping ? 'button' : undefined}
+                  tabIndex={onViewEquipment || onViewHousekeeping ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if ((onViewEquipment || onViewHousekeeping) && (event.key === 'Enter' || event.key === ' ')) {
+                      event.preventDefault();
+                      room.statut === 'NETTOYAGE' ? onViewHousekeeping?.(room) : room.statut === 'MAINTENANCE' ? onViewMaintenance?.(room) : onViewEquipment?.(room);
+                    }
+                  }}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h4 className="text-primary font-semibold text-lg">
@@ -328,7 +343,7 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[room.statut] || ''}`}>
-                        {room.statut}
+                        {statusLabels[room.statut] || room.statut}
                       </span>
                     </div>
                   </div>
@@ -344,7 +359,11 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                       <div className="flex gap-1">
                         {/* Bouton Ménage */}
                         <button
-                          onClick={() => handleStatusChange(room.id, 'NETTOYAGE')}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleStatusChange(room.id, 'NETTOYAGE');
+                          }}
                           className="p-2 rounded-lg hover:bg-info/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Ménage"
                           disabled={isProcessing}
@@ -358,7 +377,11 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
 
                         {/* Bouton Maintenance */}
                         <button
-                          onClick={() => handleStatusChange(room.id, 'MAINTENANCE')}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleStatusChange(room.id, 'MAINTENANCE').then(() => onViewMaintenance?.(room));
+                          }}
                           className="p-2 rounded-lg hover:bg-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Maintenance"
                           disabled={isProcessing}
@@ -372,7 +395,11 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
 
                         {/* Bouton Modifier */}
                         <button
-                          onClick={() => handleEdit(room)}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEdit(room);
+                          }}
                           className="p-2 rounded-lg hover:bg-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Modifier"
                           disabled={isProcessing}
@@ -382,7 +409,11 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
 
                         {/* Bouton Supprimer */}
                         <button
-                          onClick={() => handleDeleteClick(room)}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteClick(room);
+                          }}
                           className="p-2 rounded-lg hover:bg-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Supprimer"
                           disabled={isProcessing}
@@ -505,4 +536,8 @@ const statusColors: Record<string, string> = {
   NETTOYAGE: 'bg-info/10 text-info border-info/20',
   MAINTENANCE: 'bg-danger/10 text-danger border-danger/20',
   HORS_SERVICE: 'bg-muted/10 text-muted border-muted/20',
+};
+
+const statusLabels: Record<string, string> = {
+  NETTOYAGE: 'A nettoyer',
 };

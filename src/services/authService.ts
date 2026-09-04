@@ -319,7 +319,7 @@ class AuthService {
       case 'stock_manager':
         return "/restaurant";
       case 'receptioniste':
-        return "/hebergement";
+        return "/hotel";
       case 'water':
         return "/bar";
       case 'housekeeping':

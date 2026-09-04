@@ -57,6 +57,8 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
+  const [discountMode, setDiscountMode] = useState<'none' | 'discount'>('none');
+  const [discountPercent, setDiscountPercent] = useState(0);
 
   // États pour le formulaire de création rapide de client
   const [showClientModal, setShowClientModal] = useState(false);
@@ -88,6 +90,8 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         montant_total: initialData.montant_total || 0,
         statut: initialData.statut || 'CONFIRMEE',
       });
+      setDiscountPercent(initialData.remise_pourcentage || 0);
+      setDiscountMode(initialData.remise_pourcentage ? 'discount' : 'none');
       
       const room = rooms.find(r => r.id === initialData.room_id);
       setSelectedRoom(room || null);
@@ -103,6 +107,8 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         montant_total: 0,
         statut: 'CONFIRMEE',
       });
+      setDiscountPercent(0);
+      setDiscountMode('none');
       setSelectedRoom(null);
       setSelectedClient(null);
     }
@@ -256,6 +262,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         date_depart: formData.date_depart!,
         montant_total: formData.montant_total || 0,
         statut: formData.statut || 'CONFIRMEE',
+        remise_pourcentage: discountMode === 'discount' ? discountPercent : 0,
       };
 
       if (initialData) {
@@ -535,38 +542,42 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
               </div>
             )}
 
-            {/* Montant total */}
+            {/* Remise */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-primary">
                 <DollarSign size={14} className="inline mr-1.5" />
-                Montant total (Ar)
+                Tarif
               </label>
-              <div className="relative">
-                <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => { setDiscountMode('none'); setDiscountPercent(0); }} className={`p-2 rounded-lg border ${discountMode === 'none' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}>
+                  Sans remise
+                </button>
+                <button type="button" onClick={() => setDiscountMode('discount')} className={`p-2 rounded-lg border ${discountMode === 'discount' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}>
+                  Avec remise
+                </button>
+              </div>
+              {discountMode === 'discount' && (
                 <input
                   type="number"
-                  value={formData.montant_total || 0}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    montant_total: Number(e.target.value) 
-                  })}
-                  className={`input-field w-full text-sm py-2.5 pl-9 pr-3.5 rounded-lg ${
-                    errors.montant_total ? 'border-red-500 focus:border-red-500' : ''
-                  }`}
+                  value={discountPercent}
+                  onChange={(e) => setDiscountPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                  className="input-field w-full text-sm py-2.5 rounded-lg"
                   min="0"
-                  step="100"
+                  max="100"
+                  step="1"
+                  placeholder="Pourcentage de remise"
                   disabled={isSubmitting}
-                  style={{ minHeight: '42px' }}
                 />
+              )}
+              <p className="text-xs text-muted">La remise sera soumise à validation de la direction.</p>
+              <div className="rounded-lg bg-surface-2 p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span>Montant brut</span><strong>{formatCurrency((selectedRoom?.prix_nuit || 0) * nights)}</strong></div>
+                <div className="flex justify-between"><span>Remise</span><strong>{discountMode === 'discount' ? `${discountPercent}%` : 'Aucune'}</strong></div>
+                <div className="flex justify-between text-accent"><span>Total</span><strong>{formatCurrency((selectedRoom?.prix_nuit || 0) * nights * (1 - (discountMode === 'discount' ? discountPercent : 0) / 100))}</strong></div>
               </div>
               {selectedRoom && nights > 0 && (
                 <p className="text-xs text-muted">
                   💡 Calculé automatiquement : {nights} nuit{nights > 1 ? 's' : ''} × {formatCurrency(selectedRoom.prix_nuit || 0)} = {formatCurrency((selectedRoom.prix_nuit || 0) * nights)}
-                </p>
-              )}
-              {errors.montant_total && (
-                <p className="text-red-400 text-xs flex items-center gap-1">
-                  <AlertCircle size={11} /> {errors.montant_total}
                 </p>
               )}
             </div>

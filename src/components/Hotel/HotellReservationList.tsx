@@ -21,6 +21,8 @@ import { useReservations } from '../../hooks/useReservations';
 import { useClients } from '../../hooks/useClients';
 import { useRooms } from '../../hooks/useRooms';
 import { toast } from 'react-hot-toast';
+import AuthService from '../../services/authService';
+import { reservationService } from '../../services/reservation.service';
 
 interface ReservationListProps {
   reservations?: Reservation[];
@@ -52,6 +54,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
+  const isDirection = ['admin', 'manager'].includes(String(AuthService.getCurrentUser()?.role || '').toLowerCase());
 
   // 🟢 État local pour stocker les IDs des réservations déjà encaissées
   const [encaissedIds, setEncaissedIds] = useState<number[]>([]);
@@ -136,6 +139,16 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const handleDeleteClick = (reservation: Reservation) => {
     setReservationToDelete(reservation);
     setIsDeleteModalOpen(true);
+  };
+
+  const handleValidateDiscount = async (reservation: Reservation) => {
+    try {
+      await reservationService.validateDiscount(reservation.id);
+      toast.success('Remise validée par la direction');
+      await loadReservations();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Impossible de valider la remise');
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -268,12 +281,22 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                         </span>
                         <span>{formatDate(res.date_arrivee)} → {formatDate(res.date_depart)}</span>
                         <span className="text-accent font-medium">{formatCurrency(res.montant_total || 0)}</span>
+                        {Number(res.remise_pourcentage || 0) > 0 && (
+                          <span className={res.remise_validee_par ? 'text-emerald-400' : 'text-orange-400'}>
+                            Remise {res.remise_pourcentage}% {res.remise_validee_par ? 'validée' : 'à valider'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    {isDirection && Number(res.remise_pourcentage || 0) > 0 && !res.remise_validee_par && (
+                      <button type="button" onClick={() => handleValidateDiscount(res)} className="px-2 py-1 text-xs rounded bg-orange-500/20 text-orange-300">
+                        Valider remise
+                      </button>
+                    )}
                     {/* Bouton Encaisser dynamique */}
                     {onEncaisser && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
                       <button

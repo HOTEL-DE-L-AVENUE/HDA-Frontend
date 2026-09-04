@@ -19,6 +19,7 @@ interface StockManagerProps {
 
 interface BackendStockItem {
   id: number;
+  product_id: number;
   product_nom?: string | null;
   product_unite?: string | null;
   quantite: number | null;
@@ -27,6 +28,8 @@ interface BackendStockItem {
   nom: string | null;
   categorie: string | null;
   prix: number | null;
+  type_produit?: string | null;
+  etat?: string | null;
 }
 
 export const StockManager: React.FC<StockManagerProps> = ({ module, categories }) => {
@@ -35,9 +38,11 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [hotelSection, setHotelSection] = useState<'CONSOMMABLE' | 'NON_CONSOMMABLE'>('CONSOMMABLE');
   const [form, setForm] = useState({
     nom: '', categorie: categories[0], quantite: 0, unite: '',
     prixUnitaire: 0, seuilMinimum: 0, fournisseur: ''
+    , typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +102,9 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         quantite: bs.quantite ?? 0,
         unite: bs.unite || bs.product_unite || 'unités',
         prixUnitaire: bs.prix ?? 0,
-        seuilMinimum: bs.seuil_minimum ?? 5,
+        seuilMinimum: bs.seuil_minimum ?? 0,
+        typeProduit: bs.type_produit === 'NON_CONSOMMABLE' ? 'NON_CONSOMMABLE' : 'CONSOMMABLE',
+        etat: bs.etat || 'DISPONIBLE',
         fournisseur: '',
         status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
         module: isBar ? 'bar' : isHotel ? 'hotel' : 'restaurant' as ModuleType, // Changed hebergement to restaurant as fallback
@@ -109,7 +116,8 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const filtered = items.filter(item => {
     const matchSearch = item.nom.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || item.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchHotelSection = !isHotel || item.typeProduit === hotelSection;
+    return matchSearch && matchStatus && matchHotelSection;
   });
 
   const computeStatus = (qty: number, seuil: number) => {
@@ -162,7 +170,38 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
           ...(isBar && { ingredients: '', alcool: true }),
         };
 
-        if (editItem && editItem.id) {
+        if (isHotel) {
+          const productPayload = {
+            nom,
+            unite: form.unite.trim() || 'unités',
+            prix_achat: prixUnitaire,
+            prix_vente: prixUnitaire,
+            type_produit: form.typeProduit,
+            actif: 1,
+          };
+          if (editItem && editItem.id) {
+            const backendItem = backendStock.find((item) => String(item.id) === String(editItem.id));
+            if (!backendItem) throw new Error('Article de stock introuvable');
+            await api.put(`/api/stock/products/${backendItem.product_id}`, productPayload);
+            await api.put(`/api/stock/stocks/${backendItem.id}`, {
+              product_id: backendItem.product_id,
+              location_id: 5,
+              quantite,
+              seuil_minimum: seuilMinimum,
+              etat: form.etat,
+            });
+          } else {
+            const productResponse = await api.post('/api/stock/products', productPayload);
+            const product = productResponse.data?.data;
+            await api.post('/api/stock/stocks', {
+              product_id: product.id,
+              location_id: 5,
+              quantite,
+              seuil_minimum: seuilMinimum,
+              etat: form.etat,
+            });
+          }
+        } else if (editItem && editItem.id) {
           await api.put(`${apiBase}/${editItem.id}`, payload);
         } else {
           await api.post(apiBase, payload);
@@ -174,7 +213,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         
         setShowModal(false);
         setEditItem(null);
-        setForm({ nom: '', categorie: categories[0] || (isBar ? 'Bar' : 'Hébergement'), quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
+        setForm({ nom: '', categorie: categories[0] || (isBar ? 'Bar' : 'Hébergement'), quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
       } catch (err) {
         setError(getErrorMessage(err));
       } finally {
@@ -210,7 +249,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
       return;
     }
     setEditItem(item);
-    setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 5, fournisseur: item.fournisseur || '' });
+    setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 0, fournisseur: item.fournisseur || '', typeProduit: (item as any).typeProduit || 'CONSOMMABLE', etat: (item as any).etat || 'DISPONIBLE' });
     setShowModal(true);
   };
 
@@ -244,6 +283,14 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
         {item.status === 'disponible' ? 'Disponible' : item.status === 'faible' ? 'Faible' : 'Épuisé'}
       </Badge>
     )},
+    ...(isHotel ? [{ key: 'etat', label: 'État', render: (item: StockItem) => {
+      const etat = (item as StockItem & { etat?: string }).etat || 'DISPONIBLE';
+      const labels: Record<string, string> = {
+        DISPONIBLE: 'Disponible', EN_LAVAGE: 'En lavage', USE: 'Usé',
+        ENDOMMAGE: 'Endommagé', REBUT: 'Au rebut', PERDU: 'Perdu',
+      };
+      return <span className="text-slate-300 text-sm">{labels[etat] || etat}</span>;
+    }}] : []),
   ];
 
   const columns = userIsAdmin ? [
@@ -259,7 +306,14 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
             setLoading(true);
             setError(null);
             try {
-              await api.delete(`${apiBase}/${item.id}`);
+              if (isHotel) {
+                const backendItem = backendStock.find((entry) => String(entry.id) === String(item.id));
+                if (backendItem) {
+                  await api.delete(`/api/stock/stocks/${backendItem.id}`);
+                }
+              } else {
+                await api.delete(`${apiBase}/${item.id}`);
+              }
               await refetchStock();
               if (editItem?.id === item.id) {
                 setShowModal(false);
@@ -319,6 +373,12 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
                 <Package size={18} className="text-amber-400" />
                 Inventaire
               </h3>
+              {isHotel && (
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button onClick={() => setHotelSection('CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Consommables</button>
+                  <button onClick={() => setHotelSection('NON_CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'NON_CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Non consommables</button>
+                </div>
+              )}
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <div className="relative flex-1 sm:flex-none">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -353,6 +413,12 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
                 <Input label="Seuil minimum" type="number" value={form.seuilMinimum} onChange={e => setForm({...form, seuilMinimum: Number(e.target.value)})} />
               </div>
               <Input label="Fournisseur (optionnel)" value={form.fournisseur} onChange={e => setForm({...form, fournisseur: e.target.value})} />
+              {isHotel && (
+                <>
+                  <Select label="Catégorie de stock" value={form.typeProduit} onChange={e => setForm({...form, typeProduit: e.target.value})} options={[{ value: 'CONSOMMABLE', label: 'Consommable - entretien' }, { value: 'NON_CONSOMMABLE', label: 'Non consommable - linge' }]} />
+                  {form.typeProduit === 'NON_CONSOMMABLE' && <Select label="État du linge" value={form.etat} onChange={e => setForm({...form, etat: e.target.value})} options={[{value:'DISPONIBLE',label:'Disponible'},{value:'EN_LAVAGE',label:'En lavage'},{value:'USE',label:'Usé'},{value:'ENDOMMAGE',label:'Endommagé'},{value:'REBUT',label:'Au rebut'},{value:'PERDU',label:'Perdu'}]} />}
+                </>
+              )}
               <div className="flex gap-3 pt-2">
                 <Button variant="secondary" onClick={() => { setShowModal(false); setEditItem(null); }} className="flex-1">Annuler</Button>
                 <Button onClick={handleSubmit} className="flex-1">{editItem ? 'Mettre à jour' : 'Ajouter'}</Button>

@@ -20,9 +20,13 @@ import { useRooms } from '../../hooks/useRooms';
 import { useEquipment } from '../../hooks/useEquipment';
 
 import { toast } from 'react-hot-toast';
+import { maintenanceWorkerService } from '../../services/maintenanceWorker.service';
+import { MaintenanceWorker } from '../../types/hotel.types';
 import { MaintenanceFormModal } from './Modal/MaintenanceFormModal';
 
-export const MaintenanceManager: React.FC = () => {
+interface MaintenanceManagerProps { initialRoomId?: number | null; onMaintenanceCompleted?: () => void; }
+
+export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialRoomId = null, onMaintenanceCompleted }) => {
   const { 
     maintenances, 
     stats, 
@@ -37,6 +41,7 @@ export const MaintenanceManager: React.FC = () => {
 
   const { rooms, loadRooms } = useRooms();
   const { equipments, loadEquipments } = useEquipment();
+  const [workers, setWorkers] = useState<MaintenanceWorker[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMaintenance, setSelectedMaintenance] = useState<RoomMaintenance | null>(null);
@@ -45,19 +50,31 @@ export const MaintenanceManager: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('TOUS');
   const [filterType, setFilterType] = useState<string>('TOUS');
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
+  const [showWorkerForm, setShowWorkerForm] = useState(false);
+  const [workerForm, setWorkerForm] = useState({ nom: '', prenom: '', telephone: '', email: '', specialite: '', date_debut: '' });
+  useEffect(() => {
+    if (initialRoomId) {
+      setSelectedMaintenance(null);
+      setIsModalOpen(true);
+    }
+  }, [initialRoomId]);
 
   // Charger les données
   useEffect(() => {
     loadAll();
     loadRooms();
     loadEquipments();
+    maintenanceWorkerService.getWorkers().then(setWorkers).catch(() => setWorkers([]));
   }, []);
 
   // Filtrer les maintenances
   const filteredMaintenances = maintenances.filter(m => {
     const matchesStatus = filterStatus === 'TOUS' || m.statut === filterStatus;
     const matchesType = filterType === 'TOUS' || m.type_intervention === filterType;
-    return matchesStatus && matchesType;
+    const date = (m.finish_date || m.date_resolution || m.date_declaration || '').slice(0, 10);
+    return matchesStatus && matchesType && (!historyFrom || date >= historyFrom) && (!historyTo || date <= historyTo);
   });
 
   // Gestion de la suppression
@@ -87,6 +104,7 @@ export const MaintenanceManager: React.FC = () => {
   const handleStatusChange = async (id: number, statut: string) => {
     try {
       await updateStatus(id, statut);
+      if (['TERMINE', 'ANNULE'].includes(statut)) onMaintenanceCompleted?.();
       toast.success(`Statut mis à jour: ${statut}`);
       await loadAll();
     } catch (error: any) {
@@ -112,6 +130,16 @@ export const MaintenanceManager: React.FC = () => {
     }
   };
 
+  const handleCreateWorker = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!workerForm.nom.trim()) return;
+    const worker = await maintenanceWorkerService.createWorker(workerForm);
+    setWorkers((current) => [...current, worker]);
+    setWorkerForm({ nom: '', prenom: '', telephone: '', email: '', specialite: '', date_debut: '' });
+    setShowWorkerForm(false);
+    toast.success('Ouvrier ajouté');
+  };
+
   const getStatusBadge = (statut: string) => {
     const colors: Record<string, string> = {
       OUVERT: 'bg-red-500/20 text-red-400',
@@ -134,17 +162,21 @@ export const MaintenanceManager: React.FC = () => {
 
   const getTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
-      URGENCE: 'bg-red-500/20 text-red-400',
-      CORRECTIVE: 'bg-yellow-500/20 text-yellow-400',
-      PREVENTIVE: 'bg-blue-500/20 text-blue-400'
+      PLOMBERIE: 'bg-blue-500/20 text-blue-400',
+      ELECTRICITE: 'bg-yellow-500/20 text-yellow-400',
+      MACONNERIE: 'bg-orange-500/20 text-orange-400',
+      CLIMATISATION: 'bg-cyan-500/20 text-cyan-400',
+      AUTRE: 'bg-gray-500/20 text-gray-400'
     };
     const labels: Record<string, string> = {
-      URGENCE: '🚨 Urgence',
-      CORRECTIVE: '🔧 Corrective',
-      PREVENTIVE: '🛠️ Préventive'
+      PLOMBERIE: 'Plomberie',
+      ELECTRICITE: 'Électricité',
+      MACONNERIE: 'Maçonnerie',
+      CLIMATISATION: 'Climatisation',
+      AUTRE: 'Autres'
     };
     return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${colors[type] || colors.PREVENTIVE}`}>
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${colors[type] || colors.AUTRE}`}>
         {labels[type] || type}
       </span>
     );
@@ -196,7 +228,20 @@ export const MaintenanceManager: React.FC = () => {
           <Plus size={18} />
           Nouvelle intervention
         </button>
+        <button onClick={() => setShowWorkerForm((value) => !value)} className="px-4 py-2.5 border border-accent/40 text-accent rounded-xl text-sm">Ouvriers</button>
       </div>
+
+      {showWorkerForm && (
+        <form onSubmit={handleCreateWorker} className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-900 border border-gray-700 rounded-xl p-4">
+          <input required placeholder="Nom *" value={workerForm.nom} onChange={(e) => setWorkerForm({ ...workerForm, nom: e.target.value })} className="input-field" />
+          <input placeholder="Prénom" value={workerForm.prenom} onChange={(e) => setWorkerForm({ ...workerForm, prenom: e.target.value })} className="input-field" />
+          <input placeholder="Téléphone" value={workerForm.telephone} onChange={(e) => setWorkerForm({ ...workerForm, telephone: e.target.value })} className="input-field" />
+          <input placeholder="Email" value={workerForm.email} onChange={(e) => setWorkerForm({ ...workerForm, email: e.target.value })} className="input-field" />
+          <input placeholder="Spécialité" value={workerForm.specialite} onChange={(e) => setWorkerForm({ ...workerForm, specialite: e.target.value })} className="input-field" />
+          <input type="date" value={workerForm.date_debut} onChange={(e) => setWorkerForm({ ...workerForm, date_debut: e.target.value })} className="input-field" />
+          <button type="submit" className="btn-primary md:col-span-3">Ajouter l’ouvrier</button>
+        </form>
+      )}
 
       {/* Statistiques */}
       {stats && (
@@ -239,9 +284,11 @@ export const MaintenanceManager: React.FC = () => {
           className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-accent text-sm"
         >
           <option value="TOUS">Tous les types</option>
-          <option value="URGENCE">Urgence</option>
-          <option value="CORRECTIVE">Corrective</option>
-          <option value="PREVENTIVE">Préventive</option>
+          <option value="PLOMBERIE">Plomberie</option>
+          <option value="ELECTRICITE">Électricité</option>
+          <option value="MACONNERIE">Maçonnerie</option>
+          <option value="CLIMATISATION">Climatisation</option>
+          <option value="AUTRE">Autres</option>
         </select>
         <button
           onClick={() => {
@@ -252,6 +299,8 @@ export const MaintenanceManager: React.FC = () => {
         >
           Réinitialiser
         </button>
+        <input type="date" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)} className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm" title="Historique à partir du" />
+        <input type="date" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)} className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm" title="Historique jusqu’au" />
       </div>
 
       {/* Liste des maintenances */}
@@ -276,12 +325,14 @@ export const MaintenanceManager: React.FC = () => {
                       <span className="text-xs text-gray-500">ID: #{task.id}</span>
                     </div>
                     <h4 className="text-white font-semibold">
-                      Chambre {room?.numero || 'N/A'}
+                      {task.location || `Chambre ${room?.numero || 'N/A'}`}
                       {equipment && ` - ${equipment.nom}`}
                     </h4>
+                    {task.equipment_label && <p className="text-gray-400 text-sm">Équipement : {task.equipment_label}</p>}
                     {task.description && (
                       <p className="text-gray-400 text-sm mt-1">{task.description}</p>
                     )}
+                    <p className="text-accent text-sm mt-1">Total : {Number(task.total_cost ?? task.cout ?? 0).toLocaleString('fr-FR')} Ar</p>
                     <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
                       <span>📅 {formatDate(task.date_declaration)}</span>
                       {task.cout > 0 && <span>💰 {task.cout} Ar</span>}
@@ -351,6 +402,8 @@ export const MaintenanceManager: React.FC = () => {
         initialData={selectedMaintenance}
         rooms={rooms}
         equipments={equipments}
+        workers={workers}
+        defaultRoomId={initialRoomId || undefined}
         onSave={handleSave}
       />
 

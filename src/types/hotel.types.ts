@@ -8,6 +8,7 @@ export interface RoomType {
   id: number;
   nom: string;
   description: string | null;
+  prix_base?: number;
   capacite?: number;
   prix_base?: number;
   created_at?: string;
@@ -52,6 +53,11 @@ export interface Reservation {
   date_arrivee: string;
   date_depart: string;
   montant_total: number | null;
+  montant_brut?: number | null;
+  remise_pourcentage?: number;
+  montant_remise?: number | null;
+  remise_validee_par?: number | null;
+  remise_validee_at?: string | null;
   statut: 'EN_ATTENTE' | 'CONFIRMEE' | 'ANNULEE' | 'TERMINEE' | 'NO_SHOW';
   client?: Client;
   room?: Room;
@@ -81,6 +87,7 @@ export interface Equipment {
   nom: string;
   categorie: string | null;
   description: string | null;
+  zone?: 'CHAMBRE' | 'SALLE_DE_BAIN';
   created_at?: string;
   updated_at?: string;
 }
@@ -91,6 +98,7 @@ export interface RoomEquipment {
   equipment_id: number;
   quantite: number;
   statut: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
+  zone?: 'CHAMBRE' | 'SALLE_DE_BAIN';
   equipment?: Equipment;
   room?: Room;
   created_at?: string;
@@ -101,7 +109,7 @@ export interface RoomMaintenance {
   id: number;
   room_id: number;
   equipment_id: number | null;
-  type_intervention: 'PREVENTIVE' | 'CORRECTIVE' | 'URGENCE';
+  type_intervention: 'PLOMBERIE' | 'ELECTRICITE' | 'MACONNERIE' | 'CLIMATISATION' | 'AUTRE';
   description: string | null;
   statut: 'OUVERT' | 'EN_COURS' | 'TERMINE' | 'ANNULE';
   date_declaration: string;
@@ -112,6 +120,26 @@ export interface RoomMaintenance {
   equipment?: Equipment;
   created_at?: string;
   updated_at?: string;
+  location?: string | null;
+  equipment_label?: string | null;
+  worker_id?: number | null;
+  execution_date?: string | null;
+  finish_date?: string | null;
+  materials_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
+}
+
+export interface MaintenanceWorker {
+  id: number;
+  nom: string;
+  prenom: string | null;
+  telephone: string | null;
+  email: string | null;
+  specialite: string | null;
+  date_debut: string | null;
+  date_fin: string | null;
+  statut: 'ACTIF' | 'INACTIF';
 }
 
 // ============================================
@@ -122,7 +150,7 @@ export interface HousekeepingTask {
   id: number;
   room_id: number;
   assigned_user_id: number | null;
-  type_tache: 'NETTOYAGE' | 'DESINFECTION' | 'CHANGEMENT_DRAPS' | 'CONTROLE';
+  type_tache: 'CHAMBRE' | 'ESCALIER_RAMPE' | 'DECORATIONS' | 'MUR' | 'PLAFOND' | 'SOL_MOQUETTE' | 'MEUBLES' | 'COULOIR' | 'TERASSE' | 'TOILETTES';
   statut: 'A_FAIRE' | 'EN_COURS' | 'TERMINE';
   commentaire: string | null;
   planned_at: string | null;

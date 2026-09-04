@@ -167,6 +167,9 @@ const HotelPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
+  const [equipmentRoomId, setEquipmentRoomId] = useState<number | null>(null);
+  const [housekeepingRoomId, setHousekeepingRoomId] = useState<number | null>(null);
+  const [maintenanceRoomId, setMaintenanceRoomId] = useState<number | null>(null);
 
   const roomsData = Array.isArray(rooms) ? rooms : [];
   const reservationsData = Array.isArray(reservations) ? reservations : [];
@@ -222,11 +225,6 @@ const HotelPage: React.FC = () => {
   // Statistiques sécurisées
   const safeRooms = roomsData;
   const safeReservations = reservationsData;
-  const safeEquipments: any[] = [];
-  const safeRoomEquipments: any[] = [];
-  const safeMaintenanceTasks: any[] = [];
-  const safeHousekeepingTasks: any[] = [];
-  const safeMinibarItems: any[] = [];
   const safeProducts: any[] = [];
 
   const totalRooms = safeRooms.length;
@@ -345,6 +343,18 @@ const HotelPage: React.FC = () => {
         {activeTab === 'chambres' && (
           <div className="overflow-x-auto">
             <RoomList
+              onViewEquipment={(room) => {
+                setEquipmentRoomId(room.id);
+                setActiveTab('equipements');
+              }}
+              onViewHousekeeping={(room) => {
+                setHousekeepingRoomId(room.id);
+                setActiveTab('housekeeping');
+              }}
+              onViewMaintenance={(room) => {
+                setMaintenanceRoomId(room.id);
+                setActiveTab('maintenance');
+              }}
               onEdit={(room) => {
                 setSelectedRoom(room);
                 setIsRoomModalOpen(true);
@@ -376,34 +386,36 @@ const HotelPage: React.FC = () => {
         )}
         {activeTab === 'equipements' && (
           <div className="overflow-x-auto">
-            <EquipmentManager
-              equipments={safeEquipments as any}
-              roomEquipments={safeRoomEquipments as any}
-              rooms={safeRooms as any}
-            />
+            <EquipmentManager initialRoomId={equipmentRoomId} />
           </div>
         )}
         {activeTab === 'maintenance' && (
           <div className="overflow-x-auto">
             <MaintenanceManager
-              tasks={safeMaintenanceTasks as any}
-              equipments={safeEquipments as any}
-              rooms={safeRooms as any}
+              initialRoomId={maintenanceRoomId}
+              onMaintenanceCompleted={() => {
+                setMaintenanceRoomId(null);
+                setDataRefreshKey((prev) => prev + 1);
+                setActiveTab('chambres');
+              }}
             />
           </div>
         )}
         {activeTab === 'housekeeping' && (
           <div className="overflow-x-auto">
             <HousekeepingManager
-              tasks={safeHousekeepingTasks as any}
-              rooms={safeRooms as any}
+              initialRoomId={housekeepingRoomId}
+              onTaskCompleted={() => {
+                setHousekeepingRoomId(null);
+                setDataRefreshKey((prev) => prev + 1);
+                setActiveTab('chambres');
+              }}
             />
           </div>
         )}
         {activeTab === 'minibar' && (
           <div className="overflow-x-auto">
             <MinibarManager
-              items={safeMinibarItems as any}
               rooms={safeRooms as any}
               products={safeProducts as any}
             />

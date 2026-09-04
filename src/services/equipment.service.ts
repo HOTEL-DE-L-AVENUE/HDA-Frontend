@@ -1,6 +1,4 @@
-// Accommodation service is currently disabled
-// Providing empty exports to prevent import errors
-
+import api from '../lib/api';
 import { Equipment, RoomEquipment } from '../types/hotel.types';
 
 export interface EquipmentFormData {
@@ -8,6 +6,7 @@ export interface EquipmentFormData {
   nom: string;
   categorie?: string;
   description?: string;
+  zone?: 'CHAMBRE' | 'SALLE_DE_BAIN';
 }
 
 export interface RoomEquipmentFormData {
@@ -15,49 +14,14 @@ export interface RoomEquipmentFormData {
   equipment_id: number;
   quantite: number;
   statut?: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
+  zone?: 'CHAMBRE' | 'SALLE_DE_BAIN';
 }
-
-export const equipmentService = {
-  getEquipments: async (filters?: any): Promise<Equipment[]> => [],
-  getEquipmentById: async (id: number): Promise<Equipment> => null as any,
-  getEquipmentByCode: async (code: string): Promise<Equipment> => null as any,
-  getEquipmentCategories: async (): Promise<string[]> => [],
-  createEquipment: async (data: EquipmentFormData): Promise<Equipment> => null as any,
-  updateEquipment: async (id: number, data: EquipmentFormData): Promise<Equipment> => null as any,
-  deleteEquipment: async (id: number): Promise<void> => {},
-  getEquipmentStats: async (): Promise<any> => null,
-  getRoomEquipments: async (filters?: any): Promise<RoomEquipment[]> => [],
-  assignEquipment: async (data: RoomEquipmentFormData): Promise<RoomEquipment> => null as any,
-  updateRoomEquipment: async (id: number, data: Partial<RoomEquipmentFormData>): Promise<RoomEquipment> => null as any,
-  deleteRoomEquipment: async (id: number): Promise<void> => {},
-  updateRoomEquipmentStatus: async (id: number, statut: string): Promise<RoomEquipment> => null as any,
-};
-
-/*
-// Original accommodation service code (commented out)
-// src/services/equipment.service.ts
-import api from '../lib/api';
-import { Equipment, RoomEquipment } from '../types/hotel.types';
 
 interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
   count?: number;
-}
-
-export interface EquipmentFormData {
-  code?: string;
-  nom: string;
-  categorie?: string;
-  description?: string;
-}
-
-export interface RoomEquipmentFormData {
-  room_id: number;
-  equipment_id: number;
-  quantite: number;
-  statut?: 'BON' | 'EN_PANNE' | 'REMPLACE' | 'HORS_SERVICE';
 }
 
 // Toutes ci-dessous sont montées sous /api/hebergement (voir README §5.5)
@@ -170,11 +134,12 @@ export const equipmentService = {
   // =============================================
 
   // Récupérer tous les équipements de chambre
-  getRoomEquipments: async (filters?: { room_id?: number; equipment_id?: number }): Promise<RoomEquipment[]> => {
+  getRoomEquipments: async (filters?: { room_id?: number; equipment_id?: number; zone?: string }): Promise<RoomEquipment[]> => {
     try {
       const params = new URLSearchParams();
       if (filters?.room_id) params.append('room_id', String(filters.room_id));
       if (filters?.equipment_id) params.append('equipment_id', String(filters.equipment_id));
+      if (filters?.zone) params.append('zone', filters.zone);
 
       const url = `${BASE_URL}/room-equipments${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await api.get<ApiResponse<RoomEquipment[]>>(url);
@@ -228,4 +193,3 @@ export const equipmentService = {
     }
   }
 };
-*/

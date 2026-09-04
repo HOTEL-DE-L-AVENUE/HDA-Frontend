@@ -22,6 +22,7 @@ import {
 import { Modal } from '../../Modal';
 import { useRoomTypes } from '../../../hooks/useRoomTypes';
 import { roomService, roomTypeService } from '../../../services/room.service';
+import AuthService from '../../../services/authService';
 
 interface RoomFormModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
   initialData,
   onSuccess,
 }) => {
+  const isAdmin = String(AuthService.getCurrentUser()?.role || '').toLowerCase() === 'admin';
   const { roomTypes, loading: loadingTypes, loadRoomTypes } = useRoomTypes();
   
   const [formData, setFormData] = useState<Partial<Room>>({
@@ -52,6 +54,7 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
     room_type_id: null,
     capacite: null,
     prix_nuit: null,
+    etage: 0,
     statut: 'LIBRE',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +76,7 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
           room_type_id: initialData.room_type_id,
           capacite: initialData.capacite,
           prix_nuit: initialData.prix_nuit,
+          etage: initialData.etage,
           statut: initialData.statut,
         });
       } else {
@@ -81,6 +85,7 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
           room_type_id: null,
           capacite: null,
           prix_nuit: null,
+          etage: 0,
           statut: 'LIBRE',
         });
       }
@@ -138,8 +143,9 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
         numero: formData.numero!,
         room_type_id: formData.room_type_id!,
         capacite: formData.capacite ?? null,
-        prix_nuit: formData.prix_nuit ?? null,
+        etage: formData.etage ?? 0,
         statut: formData.statut!,
+        ...(isAdmin ? { prix_nuit: formData.prix_nuit ?? null } : {}),
       };
 
       if (initialData) {
@@ -188,10 +194,12 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
       await loadRoomTypes();
       
       // Sélectionner automatiquement le nouveau type
-      setFormData(prev => ({
-        ...prev,
-        room_type_id: newType.id
-      }));
+      if (newType && newType.id) {
+        setFormData(prev => ({
+          ...prev,
+          room_type_id: newType.id
+        }));
+      }
 
       // Fermer le modal d'ajout
       setIsTypeModalOpen(false);
@@ -243,13 +251,13 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
                     : 'Créez une nouvelle chambre'}
                 </p>
               </div>
-              <button 
+                  {isAdmin && <button
                 onClick={onClose} 
                 className="p-2 rounded-xl hover:bg-surface-2 transition-all duration-300 hover:rotate-90"
                 disabled={isSubmitting}
               >
                 <X size={22} className="text-muted" />
-              </button>
+                  </button>}
             </div>
           </div>
 
@@ -316,7 +324,8 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
                   value={formData.room_type_id || ''}
                   onChange={(e) => setFormData({ 
                     ...formData, 
-                    room_type_id: e.target.value ? Number(e.target.value) : null 
+                    room_type_id: e.target.value ? Number(e.target.value) : null,
+                    prix_nuit: roomTypes.find(type => type.id === Number(e.target.value))?.prix_base ?? formData.prix_nuit,
                   })}
                   className={`input-field w-full text-sm py-2.5 pl-9 pr-3.5 rounded-lg ${
                     errors.room_type_id ? 'border-danger focus:border-danger' : ''
@@ -361,9 +370,10 @@ export const RoomFormModal: React.FC<RoomFormModalProps> = ({
                   max="10"
                   placeholder="Nombre de personnes"
                   style={{ minHeight: '42px' }}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !isAdmin}
                 />
               </div>
+              {!isAdmin && <p className="text-muted text-xs">Tarif modifiable uniquement par un administrateur.</p>}
               {errors.capacite && (
                 <p className="text-danger text-xs flex items-center gap-1">
                   <AlertCircle size={11} /> {errors.capacite}
