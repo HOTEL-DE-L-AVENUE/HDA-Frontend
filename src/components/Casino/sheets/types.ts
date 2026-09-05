@@ -50,12 +50,15 @@ export type ChipLine = {
 
 export type RackCheck = {
   id: number;
+  date?: string;
   time: string;
-  type: 'Entrée' | 'Contrôle périodique' | 'Sortie';
+  type: 'Entrée' | 'Contrôle périodique' | 'Sortie' | 'Retour croupier' | 'Sortie croupier' | 'Rajout bureau' | 'Contrôle';
   expected: number;
   actual: string;
   missing: string;
   verified: boolean;
+  amount?: string;
+  variance?: string;
 };
 
 export const CHIP_VALUES = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000];

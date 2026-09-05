@@ -39,7 +39,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     });
   const bonusTotal = bonusEntries.reduce((total, entry) => total + entry.total, 0);
   const bonusResults = bonusEntries.length
-    ? `${bonusEntries.map((entry) => entry.text).join(' - ')} — TOTAL : ${casinoCurrency.format(bonusTotal)} Ar`
+    ? `${bonusEntries.map((entry) => entry.text).join('\n')}\nTOTAL : ${casinoCurrency.format(bonusTotal)} Ar`
     : '';
   const mobileReturnResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -68,7 +68,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(creditPayments.reduce((sum, payment) => sum + (payment.amount || result), 0))}`]
         : [];
     })
-    .join(' - ');
+    .join('\n');
   const depositPaymentResults = buildPositivePaymentResults(players, 'Dépôt');
   const depositPaymentTotal = getPositivePaymentTotal(players, 'Dépôt');
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
@@ -631,7 +631,7 @@ const buildPositivePaymentResults = (players: PlayerLine[], ...methods: string[]
       ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(payments.reduce((sum, payment) => sum + (payment.amount || result), 0))} (${payments.map((payment) => payment.option).join(' / ')})`]
       : [];
   })
-  .join(' - ');
+  .join('\n');
 
 const BlankCell: React.FC<{ separated?: boolean }> = ({ separated = false }) => <div className={`min-h-20 border-r border-b${separated ? ' border-l-4' : ''}`} style={casinoBorder} />;
 const TotalCell: React.FC<{ label: string; separated?: boolean }> = ({ label, separated = false }) => <div className={`min-h-14 border-r p-2 flex items-center justify-center font-bold text-[11px]${separated ? ' border-l-4' : ''}`} style={casinoBorder}>{label}</div>;

@@ -95,7 +95,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
     </div>
     <div className="mb-5 overflow-x-auto rounded-xl border" style={casinoBorder}>
       <table className="w-full min-w-[820px] border-collapse text-xs sm:text-sm"><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>
-        <th className="border p-2 text-left" style={casinoBorder}>Joueur</th><th className="border p-2 text-left" style={casinoBorder}>E-mail</th><th className="border p-2 text-left" style={casinoBorder}>Inscrit le</th><th className="border p-2 text-left" style={casinoBorder}>Dépôt de la partie</th><th className="border p-2 text-left" style={casinoBorder}>Crédit de la partie</th>{isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
+        <th className="border p-2 text-left" style={casinoBorder}>Joueur</th><th className="border p-2 text-left" style={casinoBorder}>E-mail</th><th className="border p-2 text-left" style={casinoBorder}>Inscrit le</th><th className="border p-2 text-left" style={casinoBorder}>Dépôt Avant</th><th className="border p-2 text-left" style={casinoBorder}>Crédit Avant</th>{isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
       </tr></thead><tbody>{filteredRegisteredPlayers.map((player) => {
         const playerInGame = playerList.find((line) => line.casinoPlayerId === player.id);
         const alreadyPlaying = Boolean(playerInGame);
