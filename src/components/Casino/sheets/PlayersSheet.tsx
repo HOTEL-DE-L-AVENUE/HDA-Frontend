@@ -130,14 +130,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions)
     .filter((payment) => resultOptions.includes(payment.option));
   const caveLinesToSign = selectedPlayerLines.filter((line) => line.caves.trim() || line.amount.trim());
-  const ficheIdsToSign = selectedPlayer ? [selectedPlayerId] : [];
   const signatureConfirmationItems = [
     ...caveLinesToSign.map((line) => ({ key: `cave-${line.id}`, label: `Cave ${line.caves || '—'} × ${line.amount || '—'} — ${line.name || `Joueur ${line.ficheId ?? line.id}`}` })),
     ...(selectedBonuses.length ? [{ key: `bonus-${selectedPlayerId}`, label: `Signature bonus — ${selectedPlayer?.name || `Joueur ${selectedPlayerId}`}` }] : []),
-    ...ficheIdsToSign.map((ficheId) => {
-      const player = players.find((line) => (line.ficheId ?? line.id) === ficheId);
-      return { key: `final-${ficheId}`, label: `Signature finale — ${player?.name || `Joueur ${ficheId}`}` };
-    }),
   ];
 
   useEffect(() => {
@@ -169,13 +164,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       const ficheId = unsignedCave.ficheId ?? unsignedCave.id;
       setSelectedPlayerId(ficheId);
       setSignatureError(`La signature est obligatoire pour la cave du joueur ${unsignedCave.name || ficheId}.`);
-      return;
-    }
-    const unsignedFinalSignature = ficheIdsToSign.find((ficheId) => !players.find((line) => (line.ficheId ?? line.id) === ficheId)?.finalSignature);
-    if (unsignedFinalSignature !== undefined) {
-      setSelectedPlayerId(unsignedFinalSignature);
-      const player = players.find((line) => (line.ficheId ?? line.id) === unsignedFinalSignature);
-      setSignatureError(`La signature finale est obligatoire pour ${player?.name || `le joueur ${unsignedFinalSignature}`}.`);
       return;
     }
     if (selectedBonuses.length && !selectedPlayer?.bonusSignature) {
