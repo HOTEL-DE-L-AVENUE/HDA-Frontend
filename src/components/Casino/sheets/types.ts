@@ -52,7 +52,7 @@ export type RackCheck = {
   id: number;
   date?: string;
   time: string;
-  type: 'Entrée' | 'Contrôle périodique' | 'Sortie' | 'Retour croupier' | 'Sortie croupier' | 'Rajout bureau' | 'Contrôle';
+  type: 'Entrée' | 'Contrôle périodique' | 'Sortie' | 'Retour croupier' | 'Sortie croupier' | 'Rajout bureau' | 'Contrôle' | 'Cash check' | 'Rack check entrée' | 'Rack check sortie' | 'Rack check périodique';
   expected: number;
   actual: string;
   missing: string;
