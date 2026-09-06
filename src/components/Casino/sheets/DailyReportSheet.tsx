@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Clipboard, Download, Printer } from 'lucide-react';
-import { ChipLine, PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
+import { ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 
 interface DailyReportSheetProps {
@@ -8,6 +8,7 @@ interface DailyReportSheetProps {
   table: string;
   players: PlayerLine[];
   chips: ChipLine[];
+  rackChecks: RackCheck[];
   restaurantPayments: { especes: boolean; tpe: boolean };
   finals: Record<string, Record<string, string>>;
   registeredPlayers: CasinoRegisteredPlayer[];
@@ -35,7 +36,7 @@ const paymentLabel = (player: PlayerLine) => {
   return options.length ? ` (${options.join(', ')})` : player.paymentMethod ? ` (${player.paymentMethod})` : '';
 };
 
-export const buildDailyReport = ({ date, table, players, chips, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
+export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
   const listedPlayers = uniquePlayers(players).filter((player) => player.name.trim() || playerAmount(player, players) > 0);
   const playingRegisteredIds = new Set(players.map((player) => player.casinoPlayerId).filter((id): id is number => Number.isInteger(id)));
   const waitingPlayers = registeredPlayers.filter((player) => player.statut === 'ACTIF'
@@ -43,6 +44,8 @@ export const buildDailyReport = ({ date, table, players, chips, restaurantPaymen
     && !playingRegisteredIds.has(player.id));
   const totalCaves = listedPlayers.reduce((total, player) => total + playerAmount(player, players), 0);
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
+  const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
+  const rackChecksReport = rackChecks.filter((check) => check.type.startsWith('Rack check') || check.type === 'Retour croupier' || check.type === 'Sortie croupier');
   const tpePlayers = listedPlayers.filter((player) => player.paymentMethod.toLowerCase().includes('tpe'));
   const finalValues = (key: string) => Object.values(finals)
     .map((values) => ({ values, amount: parseCasinoAmount(values?.[key]) }))
@@ -94,6 +97,12 @@ export const buildDailyReport = ({ date, table, players, chips, restaurantPaymen
     '# Bureau :', '',
     '# Devis :', '',
     '# Espece :', finalValue('especes') || `Total caves : ${formatAmount(totalCaves)}`,
+    '',
+    '# Cash checks horaires :',
+    ...(cashChecks.length ? cashChecks.map((check) => `${check.date || date} ${check.time} — attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · écart ${formatAmount(parseCasinoAmount(check.variance))} · ${check.verified ? 'validé par le caissier' : 'en attente de validation'}`) : ['Aucun cash check enregistré.']),
+    '',
+    '# Rack checks :',
+    ...(rackChecksReport.length ? rackChecksReport.map((check) => `${check.date || date} ${check.time} — ${check.type} · attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · manque ${formatAmount(parseCasinoAmount(check.missing))} · ${check.verified ? 'validé par le caissier' : 'en attente de validation'}`) : ['Aucun rack check enregistré.']),
   ];
   return lines.join('\n');
 };
