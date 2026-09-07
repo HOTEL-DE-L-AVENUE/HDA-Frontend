@@ -17,9 +17,10 @@ interface Transaction {
 
 interface BarTransactionsCardProps {
   title?: string;
+  refreshTrigger?: number;
 }
 
-export default function BarTransactionsCard({ title = 'Transactions Caisse' }: BarTransactionsCardProps) {
+export default function BarTransactionsCard({ title = 'Transactions Caisse', refreshTrigger = 0 }: BarTransactionsCardProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function BarTransactionsCard({ title = 'Transactions Caisse' }: B
 
   useEffect(() => {
     fetchTransactions();
-  }, [fetchTransactions]);
+  }, [fetchTransactions, refreshTrigger]);
 
   const totalVentes = transactions.reduce((sum, tx) => sum + (tx.quantite * tx.prix_unitaire), 0);
   const totalQuantite = transactions.reduce((sum, tx) => sum + tx.quantite, 0);

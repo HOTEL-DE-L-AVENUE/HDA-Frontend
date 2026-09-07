@@ -78,6 +78,9 @@ export const updateOrderStatus = (id: number, statut: string) =>
 export const deleteOrder = (id: number) =>
   api.delete<ApiResponse<null>>(`/api/restaurant/orders/${id}`).then(res => res.data);
 
+export const closeAllOrders = (order_ids: number[]) =>
+  api.post<ApiResponse<{ closed_orders: number; hidden_from_daily_caisse: boolean }>>('/api/restaurant/orders/close-all', { order_ids }).then(res => res.data);
+
 // ==================== PAIEMENTS ====================
 
 export const processPayment = (data: {
