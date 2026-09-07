@@ -269,7 +269,7 @@ export const CocktailMenu: React.FC<Props> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface border border-base rounded-xl p-4 shadow-sm">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-accent font-semibold">Bar & Lounge</p>
-          <h2 className="text-xl sm:text-2xl font-bold text-primary">Terminal de vente</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-primary">Les boissons disponibles</h2>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">

@@ -94,6 +94,14 @@ const getPaymentAmount = (payments: ResultPayment[], result: number, option: str
   return payments.length === 1 && selected[0].amount <= 0 ? Math.abs(result) : selected.reduce((sum, payment) => sum + payment.amount, 0);
 };
 
+const getPositiveCreditPaidAmount = (payments: ResultPayment[], result: number, availableCredit: number): number => {
+  const creditPayment = payments.find((payment) => payment.option === 'Crédit payé');
+  if (!creditPayment) return 0;
+  return payments.length === 1 && creditPayment.amount <= 0
+    ? Math.min(Math.abs(result), availableCredit)
+    : Math.min(Math.abs(result), Math.max(0, creditPayment.amount));
+};
+
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, registeredPlayers = [], restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
@@ -122,14 +130,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const selectedResultPayments = parseResultPayments(selectedPlayer?.resultPaymentOptions)
     .filter((payment) => resultOptions.includes(payment.option));
   const caveLinesToSign = selectedPlayerLines.filter((line) => line.caves.trim() || line.amount.trim());
-  const ficheIdsToSign = selectedPlayer ? [selectedPlayerId] : [];
   const signatureConfirmationItems = [
     ...caveLinesToSign.map((line) => ({ key: `cave-${line.id}`, label: `Cave ${line.caves || '—'} × ${line.amount || '—'} — ${line.name || `Joueur ${line.ficheId ?? line.id}`}` })),
     ...(selectedBonuses.length ? [{ key: `bonus-${selectedPlayerId}`, label: `Signature bonus — ${selectedPlayer?.name || `Joueur ${selectedPlayerId}`}` }] : []),
-    ...ficheIdsToSign.map((ficheId) => {
-      const player = players.find((line) => (line.ficheId ?? line.id) === ficheId);
-      return { key: `final-${ficheId}`, label: `Signature finale — ${player?.name || `Joueur ${ficheId}`}` };
-    }),
   ];
 
   useEffect(() => {
@@ -161,13 +164,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       const ficheId = unsignedCave.ficheId ?? unsignedCave.id;
       setSelectedPlayerId(ficheId);
       setSignatureError(`La signature est obligatoire pour la cave du joueur ${unsignedCave.name || ficheId}.`);
-      return;
-    }
-    const unsignedFinalSignature = ficheIdsToSign.find((ficheId) => !players.find((line) => (line.ficheId ?? line.id) === ficheId)?.finalSignature);
-    if (unsignedFinalSignature !== undefined) {
-      setSelectedPlayerId(unsignedFinalSignature);
-      const player = players.find((line) => (line.ficheId ?? line.id) === unsignedFinalSignature);
-      setSignatureError(`La signature finale est obligatoire pour ${player?.name || `le joueur ${unsignedFinalSignature}`}.`);
       return;
     }
     if (selectedBonuses.length && !selectedPlayer?.bonusSignature) {
@@ -261,35 +257,79 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     setPendingBonus(null);
   };
 
+  const updateResultBalances = (nextPayments: ResultPayment[]) => {
+    if (!selectedPlayer) return;
+    const previousCreditPayment = selectedResultPayments.find((payment) => payment.option === 'Crédit payé');
+    const previousDepositPaidPayment = selectedResultPayments.find((payment) => payment.option === 'Dépôt payé');
+    const currentCredit = parseCasinoAmount(selectedPlayer.initialCredit);
+    const currentDeposit = parseCasinoAmount(selectedPlayer.initialDeposit);
+    const previousCreditPaidAmount = previousCreditPayment
+      ? previousCreditPayment.amount > 0 ? previousCreditPayment.amount : Math.min(Math.abs(selectedPlayerResult), currentCredit)
+      : 0;
+    const previousDepositPaidAmount = previousDepositPaidPayment
+      ? previousDepositPaidPayment.amount > 0 ? previousDepositPaidPayment.amount : Math.abs(selectedPlayerResult)
+      : 0;
+    const creditBase = currentCredit + previousCreditPaidAmount;
+    const previousDepositRemainder = selectedPlayerResult > 0 && previousCreditPaidAmount >= creditBase
+      ? Math.max(0, selectedPlayerResult - previousCreditPaidAmount)
+      : 0;
+    const depositBase = Math.max(0, currentDeposit + previousDepositPaidAmount - previousDepositRemainder);
+    const nextCreditPaidAmount = getPositiveCreditPaidAmount(nextPayments, selectedPlayerResult, creditBase);
+    const normalizedPayments = nextPayments.length === 1
+      ? [{ ...nextPayments[0], amount: nextPayments[0].option === 'Crédit payé' ? nextCreditPaidAmount : Math.abs(selectedPlayerResult) }]
+      : nextPayments;
+    const hasCreditPayment = nextPayments.some((payment) => payment.option === 'Crédit payé');
+    const hasDepositPayment = nextPayments.some((payment) => payment.option === 'Dépôt');
+    const hasDepositPaidPayment = nextPayments.some((payment) => payment.option === 'Dépôt payé');
+
+    onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(normalizedPayments));
+
+    if (!hasCreditPayment && !hasDepositPaidPayment) return;
+
+    if (selectedPlayerResult > 0 && hasCreditPayment) {
+      const creditRemaining = Math.max(0, creditBase - nextCreditPaidAmount);
+      const depositRemainder = nextCreditPaidAmount >= creditBase
+        ? Math.max(0, selectedPlayerResult - nextCreditPaidAmount)
+        : 0;
+      onUpdate(selectedPlayer.id, 'initialCredit', String(creditRemaining));
+      onUpdate(selectedPlayer.id, 'initialDeposit', String(depositBase + depositRemainder));
+      return;
+    }
+
+    if (selectedPlayerResult < 0 && hasDepositPaidPayment) {
+      const depositPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Dépôt payé');
+      onUpdate(selectedPlayer.id, 'initialCredit', String(creditBase));
+      onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, depositBase - depositPaidAmount)));
+      return;
+    }
+
+    const nextDepositPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Dépôt');
+    onUpdate(selectedPlayer.id, 'initialCredit', String(creditBase));
+    onUpdate(selectedPlayer.id, 'initialDeposit', String(hasDepositPayment ? nextDepositPaidAmount : depositBase));
+  };
+
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
     if (!selectedPlayer) return;
     const nextPayments = checked
       ? [...selectedResultPayments.filter((payment) => payment.option !== option), { option, amount: 0 }]
       : selectedResultPayments.filter((payment) => payment.option !== option);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
-
-    const previousDepositPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Dépôt payé');
-    const previousCreditPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Crédit payé');
-    const nextDepositPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Dépôt payé');
-    const nextCreditPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Crédit payé');
-
-    onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) + previousDepositPaidAmount - nextDepositPaidAmount)));
-    onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialCredit) + previousCreditPaidAmount - nextCreditPaidAmount)));
+    updateResultBalances(nextPayments);
   };
 
   const updateResultPaymentAmount = (option: string, amount: string) => {
     if (!selectedPlayer) return;
     const nextPayments = selectedResultPayments.map((payment) => payment.option === option ? { ...payment, amount: parseCasinoAmount(amount) } : payment);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
-
-    const previousDepositPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Dépôt payé');
-    const previousCreditPaidAmount = getPaymentAmount(selectedResultPayments, selectedPlayerResult, 'Crédit payé');
-    const nextDepositPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Dépôt payé');
-    const nextCreditPaidAmount = getPaymentAmount(nextPayments, selectedPlayerResult, 'Crédit payé');
-
-    onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialDeposit) + previousDepositPaidAmount - nextDepositPaidAmount)));
-    onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, parseCasinoAmount(selectedPlayer.initialCredit) + previousCreditPaidAmount - nextCreditPaidAmount)));
+    updateResultBalances(nextPayments);
   };
+
+  useEffect(() => {
+    const hasBalancePayment = selectedResultPayments.some((payment) => payment.option === 'Dépôt payé' || payment.option === 'Crédit payé');
+    if (selectedPlayer && hasBalancePayment) {
+      updateResultBalances(selectedResultPayments);
+    }
+  }, [selectedPlayer?.id, selectedPlayerResult]);
 
   useEffect(() => {
     const cashingAmount = parseCasinoAmount(selectedPlayer?.cashing);

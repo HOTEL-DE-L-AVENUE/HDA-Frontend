@@ -101,7 +101,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="casino"
-                    allowedRoles={['admin', 'croupier']}
+                    allowedRoles={['admin', 'manager', 'caisse', 'caissier', 'croupier']}
                   />
                 }
               >
