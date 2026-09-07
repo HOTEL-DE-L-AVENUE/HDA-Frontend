@@ -6,7 +6,7 @@ import { formatDate } from '../utils/data';
 import { Modal, Input, Select, Button, Badge } from '../components/UI';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-react';
 import api from '../lib/api';
-import { clientService, Client } from '../services/client.service';
+// import { clientService, Client } from '../services/client.service';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrateur',
@@ -21,6 +21,7 @@ const roleLabels: Record<string, string> = {
 const formRoleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
+  receptioniste: 'Réceptionniste (accès à l\'hôtel)',
   caisse: 'Caissier (encaissement uniquement)',
   water: 'Barman',
   croupier: 'Croupier (accès au casino)',
@@ -84,9 +85,9 @@ export const UtilisateursPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [casinoPlayers, setCasinoPlayers] = useState<Client[]>([]);
-  const [showPlayerModal, setShowPlayerModal] = useState(false);
-  const [playerForm, setPlayerForm] = useState({ nom: '', prenom: '', telephone: '' });
+  // const [casinoPlayers, setCasinoPlayers] = useState<Client[]>([]);
+  // const [showPlayerModal, setShowPlayerModal] = useState(false);
+  // const [playerForm, setPlayerForm] = useState({ nom: '', prenom: '', telephone: '' });
   const [form, setForm] = useState({
     nom: '', prenom: '', email: '', role: 'manager' as UserRole,
     module: [] as ModuleType[], actif: true, password: ''
@@ -120,43 +121,43 @@ export const UtilisateursPage: React.FC = () => {
     }
   }, [dispatch]);
 
-  const fetchCasinoPlayers = useCallback(async () => {
-    try {
-      setCasinoPlayers(await clientService.getClients({ is_casino_player: true }));
-    } catch (err: any) {
-      setErrorMessage(getApiErrorMessage(err, 'Impossible de charger les joueurs Casino.'));
-    }
-  }, []);
+  // const fetchCasinoPlayers = useCallback(async () => {
+  //   try {
+  //     setCasinoPlayers(await clientService.getClients({ is_casino_player: true }));
+  //   } catch (err: any) {
+  //     setErrorMessage(getApiErrorMessage(err, 'Impossible de charger les joueurs Casino.'));
+  //   }
+  // }, []);
 
   useEffect(() => {
     fetchRealUsers();
-    fetchCasinoPlayers();
-  }, [fetchRealUsers, fetchCasinoPlayers]);
+    // fetchCasinoPlayers();
+  }, [fetchRealUsers]);
 
-  const createCasinoPlayer = async () => {
-    if (!playerForm.nom.trim()) {
-      setErrorMessage('Le nom du joueur est requis.');
-      return;
-    }
-    try {
-      setIsSubmitting(true);
-      setErrorMessage('');
-      await clientService.createClient({
-        nom: playerForm.nom.trim(),
-        prenom: playerForm.prenom.trim() || undefined,
-        telephone: playerForm.telephone.trim() || undefined,
-        is_casino_player: true,
-        statut: 'ACTIF',
-      });
-      setPlayerForm({ nom: '', prenom: '', telephone: '' });
-      setShowPlayerModal(false);
-      await fetchCasinoPlayers();
-    } catch (err: any) {
-      setErrorMessage(getApiErrorMessage(err, 'Impossible de créer le joueur.'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  // const createCasinoPlayer = async () => {
+  //   if (!playerForm.nom.trim()) {
+  //     setErrorMessage('Le nom du joueur est requis.');
+  //     return;
+  //   }
+  //   try {
+  //     setIsSubmitting(true);
+  //     setErrorMessage('');
+  //     await clientService.createClient({
+  //       nom: playerForm.nom.trim(),
+  //       prenom: playerForm.prenom.trim() || undefined,
+  //       telephone: playerForm.telephone.trim() || undefined,
+  //       is_casino_player: true,
+  //       statut: 'ACTIF',
+  //     });
+  //     setPlayerForm({ nom: '', prenom: '', telephone: '' });
+  //     setShowPlayerModal(false);
+  //     await fetchCasinoPlayers();
+  //   } catch (err: any) {
+  //     setErrorMessage(getApiErrorMessage(err, 'Impossible de créer le joueur.'));
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
 
   const filtered = state.users.filter(u =>
     `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -209,6 +210,11 @@ export const UtilisateursPage: React.FC = () => {
 
     if (form.role === 'water' && parseModules(form.module).length !== 1) {
       setErrorMessage('Un barman doit être affecté au module Bar.');
+      return;
+    }
+
+    if (form.role === 'receptioniste' && (parseModules(form.module).length !== 1 || parseModules(form.module)[0] !== 'hotel')) {
+      setErrorMessage('Un réceptionniste est affecté uniquement au module Hôtel.');
       return;
     }
 
@@ -271,7 +277,7 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
-    if (form.role === 'croupier') return;
+    if (form.role === 'croupier' || form.role === 'receptioniste') return;
 
     if (form.role === 'caisse') {
       setErrorMessage('');
@@ -439,8 +445,8 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Joueurs Casino : profils clients sans compte de connexion */}
-      <div className="bg-surface border border-base rounded-2xl overflow-hidden">
+      {/* Joueurs Casino : profils clients sans compte de connexion - HIDDEN */}
+      {/* <div className="bg-surface border border-base rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-base">
           <div>
             <h3 className="text-primary font-semibold">Joueurs Casino</h3>
@@ -461,7 +467,7 @@ export const UtilisateursPage: React.FC = () => {
             </div>
           ))}
         </div>
-      </div>
+      </div> */}
 
       {/* Role Legend */}
       <div className="bg-surface border border-base rounded-2xl p-6">
@@ -511,7 +517,7 @@ export const UtilisateursPage: React.FC = () => {
 
           <Select label="Rôle" value={form.role} onChange={e => {
             const role = e.target.value as UserRole;
-            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : role === 'croupier' ? ['casino'] : form.module });
+            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : role === 'receptioniste' ? ['hotel'] : role === 'croupier' ? ['casino'] : form.module });
           }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
@@ -520,7 +526,7 @@ export const UtilisateursPage: React.FC = () => {
               <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse autorisée' : 'Modules autorisés (1 ou 2 max pour un manager)'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (
@@ -528,7 +534,7 @@ export const UtilisateursPage: React.FC = () => {
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={form.role === 'water' || form.role === 'croupier'}
+                    disabled={form.role === 'water' || form.role === 'receptioniste' || form.role === 'croupier'}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
                       : 'bg-surface-2 text-muted border-base hover:text-primary'
@@ -541,6 +547,7 @@ export const UtilisateursPage: React.FC = () => {
             </div>
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier est limité à une seule caisse : Bar, Restaurant, Hôtel ou Hébergement.</p>}
             {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
+            {form.role === 'receptioniste' && <p className="mt-2 text-xs text-muted">Le réceptionniste travaille uniquement dans le module Hôtel.</p>}
             {form.role === 'croupier' && <p className="mt-2 text-xs text-muted">Le croupier travaille uniquement dans le module Casino.</p>}
           </div>
 
@@ -561,7 +568,7 @@ export const UtilisateursPage: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal isOpen={showPlayerModal} onClose={() => setShowPlayerModal(false)} title="Nouveau joueur Casino" size="md">
+      {/* <Modal isOpen={showPlayerModal} onClose={() => setShowPlayerModal(false)} title="Nouveau joueur Casino" size="md">
         <div className="space-y-4">
           {errorMessage && <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 text-sm">{errorMessage}</div>}
           <div className="grid grid-cols-2 gap-4">
@@ -575,7 +582,7 @@ export const UtilisateursPage: React.FC = () => {
             <Button onClick={createCasinoPlayer} disabled={isSubmitting} className="flex-1">{isSubmitting ? 'Création…' : 'Créer la fiche'}</Button>
           </div>
         </div>
-      </Modal>
+      </Modal> */}
     </div>
   );
 };
