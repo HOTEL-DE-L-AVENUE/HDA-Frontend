@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+     import React, { useMemo, useState } from 'react';
 import { Clipboard, Download, Printer } from 'lucide-react';
 import { ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
