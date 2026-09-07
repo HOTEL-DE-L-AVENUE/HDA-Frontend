@@ -59,12 +59,13 @@ export const RestaurantPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   // ---------- Chargement initial ----------
   const fetchOrders = async () => {
     try {
       const res = await restaurantService.getOrders();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setOrders(res.data as Order[]);
       }
     } catch (error) {
@@ -158,6 +159,22 @@ export const RestaurantPage: React.FC = () => {
   // ---------- Handlers Commandes ----------
   const handleAddOrder = async (formData: any) => {
     const table = tables.find(t => t.id === formData.table_id);
+
+    if (editingOrder) {
+      setOrders(prev => prev.map(order => order.id === editingOrder.id ? {
+        ...order,
+        client_id: formData.client_id || null,
+        table_id: formData.table_id || null,
+        table,
+        montant_total: formData.montant_total,
+        notes: formData.notes,
+        items: formData.items,
+      } : order));
+      setEditingOrder(null);
+      setShowOrderModal(false);
+      return;
+    }
+
     try {
       const res = await restaurantService.createOrder({
         client_id: formData.client_id || undefined,
@@ -182,6 +199,7 @@ export const RestaurantPage: React.FC = () => {
     const newOrder: Order = {
       id: orders.length + 1,
       client_id: formData.client_id || null,
+      table_id: formData.table_id || null,
       source_module: 'RESTAURANT',
       montant_total: formData.montant_total,
       statut: 'EN_ATTENTE',
@@ -216,7 +234,7 @@ export const RestaurantPage: React.FC = () => {
     setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: status } : o));
   };
 
-  const handlePayment = async (orderId: number | string) => {
+  const handlePayment = async (orderId: number | string, paymentMethod = 'ESPECES') => {
     const numericId = Number(orderId);
     const order = orders.find(o => Number(o.id) === numericId);
 
@@ -233,7 +251,7 @@ export const RestaurantPage: React.FC = () => {
       const res = await restaurantService.processPayment({
         order_id: numericId,
         montant: calculatedMontant > 0 ? calculatedMontant : undefined as any,
-        moyen_paiement: 'ESPECES',
+        moyen_paiement: paymentMethod,
         client_id: order?.client_id || undefined,
       });
       if (res && res.success) {
@@ -260,9 +278,9 @@ export const RestaurantPage: React.FC = () => {
           montant: calculatedMontant,
           description: `Encaissement Commande #${numericId} ${order?.table?.numero ? '(Table ' + order.table.numero + ')' : ''}`,
           categorie: 'Ventes Restaurant',
+          userId: String(state.currentUser?.id || 'caisse'),
           module: 'restaurant',
           userName: state.currentUser ? `${state.currentUser.prenom} ${state.currentUser.nom}` : 'Caisse',
-          heure: new Date().toISOString()
         }
       });
     }
@@ -389,7 +407,20 @@ export const RestaurantPage: React.FC = () => {
   const handleAddClient = async (formData: any) => {
     try {
       const created = await clientService.createClient(formData);
-      setClients(prev => [...prev, created]);
+      const normalizedClient: Client = {
+        id: created.id,
+        code_client: created.code_client || `CL${String(created.id).padStart(3, '0')}`,
+        nom: created.nom,
+        prenom: created.prenom || '',
+        telephone: created.telephone || '',
+        email: created.email || '',
+        adresse: created.adresse || '',
+        date_naissance: created.date_naissance || '',
+        type_piece: created.type_piece || '',
+        numero_piece: created.numero_piece || '',
+        statut: created.statut,
+      };
+      setClients(prev => [...prev, normalizedClient]);
       setShowClientModal(false);
       alert('Client créé avec succès !');
     } catch (err) {
@@ -416,7 +447,7 @@ export const RestaurantPage: React.FC = () => {
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
       {/* Header avec statistiques */}
-      <RestaurantHeader stats={stats} onNewOrder={() => setShowOrderModal(true)} />
+      <RestaurantHeader stats={stats} />
 
       {/* Barre de recherche et filtres - Masquée uniquement sur l'onglet menu */}
       {activeTab !== 'menu' && (
@@ -468,6 +499,10 @@ export const RestaurantPage: React.FC = () => {
             onCancel={handleCancelOrder}
             onDelete={handleDeleteOrder}
             onNewOrder={() => setShowOrderModal(true)}
+            onEditOrder={(order) => {
+              setEditingOrder(order);
+              setShowOrderModal(true);
+            }}
             onInvoice={handlePrintInvoice}
           />
         )}
@@ -494,20 +529,28 @@ export const RestaurantPage: React.FC = () => {
         )}
         {activeTab === 'stock' && <StockTab />}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
-          <CaisseTab orders={orders} onPayment={handlePayment} />
+          <CaisseTab
+            orders={orders}
+            onPayment={handlePayment}
+            onCloseAllOrders={async (orderIds) => {
+              await restaurantService.closeAllOrders(orderIds);
+            }}
+            onRefresh={fetchOrders}
+          />
         )}
       </div>
 
       {/* Modales */}
       <OrderModal
         isOpen={showOrderModal}
-        onClose={() => setShowOrderModal(false)}
+        onClose={() => { setShowOrderModal(false); setEditingOrder(null); }}
         tables={tables}
         products={products}
         categories={categories}
         clients={clients}
         onSubmit={handleAddOrder}
         onNewClient={() => setShowClientModal(true)}
+        orderToEdit={editingOrder || undefined}
       />
       <TableModal
         isOpen={showTableModal}

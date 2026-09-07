@@ -470,8 +470,11 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [backendError, setBackendError] = useState<string | null>(null);
   const [currentBarSession, setCurrentBarSession] = useState<BarSession | null>(null);
   const [isClosingBarSession, setIsClosingBarSession] = useState(false);
+  const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
 
   const isBar = module === 'bar';
+  const isRestaurant = module === 'restaurant';
+  const isOrderRegister = isBar || isRestaurant;
   // const isHebergement = module === 'hebergement'; // COMMENTED OUT
   const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
@@ -742,6 +745,8 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
     handlePrintAllOrders();
     await onCloseAllOrders(allOrders.map((order) => order.id));
+    setBackendTransactions([]);
+    setTransactionsRefreshTrigger((value) => value + 1);
     await onRefresh?.();
   };
 
@@ -757,12 +762,12 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         </div>
       </div>
 
-      <div className={isBar ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
+      <div className={isOrderRegister ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
         {/* Caisse Card */}
         {canViewBarBalance && (
           <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
         )}
-        {isBar && (
+        {isOrderRegister && (
           <section className="rounded-2xl border border-accent/30 bg-surface p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -790,7 +795,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                 <p className="text-[11px] text-muted">À encaisser</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => order.statut === 'Encaissée').length}</p>
+                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || '')).length}</p>
                 <p className="text-[11px] text-muted">Encaissées</p>
               </div>
             </div>
@@ -840,7 +845,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
       {/* Transactions adaptées au module */}
       {isBar ? (
-        <BarTransactionsCard title={transactionTitle} />
+        <BarTransactionsCard title={transactionTitle} refreshTrigger={transactionsRefreshTrigger} />
       ) : (
         <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-800/50 flex items-center justify-between">
@@ -848,6 +853,18 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
           </div>
           <div className="divide-y divide-slate-800/50">
             {backendError && <p className="px-6 py-3 text-sm text-red-400">{backendError}</p>}
+            {allOrders.map((order) => (
+              <div key={`order-${order.id}`} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm bg-emerald-500/10 text-emerald-400">↗</div>
+                  <div>
+                    <p className="text-white font-medium text-sm">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
+                    <p className="text-slate-500 text-xs">Vente Restaurant{order.table ? ` · Table ${order.table}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
+                  </div>
+                </div>
+                <span className="font-semibold text-sm text-emerald-400">+ {formatCurrency(order.total)}</span>
+              </div>
+            ))}
             {transactions.length > 0 ? (
               transactions.map((t: any, index: number) => (
                 <div key={index} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-all">

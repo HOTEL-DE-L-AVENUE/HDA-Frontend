@@ -1,7 +1,7 @@
-import React from 'react';
-import { Badge, Button, DataTable } from '../../UI';
+import React, { useState } from 'react';
+import { Badge, Button, DataTable, Modal, Select } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, Trash2, XCircle, Pencil } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, CheckCircle2 } from 'lucide-react';
 import type { Order } from '../types';
 import AuthService from '../../../services/authService';
 import { isAdmin, isCashier } from '../../../utils/permissions';
@@ -19,7 +19,7 @@ interface CommandesTabProps {
   orders: Order[];
   products: any[];
   onUpdateStatus: (orderId: number, status: Order['statut']) => void;
-  onPayment: (orderId: number) => void;
+  onPayment: (orderId: number, paymentMethod?: string) => void | Promise<void>;
   onCancel: (orderId: number) => void;
   onDelete: (orderId: number) => void;
   onNewOrder: () => void;
@@ -38,6 +38,9 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onEditOrder,
   onInvoice
 }) => {
+  const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState('ESPECES');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
@@ -96,7 +99,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
-          <Button size="sm" onClick={() => onPayment(order.id)}>Encaisser</Button>
+          <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); }}>Encaisser</Button>
         )}
         {/* Invoice button */}
         {onInvoice && (
@@ -122,7 +125,8 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   ];
 
   // Tri des commandes : les plus récentes (plus grandes dates/IDs) en premier
-  const sortedOrders = [...orders].sort((a, b) => {
+  const activeOrders = orders.filter((order) => !['PAYE', 'PAYEE', 'ANNULEE'].includes(order.statut));
+  const sortedOrders = [...activeOrders].sort((a, b) => {
     const timeA = new Date(a.created_at || 0).getTime();
     const timeB = new Date(b.created_at || 0).getTime();
     if (timeA !== timeB) return timeB - timeA; // Tri par date décroissante
@@ -130,6 +134,17 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   });
 
   const data = sortedOrders.map(order => ({ ...order, id: String(order.id) }));
+
+  const handleConfirmPayment = async () => {
+    if (paymentOrderId === null) return;
+    try {
+      setIsProcessingPayment(true);
+      await onPayment(paymentOrderId, paymentMethod);
+      setPaymentOrderId(null);
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
 
   return (
     <div className="rounded-2xl overflow-hidden w-full" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -144,6 +159,37 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
       <div className="overflow-x-auto">
         <DataTable data={data} columns={columns as any} />
       </div>
+
+      <Modal
+        isOpen={paymentOrderId !== null}
+        onClose={() => { if (!isProcessingPayment) setPaymentOrderId(null); }}
+        title={`Encaisser la commande #${paymentOrderId ?? ''}`}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">Choisissez le mode de paiement pour confirmer cette commande.</p>
+          <Select
+            label="Mode de paiement"
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value)}
+            options={[
+              { value: 'ESPECES', label: 'Espèces' },
+              { value: 'CREDIT', label: 'Crédit' },
+              { value: 'TPE', label: 'TPE' },
+              { value: 'ORANGE_MONEY', label: 'Orange Money' },
+              { value: 'MVOLA', label: 'MVola' },
+              { value: 'GRATUIT', label: 'Gratuit' },
+            ]}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setPaymentOrderId(null)} disabled={isProcessingPayment} className="flex-1">Annuler</Button>
+            <Button type="button" onClick={() => void handleConfirmPayment()} disabled={isProcessingPayment} className="flex-1">
+              <CheckCircle2 size={16} />
+              {isProcessingPayment ? 'Confirmation...' : 'Confirmer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
