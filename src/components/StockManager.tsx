@@ -670,10 +670,10 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     Array.from(printWindow.document.querySelectorAll('h2'))
       .filter((heading) => ['Sales', 'Product Categories'].includes(heading.textContent?.trim() || ''))
       .forEach((heading) => {
-        heading.style.display = 'none';
+        (heading as HTMLElement).style.display = 'none';
         let sibling = heading.nextElementSibling;
         while (sibling && sibling.tagName !== 'H2') {
-          sibling.style.display = 'none';
+          (sibling as HTMLElement).style.display = 'none';
           sibling = sibling.nextElementSibling;
         }
       });
@@ -816,6 +816,54 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     printWindow.print();
   };
 
+  const handlePrintSingleOrder = (order: any) => {
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
+    if (!printWindow) return;
+
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    } as Record<string, string>)[character] || character);
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const generatedAt = new Date().toLocaleString('fr-FR');
+    const orderDate = order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '-';
+    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
+    const orderTotal = Number(order.total || 0);
+    const paymentLabel = order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces';
+    
+    const itemsRows = (order.items || []).map((item: any) => {
+      const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
+      const lineTotal = unitPrice * Number(item.quantite || 0);
+      return `<div class="row"><span>${escapeHtml(item.nom || item.product_nom || 'Article')} x${item.quantite}</span><span>${formatCurrency(lineTotal)}</span></div>`;
+    }).join('');
+
+    const report = `<h1>Reçu de Commande</h1><p>Commande #${order.id}<br>Client : ${escapeHtml(order.client || 'Client anonyme')}<br>Table : ${escapeHtml(String(order.table || 'N/A'))}<br>Date : ${escapeHtml(orderDate)}<br>Caissier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}</p><div class="separator"></div><h2>Articles</h2>${itemsRows || '<p>Aucun article.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(orderTotal)}</strong></div><div class="separator"></div><div class="row"><span>Moyen de paiement</span><span>${escapeHtml(paymentLabel)}</span></div>`;
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Commande</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const handlePrintSingleTransaction = (transaction: any) => {
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
+    if (!printWindow) return;
+
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    } as Record<string, string>)[character] || character);
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const generatedAt = new Date().toLocaleString('fr-FR');
+    const transactionDate = transaction.heure ? new Date(transaction.heure).toLocaleString('fr-FR') : '-';
+    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
+    const transactionAmount = Number(transaction.montant || 0);
+    const isInflow = transaction.type === 'entree';
+
+    const report = `<h1>Reçu de Transaction</h1><p>Description : ${escapeHtml(transaction.description)}<br>Catégorie : ${escapeHtml(transaction.categorie)}<br>Date : ${escapeHtml(transactionDate)}<br>Caissier : ${escapeHtml(transaction.userName || connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}</p><div class="separator"></div><div class="total">${isInflow ? 'Encaissement' : 'Décaissement'} <strong>${formatCurrency(transactionAmount)}</strong></div><div class="separator"></div><p class="center">Généré le ${escapeHtml(generatedAt)}</p>`;
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Transaction</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}.center{text-align:center}</style></head><body>${report}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
     if (!window.confirm(`Imprimer puis effacer les ${allOrders.length} commande(s) et leurs transactions ?`)) return;
@@ -939,7 +987,16 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                     <p className="text-slate-500 text-xs">Vente Restaurant{order.table ? ` · Table ${order.table}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
                   </div>
                 </div>
-                <span className="font-semibold text-sm text-emerald-400">+ {formatCurrency(order.total)}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold text-sm text-emerald-400">+ {formatCurrency(order.total)}</span>
+                  <button
+                    onClick={() => handlePrintSingleOrder(order)}
+                    className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                    title="Imprimer la transaction"
+                  >
+                    <Printer size={14} />
+                  </button>
+                </div>
               </div>
             ))}
             {transactions.length > 0 ? (
@@ -954,9 +1011,18 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                       <p className="text-slate-500 text-xs">{t.categorie} • {t.userName || 'Système'} {t.heure ? `• ${t.heure}` : ''}</p>
                     </div>
                   </div>
-                  <span className={`font-semibold text-sm ${t.type === 'entree' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {t.type === 'entree' ? '+' : '-'} {formatCurrency(t.montant)}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className={`font-semibold text-sm ${t.type === 'entree' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {t.type === 'entree' ? '+' : '-'} {formatCurrency(t.montant)}
+                    </span>
+                    <button
+                      onClick={() => handlePrintSingleTransaction(t)}
+                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                      title="Imprimer la transaction"
+                    >
+                      <Printer size={14} />
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (
