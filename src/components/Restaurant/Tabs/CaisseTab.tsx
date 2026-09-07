@@ -7,6 +7,9 @@ interface CaisseTabProps {
   onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
 }
+   
+
+
 
 export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, onCloseAllOrders, onRefresh }) => {
   const getOrderTotal = (order: any) => {
