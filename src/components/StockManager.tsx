@@ -681,6 +681,53 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     printWindow.print();
   };
 
+  const handlePrintDailyOrderDetails = () => {
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
+    if (!printWindow) return;
+
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    } as Record<string, string>)[character] || character);
+    const moduleLabel = module === 'restaurant' ? 'Restaurant' : 'Bar & Lounge';
+    const generatedAt = new Date().toLocaleString('fr-FR');
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
+    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : '-';
+    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
+    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const itemCount = allOrders.reduce((sum, order) => sum + (order.items || []).reduce((itemSum, item) => itemSum + Number(item.quantite || 0), 0), 0);
+    const sales = new Map<string, { sold: number; net: number; category: string }>();
+    const categories = new Map<string, { sold: number; total: number }>();
+    allOrders.forEach((order) => (order.items || []).forEach((item) => {
+      const name = item.nom || 'Article';
+      const sold = Number(item.quantite || 0);
+      const net = sold * Number(item.prix || 0);
+      const sale = sales.get(name) || { sold: 0, net: 0, category: item.categorie || 'Autre' };
+      sales.set(name, { sold: sale.sold + sold, net: sale.net + net, category: sale.category });
+    }));
+    sales.forEach((sale) => {
+      const category = categories.get(sale.category) || { sold: 0, total: 0 };
+      categories.set(sale.category, { sold: category.sold + sale.sold, total: category.total + sale.net });
+    });
+    const paymentLabels: Record<string, string> = { ESPECES: 'Cash', CREDIT: 'Credit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'Mvola', GRATUIT: 'Gratuit' };
+    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
+    const paymentTotals = new Map<string, number>();
+    allOrders.forEach((order) => {
+      const payment = order.moyen_paiement || 'ESPECES';
+      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
+    });
+    const salesRows = Array.from(sales.entries()).map(([name, sale]) => `<div class="row four"><span>${escapeHtml(name)}</span><span>${sale.sold}</span><span>${formatCurrency(sale.net)}</span><span>${formatCurrency(sale.net)}</span></div>`).join('');
+    const categoryRows = Array.from(categories.entries()).map(([name, category]) => `<div class="row three"><span>${escapeHtml(name)}</span><span>${category.sold}</span><span>${formatCurrency(category.total)}</span></div>`).join('');
+    const paymentRows = paymentMethods.map((payment) => `<div class="row two"><span>${paymentLabels[payment]}</span><span>${formatCurrency(paymentTotals.get(payment) || 0)}</span></div>`).join('');
+    const paidOrders = allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || ''));
+    const ticketLines = allOrders.reduce((sum, order) => sum + (order.items || []).length, 0);
+    const report = `<h1>Partial Cash Report</h1><p>Module : ${escapeHtml(moduleLabel)}</p><p>Cashier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}<br>Sequence : ${allOrders.length}<br>Start Date : ${escapeHtml(startDate)}<br>End Date : ${escapeHtml(generatedAt)}</p><div class="separator"></div><h2>Sales</h2><div class="row four head"><span>Name</span><span>Sold</span><span>Net</span><span>Total</span></div>${salesRows || '<p>Aucune vente.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Product Categories</h2><div class="row three head"><span>Category</span><span>Sold</span><span>Total</span></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Lines Removed</h2><div class="row two"><span>${escapeHtml(connectedCashier)}</span><span>${formatCurrency(0)}</span></div><h2>Taxes</h2><div class="row two"><span>Tax Exempt</span><span>${formatCurrency(0)}</span></div><h2>Payments</h2><div class="row two head"><span>Type</span><span>Total</span></div>${paymentRows}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>SUMMARY</h2><div class="row two"><span>Tickets</span><span>${allOrders.length}</span></div><div class="row two"><span>Ticket Lines</span><span>${ticketLines}</span></div><div class="row two"><span>Payments</span><span>${paidOrders.length}</span></div><div class="row two"><span>Net Sales</span><span>${formatCurrency(total)}</span></div><div class="row two"><span>Tax</span><span>${formatCurrency(0)}</span></div>`;
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:2mm}body{font-family:monospace;width:76mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.four{grid-template-columns:minmax(0,1fr) 7ch 12ch 12ch;column-gap:7px}.row.four span:not(:first-child){white-space:nowrap}.row.three{grid-template-columns:minmax(0,1fr) 28px 60px}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:not(:first-child){text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   const handlePrintCloseReport = (closedFund?: number) => {
     const printWindow = window.open('', '_blank', 'width=760,height=720');
     if (!printWindow) return;
@@ -739,11 +786,41 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     }
   };
 
+  const handlePrintClosingReport = () => {
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
+    if (!printWindow) return;
+
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    } as Record<string, string>)[character] || character);
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const generatedAt = new Date().toLocaleString('fr-FR');
+    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
+    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : '-';
+    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
+    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const ticketLines = allOrders.reduce((sum, order) => sum + (order.items || []).length, 0);
+    const paidOrders = allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || ''));
+    const paymentLabels: Record<string, string> = { ESPECES: 'Cash', CREDIT: 'Credit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'Mvola', GRATUIT: 'Gratuit' };
+    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
+    const paymentTotals = new Map<string, number>();
+    allOrders.forEach((order) => {
+      const payment = order.moyen_paiement || 'ESPECES';
+      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
+    });
+    const paymentRows = paymentMethods.map((payment) => `<div class="row two"><span>${paymentLabels[payment]}</span><span>${formatCurrency(paymentTotals.get(payment) || 0)}</span></div>`).join('');
+    const report = `<h1>Partial Cash Report</h1><p>Cashier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}<br>Sequence : ${allOrders.length}<br>Start Date : ${escapeHtml(startDate)}<br>End Date : ${escapeHtml(generatedAt)}</p><div class="separator"></div><h2>Lines Removed</h2><div class="row two"><span>${escapeHtml(connectedCashier)}</span><span>${formatCurrency(0)}</span></div><h2>Taxes</h2><div class="row two"><span>Tax Exempt</span><span>${formatCurrency(0)}</span></div><h2>Payments</h2><div class="row two head"><span>Type</span><span>Total</span></div>${paymentRows}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>SUMMARY</h2><div class="row two"><span>Tickets</span><span>${allOrders.length}</span></div><div class="row two"><span>Ticket Lines</span><span>${ticketLines}</span></div><div class="row two"><span>Payments</span><span>${paidOrders.length}</span></div><div class="row two"><span>Net Sales</span><span>${formatCurrency(total)}</span></div><div class="row two"><span>Tax</span><span>${formatCurrency(0)}</span></div>`;
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Closing Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
     if (!window.confirm(`Imprimer puis effacer les ${allOrders.length} commande(s) et leurs transactions ?`)) return;
 
-    handlePrintAllOrders();
+    handlePrintClosingReport();
     await onCloseAllOrders(allOrders.map((order) => order.id));
     setBackendTransactions([]);
     setTransactionsRefreshTrigger((value) => value + 1);
@@ -777,7 +854,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
               <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{allOrders.length}</span>
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintAllOrders()} disabled={allOrders.length === 0} className="justify-center">
+              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintDailyOrderDetails()} disabled={allOrders.length === 0} className="justify-center">
                 Imprimer toutes
               </Button>
               <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="justify-center">
