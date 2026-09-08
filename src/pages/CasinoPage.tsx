@@ -8,7 +8,8 @@ import { IdentityVerificationsManagement } from '../components/Casino/sheets/Ide
 import { DailyReportSheet } from '../components/Casino/sheets/DailyReportSheet';
 import { CaisseTab } from '../components/Casino/tabs/CaisseTab';
 import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
-import { casinoPlayersApi, CasinoRegisteredPlayer, playerSheetApi, identityVerificationApi } from '../services/casinoTablesJeu.service';
+import { casinoPlayersApi, CasinoRegisteredPlayer, playerSheetApi, identityVerificationApi, tablesJeuApi } from '../services/casinoTablesJeu.service';
+import type { TableJeu } from '../types/casinoTablesJeu.types';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
 
@@ -18,6 +19,7 @@ const getCurrentTime = () => {
 };
 
 const createInitialPlayers = (): PlayerLine[] => [];
+const DEFAULT_TABLE_NUMBERS = Array.from({ length: 10 }, (_, index) => String(index + 1));
 const createInitialRackChecks = (): RackCheck[] => [{ id: Date.now(), date: new Date().toISOString().slice(0, 10), time: getCurrentTime(), type: 'Cash check', expected: 0, actual: '', missing: '', verified: false, variance: '' }];
 
 const setFirstPlayerTimeIfMissing = (players: PlayerLine[]) => {
@@ -37,9 +39,12 @@ export const CasinoPage: React.FC = () => {
   const userRole = currentUser?.role?.toLowerCase() || '';
   const userIsAdmin = isAdmin(currentUser);
   const canManageCasino = userIsAdmin || ['croupier', 'manager', 'caisse', 'caissier'].includes(userRole);
-  const [view, setView] = useState<CasinoView>('setup');
+  const [view, setView] = useState<CasinoView>('table');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [table, setTable] = useState('Table Poker Night');
+  const [table, setTable] = useState('');
+  const [gameTables, setGameTables] = useState<TableJeu[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(true);
+  const [tablesError, setTablesError] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerLine[]>(createInitialPlayers);
   const playersRef = useRef<PlayerLine[]>(players);
   const [restaurantPayments, setRestaurantPayments] = useState({ especes: false, tpe: false });
@@ -57,6 +62,22 @@ export const CasinoPage: React.FC = () => {
   const [showIdentityVerifications, setShowIdentityVerifications] = useState(true);
   const [identityVerifications, setIdentityVerifications] = useState<Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>>({});
   const [registeredPlayers, setRegisteredPlayers] = useState<CasinoRegisteredPlayer[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    tablesJeuApi.list().then((rows) => {
+      if (!active) return;
+      const allTables = [...rows].sort((first, second) =>
+        first.numero.localeCompare(second.numero, undefined, { numeric: true, sensitivity: 'base' })
+      );
+      setGameTables(allTables);
+    }).catch(() => {
+      if (active) setTablesError('Impossible de charger les tables de jeu.');
+    }).finally(() => {
+      if (active) setTablesLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   const changeGameDate = (value: string) => {
     if (value === date) return;
@@ -102,6 +123,10 @@ export const CasinoPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
+    if (!table) {
+      setSaveState('idle');
+      return () => { active = false; };
+    }
     setSaveState('idle');
     setIsGameFinished(false);
     setGameFinishedAt('');
@@ -242,6 +267,7 @@ export const CasinoPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
+    if (!table) return () => { active = false; };
     identityVerificationApi.list({ date_from: date, date_to: date }).then((rows) => {
       if (!active) return;
       const map: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }> = {};
@@ -351,24 +377,30 @@ export const CasinoPage: React.FC = () => {
     });
   };
 
+  const tableOptions = Array.from(new Set([
+    ...DEFAULT_TABLE_NUMBERS,
+    ...gameTables.map((gameTable) => gameTable.numero),
+  ]));
   const navigation: { id: CasinoView; label: string; help: string; icon: React.ReactNode }[] = [
-    { id: 'setup', label: '1. Joueurs', help: 'Informations de début de jeu', icon: <ClipboardList size={18} /> },
-    { id: 'players', label: '2. Fiche de tournoi', help: 'Caves, paiements et signatures', icon: <ClipboardList size={18} /> },
-    { id: 'chips', label: '3. Comptage jetons', help: 'Ouverture / fermeture', icon: <Coins size={18} /> },
-    { id: 'final', label: '4. Calcul final', help: 'Clôture de caisse', icon: <Calculator size={18} /> },
-    { id: 'management', label: '5. Vérifications', help: 'Gérer les identités', icon: <Shield size={18} /> },
-    { id: 'caisse', label: '6. Caisse', help: 'Sessions, écarts et rack check', icon: <WalletCards size={18} /> },
-    { id: 'report', label: '7. Rapport', help: 'Générer le rapport du jour', icon: <FileText size={18} /> },
+    { id: 'table', label: '1. Choix de table', help: 'Sélectionner la table à jouer', icon: <ClipboardList size={18} /> },
+    { id: 'setup', label: '2. Joueurs', help: 'Informations de début de jeu', icon: <ClipboardList size={18} /> },
+    { id: 'players', label: '3. Fiche de jeu', help: 'Caves, paiements et signatures', icon: <ClipboardList size={18} /> },
+    { id: 'chips', label: '4. Comptage jetons', help: 'Ouverture / fermeture', icon: <Coins size={18} /> },
+    { id: 'final', label: '5. Calcul final', help: 'Clôture de caisse', icon: <Calculator size={18} /> },
+    { id: 'management', label: '6. Vérifications', help: 'Gérer les identités', icon: <Shield size={18} /> },
+    { id: 'caisse', label: '7. Caisse', help: 'Sessions, écarts et rack check', icon: <WalletCards size={18} /> },
+    { id: 'report', label: '8. Rapport', help: 'Générer le rapport de la table', icon: <FileText size={18} /> },
   ];
 
   return <div className="flex flex-col gap-5 w-full">
     <header className="rounded-3xl p-5 md:p-7 print:hidden" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', ...casinoBorder }}>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-5"><div><p className="text-accent text-xs font-bold uppercase tracking-[.18em]">Poker Night</p><h1 className="text-primary text-3xl font-bold mt-2" style={{ fontFamily: 'Playfair Display, serif' }}>Gestion casino</h1><p className="text-muted text-sm mt-2">Nouvelle interface locale basée sur les trois fiches papier.</p></div><div className="flex gap-2"><button type="button" onClick={() => window.print()} className="action secondary"><Printer size={15} /> Imprimer</button><button type="button" onClick={() => setView('report')} className="action"><Download size={15} /> Rapport</button></div></div>
     </header>
-    <nav className="grid gap-2 md:grid-cols-5 print:hidden">{navigation.map((item) => <button type="button" key={item.id} onClick={() => setView(item.id)} className="casino-nav-button flex gap-3 items-center rounded-2xl p-4 text-left" style={{ backgroundColor: view === item.id ? '#6b7280' : 'var(--color-surface)', color: view === item.id ? '#000' : undefined, ...casinoBorder }}>{item.icon}<span><b className="block text-sm">{item.label}</b><small className="opacity-70">{item.help}</small></span></button>)}</nav>
+    <nav className="grid gap-2 md:grid-cols-4 print:hidden">{navigation.map((item) => <button type="button" key={item.id} disabled={item.id !== 'table' && !table} onClick={() => setView(item.id)} className="casino-nav-button flex gap-3 items-center rounded-2xl p-4 text-left disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: view === item.id ? '#6b7280' : 'var(--color-surface)', color: view === item.id ? '#000' : undefined, ...casinoBorder }}>{item.icon}<span><b className="block text-sm">{item.label}</b><small className="opacity-70">{item.help}</small></span></button>)}</nav>
     <main className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
-      <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-3 justify-between print:hidden" style={{ borderBottom: '1px solid var(--color-border)' }}><div className="flex flex-col sm:flex-row gap-3"><label className="field">Table<input value={table} onChange={(event) => setTable(event.target.value)} /></label><label className="field">Date<input type="date" value={date} onChange={(event) => changeGameDate(event.target.value)} /></label></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-semibold cursor-pointer"><input type="checkbox" checked={showIdentityVerifications} onChange={(event) => setShowIdentityVerifications(event.target.checked)} /> Vérifications identité</label><p className="text-muted text-xs self-end">Fiche enregistrée dans la base de données.</p></div></div>
+      <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-3 justify-between print:hidden" style={{ borderBottom: '1px solid var(--color-border)' }}><div className="flex flex-col sm:flex-row gap-3"><label className="field">Table sélectionnée<input value={table || 'Aucune table sélectionnée'} readOnly /></label><label className="field">Date<input type="date" value={date} onChange={(event) => changeGameDate(event.target.value)} /></label></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-semibold cursor-pointer"><input type="checkbox" checked={showIdentityVerifications} onChange={(event) => setShowIdentityVerifications(event.target.checked)} /> Vérifications identité</label><p className="text-muted text-xs self-end">Fiche enregistrée dans la base de données.</p></div></div>
       <div className="p-4 md:p-5"><div className="hidden print:block text-center mb-5"><h1>{table}</h1><p>Date : {date}</p></div>
+        {view === 'table' && <section className="flex flex-col gap-4"><div><h2 className="text-primary text-xl font-bold">Choix de la table</h2><p className="text-muted text-sm mt-1">Choisissez la table avant de commencer. Chaque table conserve ses propres joueurs et sa propre fiche.</p></div>{tablesError && <p className="text-red-400 text-sm">{tablesError}</p>}{tablesLoading ? <p className="text-muted text-sm">Chargement des tables…</p> : <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">{tableOptions.map((tableNumber) => { const gameTable = gameTables.find((candidate) => candidate.numero === tableNumber); const isSelected = table === tableNumber; return <button key={tableNumber} type="button" aria-pressed={isSelected} onClick={() => { setTable(tableNumber); setView('setup'); }} className="flex min-h-24 flex-col items-center justify-center rounded-xl px-4 py-3 text-center transition-all hover:-translate-y-0.5 hover:border-[var(--color-accent)]" style={{ backgroundColor: isSelected ? 'var(--color-accent)' : 'var(--color-bg)', color: isSelected ? '#000' : undefined, border: isSelected ? '2px solid var(--color-accent)' : '1px solid var(--color-border)', boxShadow: isSelected ? 'var(--shadow-accent)' : 'none' }}><span className="text-base font-bold">Table {tableNumber}</span>{gameTable ? <><span className="mt-1 text-[11px] opacity-75">{gameTable.type_jeu} · {gameTable.nombre_places} places</span><span className="mt-1 text-[11px] font-semibold">{gameTable.statut === 'OUVERTE' ? 'Ouverte' : gameTable.statut === 'FERMEE' ? 'Fermée' : 'Archivée'}</span></> : <span className="mt-1 text-[11px] opacity-75">Disponible</span>}</button>; })}</div>}</section>}
         {view === 'setup' && <PlayerSetupSheet players={players} isAdmin={userIsAdmin} canManageGame={canManageCasino} saveState={saveState} registeredPlayers={registeredPlayers} onRegister={registerCasinoPlayer} onUpdateRegisteredPlayer={updateRegisteredCasinoPlayer} onDeleteRegisteredPlayer={deleteRegisteredCasinoPlayer} onPlay={addRegisteredPlayerToGame} onUpdate={updatePlayerLine} onAdd={() => { const firstId = Math.max(0, ...players.map((line) => line.id)) + 1; setPlayers((lines) => [...lines, createPlayerLine(firstId)]); }} onRemove={(ficheId) => removePlayerLines(players.filter((line) => (line.ficheId ?? line.id) === ficheId).map((line) => line.id))} onSave={savePlayerSheet} />}
         {view === 'players' && <PlayersSheet date={date} players={players} registeredPlayers={registeredPlayers} cashingPaymentMethod={cashingPaymentMethod} restaurantPayments={restaurantPayments} saveState={saveState} isAdmin={canManageCasino} canDeletePlayerLine={userIsAdmin} onDateChange={changeGameDate} onUpdate={updatePlayerLine} onPaymentChange={(payment, checked) => { setSaveState('idle'); setRestaurantPayments((current) => ({ ...current, [payment]: checked })); }} onCashingPaymentMethodChange={(value) => { setSaveState('idle'); setCashingPaymentMethod(value); }} onSave={savePlayerSheet} onAdd={(ficheId, name = '') => { const firstId = Math.max(0, ...players.map((line) => line.id)) + 1; const newFicheId = ficheId ?? firstId; const newLines = ficheId ? [createPlayerLine(firstId, newFicheId)] : Array.from({ length: 5 }, (_, index) => createPlayerLine(firstId + index, newFicheId)); setPlayers((lines) => [...lines, ...newLines.map((line) => name ? { ...line, name } : line)]); return newFicheId; }} onDuplicate={(source) => { if (!canManageCasino) return; setSaveState('idle'); setPlayers((lines) => { const lineId = Math.max(0, ...lines.map((line) => line.id)) + 1; return [...lines, { ...createPlayerLine(lineId, source.ficheId ?? source.id), name: source.name, time: source.time, caves: source.caves, amount: source.amount, payment: source.payment, paymentMethod: source.paymentMethod }]; }); }} onGoToRegisteredPlayers={() => setView('setup')} onRemove={(id) => { if (!userIsAdmin) return; const previousPlayers = players; const nextPlayers = players.filter((line) => line.id !== id); setPlayers(nextPlayers); void savePlayerSheet(nextPlayers).then((saved) => { if (!saved) setPlayers(previousPlayers); }); }} showIdentityVerifications={showIdentityVerifications} identityVerifications={identityVerifications} onIdentityVerified={(ficheId, data, verificationId) => { setIdentityVerifications((current) => ({ ...current, [ficheId]: { id: verificationId ?? current[ficheId]?.id, full_name: data.fullName, id_type: data.idType, id_number: data.idNumber, issue_date: data.issueDate, transaction_type: data.transactionType.toUpperCase(), amount: data.amount, verified_at: data.verifiedAt } })); }} />}
         {view === 'chips' && <ChipsSheet date={date} chips={chips} players={players} rackChecks={rackChecks} endGameTime={endGameTime} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onRackChecksChange={(checks) => { setSaveState('idle'); rackChecksRef.current = checks; setRackChecks(checks); }} onEndGameTimeChange={(value) => { setSaveState('idle'); setEndGameTime(value); }} onSave={savePlayerSheet} />}
