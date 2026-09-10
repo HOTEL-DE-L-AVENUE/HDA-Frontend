@@ -39,7 +39,17 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [hotelSection, setHotelSection] = useState<'CONSOMMABLE' | 'NON_CONSOMMABLE'>('CONSOMMABLE');
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    nom: string;
+    categorie: string;
+    quantite: number;
+    unite: string;
+    prixUnitaire: number;
+    seuilMinimum: number;
+    fournisseur: string;
+    typeProduit: 'CONSOMMABLE' | 'NON_CONSOMMABLE';
+    etat: 'DISPONIBLE' | 'EN_LAVAGE' | 'USE' | 'ENDOMMAGE' | 'REBUT' | 'PERDU';
+  }>({
     nom: '', categorie: categories[0], quantite: 0, unite: '',
     prixUnitaire: 0, seuilMinimum: 0, fournisseur: ''
     , typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE'
@@ -236,7 +246,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
 
     setShowModal(false);
     setEditItem(null);
-    setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '' });
+    setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
   };
 
   const openEdit = async (item: StockItem) => {
@@ -415,8 +425,8 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
               <Input label="Fournisseur (optionnel)" value={form.fournisseur} onChange={e => setForm({...form, fournisseur: e.target.value})} />
               {isHotel && (
                 <>
-                  <Select label="Catégorie de stock" value={form.typeProduit} onChange={e => setForm({...form, typeProduit: e.target.value})} options={[{ value: 'CONSOMMABLE', label: 'Consommable - entretien' }, { value: 'NON_CONSOMMABLE', label: 'Non consommable - linge' }]} />
-                  {form.typeProduit === 'NON_CONSOMMABLE' && <Select label="État du linge" value={form.etat} onChange={e => setForm({...form, etat: e.target.value})} options={[{value:'DISPONIBLE',label:'Disponible'},{value:'EN_LAVAGE',label:'En lavage'},{value:'USE',label:'Usé'},{value:'ENDOMMAGE',label:'Endommagé'},{value:'REBUT',label:'Au rebut'},{value:'PERDU',label:'Perdu'}]} />}
+                  <Select label="Catégorie de stock" value={form.typeProduit} onChange={e => setForm({...form, typeProduit: e.target.value as 'CONSOMMABLE' | 'NON_CONSOMMABLE'})} options={[{ value: 'CONSOMMABLE', label: 'Consommable - entretien' }, { value: 'NON_CONSOMMABLE', label: 'Non consommable - linge' }]} />
+                  {form.typeProduit === 'NON_CONSOMMABLE' && <Select label="État du linge" value={form.etat} onChange={e => setForm({...form, etat: e.target.value as typeof form.etat})} options={[{value:'DISPONIBLE',label:'Disponible'},{value:'EN_LAVAGE',label:'En lavage'},{value:'USE',label:'Usé'},{value:'ENDOMMAGE',label:'Endommagé'},{value:'REBUT',label:'Au rebut'},{value:'PERDU',label:'Perdu'}]} />}
                 </>
               )}
               <div className="flex gap-3 pt-2">

@@ -1,234 +1,45 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  BarChart3,
-  CalendarDays,
-  Check,
-  ChevronRight,
-  Clock3,
-  Download,
-  FileText,
-  Plus,
-  Search,
-  ShieldCheck,
-  UserPlus,
-  UsersRound,
-  WalletCards,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, BarChart3, CalendarDays, Check, ChevronRight, Clock3, Download, FileText, Plus, Search, ShieldCheck, UserPlus, UsersRound, WalletCards, X } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import rhService, { RHEmployee, RHDashboard } from '../services/rh.service';
+import rhService, { RHAttendance, RHDashboard, RHEmployee, RHEvaluation, RHLeave, RHPayroll } from '../services/rh.service';
 
-type RHView = 'overview' | 'employees' | 'attendance' | 'payroll';
-type EmployeeStatus = 'Actif' | 'En congé' | 'Absent';
-
-type Employee = {
-  id: number;
-  firstName: string;
-  lastName: string;
-  department: string;
-  position: string;
-  contract: string;
-  joinedAt: string;
-  salary: number;
-  status: EmployeeStatus;
-  initials: string;
-  color: string;
-};
-
-const initialEmployees: Employee[] = [
-  { id: 1, firstName: 'Mamy', lastName: 'Rakoto', department: 'Réception', position: 'Responsable réception', contract: 'CDI', joinedAt: '12 mars 2021', salary: 1850000, status: 'Actif', initials: 'MR', color: '#2b7a78' },
-  { id: 2, firstName: 'Lova', lastName: 'Razanakoto', department: 'Restauration', position: 'Chef de rang', contract: 'CDI', joinedAt: '05 juin 2022', salary: 1250000, status: 'Actif', initials: 'LR', color: '#d97745' },
-  { id: 3, firstName: 'Sarah', lastName: 'Andrianina', department: 'Administration', position: 'Assistante RH', contract: 'CDD', joinedAt: '18 septembre 2023', salary: 1100000, status: 'En congé', initials: 'SA', color: '#8067a7' },
-  { id: 4, firstName: 'Tiana', lastName: 'Raveloson', department: 'Casino', position: 'Croupier', contract: 'CDI', joinedAt: '21 janvier 2020', salary: 1450000, status: 'Actif', initials: 'TR', color: '#be6657' },
-  { id: 5, firstName: 'Hery', lastName: 'Ratsimba', department: 'Maintenance', position: 'Technicien', contract: 'CDD', joinedAt: '02 novembre 2024', salary: 980000, status: 'Absent', initials: 'HR', color: '#4d7890' },
-];
-
-const formatMoney = (value: number) => `${new Intl.NumberFormat('fr-FR').format(value)} Ar`;
-const storageKey = 'hda-rh-employees';
-
-const statusStyles: Record<EmployeeStatus, { background: string; color: string }> = {
-  Actif: { background: '#e5f4ef', color: '#28796e' },
-  'En congé': { background: '#fff1df', color: '#a76625' },
-  Absent: { background: '#fae8e7', color: '#b64f4d' },
-};
-
-const mapStatus = (status: string): EmployeeStatus => {
-  if (status === 'EN_CONGE') return 'En congé';
-  if (status === 'ABSENT') return 'Absent';
-  return 'Actif';
-};
-
-const mapEmployee = (employee: RHEmployee): Employee => ({
-  id: employee.id,
-  firstName: employee.first_name,
-  lastName: employee.last_name,
-  department: employee.department,
-  position: employee.position,
-  contract: employee.contract_type,
-  joinedAt: employee.joined_at,
-  salary: Number(employee.salary || 0),
-  status: mapStatus(employee.status),
-  initials: `${employee.first_name?.[0] || ''}${employee.last_name?.[0] || ''}`.toUpperCase(),
-  color: '#2b7a78',
-});
-
-const navigation: Array<{ id: RHView; label: string; icon: React.ReactNode }> = [
-  { id: 'overview', label: 'Vue d’ensemble', icon: <BarChart3 size={17} /> },
-  { id: 'employees', label: 'Employés', icon: <UsersRound size={17} /> },
-  { id: 'attendance', label: 'Présences & congés', icon: <CalendarDays size={17} /> },
-  { id: 'payroll', label: 'Paie', icon: <WalletCards size={17} /> },
-];
-
-const StatCard = ({ label, value, detail, icon, tone }: { label: string; value: string; detail: string; icon: React.ReactNode; tone: string }) => (
-  <div className="rounded-2xl border border-base bg-surface p-5 shadow-sm">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <p className="text-sm text-secondary">{label}</p>
-        <p className="mt-2 text-2xl font-bold text-primary">{value}</p>
-      </div>
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: tone, color: 'var(--color-primary)' }}>{icon}</span>
-    </div>
-    <p className="mt-4 text-xs text-secondary">{detail}</p>
-  </div>
-);
+type RHView = 'overview' | 'employees' | 'attendance' | 'payroll' | 'evaluations';
+const departments = ['Administration', 'Réception', 'Restauration', 'Casino', 'Maintenance', 'Hébergement', 'Sécurité'];
+const emptyEmployee = { first_name: '', last_name: '', department: 'Administration', position: '', contract_type: 'CDI', status: 'ACTIF', joined_at: new Date().toISOString().slice(0, 10), salary: '', phone: '', address: '', email: '', birth_date: '', identification_number: '', contract_end_date: '' };
+const formatMoney = (value: number) => `${new Intl.NumberFormat('fr-FR').format(Number(value || 0))} Ar`;
+const labelStatus = (status: string) => ({ ACTIF: 'Actif', EN_CONGE: 'En congé', SUSPENDU: 'Suspendu', SORTI: 'Sorti' }[status] || status);
+const colour = (status: string) => status === 'SORTI' ? '#b64f4d' : status === 'SUSPENDU' ? '#9c6b2e' : status === 'EN_CONGE' ? '#a76625' : '#28796e';
+const initials = (e: { first_name: string; last_name: string }) => `${e.first_name[0] || ''}${e.last_name[0] || ''}`.toUpperCase();
 
 export const RHPage: React.FC = () => {
   const { showToast } = useToast();
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [dashboardData, setDashboardData] = useState<RHDashboard | null>(null);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const [activeView, setActiveView] = useState<RHView>('overview');
-  const [search, setSearch] = useState('');
-  const [department, setDepartment] = useState('Tous les départements');
-  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
-  const [form, setForm] = useState({ firstName: '', lastName: '', department: 'Administration', position: '', contract: 'CDI' });
-  useEffect(() => {
-    let cancelled = false;
-    const loadRHData = async () => {
-      try {
-        const [remoteEmployees, remoteDashboard, remoteLeaveRequests] = await Promise.all([
-          rhService.listEmployees(), rhService.getDashboard(), rhService.listLeaveRequests(),
-        ]);
-        if (!cancelled) {
-          setEmployees(remoteEmployees.map(mapEmployee));
-          setDashboardData(remoteDashboard);
-          setLeaveRequests(remoteLeaveRequests);
-        }
-      } catch {
-        const saved = localStorage.getItem(storageKey);
-        if (!cancelled && saved) {
-          try { setEmployees(JSON.parse(saved)); } catch { localStorage.removeItem(storageKey); }
-        }
-      }
-    };
-    loadRHData();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(employees));
-  }, [employees]);
-
-  const departments = useMemo(() => ['Tous les départements', ...Array.from(new Set(employees.map((employee) => employee.department)))], [employees]);
-  const filteredEmployees = useMemo(() => employees.filter((employee) => {
-    const term = search.toLowerCase();
-    const matchesSearch = `${employee.firstName} ${employee.lastName} ${employee.position}`.toLowerCase().includes(term);
-    return matchesSearch && (department === 'Tous les départements' || employee.department === department);
-  }), [department, employees, search]);
-
-  const activeCount = dashboardData?.active ?? employees.filter((employee) => employee.status === 'Actif').length;
-  const leaveCount = dashboardData?.onLeave ?? employees.filter((employee) => employee.status === 'En congé').length;
-  const absenceCount = dashboardData?.absent ?? employees.filter((employee) => employee.status === 'Absent').length;
-  const payrollTotal = dashboardData?.payrollTotal ?? employees.reduce((total, employee) => total + employee.salary, 0);
-
-  const addEmployee = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.position.trim()) {
-      showToast('Renseignez le nom et le poste de l’employé.', 'error');
-      return;
-    }
-    try {
-      const created = await rhService.createEmployee({
-        first_name: form.firstName.trim(), last_name: form.lastName.trim(), department: form.department,
-        position: form.position.trim(), contract_type: form.contract, joined_at: new Date().toISOString().slice(0, 10), status: 'ACTIF', salary: 0,
-      });
-      setEmployees((current) => [...current, mapEmployee(created)]);
-      setDashboardData((current) => current ? { ...current, total: current.total + 1, active: current.active + 1 } : current);
-      setForm({ firstName: '', lastName: '', department: 'Administration', position: '', contract: 'CDI' });
-      setShowEmployeeForm(false);
-      showToast('Employé ajouté au registre RH.', 'success');
-    } catch {
-      showToast('Impossible d’enregistrer l’employé. Vérifiez la connexion au backend.', 'error');
-    }
+  const [view, setView] = useState<RHView>('overview'); const [employees, setEmployees] = useState<RHEmployee[]>([]); const [dashboard, setDashboard] = useState<RHDashboard | null>(null); const [attendance, setAttendance] = useState<RHAttendance[]>([]); const [leaves, setLeaves] = useState<RHLeave[]>([]); const [payroll, setPayroll] = useState<RHPayroll[]>([]); const [evaluations, setEvaluations] = useState<RHEvaluation[]>([]);
+  const [error, setError] = useState(''); const [search, setSearch] = useState(''); const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7)); const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10)); const [employeeForm, setEmployeeForm] = useState<Record<string, string> | null>(null); const [selected, setSelected] = useState<RHEmployee | null>(null); const [leaveForm, setLeaveForm] = useState(false);
+  const load = async () => {
+    setError('');
+    try { const [es, d, l, a, p, ev] = await Promise.all([rhService.listEmployees({ limit: 100, search }), rhService.getDashboard(), rhService.listLeaveRequests({ limit: 100 }), rhService.listAttendance({ date: attendanceDate, limit: 100 }), rhService.listPayroll({ period, limit: 100 }), rhService.listEvaluations({ limit: 100 })]); setEmployees(es.rows); setDashboard(d); setLeaves(l.rows); setAttendance(a.rows); setPayroll(p.rows); setEvaluations(ev.rows); } catch { setError('Les données RH ne peuvent pas être chargées. Vérifiez votre accès et la connexion au serveur.'); }
   };
-
-  const updateLeaveRequest = async (id: number | undefined, status: 'APPROUVE' | 'REFUSE') => {
-    if (!id) {
-      showToast('Aucune demande de congé disponible.', 'error');
-      return;
-    }
-    try {
-      await rhService.updateLeaveStatus(id, status);
-      setLeaveRequests((current) => current.map((request) => request.id === id ? { ...request, status } : request));
-      showToast(status === 'APPROUVE' ? 'Demande de congé validée.' : 'Demande refusée.', 'success');
-    } catch {
-      showToast('Impossible de mettre à jour la demande de congé.', 'error');
-    }
-  };
-
-  const exportEmployees = () => {
-    const rows = [['Nom', 'Département', 'Poste', 'Contrat', 'Statut'], ...filteredEmployees.map((employee) => [`${employee.firstName} ${employee.lastName}`, employee.department, employee.position, employee.contract, employee.status])];
-    const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(';')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    link.download = 'registre-employes-hda.csv';
-    link.click();
-    URL.revokeObjectURL(link.href);
-    showToast('Le registre RH a été exporté.', 'success');
-  };
-
-  return (
-    <div className="min-h-[calc(100vh-120px)] space-y-6 pb-8">
-      <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium" style={{ color: '#2b7a78' }}><ShieldCheck size={16} /> Administration du personnel</div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Ressources humaines</h1>
-          <p className="mt-1 text-sm text-secondary">Pilotez le cycle de vie des équipes de l’Hôtel de l’Avenue.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={exportEmployees} className="flex h-10 items-center gap-2 rounded-xl border border-base bg-surface px-4 text-sm font-medium text-primary transition hover:bg-surface-2"><Download size={16} /> Exporter</button>
-          <button onClick={() => setShowEmployeeForm(true)} className="flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-90" style={{ backgroundColor: '#2b7a78' }}><UserPlus size={16} /> Nouvel employé</button>
-        </div>
-      </header>
-
-      <div className="flex gap-1 overflow-x-auto border-b border-base">
-        {navigation.map((item) => <button key={item.id} onClick={() => setActiveView(item.id)} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition ${activeView === item.id ? 'border-[#2b7a78] text-[#2b7a78]' : 'border-transparent text-secondary hover:text-primary'}`}>{item.icon}{item.label}</button>)}
-      </div>
-
-      {activeView === 'overview' && <>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Effectif total" value={String(employees.length).padStart(2, '0')} detail={`${activeCount} employés actifs`} icon={<UsersRound size={20} />} tone="#dcefeb" />
-          <StatCard label="Présences aujourd’hui" value={`${Math.max(activeCount - absenceCount, 0)}/${employees.length}`} detail={`${absenceCount} absence à traiter`} icon={<Clock3 size={20} />} tone="#e9e2f4" />
-          <StatCard label="Congés en cours" value={String(leaveCount).padStart(2, '0')} detail="1 demande à valider" icon={<CalendarDays size={20} />} tone="#fcebd7" />
-          <StatCard label="Masse salariale" value={`${(payrollTotal / 1000000).toFixed(1)}M`} detail="Estimation mensuelle" icon={<WalletCards size={20} />} tone="#f4e2e1" />
-        </div>
-        <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-          <section className="rounded-2xl border border-base bg-surface p-5 shadow-sm">
-            <div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold text-primary">Effectif par département</h2><p className="mt-1 text-xs text-secondary">Répartition actuelle des collaborateurs</p></div><BarChart3 size={19} className="text-secondary" /></div>
-            <div className="space-y-4">{departments.slice(1).map((name) => { const count = employees.filter((employee) => employee.department === name).length; const width = Math.max(16, (count / Math.max(employees.length, 1)) * 100); return <div key={name}><div className="mb-1 flex justify-between text-sm"><span className="text-primary">{name}</span><span className="text-secondary">{count}</span></div><div className="h-2 rounded-full bg-surface-2"><div className="h-2 rounded-full" style={{ width: `${width}%`, backgroundColor: '#2b7a78' }} /></div></div>; })}</div>
-          </section>
-          <section className="rounded-2xl border border-base bg-surface p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold text-primary">À traiter</h2><p className="mt-1 text-xs text-secondary">Vos prochaines actions RH</p></div><AlertTriangle size={19} style={{ color: '#d97745' }} /></div><div className="space-y-3"><button onClick={() => setActiveView('attendance')} className="flex w-full items-center gap-3 rounded-xl bg-surface-2 p-3 text-left transition hover:bg-surface-3"><span className="rounded-lg bg-[#fff1df] p-2 text-[#a76625]"><CalendarDays size={16} /></span><span className="flex-1"><strong className="block text-sm text-primary">Demande de congé</strong><small className="text-xs text-secondary">Sarah Andrianina · 3 jours</small></span><ChevronRight size={16} className="text-secondary" /></button><button onClick={() => setActiveView('employees')} className="flex w-full items-center gap-3 rounded-xl bg-surface-2 p-3 text-left transition hover:bg-surface-3"><span className="rounded-lg bg-[#fae8e7] p-2 text-[#b64f4d]"><FileText size={16} /></span><span className="flex-1"><strong className="block text-sm text-primary">Contrat à renouveler</strong><small className="text-xs text-secondary">CDD · échéance dans 18 jours</small></span><ChevronRight size={16} className="text-secondary" /></button></div></section>
-        </div>
-      </>}
-
-      {activeView === 'employees' && <section className="rounded-2xl border border-base bg-surface shadow-sm"><div className="flex flex-col gap-3 border-b border-base p-4 md:flex-row md:items-center md:justify-between"><div><h2 className="font-semibold text-primary">Registre des employés</h2><p className="mt-1 text-xs text-secondary">Dossiers actifs et historique professionnel</p></div><div className="flex flex-wrap gap-2"><label className="flex h-10 items-center gap-2 rounded-xl border border-base bg-surface-2 px-3"><Search size={16} className="text-secondary" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher..." className="w-36 bg-transparent text-sm text-primary outline-none" /></label><select value={department} onChange={(event) => setDepartment(event.target.value)} className="h-10 rounded-xl border border-base bg-surface-2 px-3 text-sm text-primary outline-none">{departments.map((item) => <option key={item}>{item}</option>)}</select></div></div><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-surface-2 text-xs uppercase text-secondary"><tr><th className="px-5 py-3 font-medium">Employé</th><th className="px-5 py-3 font-medium">Département / poste</th><th className="px-5 py-3 font-medium">Contrat</th><th className="px-5 py-3 font-medium">Entrée</th><th className="px-5 py-3 font-medium">Statut</th><th className="px-5 py-3" /></tr></thead><tbody className="divide-y divide-base">{filteredEmployees.map((employee) => <tr key={employee.id} className="transition hover:bg-surface-2"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white" style={{ backgroundColor: employee.color }}>{employee.initials}</span><span><strong className="block text-primary">{employee.firstName} {employee.lastName}</strong><small className="text-xs text-secondary">Matricule HDA-{String(employee.id).padStart(4, '0')}</small></span></div></td><td className="px-5 py-4"><span className="block text-primary">{employee.department}</span><small className="text-xs text-secondary">{employee.position}</small></td><td className="px-5 py-4 text-primary">{employee.contract}</td><td className="px-5 py-4 text-secondary">{employee.joinedAt}</td><td className="px-5 py-4"><span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: statusStyles[employee.status].background, color: statusStyles[employee.status].color }}>{employee.status}</span></td><td className="px-5 py-4 text-right"><button className="text-secondary hover:text-primary" title="Ouvrir le dossier"><ChevronRight size={17} /></button></td></tr>)}</tbody></table>{filteredEmployees.length === 0 && <p className="p-8 text-center text-sm text-secondary">Aucun employé ne correspond aux filtres.</p>}</div></section>}
-
-      {activeView === 'attendance' && <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]"><section className="rounded-2xl border border-base bg-surface p-5 shadow-sm"><div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold text-primary">Suivi des présences</h2><p className="mt-1 text-xs text-secondary">Pointage du mercredi 09 septembre 2026</p></div><Clock3 size={19} className="text-secondary" /></div><div className="space-y-3">{employees.map((employee, index) => <div key={employee.id} className="flex items-center gap-3 rounded-xl bg-surface-2 p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white" style={{ backgroundColor: employee.color }}>{employee.initials}</span><span className="flex-1"><strong className="block text-sm text-primary">{employee.firstName} {employee.lastName}</strong><small className="text-xs text-secondary">{employee.department}</small></span><span className="text-right"><strong className="block text-sm text-primary">{employee.status === 'Absent' ? '--:--' : `0${7 + (index % 2)}:${index ? '4' : '58'}`}</strong><small className="text-xs" style={{ color: employee.status === 'Absent' ? '#b64f4d' : '#28796e' }}>{employee.status === 'Absent' ? 'Absence signalée' : 'Présent'}</small></span></div>)}</div></section><section className="rounded-2xl border border-base bg-surface p-5 shadow-sm"><h2 className="font-semibold text-primary">Demandes de congé</h2><p className="mt-1 text-xs text-secondary">Validation en attente</p><div className="mt-5 rounded-xl border border-[#f2dec4] bg-[#fffaf4] p-4"><div className="flex items-start gap-3"><CalendarDays size={18} className="mt-0.5 text-[#a76625]" /><div className="flex-1"><strong className="text-sm text-primary">Sarah Andrianina</strong><p className="mt-1 text-xs text-secondary">Congé annuel · 14 au 16 septembre</p><div className="mt-3 flex gap-2"><button onClick={() => showToast('Demande de congé validée.', 'success')} className="flex items-center gap-1 rounded-lg bg-[#2b7a78] px-3 py-2 text-xs font-semibold text-white"><Check size={14} /> Valider</button><button onClick={() => showToast('Demande refusée.', 'error')} className="flex items-center gap-1 rounded-lg border border-base px-3 py-2 text-xs font-semibold text-primary"><X size={14} /> Refuser</button></div></div></div></div></section></div>}
-
-      {activeView === 'payroll' && <div className="grid gap-5 xl:grid-cols-[1.25fr_1fr]"><section className="rounded-2xl border border-base bg-surface p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-primary">Préparation de la paie</h2><p className="mt-1 text-xs text-secondary">Période de septembre 2026</p></div><button onClick={() => showToast('La paie est prête pour validation.', 'success')} className="rounded-xl px-3 py-2 text-xs font-semibold text-white" style={{ backgroundColor: '#2b7a78' }}>Préparer la paie</button></div><div className="mt-5 divide-y divide-base">{employees.map((employee) => <div key={employee.id} className="flex items-center justify-between py-3"><div><strong className="block text-sm text-primary">{employee.firstName} {employee.lastName}</strong><small className="text-xs text-secondary">Base · {employee.contract}</small></div><span className="text-sm font-semibold text-primary">{employee.salary ? formatMoney(employee.salary) : 'À compléter'}</span></div>)}</div></section><section className="rounded-2xl border border-base bg-surface p-5 shadow-sm"><h2 className="font-semibold text-primary">Résumé de la période</h2><div className="mt-5 space-y-4"><div className="flex justify-between text-sm"><span className="text-secondary">Salaires de base</span><strong className="text-primary">{formatMoney(payrollTotal)}</strong></div><div className="flex justify-between text-sm"><span className="text-secondary">Heures supplémentaires</span><strong className="text-primary">215 000 Ar</strong></div><div className="flex justify-between text-sm"><span className="text-secondary">Avances et retenues</span><strong className="text-primary">-180 000 Ar</strong></div><div className="border-t border-base pt-4"><div className="flex justify-between"><span className="font-semibold text-primary">Net à payer estimé</span><strong className="text-xl text-[#2b7a78]">{formatMoney(payrollTotal + 35000)}</strong></div></div></div></section></div>}
-
-      {showEmployeeForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" onMouseDown={(event) => event.target === event.currentTarget && setShowEmployeeForm(false)}><form onSubmit={addEmployee} className="w-full max-w-lg rounded-2xl border border-base bg-surface p-6 shadow-xl"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-xl font-bold text-primary">Nouvel employé</h2><p className="mt-1 text-sm text-secondary">Créez un dossier local en quelques étapes.</p></div><button type="button" onClick={() => setShowEmployeeForm(false)} className="rounded-lg p-1 text-secondary hover:bg-surface-2"><X size={19} /></button></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm text-secondary">Prénom<input required value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} className="mt-1 h-10 w-full rounded-xl border border-base bg-surface-2 px-3 text-primary outline-none focus:border-[#2b7a78]" /></label><label className="text-sm text-secondary">Nom<input required value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} className="mt-1 h-10 w-full rounded-xl border border-base bg-surface-2 px-3 text-primary outline-none focus:border-[#2b7a78]" /></label><label className="text-sm text-secondary sm:col-span-2">Poste<input required value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })} placeholder="Ex. Responsable hébergement" className="mt-1 h-10 w-full rounded-xl border border-base bg-surface-2 px-3 text-primary outline-none focus:border-[#2b7a78]" /></label><label className="text-sm text-secondary">Département<select value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })} className="mt-1 h-10 w-full rounded-xl border border-base bg-surface-2 px-3 text-primary outline-none"><option>Administration</option><option>Réception</option><option>Restauration</option><option>Casino</option><option>Maintenance</option></select></label><label className="text-sm text-secondary">Contrat<select value={form.contract} onChange={(event) => setForm({ ...form, contract: event.target.value })} className="mt-1 h-10 w-full rounded-xl border border-base bg-surface-2 px-3 text-primary outline-none"><option>CDI</option><option>CDD</option><option>Stage</option></select></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setShowEmployeeForm(false)} className="h-10 rounded-xl border border-base px-4 text-sm font-medium text-primary">Annuler</button><button type="submit" className="flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-white" style={{ backgroundColor: '#2b7a78' }}><Plus size={16} /> Ajouter</button></div></form></div>}
-    </div>
-  );
+  useEffect(() => { load(); }, []); // Sensitive data is never cached in localStorage.
+  useEffect(() => { rhService.listAttendance({ date: attendanceDate, limit: 100 }).then((r) => setAttendance(r.rows)).catch(() => setError('Impossible de charger les présences.')); }, [attendanceDate]);
+  useEffect(() => { rhService.listPayroll({ period, limit: 100 }).then((r) => setPayroll(r.rows)).catch(() => setError('Impossible de charger la paie.')); }, [period]);
+  const pendingLeaves = leaves.filter((l) => l.status === 'EN_ATTENTE'); const totals = useMemo(() => payroll.reduce((a, p) => ({ base: a.base + Number(p.base_salary), extras: a.extras + Number(p.overtime_amount) + Number(p.bonuses) + Number(p.allowances), deductions: a.deductions + Number(p.advances) + Number(p.deductions), net: a.net + Number(p.net_amount) }), { base: 0, extras: 0, deductions: 0, net: 0 }), [payroll]);
+  const refreshAfterAction = () => load();
+  const saveEmployee = async (event: React.FormEvent) => { event.preventDefault(); if (!employeeForm) return; try { const { id: _id, matricule: _matricule, departure_date: _departureDate, departure_reason: _departureReason, ...editable } = employeeForm; const payload: Record<string, unknown> = { ...editable, salary: Number(employeeForm.salary), birth_date: employeeForm.birth_date || null, contract_end_date: employeeForm.contract_end_date || null, email: employeeForm.email || null, phone: employeeForm.phone || null, address: employeeForm.address || null, identification_number: employeeForm.identification_number || null }; if (selected && ['EN_CONGE', 'SORTI'].includes(selected.status)) delete payload.status; if (selected) await rhService.updateEmployee(selected.id, payload); else await rhService.createEmployee(payload); setEmployeeForm(null); setSelected(null); showToast('Dossier employé enregistré.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Enregistrement impossible.', 'error'); } };
+  const handleLeave = async (id: number, status: 'APPROUVE' | 'REFUSE') => { try { await rhService.updateLeaveStatus(id, status); showToast(status === 'APPROUVE' ? 'Congé approuvé.' : 'Congé refusé.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Mise à jour impossible.', 'error'); } };
+  const generate = async () => { try { const r = await rhService.generatePayroll(period); setPayroll(r.rows); showToast('Paie préparée : les absences et congés sans solde ont été calculés.', 'success'); } catch (e: any) { showToast(e?.response?.data?.message || 'Préparation impossible.', 'error'); } };
+  const point = async (employeeId: number, action: 'in' | 'out') => { try { action === 'in' ? await rhService.checkIn(employeeId) : await rhService.checkOut(employeeId); showToast(action === 'in' ? 'Arrivée enregistrée.' : 'Départ enregistré.', 'success'); const r = await rhService.listAttendance({ date: attendanceDate, limit: 100 }); setAttendance(r.rows); } catch (e: any) { showToast(e?.response?.data?.message || 'Pointage impossible.', 'error'); } };
+  const changePayroll = async (line: RHPayroll, status: 'VALIDE' | 'PAYE') => { try { await rhService.updatePayrollStatus(line.id, status); showToast(`Paie ${status === 'VALIDE' ? 'validée' : 'marquée payée'}.`, 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Action impossible.', 'error'); } };
+  const adjustPayroll = async (line: RHPayroll) => { const fields = ['overtime_amount', 'bonuses', 'allowances', 'advances', 'deductions'] as const; const payload: Record<string, number> = {}; for (const field of fields) { const value = window.prompt(`${field} (Ar)`, String(line[field] || 0)); if (value === null) return; if (!/^\d+(\.\d{1,2})?$/.test(value)) return showToast('Saisissez un montant positif valide.', 'error'); payload[field] = Number(value); } try { await rhService.updatePayroll(line.id, payload); showToast('Ligne de paie recalculée côté serveur.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Mise à jour impossible.', 'error'); } };
+  const downloadPayslip = async (line: RHPayroll) => { try { const response = await rhService.downloadPayslip(period, line.employee_id); const url = URL.createObjectURL(response.data); const a = document.createElement('a'); a.href = url; a.download = `bulletin-${line.matricule}-${period}.pdf`; a.click(); URL.revokeObjectURL(url); } catch { showToast('Téléchargement du bulletin impossible.', 'error'); } };
+  const nav: Array<[RHView, string, React.ReactNode]> = [['overview', 'Vue d’ensemble', <BarChart3 size={17} />], ['employees', 'Employés', <UsersRound size={17} />], ['attendance', 'Présences & congés', <CalendarDays size={17} />], ['payroll', 'Paie', <WalletCards size={17} />], ['evaluations', 'Évaluations', <FileText size={17} />]];
+  return <div className="min-h-[calc(100vh-120px)] space-y-6 pb-8"><header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"><div><div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#2b7a78]"><ShieldCheck size={16} /> Administration du personnel</div><h1 className="text-3xl font-bold text-primary">Ressources humaines</h1><p className="mt-1 text-sm text-secondary">Données RH sécurisées et actions traçables.</p></div><button onClick={() => { setSelected(null); setEmployeeForm(emptyEmployee); }} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><UserPlus size={16} /> Nouvel employé</button></header>
+    {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}<div className="flex gap-1 overflow-x-auto border-b border-base">{nav.map(([id, label, icon]) => <button key={id} onClick={() => setView(id)} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm ${view === id ? 'border-[#2b7a78] text-[#2b7a78]' : 'border-transparent text-secondary'}`}>{icon}{label}</button>)}</div>
+    {view === 'overview' && <><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[['Effectif total', dashboard?.total || 0, `${dashboard?.active || 0} actifs`, <UsersRound size={20} />], ['Présences aujourd’hui', `${attendance.filter(a => ['PRESENT', 'RETARD'].includes(a.attendance_status)).length}/${attendance.length}`, `${dashboard?.absent || 0} absence(s)`, <Clock3 size={20} />], ['Congés en cours', dashboard?.onLeave || 0, `${dashboard?.pendingLeave || 0} à traiter`, <CalendarDays size={20} />], ['Masse salariale', formatMoney(dashboard?.payrollTotal || 0), 'Estimation mensuelle', <WalletCards size={20} />]].map(([label, value, detail, icon]) => <div key={String(label)} className="rounded-2xl border border-base bg-surface p-5 shadow-sm"><div className="flex justify-between"><div><p className="text-sm text-secondary">{label}</p><p className="mt-2 text-2xl font-bold text-primary">{value}</p></div><span className="text-[#2b7a78]">{icon as React.ReactNode}</span></div><p className="mt-4 text-xs text-secondary">{detail}</p></div>)}</div><div className="grid gap-5 xl:grid-cols-2"><section className="rounded-2xl border border-base bg-surface p-5"><h2 className="font-semibold text-primary">Effectif par département</h2><div className="mt-4 space-y-3">{(dashboard?.departments || []).map(d => <div key={d.department} className="flex justify-between text-sm"><span>{d.department}</span><strong>{d.total}</strong></div>)}</div></section><section className="rounded-2xl border border-base bg-surface p-5"><h2 className="font-semibold text-primary">À traiter</h2><div className="mt-3 space-y-2">{pendingLeaves.map(l => <button key={l.id} onClick={() => setView('attendance')} className="flex w-full items-center gap-3 rounded-xl bg-surface-2 p-3 text-left"><CalendarDays size={16} /><span className="flex-1"><strong className="block text-sm">Demande de congé</strong><small>{l.first_name} {l.last_name} · {l.days} jour(s)</small></span><ChevronRight size={16} /></button>)}{(dashboard?.expiringContracts || []).map(c => <button key={c.id} onClick={() => setView('employees')} className="flex w-full items-center gap-3 rounded-xl bg-surface-2 p-3 text-left"><AlertTriangle size={16} /><span className="flex-1"><strong className="block text-sm">Contrat à renouveler</strong><small>{c.first_name} {c.last_name} · {c.contract_end_date}</small></span><ChevronRight size={16} /></button>)}{!pendingLeaves.length && !(dashboard?.expiringContracts || []).length && <p className="text-sm text-secondary">Aucune action en attente.</p>}</div></section></div></>}
+    {view === 'employees' && <section className="rounded-2xl border border-base bg-surface"><div className="flex justify-between gap-3 border-b border-base p-4"><h2 className="font-semibold text-primary">Registre des employés</h2><label className="flex items-center gap-2 rounded-xl border border-base px-3"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && load()} placeholder="Rechercher" className="h-9 bg-transparent outline-none" /></label></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-surface-2 text-secondary"><tr><th className="p-3">Employé</th><th>Poste</th><th>Contrat</th><th>Statut</th><th /></tr></thead><tbody>{employees.map(e => <tr key={e.id} className="border-t border-base"><td className="p-3"><strong>{e.first_name} {e.last_name}</strong><small className="block text-secondary">{e.matricule}</small></td><td>{e.department} · {e.position}</td><td>{e.contract_type}</td><td><span style={{ color: colour(e.status) }}>{labelStatus(e.status)}</span></td><td><button onClick={() => { setSelected(e); setEmployeeForm({ ...emptyEmployee, ...Object.fromEntries(Object.entries(e).map(([k,v]) => [k, v == null ? '' : String(v)])) }); }} title="Ouvrir le dossier"><ChevronRight size={18}/></button></td></tr>)}</tbody></table></div></section>}
+    {view === 'attendance' && <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]"><section className="rounded-2xl border border-base bg-surface p-5"><div className="flex justify-between"><div><h2 className="font-semibold text-primary">Suivi des présences</h2><input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className="mt-2 rounded border p-1" /></div><Clock3 size={19}/></div><div className="mt-4 space-y-2">{attendance.map(a => <div key={a.employee_id} className="flex items-center gap-3 rounded-xl bg-surface-2 p-3"><span className="rounded bg-[#2b7a78] p-2 text-xs text-white">{initials(a)}</span><span className="flex-1"><strong className="block text-sm">{a.first_name} {a.last_name}</strong><small>{a.department} · {a.attendance_status}</small></span><span className="text-right text-xs">{a.check_in || '--:--'}<br/>{a.check_out || '--:--'}</span>{attendanceDate === new Date().toISOString().slice(0, 10) && <span className="flex gap-1"><button onClick={() => point(a.employee_id, 'in')} className="rounded bg-[#2b7a78] px-2 py-1 text-xs text-white">Entrée</button><button onClick={() => point(a.employee_id, 'out')} className="rounded border px-2 py-1 text-xs">Sortie</button></span>}</div>)}</div></section><section className="rounded-2xl border border-base bg-surface p-5"><div className="flex justify-between"><div><h2 className="font-semibold text-primary">Demandes de congé</h2><p className="text-xs text-secondary">Solde annuel affiché après traitement</p></div><button onClick={() => setLeaveForm(true)} className="rounded bg-[#2b7a78] px-2 text-white"><Plus size={16}/></button></div><div className="mt-4 space-y-3">{leaves.map(l => <div key={l.id} className="rounded-xl border border-base p-3"><strong className="text-sm">{l.first_name} {l.last_name}</strong><p className="text-xs text-secondary">{l.leave_type} · {l.start_date} au {l.end_date} · {l.days} jours</p><p className="text-xs">Statut : {l.status}{l.annual_remaining !== undefined ? ` · Solde annuel : ${l.annual_remaining}` : ''}</p>{l.status === 'EN_ATTENTE' && <div className="mt-2 flex gap-2"><button onClick={() => handleLeave(l.id, 'APPROUVE')} className="rounded bg-[#2b7a78] px-2 py-1 text-xs text-white"><Check size={13}/></button><button onClick={() => handleLeave(l.id, 'REFUSE')} className="rounded border px-2 py-1 text-xs"><X size={13}/></button></div>}</div>)}</div></section></div>}
+    {view === 'payroll' && <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]"><section className="rounded-2xl border border-base bg-surface p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-primary">Préparation de la paie</h2><input type="month" value={period} onChange={e => setPeriod(e.target.value)} className="mt-2 rounded border p-1" /></div><button onClick={generate} className="rounded-xl bg-[#2b7a78] px-3 py-2 text-xs text-white">Préparer la paie</button></div><div className="mt-4 space-y-2">{payroll.map(p => <div key={p.id} className="rounded-xl bg-surface-2 p-3"><div className="flex justify-between"><strong className="text-sm">{p.first_name} {p.last_name}</strong><strong>{formatMoney(p.net_amount)}</strong></div><small>Base {formatMoney(p.base_salary)} · HS {formatMoney(p.overtime_amount)} · Retenues {formatMoney(p.deductions)}</small><div className="mt-2 flex gap-2"><button disabled={p.status !== 'BROUILLON'} onClick={() => adjustPayroll(p)} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Ajuster</button><button disabled={p.status !== 'BROUILLON'} onClick={() => changePayroll(p, 'VALIDE')} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Valider</button><button disabled={p.status !== 'VALIDE'} onClick={() => changePayroll(p, 'PAYE')} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Payer</button><button onClick={() => downloadPayslip(p)} className="rounded border px-2 py-1 text-xs"><Download size={13}/></button><span className="text-xs">{p.status}</span></div></div>)}</div></section><section className="rounded-2xl border border-base bg-surface p-5"><h2 className="font-semibold text-primary">Résumé réel de la période</h2><div className="mt-5 space-y-3 text-sm"><p>Salaires de base <strong className="float-right">{formatMoney(totals.base)}</strong></p><p>Variables <strong className="float-right">{formatMoney(totals.extras)}</strong></p><p>Avances et retenues <strong className="float-right">-{formatMoney(totals.deductions)}</strong></p><p className="border-t pt-3 font-semibold">Net à payer <strong className="float-right text-[#2b7a78]">{formatMoney(totals.net)}</strong></p></div><p className="mt-5 text-xs text-secondary">CNAPS, OSTIE et IRSA ne sont pas calculés automatiquement.</p></section></div>}
+    {view === 'evaluations' && <section className="rounded-2xl border border-base bg-surface p-5"><h2 className="font-semibold text-primary">Évaluations de performance</h2><div className="mt-4 space-y-2">{evaluations.map(e => <div key={e.id} className="rounded-xl bg-surface-2 p-3 text-sm">Employé #{e.employee_id} · {e.period} · score {e.score ?? '—'} · {e.status}<small className="block text-secondary">{e.comment || 'Aucun commentaire'}</small></div>)}{!evaluations.length && <p className="text-sm text-secondary">Aucune évaluation enregistrée.</p>}</div></section>}
+    {employeeForm && <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/30 p-4"><form onSubmit={saveEmployee} className="mx-auto my-8 max-w-2xl rounded-2xl bg-surface p-6"><div className="flex justify-between"><h2 className="text-xl font-bold">{selected ? 'Dossier employé' : 'Nouvel employé'}</h2><button type="button" onClick={() => {setEmployeeForm(null);setSelected(null)}}><X/></button></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[['first_name','Prénom','text'],['last_name','Nom','text'],['position','Poste','text'],['salary','Salaire (Ar)','number'],['phone','Téléphone','text'],['email','E-mail','email'],['birth_date','Date de naissance','date'],['identification_number','N° identité','text'],['address','Adresse','text'],['joined_at','Date d’entrée','date'],['contract_end_date','Fin de contrat','date']].map(([key,label,type]) => <label key={key} className="text-sm">{label}<input required={['first_name','last_name','position','salary','joined_at'].includes(key)} type={type} value={employeeForm[key] || ''} onChange={e => setEmployeeForm({...employeeForm,[key]:e.target.value})} className="mt-1 h-10 w-full rounded border p-2"/></label>)}<label className="text-sm">Département<select value={employeeForm.department} onChange={e => setEmployeeForm({...employeeForm,department:e.target.value})} className="mt-1 h-10 w-full rounded border p-2">{departments.map(d=><option key={d}>{d}</option>)}</select></label><label className="text-sm">Contrat<select value={employeeForm.contract_type} onChange={e => setEmployeeForm({...employeeForm,contract_type:e.target.value})} className="mt-1 h-10 w-full rounded border p-2"><option>CDI</option><option>CDD</option><option>Stage</option></select></label>{selected && selected.status !== 'SORTI' && <label className="text-sm">Statut d’emploi<select value={employeeForm.status === 'SUSPENDU' ? 'SUSPENDU' : 'ACTIF'} onChange={e => setEmployeeForm({...employeeForm,status:e.target.value})} className="mt-1 h-10 w-full rounded border p-2"><option value="ACTIF">Actif</option><option value="SUSPENDU">Suspendu</option></select></label>}</div>{selected && selected.status !== 'SORTI' && <button type="button" onClick={async()=>{const reason=window.prompt('Motif de sortie :'); if(reason){try{await rhService.offboardEmployee(selected.id,reason);showToast('Sortie enregistrée.','success');setEmployeeForm(null);setSelected(null);refreshAfterAction()}catch{showToast('Sortie impossible.','error')}}}} className="mt-4 text-sm text-red-600">Enregistrer une sortie</button>}<div className="mt-6 flex justify-end"><button className="rounded bg-[#2b7a78] px-4 py-2 text-white">Enregistrer</button></div></form></div>}
+    {leaveForm && <LeaveModal employees={employees} close={() => setLeaveForm(false)} done={refreshAfterAction} toast={showToast}/>}</div>;
 };
+const LeaveModal = ({ employees, close, done, toast }: { employees: RHEmployee[]; close: () => void; done: () => void; toast: (message: string, type: 'success' | 'error') => void }) => { const [f,setF]=useState({employee_id:'',leave_type:'ANNUEL',start_date:'',end_date:'',reason:''}); return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async e=>{e.preventDefault();try{await rhService.createLeaveRequest({...f,employee_id:Number(f.employee_id)});toast('Demande créée.','success');close();done()}catch(err:any){toast(err?.response?.data?.message||'Création impossible.','error')}}} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6"><h2 className="font-bold">Nouvelle demande de congé</h2><div className="mt-4 space-y-3"><select required value={f.employee_id} onChange={e=>setF({...f,employee_id:e.target.value})} className="w-full rounded border p-2"><option value="">Employé</option>{employees.filter(e=>e.status!=='SORTI').map(e=><option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}</select><select value={f.leave_type} onChange={e=>setF({...f,leave_type:e.target.value})} className="w-full rounded border p-2"><option value="ANNUEL">Annuel</option><option value="MALADIE">Maladie</option><option value="MATERNITE_PATERNITE">Maternité/paternité</option><option value="SANS_SOLDE">Sans solde</option></select><input required type="date" value={f.start_date} onChange={e=>setF({...f,start_date:e.target.value})} className="w-full rounded border p-2"/><input required type="date" value={f.end_date} onChange={e=>setF({...f,end_date:e.target.value})} className="w-full rounded border p-2"/><input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} placeholder="Motif" className="w-full rounded border p-2"/></div><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={close}>Annuler</button><button className="rounded bg-[#2b7a78] px-3 py-2 text-white">Envoyer</button></div></form></div> };
