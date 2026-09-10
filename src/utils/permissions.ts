@@ -11,7 +11,8 @@ import { ModuleType, UserRole } from '../types';
  * - stock_manager : uniquement les fonctions de gestion de stock (onglets stock)
  */
 export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
-  admin: ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'alcool', 'casino', 'finances', 'clients', 'utilisateurs'],
+  admin: ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'alcool', 'casino', 'finances', 'clients', 'utilisateurs', 'rh'],
+  manager: ['dashboard', 'rh'],
   caissier: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
   caisse: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
   stock_manager: ['hotel', 'restaurant', 'bar', 'alcool', 'hebergement'],

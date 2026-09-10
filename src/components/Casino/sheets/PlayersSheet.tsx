@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Copy, Trash2 } from 'lucide-react';
+import { Camera, Copy, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
@@ -106,6 +106,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
+  const [capturingPlayer, setCapturingPlayer] = useState(false);
+  const playerCaptureRef = useRef<HTMLDivElement>(null);
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
   const [rouletteResult, setRouletteResult] = useState<number | null>(null);
@@ -206,6 +208,50 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       };
       window.print();
     }, 0);
+  };
+
+  const capturePlayerSheet = async () => {
+    if (!selectedPlayer || !playerCaptureRef.current || capturingPlayer) return;
+    setCapturingPlayer(true);
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(playerCaptureRef.current, {
+        backgroundColor: '#161616',
+        scale: Math.min(window.devicePixelRatio || 1, 2),
+        useCORS: true,
+        onclone: (clonedDocument) => {
+          const clonedRoot = clonedDocument.querySelector('[data-player-capture]');
+          if (!clonedRoot) return;
+
+          const colorProperties = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor', 'fill', 'stroke', 'boxShadow'];
+          clonedRoot.querySelectorAll<HTMLElement>('*').forEach((element) => {
+            const computedStyle = clonedDocument.defaultView?.getComputedStyle(element);
+            if (!computedStyle) return;
+            colorProperties.forEach((property) => {
+              const value = computedStyle[property as keyof CSSStyleDeclaration];
+              if (typeof value === 'string' && /okl(ab|ch)/i.test(value)) {
+                const fallback = property === 'backgroundColor' ? '#161616' : property === 'boxShadow' ? 'none' : '#ffffff';
+                element.style.setProperty(property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`), fallback, 'important');
+              }
+            });
+          });
+        },
+      });
+      const playerName = (selectedPlayer.name || `joueur-${selectedPlayer.ficheId ?? selectedPlayer.id}`)
+        .trim()
+        .replace(/[^a-z0-9]+/gi, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase();
+      const link = document.createElement('a');
+      link.download = `fiche-${playerName || 'joueur'}-${date}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('Erreur lors de la capture de la fiche joueur :', error);
+      setSignatureError('Impossible de capturer la fiche joueur.');
+    } finally {
+      setCapturingPlayer(false);
+    }
   };
 
   const addPlayerLine = () => {
@@ -386,9 +432,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
         {isAdmin && <button type="button" className={sheetActionSecondary} onClick={onGoToRegisteredPlayers}>Ajouter un joueur</button>}
         {isAdmin && <button type="button" className={sheetActionSecondary} onClick={addPlayerLine} disabled={!selectedPlayer}>Ajouter une ligne</button>}
+        <button type="button" className={sheetActionSecondary} onClick={capturePlayerSheet} disabled={!selectedPlayer || capturingPlayer}><Camera size={15} /> {capturingPlayer ? 'Capture...' : 'Capture'}</button>
         <button type="button" className={sheetActionSecondary} onClick={printPlayerSheet} disabled={!selectedPlayer}>Imprimer la fiche</button>
       </div>
     </div>
+    <div ref={playerCaptureRef} data-player-capture>
     <div className="-mx-2 overflow-x-auto px-2 pb-2 sm:mx-0 sm:px-0">
       <table className="w-full min-w-[980px] table-fixed border-collapse border sm:min-w-[1080px] xl:min-w-[1180px]" style={casinoBorder}>
         <thead>
@@ -530,6 +578,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
         </div>
       </div>
     )}
+    </div>
     <div className="mt-5 flex flex-col items-stretch gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center sm:justify-end print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
       {(saveState === 'error' || signatureError) && <span className="text-xs text-red-400">{signatureError || 'Erreur d’enregistrement'}</span>}
