@@ -108,6 +108,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const [capturingPlayer, setCapturingPlayer] = useState(false);
   const playerCaptureRef = useRef<HTMLDivElement>(null);
+  const resultPaymentBackups = useRef<Record<number, string>>({});
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
   const [rouletteResult, setRouletteResult] = useState<number | null>(null);
@@ -224,7 +225,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
           if (!clonedRoot) return;
 
           const colorProperties = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor', 'fill', 'stroke', 'boxShadow'];
-          clonedRoot.querySelectorAll<HTMLElement>('*').forEach((element) => {
+          const clonedElements: Array<HTMLElement | SVGElement> = [clonedRoot as HTMLElement, ...clonedRoot.querySelectorAll<HTMLElement | SVGElement>('*')];
+          clonedElements.forEach((element) => {
             const computedStyle = clonedDocument.defaultView?.getComputedStyle(element);
             if (!computedStyle) return;
             colorProperties.forEach((property) => {
@@ -235,6 +237,12 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
               }
             });
           });
+
+          // html2canvas also parses pseudo-elements, which cannot be fixed through
+          // the cloned element's inline style.
+          const captureStyle = clonedDocument.createElement('style');
+          captureStyle.textContent = `[data-player-capture] *::before, [data-player-capture] *::after { color: inherit !important; background: transparent !important; border-color: transparent !important; outline-color: transparent !important; box-shadow: none !important; text-shadow: none !important; }`;
+          clonedDocument.head.appendChild(captureStyle);
         },
       });
       const playerName = (selectedPlayer.name || `joueur-${selectedPlayer.ficheId ?? selectedPlayer.id}`)
@@ -256,6 +264,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
 
   const addPlayerLine = () => {
     if (!selectedPlayer) return;
+    const ficheId = selectedPlayer.ficheId ?? selectedPlayer.id;
+    resultPaymentBackups.current[ficheId] = selectedPlayer.resultPaymentOptions || '';
+    onUpdate(selectedPlayer.id, 'resultPaymentOptions', '');
     onAdd(selectedPlayer.ficheId ?? selectedPlayer.id, selectedPlayer.name);
     setSelectedPlayerId(selectedPlayer.ficheId ?? selectedPlayer.id);
   };
@@ -484,7 +495,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
               {isAdmin && <td className="border p-1 text-center print:hidden" style={casinoBorder}>
                 <div className="flex justify-center gap-1">
                   <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-500/10 p-2 text-amber-200 transition hover:bg-amber-500/20 hover:text-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onDuplicate(line)} title="Copier cette ligne" aria-label={`Copier la ligne de ${line.name || 'ce joueur'}`} disabled={isEmptyCaveLine}><Copy size={16} /></button>
-                  {canDeletePlayerLine && <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-400" onClick={() => window.confirm(`Supprimer la ligne de ${line.name || 'ce joueur'} ?`) && onRemove(line.id)} title="Supprimer la ligne" aria-label={`Supprimer la ligne de ${line.name || 'ce joueur'}`}><Trash2 size={16} /></button>}
+                  {canDeletePlayerLine && <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:border-red-400/60 focus:outline-none focus:ring-2 focus:ring-red-400" onClick={() => { if (!window.confirm(`Supprimer la ligne de ${line.name || 'ce joueur'} ?`)) return; const ficheId = line.ficheId ?? line.id; const previousPayment = resultPaymentBackups.current[ficheId]; if (previousPayment !== undefined) { onUpdate(line.id, 'resultPaymentOptions', `__restore_remove__:${previousPayment}`); return; } onRemove(line.id); }} title="Supprimer la ligne" aria-label={`Supprimer la ligne de ${line.name || 'ce joueur'}`}><Trash2 size={16} /></button>}
                 </div>
               </td>}
             </tr>
@@ -683,7 +694,7 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext('2d');
+    const context = canvas?.getContext('2d', { willReadFrequently: true });
     if (!canvas || !context) return;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
@@ -707,7 +718,7 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
 
   const startDrawing = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
-    const context = canvasRef.current?.getContext('2d');
+    const context = canvasRef.current?.getContext('2d', { willReadFrequently: true });
     if (!context) return;
     const { x, y } = point(event);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -718,7 +729,7 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
 
   const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled || !isDrawingRef.current) return;
-    const context = canvasRef.current?.getContext('2d');
+    const context = canvasRef.current?.getContext('2d', { willReadFrequently: true });
     if (!context) return;
     const { x, y } = point(event);
     context.lineTo(x, y);
@@ -736,7 +747,7 @@ const SignaturePad: React.FC<{ value?: string; onChange: (value: string) => void
   const clear = () => {
     if (disabled) return;
     const canvas = canvasRef.current;
-    canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+    canvas?.getContext('2d', { willReadFrequently: true })?.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
     onChange('');
   };
