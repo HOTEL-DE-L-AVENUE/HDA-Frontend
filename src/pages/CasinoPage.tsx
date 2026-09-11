@@ -47,6 +47,7 @@ export const CasinoPage: React.FC = () => {
   const [tablesError, setTablesError] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerLine[]>(createInitialPlayers);
   const playersRef = useRef<PlayerLine[]>(players);
+  const resultPaymentOverridesRef = useRef<Record<string, string>>({});
   const [restaurantPayments, setRestaurantPayments] = useState({ especes: false, tpe: false });
   const [cashingPaymentMethod, setCashingPaymentMethod] = useState('');
   const [endGameTime, setEndGameTime] = useState('');
@@ -237,6 +238,20 @@ export const CasinoPage: React.FC = () => {
     const isDeposit = key === 'initialDeposit';
     const isCredit = key === 'initialCredit';
     const enteredAmount = parseCasinoAmount(value);
+    if (key === 'resultPaymentOptions' && value.startsWith('__restore_remove__:')) {
+      const restoredPayment = value.slice('__restore_remove__:'.length);
+      const nextPlayers = playersRef.current
+        .filter((line) => line.id !== id)
+        .map((line) => (line.ficheId ?? line.id) === ficheId ? { ...line, resultPaymentOptions: restoredPayment } : line);
+      resultPaymentOverridesRef.current[String(ficheId)] = restoredPayment;
+      playersRef.current = nextPlayers;
+      setPlayers(nextPlayers);
+      void savePlayerSheet(nextPlayers);
+      return;
+    }
+    if (key === 'resultPaymentOptions') {
+      resultPaymentOverridesRef.current[String(ficheId)] = value;
+    }
     const nextPlayers = playersRef.current.map((line) => {
       const sameFiche = (line.ficheId ?? line.id) === ficheId;
       if ((isDeposit || isCredit) && sameFiche) {
@@ -305,9 +320,11 @@ export const CasinoPage: React.FC = () => {
         const ficheId = String(player.ficheId ?? player.id);
         const lineTotal = parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount);
         accumulatedTotals[ficheId] = (accumulatedTotals[ficheId] || 0) + lineTotal;
-        return { ...player, total: String(lineTotal), accumulated: String(accumulatedTotals[ficheId]) };
+        const resultPaymentOptions = resultPaymentOverridesRef.current[ficheId] ?? player.resultPaymentOptions;
+        return { ...player, resultPaymentOptions, total: String(lineTotal), accumulated: String(accumulatedTotals[ficheId]) };
       });
       const saved = await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, rackChecks: rackChecksRef.current, restaurantPayments, finals: finalsByPlayer, endGameTime, cashingPaymentMethod, isFinished: isGameFinished, finishedAt: gameFinishedAt });
+      resultPaymentOverridesRef.current = {};
       setSaveState('saved');
       // Les vérifications d'identité sont liées à la fiche, mais leur échec
       // ne doit pas bloquer l'enregistrement principal de la fiche.
@@ -369,11 +386,15 @@ export const CasinoPage: React.FC = () => {
 
   const removePlayerLines = (lineIds: number[]) => {
     if (!userIsAdmin) return;
-    const previousPlayers = players;
-    const nextPlayers = players.filter((line) => !lineIds.includes(line.id));
+    const previousPlayers = playersRef.current;
+    const nextPlayers = previousPlayers.filter((line) => !lineIds.includes(line.id));
+    playersRef.current = nextPlayers;
     setPlayers(nextPlayers);
     void savePlayerSheet(nextPlayers).then((saved) => {
-      if (!saved) setPlayers(previousPlayers);
+      if (!saved) {
+        playersRef.current = previousPlayers;
+        setPlayers(previousPlayers);
+      }
     });
   };
 
