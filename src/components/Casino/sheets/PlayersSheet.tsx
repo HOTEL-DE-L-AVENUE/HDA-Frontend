@@ -121,6 +121,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const [confirmedSignatures, setConfirmedSignatures] = useState<string[]>([]);
   const [lineSignatureModal, setLineSignatureModal] = useState<{ id: number; name: string; value: string; field: 'signature' | 'finalSignature' } | null>(null);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
+  const selectedPlayerName = selectedPlayer?.name?.trim() || `Joueur ${selectedPlayer?.ficheId ?? selectedPlayer?.id ?? selectedPlayerId}`;
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
   const selectedPlayerCaveToVerify = selectedPlayerTotal;
@@ -426,7 +427,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   };
 
   return (
-  <div className="player-sheet-print p-2 text-xs text-white" style={{ backgroundColor: 'var(--color-surface)' }}>
+  <div className="player-sheet-print p-2 text-xs text-white print:bg-white print:text-black" style={{ backgroundColor: 'var(--color-surface)' }}>
     <div className="mb-4 flex flex-col items-stretch justify-between gap-3 rounded-2xl border p-3 shadow-sm sm:flex-row sm:items-center print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
         <label htmlFor="player-to-print" className="font-semibold">Fiche joueur :</label>
@@ -448,6 +449,17 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       </div>
     </div>
     <div ref={playerCaptureRef} data-player-capture>
+    <div className="player-print-header mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-end sm:justify-between print:mb-3 print:rounded-none print:border-2 print:border-black print:bg-white print:p-3" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-300">Fiche joueur</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-white print:text-black">{selectedPlayerName}</h1>
+        <p className="mt-1 text-[11px] text-gray-400 print:text-gray-600">Suivi de jeu et règlement de la session</p>
+      </div>
+      <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-right text-[11px] text-gray-300 print:text-black sm:min-w-48">
+        <span className="text-gray-500 print:text-gray-600">N° de fiche</span><strong>{selectedPlayer?.ficheId ?? selectedPlayer?.id ?? '—'}</strong>
+        <span className="text-gray-500 print:text-gray-600">Date</span><strong>{date || '—'}</strong>
+      </div>
+    </div>
     <div className="-mx-2 overflow-x-auto px-2 pb-2 sm:mx-0 sm:px-0">
       <table className="w-full min-w-[980px] table-fixed border-collapse border sm:min-w-[1080px] xl:min-w-[1180px]" style={casinoBorder}>
         <thead>
