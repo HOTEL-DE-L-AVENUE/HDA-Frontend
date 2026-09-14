@@ -28,5 +28,9 @@ const rhService = {
   async updatePayrollStatus(id: number, status: 'VALIDE' | 'PAYE') { return (await api.patch(`/api/rh/payroll/${id}/status`, { status })).data.data as RHPayroll; },
   async downloadPayslip(period: string, employeeId: number) { return api.get(`/api/rh/payroll/${period}/payslip/${employeeId}`, { responseType: 'blob' }); },
   async listEvaluations(params?: Record<string, unknown>) { return page<RHEvaluation>(await api.get('/api/rh/evaluations', { params })); },
+  // --- Espace personnel : limité à sa propre fiche, pour tout utilisateur connecté ---
+  async getMyProfile() { return (await api.get('/api/rh/me')).data.data as RHEmployee; },
+  async listMyLeaveRequests(params?: Record<string, unknown>) { return page<RHLeave>(await api.get('/api/rh/me/leave-requests', { params })); },
+  async createMyLeaveRequest(payload: { leave_type: string; start_date: string; end_date: string; reason?: string }) { return (await api.post('/api/rh/me/leave-requests', payload)).data.data as RHLeave; },
 };
 export default rhService;
