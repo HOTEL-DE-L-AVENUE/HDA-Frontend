@@ -2,7 +2,7 @@ import api from '../lib/api';
 
 export interface RHEmployee { id: number; matricule: string; first_name: string; last_name: string; department: string; position: string; joined_at: string; contract_type: string; salary: number; status: string; photo_url?: string | null; birth_date?: string | null; phone?: string | null; address?: string | null; email?: string | null; identification_number?: string | null; contract_end_date?: string | null; departure_date?: string | null; departure_reason?: string | null; }
 export interface RHDashboard { total: number; active: number; absent: number; onLeave: number; payrollTotal: number; pendingLeave: number; departments: Array<{ department: string; total: number }>; expiringContracts: Array<{ id: number; matricule: string; first_name: string; last_name: string; contract_end_date: string }>; }
-export interface RHAttendance { employee_id: number; matricule: string; first_name: string; last_name: string; department: string; attendance_date?: string; check_in?: string | null; check_out?: string | null; attendance_status: string; notes?: string | null; }
+export interface RHAttendance { id?: number; employee_id: number; matricule?: string; first_name?: string; last_name?: string; department?: string; attendance_date?: string; check_in?: string | null; check_out?: string | null; status?: string; attendance_status?: string; notes?: string | null; }
 export interface RHPayroll { id: number; employee_id: number; matricule: string; first_name: string; last_name: string; base_salary: number; overtime_amount: number; bonuses: number; allowances: number; advances: number; deductions: number; net_amount: number; status: string; period_month: string; }
 export interface RHLeave { id: number; employee_id: number; first_name: string; last_name: string; leave_type: string; start_date: string; end_date: string; days: number; reason?: string; status: string; annual_remaining?: number; }
 export interface RHEvaluation { id: number; employee_id: number; period: string; score?: number; comment?: string; evaluation_date: string; status: string; }
@@ -32,5 +32,8 @@ const rhService = {
   async getMyProfile() { return (await api.get('/api/rh/me')).data.data as RHEmployee; },
   async listMyLeaveRequests(params?: Record<string, unknown>) { return page<RHLeave>(await api.get('/api/rh/me/leave-requests', { params })); },
   async createMyLeaveRequest(payload: { leave_type: string; start_date: string; end_date: string; reason?: string }) { return (await api.post('/api/rh/me/leave-requests', payload)).data.data as RHLeave; },
+  async listMyAttendance(params?: Record<string, unknown>) { return page<RHAttendance>(await api.get('/api/rh/me/attendance', { params })); },
+  async checkMyIn(notes?: string) { return (await api.post('/api/rh/me/attendance/check-in', { notes })).data.data; },
+  async checkMyOut(notes?: string) { return (await api.post('/api/rh/me/attendance/check-out', { notes })).data.data; },
 };
 export default rhService;

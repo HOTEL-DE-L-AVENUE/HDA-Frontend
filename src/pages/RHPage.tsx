@@ -28,6 +28,7 @@ const MyRHSpace: React.FC = () => {
   const { showToast } = useToast();
   const [profile, setProfile] = useState<RHEmployee | null>(null);
   const [leaves, setLeaves] = useState<RHLeave[]>([]);
+  const [attendance, setAttendance] = useState<RHAttendance[]>([]);
   const [error, setError] = useState('');
   const [notLinked, setNotLinked] = useState(false);
   const [leaveForm, setLeaveForm] = useState(false);
@@ -35,14 +36,37 @@ const MyRHSpace: React.FC = () => {
   const load = async () => {
     setError(''); setNotLinked(false);
     try {
-      const [p, l] = await Promise.all([rhService.getMyProfile(), rhService.listMyLeaveRequests({ limit: 50 })]);
-      setProfile(p); setLeaves(l.rows);
+      const [p, l, a] = await Promise.all([rhService.getMyProfile(), rhService.listMyLeaveRequests({ limit: 50 }), rhService.listMyAttendance({ limit: 31 })]);
+      setProfile(p); setLeaves(l.rows); setAttendance(a.rows);
     } catch (e: any) {
       if (e?.response?.status === 404) setNotLinked(true);
       else setError('Vos données RH ne peuvent pas être chargées. Vérifiez votre connexion.');
     }
   };
   useEffect(() => { load(); }, []);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAttendance = attendance.find(a => a.attendance_date === today);
+
+  const handleCheckIn = async () => {
+    try {
+      await rhService.checkMyIn();
+      showToast('Arrivée enregistrée.', 'success');
+      load();
+    } catch (e: any) {
+      showToast(e?.response?.data?.message || 'Pointage impossible.', 'error');
+    }
+  };
+
+  const handleCheckOut = async () => {
+    try {
+      await rhService.checkMyOut();
+      showToast('Départ enregistré.', 'success');
+      load();
+    } catch (e: any) {
+      showToast(e?.response?.data?.message || 'Pointage impossible.', 'error');
+    }
+  };
 
   if (notLinked) {
     return <div className="min-h-[calc(100vh-120px)] space-y-4 pb-8">
@@ -71,6 +95,18 @@ const MyRHSpace: React.FC = () => {
       <div className="mt-4 space-y-3">
         {leaves.map((l) => <div key={l.id} className="rounded-xl border border-base p-3"><p className="text-sm">{l.leave_type} · {l.start_date} au {l.end_date} · {l.days} jour(s)</p><p className="text-xs">Statut : {l.status}{l.annual_remaining !== undefined ? ` · Solde annuel : ${l.annual_remaining}` : ''}</p>{l.reason && <p className="text-xs text-secondary">{l.reason}</p>}</div>)}
         {!leaves.length && <p className="text-sm text-secondary">Aucune demande de congé.</p>}
+      </div>
+    </section>
+    <section className="rounded-2xl border border-base bg-surface p-5">
+      <h2 className="font-semibold text-primary">Ma présence</h2>
+      <div className="mt-4 flex gap-2">
+        {!todayAttendance?.check_in && <button onClick={handleCheckIn} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Clock3 size={16} /> Entrée</button>}
+        {todayAttendance?.check_in && !todayAttendance?.check_out && <button onClick={handleCheckOut} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Clock3 size={16} /> Sortie</button>}
+        {todayAttendance?.check_out && <span className="flex h-10 items-center gap-2 rounded-xl bg-surface-2 px-4 text-sm text-secondary"><Check size={16} /> Journée terminée</span>}
+      </div>
+      <div className="mt-4 space-y-2">
+        {attendance.map((a) => <div key={a.id} className="rounded-xl border border-base p-3"><p className="text-sm">{a.attendance_date}</p><p className="text-xs text-secondary">Entrée : {a.check_in || '--:--'} · Sortie : {a.check_out || '--:--'} · Statut : {a.status || a.attendance_status}</p></div>)}
+        {!attendance.length && <p className="text-sm text-secondary">Aucun pointage enregistré.</p>}
       </div>
     </section>
     {leaveForm && <MyLeaveModal close={() => setLeaveForm(false)} done={load} toast={showToast} />}
