@@ -87,6 +87,11 @@ export function canAccessModule(
   // 2. Modules réservés strictement à l'admin
   if (ADMIN_ONLY_MODULES.includes(moduleId as ModuleType)) return false;
 
+  // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé).
+  // Le contenu réellement affiché/autorisé est filtré dans RHPage et côté backend
+  // via /rh/me ; seuls admin/manager voient la vue de gestion complète.
+  if (moduleId === 'rh') return true;
+
   // 3. Manager : accès UNIQUEMENT aux modules assignés
   if (role === 'manager') {
     const userModules = parseUserModules(user.module);

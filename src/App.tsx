@@ -120,14 +120,10 @@ function App() {
                 <Route path="/finances" element={<FinancesPage />} />
               </Route>
 
-              <Route
-                element={
-                  <ProtectedRoute
-                    moduleId="rh"
-                    allowedRoles={['admin', 'manager']}
-                  />
-                }
-              >
+              {/* RH : ouvert à tout utilisateur connecté. admin/manager voient la gestion
+                  complète ; les autres rôles voient uniquement leur propre fiche RH
+                  (voir RHPage.tsx et canAccessModule). */}
+              <Route element={<ProtectedRoute moduleId="rh" />}>
                 <Route path="/rh" element={<RHPage />} />
               </Route>
 

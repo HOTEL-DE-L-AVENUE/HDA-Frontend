@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, CalendarDays, Check, ChevronRight, Clock3, Download, FileText, Plus, Search, ShieldCheck, UserPlus, UsersRound, WalletCards, X } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import AuthService from '../services/authService';
 import rhService, { RHAttendance, RHDashboard, RHEmployee, RHEvaluation, RHLeave, RHPayroll } from '../services/rh.service';
 
 type RHView = 'overview' | 'employees' | 'attendance' | 'payroll' | 'evaluations';
@@ -12,6 +13,124 @@ const colour = (status: string) => status === 'SORTI' ? '#b64f4d' : status === '
 const initials = (e: { first_name: string; last_name: string }) => `${e.first_name[0] || ''}${e.last_name[0] || ''}`.toUpperCase();
 
 export const RHPage: React.FC = () => {
+  const role = AuthService.getCurrentUser()?.role;
+  const isRHManager = role === 'admin' || role === 'manager';
+  if (!isRHManager) return <MyRHSpace />;
+  return <RHManagerView />;
+};
+
+// ─────────────────────────────────────────────
+// Vue self-service : tout utilisateur non admin/manager (barman, réceptionniste,
+// croupier, etc.). Toujours sur la route /rh, toujours dans cette page — pas
+// d'onglet séparé. Lecture seule sur sa fiche + demande de congé uniquement.
+// ─────────────────────────────────────────────
+const MyRHSpace: React.FC = () => {
+  const { showToast } = useToast();
+  const [profile, setProfile] = useState<RHEmployee | null>(null);
+  const [leaves, setLeaves] = useState<RHLeave[]>([]);
+  const [attendance, setAttendance] = useState<RHAttendance[]>([]);
+  const [error, setError] = useState('');
+  const [notLinked, setNotLinked] = useState(false);
+  const [leaveForm, setLeaveForm] = useState(false);
+
+  const load = async () => {
+    setError(''); setNotLinked(false);
+    try {
+      const [p, l, a] = await Promise.all([rhService.getMyProfile(), rhService.listMyLeaveRequests({ limit: 50 }), rhService.listMyAttendance({ limit: 31 })]);
+      setProfile(p); setLeaves(l.rows); setAttendance(a.rows);
+    } catch (e: any) {
+      if (e?.response?.status === 404) setNotLinked(true);
+      else setError('Vos données RH ne peuvent pas être chargées. Vérifiez votre connexion.');
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAttendance = attendance.find(a => a.attendance_date === today);
+
+  const handleCheckIn = async () => {
+    try {
+      await rhService.checkMyIn();
+      showToast('Arrivée enregistrée.', 'success');
+      load();
+    } catch (e: any) {
+      showToast(e?.response?.data?.message || 'Pointage impossible.', 'error');
+    }
+  };
+
+  const handleCheckOut = async () => {
+    try {
+      await rhService.checkMyOut();
+      showToast('Départ enregistré.', 'success');
+      load();
+    } catch (e: any) {
+      showToast(e?.response?.data?.message || 'Pointage impossible.', 'error');
+    }
+  };
+
+  if (notLinked) {
+    return <div className="min-h-[calc(100vh-120px)] space-y-4 pb-8">
+      <header><div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#2b7a78]"><ShieldCheck size={16} /> Ressources humaines</div><h1 className="text-3xl font-bold text-primary">Mon dossier</h1></header>
+      <div className="rounded-xl border border-base bg-surface p-5 text-sm text-secondary">Aucune fiche RH n'est encore liée à votre compte. Contactez un administrateur pour la mise en place.</div>
+    </div>;
+  }
+
+  return <div className="min-h-[calc(100vh-120px)] space-y-6 pb-8">
+    <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div><div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#2b7a78]"><ShieldCheck size={16} /> Ressources humaines</div><h1 className="text-3xl font-bold text-primary">Mon dossier</h1><p className="mt-1 text-sm text-secondary">Vos informations personnelles et vos demandes de congé.</p></div>
+      <button onClick={() => setLeaveForm(true)} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Plus size={16} /> Demander un congé</button>
+    </header>
+    {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+    {profile && <section className="rounded-2xl border border-base bg-surface p-5">
+      <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#2b7a78] text-sm font-semibold text-white">{initials(profile)}</span><div><h2 className="font-semibold text-primary">{profile.first_name} {profile.last_name}</h2><p className="text-sm text-secondary">{profile.matricule} · {profile.position}</p></div></div>
+      <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+        <p>Département <strong className="float-right">{profile.department}</strong></p>
+        <p>Contrat <strong className="float-right">{profile.contract_type}</strong></p>
+        <p>Date d'entrée <strong className="float-right">{profile.joined_at}</strong></p>
+        <p>Statut <strong className="float-right" style={{ color: colour(profile.status) }}>{labelStatus(profile.status)}</strong></p>
+      </div>
+    </section>}
+    <section className="rounded-2xl border border-base bg-surface p-5">
+      <h2 className="font-semibold text-primary">Mes demandes de congé</h2>
+      <div className="mt-4 space-y-3">
+        {leaves.map((l) => <div key={l.id} className="rounded-xl border border-base p-3"><p className="text-sm">{l.leave_type} · {l.start_date} au {l.end_date} · {l.days} jour(s)</p><p className="text-xs">Statut : {l.status}{l.annual_remaining !== undefined ? ` · Solde annuel : ${l.annual_remaining}` : ''}</p>{l.reason && <p className="text-xs text-secondary">{l.reason}</p>}</div>)}
+        {!leaves.length && <p className="text-sm text-secondary">Aucune demande de congé.</p>}
+      </div>
+    </section>
+    <section className="rounded-2xl border border-base bg-surface p-5">
+      <h2 className="font-semibold text-primary">Ma présence</h2>
+      <div className="mt-4 flex gap-2">
+        {!todayAttendance?.check_in && <button onClick={handleCheckIn} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Clock3 size={16} /> Entrée</button>}
+        {todayAttendance?.check_in && !todayAttendance?.check_out && <button onClick={handleCheckOut} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Clock3 size={16} /> Sortie</button>}
+        {todayAttendance?.check_out && <span className="flex h-10 items-center gap-2 rounded-xl bg-surface-2 px-4 text-sm text-secondary"><Check size={16} /> Journée terminée</span>}
+      </div>
+      <div className="mt-4 space-y-2">
+        {attendance.map((a) => <div key={a.id} className="rounded-xl border border-base p-3"><p className="text-sm">{a.attendance_date}</p><p className="text-xs text-secondary">Entrée : {a.check_in || '--:--'} · Sortie : {a.check_out || '--:--'} · Statut : {a.status || a.attendance_status}</p></div>)}
+        {!attendance.length && <p className="text-sm text-secondary">Aucun pointage enregistré.</p>}
+      </div>
+    </section>
+    {leaveForm && <MyLeaveModal close={() => setLeaveForm(false)} done={load} toast={showToast} />}
+  </div>;
+};
+
+const MyLeaveModal = ({ close, done, toast }: { close: () => void; done: () => void; toast: (message: string, type: 'success' | 'error') => void }) => {
+  const [f, setF] = useState({ leave_type: 'ANNUEL', start_date: '', end_date: '', reason: '' });
+  return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async (e) => { e.preventDefault(); try { await rhService.createMyLeaveRequest(f); toast('Demande envoyée.', 'success'); close(); done(); } catch (err: any) { toast(err?.response?.data?.message || 'Envoi impossible.', 'error'); } }} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6">
+    <h2 className="font-bold">Demander un congé</h2>
+    <div className="mt-4 space-y-3">
+      <select value={f.leave_type} onChange={(e) => setF({ ...f, leave_type: e.target.value })} className="w-full rounded border p-2"><option value="ANNUEL">Annuel</option><option value="MALADIE">Maladie</option><option value="MATERNITE_PATERNITE">Maternité/paternité</option><option value="SANS_SOLDE">Sans solde</option></select>
+      <input required type="date" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} className="w-full rounded border p-2" />
+      <input required type="date" value={f.end_date} onChange={(e) => setF({ ...f, end_date: e.target.value })} className="w-full rounded border p-2" />
+      <input value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="Motif" className="w-full rounded border p-2" />
+    </div>
+    <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={close}>Annuler</button><button className="rounded bg-[#2b7a78] px-3 py-2 text-white">Envoyer</button></div>
+  </form></div>;
+};
+
+// ─────────────────────────────────────────────
+// Vue de gestion complète : admin / manager, inchangée.
+// ─────────────────────────────────────────────
+const RHManagerView: React.FC = () => {
   const { showToast } = useToast();
   const [view, setView] = useState<RHView>('overview'); const [employees, setEmployees] = useState<RHEmployee[]>([]); const [dashboard, setDashboard] = useState<RHDashboard | null>(null); const [attendance, setAttendance] = useState<RHAttendance[]>([]); const [leaves, setLeaves] = useState<RHLeave[]>([]); const [payroll, setPayroll] = useState<RHPayroll[]>([]); const [evaluations, setEvaluations] = useState<RHEvaluation[]>([]);
   const [error, setError] = useState(''); const [search, setSearch] = useState(''); const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7)); const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().slice(0, 10)); const [employeeForm, setEmployeeForm] = useState<Record<string, string> | null>(null); const [selected, setSelected] = useState<RHEmployee | null>(null); const [leaveForm, setLeaveForm] = useState(false);
