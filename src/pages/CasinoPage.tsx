@@ -6,7 +6,6 @@ import { ChipsSheet } from '../components/Casino/sheets/ChipsSheet';
 import { FinalCalculationSheet } from '../components/Casino/sheets/FinalCalculationSheet';
 import { IdentityVerificationsManagement } from '../components/Casino/sheets/IdentityVerificationsManagement';
 import { DailyReportSheet } from '../components/Casino/sheets/DailyReportSheet';
-import { CaisseTab } from '../components/Casino/tabs/CaisseTab';
 import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
 import { casinoPlayersApi, CasinoRegisteredPlayer, playerSheetApi, identityVerificationApi, tablesJeuApi } from '../services/casinoTablesJeu.service';
 import type { TableJeu } from '../types/casinoTablesJeu.types';
@@ -410,8 +409,7 @@ export const CasinoPage: React.FC = () => {
     { id: 'chips', label: '4. Comptage jetons', help: 'Ouverture / fermeture', icon: <Coins size={18} /> },
     { id: 'final', label: '5. Calcul final', help: 'Clôture de caisse', icon: <Calculator size={18} /> },
     { id: 'management', label: '6. Vérifications', help: 'Gérer les identités', icon: <Shield size={18} /> },
-    { id: 'caisse', label: '7. Caisse', help: 'Sessions, écarts et rack check', icon: <WalletCards size={18} /> },
-    { id: 'report', label: '8. Rapport', help: 'Générer le rapport de la table', icon: <FileText size={18} /> },
+    { id: 'report', label: '7. Rapport', help: 'Générer le rapport de la table', icon: <FileText size={18} /> },
   ];
 
   return <div className="flex flex-col gap-5 w-full">
@@ -428,7 +426,6 @@ export const CasinoPage: React.FC = () => {
         {view === 'chips' && <ChipsSheet date={date} chips={chips} players={players} rackChecks={rackChecks} endGameTime={endGameTime} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onRackChecksChange={(checks) => { setSaveState('idle'); rackChecksRef.current = checks; setRackChecks(checks); }} onEndGameTimeChange={(value) => { setSaveState('idle'); setEndGameTime(value); }} onSave={savePlayerSheet} />}
         {view === 'final' && <FinalCalculationSheet players={players} selectedPlayerId={selectedFinalPlayerId} values={{ ...(finalsByPlayer[String(selectedFinalPlayerId)] || {}), signature: finalsByPlayer._global?.signature || finalsByPlayer[String(selectedFinalPlayerId)]?.signature || '' }} withdrawnTotal={withdrawnTotal} depositResults={depositResults} creditResults={creditResults} saveState={saveState} onPlayerChange={setSelectedFinalPlayerId} onUpdate={(key, value) => { setSaveState('idle'); setFinalsByPlayer((current) => key === 'signature' ? { ...current, _global: { ...(current._global || {}), signature: value } } : { ...current, [String(selectedFinalPlayerId)]: { ...(current[String(selectedFinalPlayerId)] || {}), [key]: value } }); }} onPlayerUpdate={updatePlayerLine} onSave={savePlayerSheet} isFinished={isGameFinished} isFinishing={isFinishingGame} canFinish={canManageCasino} onFinish={finishGame} showIdentityVerifications={showIdentityVerifications} identityVerifications={identityVerifications} />}
         {view === 'management' && <IdentityVerificationsManagement verifications={Object.entries(identityVerifications).map(([ficheId, v]) => ({ ...v, fiche_id: Number(ficheId) }))} onUpdate={(updated) => { const map: Record<number, any> = {}; for (const v of updated) { map[v.fiche_id ?? 0] = v; } setIdentityVerifications(map); }} />}
-        {view === 'caisse' && <CaisseTab />}
         {view === 'report' && <DailyReportSheet date={date} table={table} players={players} chips={chips} rackChecks={rackChecks} restaurantPayments={restaurantPayments} finals={finalsByPlayer} registeredPlayers={registeredPlayers} />}
       </div>
     </main>

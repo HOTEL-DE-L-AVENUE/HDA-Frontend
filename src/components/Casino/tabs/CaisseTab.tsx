@@ -135,6 +135,11 @@ export const CaisseTab: React.FC = () => {
     <div className="flex flex-col gap-4 w-full">
       {error && <ErrorBanner message={error} />}
 
+      {/*
+        Résumé financier rapide du casino :
+        - entrées / sorties / solde global de la caisse
+        - permet d'avoir une vue d'ensemble avant d'ouvrir un détail
+      */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           { label: 'Entrées Casino', value: casinoFinance.entrees, color: 'var(--color-success, #4ade80)' },
@@ -149,6 +154,12 @@ export const CaisseTab: React.FC = () => {
         ))}
       </div>
 
+      {/*
+        Gestion des sessions de caisse par caissier :
+        - ouverture d'une session si aucune n'est active
+        - fermeture si une session est déjà ouverte
+        - contrôle du cycle de vie de la caisse casino
+      */}
       <SectionCard title="Sessions de caisse" action={<RefreshCw size={16} className="text-muted" />}>
         {cashiers.length === 0 ? (
           <EmptyState label="Aucune caisse configurée." />
@@ -191,6 +202,12 @@ export const CaisseTab: React.FC = () => {
         )}
       </SectionCard>
 
+      {/*
+        Règle métier centrale : la caisse casino est la source unique de vérité.
+        Tous les mouvements sont consolidés dans le module financier global,
+        et la référence de flux permet de faire la correspondance entre les
+        écritures locales et les écritures centralisées.
+      */}
       <SectionCard
         title="Principe : source unique"
         action={<ShieldCheck size={16} className="text-muted" />}
@@ -204,6 +221,11 @@ export const CaisseTab: React.FC = () => {
       </SectionCard>
 
       <div className="grid lg:grid-cols-2 gap-4">
+        {/*
+          Contrôle des écarts de caisse après fermeture d'une session.
+          Affiche le fond théorique, le fond déclaré et les écarts éventuels
+          comme le cash check ou le rack check manquant.
+        */}
         <SectionCard
           title="Écarts de caisse"
           action={
@@ -290,6 +312,11 @@ export const CaisseTab: React.FC = () => {
           )}
         </SectionCard>
 
+        {/*
+          Gestion des transferts d'argent entre caisses.
+          Le casino peut recevoir ou envoyer des fonds vers d'autres modules,
+          avec validation, refus ou reprise selon le statut du transfert.
+        */}
         <SectionCard
           title="Transferts inter-caisses"
           className="lg:col-span-2"
@@ -398,6 +425,10 @@ export const CaisseTab: React.FC = () => {
           )}
         </SectionCard>
 
+        {/*
+          Liste des mouvements non encore correctement synchronisés avec le
+          module financier global. Cela sert de filet de réconciliation.
+        */}
         <SectionCard
           title="Flux à synchroniser"
           className="lg:col-span-2"

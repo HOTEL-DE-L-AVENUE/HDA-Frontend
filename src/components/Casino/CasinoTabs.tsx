@@ -6,7 +6,6 @@ import { filterTabsByRole } from '../../utils/permissions';
 const TABS = [
   { id: 'setup', label: 'Configuration', icon: <Settings2 size={16} /> },
   { id: 'tokens', label: 'Jetons', icon: <Coins size={16} /> },
-  { id: 'caisse', label: 'Caisse', icon: <WalletCards size={16} /> },
 ];
 
 interface CasinoTabsProps {
