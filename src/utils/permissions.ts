@@ -172,6 +172,12 @@ export function isBarman(userOrRole?: { role?: string } | string | null): boolea
   return ['water', 'barman'].includes((role || '').toLowerCase());
 }
 
+export function isManager(userOrRole?: { role?: string } | string | null): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  return (role || '').toLowerCase() === 'manager';
+}
+
 /**
  * Filtre les onglets/sous-sections secondaires au sein d'un module en fonction du rôle :
  * - Barman : UNIQUEMENT l'onglet 'commandes'
