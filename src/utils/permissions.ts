@@ -89,12 +89,14 @@ export function canAccessModule(
   // 2. Modules réservés strictement à l'admin
   if (ADMIN_ONLY_MODULES.includes(moduleId as ModuleType)) return false;
 
-  // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé).
-  // Le contenu réellement affiché/autorisé est filtré dans RHPage et côté backend
-  // via /rh/me ; seuls admin/manager voient la vue de gestion complète.
+  // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé),
+  // y compris le barman — vérifié avant la restriction stricte ci-dessous pour ne
+  // pas être court-circuité par elle. Le contenu réellement affiché/autorisé est
+  // filtré dans RHPage et côté backend via /rh/me ; seuls admin/manager voient la
+  // vue de gestion complète.
   if (moduleId === 'rh') return true;
 
-  // 3. Barman : accès UNIQUEMENT au module bar
+  // 3. Barman : accès UNIQUEMENT au module bar (en dehors de RH ci-dessus)
   if (role === 'water' || role === 'barman') {
     return moduleId === 'bar';
   }
