@@ -7,7 +7,7 @@ import { Badge, Button, Input, Modal, Select } from '../UI';
 import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
 import AuthService from '../../services/authService';
-import { isAdmin, isCashier } from '../../utils/permissions';
+import { isAdmin, isCashier, isBarman } from '../../utils/permissions';
 
 interface Props {
   commandes: BarCommande[];
@@ -38,7 +38,7 @@ export const BarCommandeView: React.FC<Props> = ({
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
-  const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser);
+  const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser) || isBarman(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
   const canDeleteTicketItem = isAdmin(currentUser);
   const canAdjustTicketQuantity = isAdmin(currentUser);

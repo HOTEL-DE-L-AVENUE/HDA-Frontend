@@ -17,7 +17,8 @@ export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
   caisse: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
   stock_manager: ['hotel', 'restaurant', 'bar', 'alcool', 'hebergement'],
   receptioniste: ['hebergement', 'hotel', 'clients'],
-  water: ['bar', 'alcool'],
+  water: ['bar'],
+  barman: ['bar'],
   housekeeping: ['hotel', 'hebergement'],
   croupier: ['casino'],
 };
@@ -64,9 +65,10 @@ export function parseUserModules(rawModules: any): string[] {
  * 1. Un utilisateur non authentifié n'a accès à rien.
  * 2. Un administrateur (role === 'admin') a accès à TOUS les modules.
  * 3. Le module 'utilisateurs' est strictement réservé à l'administrateur.
- * 4. Pour 'manager' : accès UNIQUEMENT aux modules sélectionnés lors de sa création.
- * 5. Pour 'caissier' / 'caisse' : accès aux modules liés aux encaissements et finances.
- * 6. Pour 'stock_manager' : accès aux modules comportant une gestion de stock.
+ * 4. Pour 'barman' / 'water' : accès UNIQUEMENT au module 'bar'.
+ * 5. Pour 'manager' : accès UNIQUEMENT aux modules sélectionnés lors de sa création.
+ * 6. Pour 'caissier' / 'caisse' : accès aux modules liés aux encaissements et finances.
+ * 7. Pour 'stock_manager' : accès aux modules comportant une gestion de stock.
  *
  * @param user        - L'utilisateur courant (depuis AuthService.getCurrentUser())
  * @param moduleId    - L'identifiant du module à tester
@@ -87,12 +89,17 @@ export function canAccessModule(
   // 2. Modules réservés strictement à l'admin
   if (ADMIN_ONLY_MODULES.includes(moduleId as ModuleType)) return false;
 
+  // 3. Barman : accès UNIQUEMENT au module bar
+  if (role === 'water' || role === 'barman') {
+    return moduleId === 'bar';
+  }
+
   // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé).
   // Le contenu réellement affiché/autorisé est filtré dans RHPage et côté backend
   // via /rh/me ; seuls admin/manager voient la vue de gestion complète.
   if (moduleId === 'rh') return true;
 
-  // 3. Manager : accès UNIQUEMENT aux modules assignés
+  // 4. Manager : accès UNIQUEMENT aux modules assignés
   if (role === 'manager') {
     const userModules = parseUserModules(user.module);
     if (moduleId === 'dashboard') {
@@ -101,7 +108,7 @@ export function canAccessModule(
     return userModules.includes(moduleId);
   }
 
-  // 4. Caissier : finances ou modules avec encaissement
+  // 5. Caissier : finances ou modules avec encaissement
   if (role === 'caissier' || role === 'caisse') {
     const userModules = parseUserModules(user.module);
     if (userModules.length > 0) {
@@ -110,7 +117,7 @@ export function canAccessModule(
     return ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'].includes(moduleId);
   }
 
-  // 5. Stock Manager : uniquement modules de stock (restaurant, bar, hotel, hebergement)
+  // 6. Stock Manager : uniquement modules de stock (restaurant, bar, hotel, hebergement)
   if (role === 'stock_manager') {
     const userModules = parseUserModules(user.module);
     if (userModules.length > 0) {
@@ -119,7 +126,7 @@ export function canAccessModule(
     return ['hotel', 'restaurant', 'bar', 'alcool', 'hebergement'].includes(moduleId);
   }
 
-  // 6. Autres rôles métiers spécifiques
+  // 7. Autres rôles métiers spécifiques
   if (ROLE_MODULE_PERMISSIONS[role]) {
     const allowed = ROLE_MODULE_PERMISSIONS[role];
     const userModules = parseUserModules(user.module);
@@ -157,8 +164,15 @@ export function isCashier(userOrRole?: { role?: string } | string | null): boole
   return ['caisse', 'caissier'].includes((role || '').toLowerCase());
 }
 
+export function isBarman(userOrRole?: { role?: string } | string | null): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  return ['water', 'barman'].includes((role || '').toLowerCase());
+}
+
 /**
  * Filtre les onglets/sous-sections secondaires au sein d'un module en fonction du rôle :
+ * - Barman : UNIQUEMENT l'onglet 'commandes'
  * - Caisse : UNIQUEMENT accessible pour l'administrateur ('admin'). Si l'utilisateur n'est pas admin, l'onglet 'caisse' est totalement exclu.
  * - Stock Manager : UNIQUEMENT l'onglet 'stock'
  * - Autres rôles non-admin : Tous les onglets sauf 'caisse'
@@ -172,14 +186,19 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
     return tabs;
   }
 
+  // 2. Barman : UNIQUEMENT l'onglet commandes
+  if (role === 'water' || role === 'barman') {
+    return tabs.filter(t => t.id === 'commandes');
+  }
+
   if (role === 'caisse' || role === 'caissier') {
     return tabs.filter(t => t.id === 'caisse' || t.id.includes('caisse') || t.id === 'commandes');
   }
 
-  // 2. Si non-admin : exclure systématiquement les onglets de caisse
+  // 3. Si non-admin : exclure systématiquement les onglets de caisse
   const nonCaisseTabs = tabs.filter(t => t.id !== 'caisse' && !t.id.includes('caisse'));
 
-  // 3. Stock Manager : restreindre uniquement au stock
+  // 4. Stock Manager : restreindre uniquement au stock
   if (role === 'stock_manager') {
     const stockTabs = nonCaisseTabs.filter(t => t.id === 'stock' || t.id.includes('stock'));
     return stockTabs.length > 0 ? stockTabs : nonCaisseTabs;
@@ -193,6 +212,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
  */
 export function getDefaultTabForRole(defaultTab: string, userRole?: string): string {
   const role = userRole?.toLowerCase() || '';
+  if (role === 'water' || role === 'barman') return 'commandes';
   if (role === 'caisse' || role === 'caissier') return 'caisse';
   if (role === 'stock_manager') return 'stock';
   if (role !== 'admin' && (defaultTab === 'caisse' || defaultTab.includes('caisse'))) {
@@ -221,6 +241,9 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
 
   // Replis par défaut selon le rôle
   switch (role) {
+    case 'water':
+    case 'barman':
+      return '/bar';
     case 'croupier':
       return '/casino';
     case 'caissier':
@@ -230,8 +253,6 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
       return '/restaurant';
     case 'receptioniste':
       return '/hotel';
-    case 'water':
-      return '/bar';
     case 'housekeeping':
       return '/hotel';
     default:
