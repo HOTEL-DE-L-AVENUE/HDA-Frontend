@@ -19,13 +19,14 @@ import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
 import AuthService from '../services/authService';
-import { isAdmin, isCashier } from '../utils/permissions';
+import { isAdmin, isCashier, isBarman } from '../utils/permissions';
 import { useToast } from '../context/ToastContext';
 
 export const BarPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
   const userIsCashier = isCashier(currentUser);
+  const userIsBarman = isBarman(currentUser);
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
 
@@ -234,9 +235,9 @@ export const BarPage: React.FC = () => {
         </div>
       )}
 
-      <BarStats commandes={commandes} stockMap={stockMap} />
+      {!userIsBarman && <BarStats commandes={commandes} stockMap={stockMap} />}
 
-      <BarTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <BarTabs activeTab={userIsBarman ? 'commandes' : activeTab} onTabChange={setActiveTab} />
 
       {activeTab === 'bar' && (
         <div className="space-y-6">

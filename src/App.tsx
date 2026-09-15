@@ -80,7 +80,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="bar"
-                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager']}
+                    allowedRoles={['admin', 'manager', 'water', 'barman', 'caissier', 'caisse', 'stock_manager']}
                   />
                 }
               >
@@ -91,7 +91,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="alcool"
-                    allowedRoles={['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager']}
+                    allowedRoles={['admin', 'manager', 'caissier', 'caisse', 'stock_manager']}
                   />
                 }
               >
