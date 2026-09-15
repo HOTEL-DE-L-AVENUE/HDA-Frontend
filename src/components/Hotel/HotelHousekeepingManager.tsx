@@ -93,12 +93,19 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
   // Gestion du statut
   const handleStatusChange = async (id: number, statut: string) => {
     try {
+      const task = tasks.find((item) => item.id === id);
+      if (!task) return;
+
       await updateStatus(id, statut);
-      if (statut === 'TERMINE') {
-        const task = tasks.find((item) => item.id === id);
-        if (task) await updateRoomStatus(task.room_id, 'LIBRE');
+      
+      // Change room status based on task status
+      if (statut === 'EN_COURS') {
+        await updateRoomStatus(task.room_id, 'NETTOYAGE');
+      } else if (statut === 'TERMINE') {
+        await updateRoomStatus(task.room_id, 'LIBRE');
         onTaskCompleted?.();
       }
+      
       toast.success(`Statut mis à jour: ${statut}`);
       await loadAll();
     } catch (error: any) {
@@ -113,8 +120,13 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
         await updateTask(selectedTask.id, data);
         toast.success('Tâche modifiée avec succès');
       } else {
-        await createTask(data);
+        const newTask = await createTask(data);
         toast.success('Tâche créée avec succès');
+        
+        // If task is created with EN_COURS status, update room status
+        if (data.statut === 'EN_COURS') {
+          await updateRoomStatus(data.room_id, 'NETTOYAGE');
+        }
       }
       setIsModalOpen(false);
       setSelectedTask(null);

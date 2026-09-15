@@ -135,22 +135,20 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
             </select>
           </div>
 
-          {/* Statut (visible uniquement en modification) */}
-          {initialData && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Statut</label>
-              <select
-                value={formData.statut}
-                onChange={(e) => setFormData({ ...formData, statut: e.target.value as any })}
-                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
-                disabled={isSubmitting}
-              >
-                <option value="A_FAIRE">📋 À faire</option>
-                <option value="EN_COURS">🔄 En cours</option>
-                <option value="TERMINE">✅ Terminé</option>
-              </select>
-            </div>
-          )}
+          {/* Statut */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Statut</label>
+            <select
+              value={formData.statut}
+              onChange={(e) => setFormData({ ...formData, statut: e.target.value as any })}
+              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
+              disabled={isSubmitting}
+            >
+              <option value="A_FAIRE">📋 À faire</option>
+              <option value="EN_COURS">🔄 En cours (Démarrer maintenant)</option>
+              <option value="TERMINE">✅ Terminé</option>
+            </select>
+          </div>
 
           {/* Date planifiée */}
           <div>
