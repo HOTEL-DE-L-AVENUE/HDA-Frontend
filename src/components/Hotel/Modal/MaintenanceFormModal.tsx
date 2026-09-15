@@ -188,22 +188,20 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
           </div>
 
           {/* Statut */}
-          {initialData && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Statut</label>
-              <select
-                value={formData.statut}
-                onChange={(e) => setFormData({ ...formData, statut: e.target.value as any })}
-                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
-                disabled={isSubmitting}
-              >
-                <option value="OUVERT">🔴 Ouvert</option>
-                <option value="EN_COURS">🟡 En cours</option>
-                <option value="TERMINE">✅ Terminé</option>
-                <option value="ANNULE">⛔ Annulé</option>
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Statut</label>
+            <select
+              value={formData.statut}
+              onChange={(e) => setFormData({ ...formData, statut: e.target.value as any })}
+              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
+              disabled={isSubmitting}
+            >
+              <option value="OUVERT">🔴 Ouvert</option>
+              <option value="EN_COURS">🟡 En cours (Démarrer maintenant)</option>
+              <option value="TERMINE">✅ Terminé</option>
+              <option value="ANNULE">⛔ Annulé</option>
+            </select>
+          </div>
 
           {/* Description */}
           <div>

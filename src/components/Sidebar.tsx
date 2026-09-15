@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
   // { id: 'alcool', label: 'Alcool', icon: <Martini size={20} />, gradient: 'from-amber-500 to-orange-500', path: "/alcool", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
   { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier', 'croupier'] },
   { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
-  { id: 'rh', label: 'Ressources humaines', icon: <UsersRound size={20} />, gradient: 'from-accent to-accent-2', path: "/rh", roles: ['admin', 'manager'] },
+  { id: 'rh', label: 'Ressources humaines', icon: <UsersRound size={20} />, gradient: 'from-accent to-accent-2', path: "/rh", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'water', 'barman', 'croupier'] },
   { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier'] },
   { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs", roles: ['admin'] },
 ];
