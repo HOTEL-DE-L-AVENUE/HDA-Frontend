@@ -24,7 +24,7 @@ const inputClass = 'w-full rounded border bg-transparent px-2 py-2 text-sm text-
 
 export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isAdmin, canManageGame, saveState = 'idle', onUpdate, onAdd, onRemove, onSave, registeredPlayers = [], onRegister, onPlay, onDeleteRegisteredPlayer, onUpdateRegisteredPlayer }) => {
   const playerList = players.filter((player, index, lines) => Boolean(player.casinoPlayerId || player.name.trim()) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
-  const emptyPlayer = { nom: '', prenom: '', email: '', telephone: '', date_inscription: new Date().toISOString().slice(0, 10), depot: '', credit: '', mode_jeu: 'EN_ATTENTE' as const };
+  const emptyPlayer: { nom: string; prenom: string; email: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' } = { nom: '', prenom: '', email: '', telephone: '', date_inscription: new Date().toISOString().slice(0, 10), depot: '', credit: '', mode_jeu: 'EN_ATTENTE' };
   const [newPlayer, setNewPlayer] = useState(emptyPlayer);
   const [amounts, setAmounts] = useState<Record<number, { deposit: string; credit: string }>>({});
   const [error, setError] = useState('');

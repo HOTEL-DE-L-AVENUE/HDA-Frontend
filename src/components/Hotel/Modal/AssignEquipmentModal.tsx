@@ -10,7 +10,7 @@ interface AssignEquipmentModalProps {
   onClose: () => void;
   equipment: Equipment | null;
   rooms: Room[];
-  onAssign: (roomId: number, quantity: number) => void;
+  onAssign: (roomId: number, quantity: number, zone: 'CHAMBRE' | 'SALLE_DE_BAIN') => void;
 }
 
 export const AssignEquipmentModal: React.FC<AssignEquipmentModalProps> = ({

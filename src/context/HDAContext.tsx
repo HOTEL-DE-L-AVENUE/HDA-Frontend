@@ -384,6 +384,7 @@ const initialState: HDAState = {
   jeux: initialJeuxCasino,
   reservations: reservations,
   commandes: commandes,
+  orders: commandes,
   stockMovements: stockMovements,
   chambres: initialChambres,
   activeModule: 'dashboard',

@@ -10,7 +10,6 @@ export interface RoomType {
   description: string | null;
   prix_base?: number;
   capacite?: number;
-  prix_base?: number;
   created_at?: string;
   updated_at?: string;
 }
