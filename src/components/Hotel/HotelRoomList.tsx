@@ -4,8 +4,6 @@ import { Room, RoomType } from '../../types/hotel.types';
 import {
   DoorOpen,
   Edit,
-  Wrench,
-  Brush,
   Loader,
   Trash2,
   AlertTriangle,
@@ -16,7 +14,10 @@ import {
   Home,
   Search,
   Filter,
-  XCircle
+  XCircle,
+  Settings,
+  Wrench,
+  Brush
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/data';
 import { RoomStatusModal } from './Modal/RoomStatusModal';
@@ -52,6 +53,8 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [isNavigationModalOpen, setIsNavigationModalOpen] = useState(false);
+  const [navigationRoom, setNavigationRoom] = useState<Room | null>(null);
 
   // États pour la recherche et le filtrage
   const [searchTerm, setSearchTerm] = useState('');
@@ -178,6 +181,32 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     setSearchTerm('');
     setFilterStatus('TOUS');
     setFilterType('TOUS');
+  };
+
+  // Gestion du clic sur une chambre - ouvrir le modal de navigation
+  const handleRoomClick = (room: Room) => {
+    setNavigationRoom(room);
+    setIsNavigationModalOpen(true);
+  };
+
+  // Gestion de la navigation vers les différentes sections
+  const handleNavigation = (destination: 'equipment' | 'maintenance' | 'housekeeping') => {
+    if (!navigationRoom) return;
+
+    switch (destination) {
+      case 'equipment':
+        onViewEquipment?.(navigationRoom);
+        break;
+      case 'maintenance':
+        onViewMaintenance?.(navigationRoom);
+        break;
+      case 'housekeeping':
+        onViewHousekeeping?.(navigationRoom);
+        break;
+    }
+
+    setIsNavigationModalOpen(false);
+    setNavigationRoom(null);
   };
 
   // Affichage du chargement
@@ -321,13 +350,13 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                 <div
                   key={room.id}
                   className="card card-gold-hover p-5 cursor-pointer"
-                  onClick={() => room.statut === 'NETTOYAGE' ? onViewHousekeeping?.(room) : room.statut === 'MAINTENANCE' ? onViewMaintenance?.(room) : onViewEquipment?.(room)}
-                  role={onViewEquipment || onViewHousekeeping ? 'button' : undefined}
-                  tabIndex={onViewEquipment || onViewHousekeeping ? 0 : undefined}
+                  onClick={() => handleRoomClick(room)}
+                  role="button"
+                  tabIndex={0}
                   onKeyDown={(event) => {
-                    if ((onViewEquipment || onViewHousekeeping) && (event.key === 'Enter' || event.key === ' ')) {
+                    if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      room.statut === 'NETTOYAGE' ? onViewHousekeeping?.(room) : room.statut === 'MAINTENANCE' ? onViewMaintenance?.(room) : onViewEquipment?.(room);
+                      handleRoomClick(room);
                     }
                   }}
                 >
@@ -357,42 +386,6 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                         <span className="text-muted text-sm font-normal ml-1">/nuit</span>
                       </div>
                       <div className="flex gap-1">
-                        {/* Bouton Ménage */}
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleStatusChange(room.id, 'NETTOYAGE');
-                          }}
-                          className="p-2 rounded-lg hover:bg-info/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Ménage"
-                          disabled={isProcessing}
-                        >
-                          {isProcessing ? (
-                            <Loader size={16} className="animate-spin text-muted" />
-                          ) : (
-                            <Brush size={16} className="text-info" />
-                          )}
-                        </button>
-
-                        {/* Bouton Maintenance */}
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleStatusChange(room.id, 'MAINTENANCE').then(() => onViewMaintenance?.(room));
-                          }}
-                          className="p-2 rounded-lg hover:bg-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Maintenance"
-                          disabled={isProcessing}
-                        >
-                          {isProcessing ? (
-                            <Loader size={16} className="animate-spin text-muted" />
-                          ) : (
-                            <Wrench size={16} className="text-danger" />
-                          )}
-                        </button>
-
                         {/* Bouton Modifier */}
                         <button
                           type="button"
@@ -494,6 +487,60 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                       Supprimer définitivement
                     </>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Modal */}
+      {isNavigationModalOpen && navigationRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black backdrop-blur-sm animate-fade-in">
+          <div className="bg dark:bg-surface-2 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border border-base-light dark:border-base-dark animate-scale-in">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-primary mb-4">
+                Chambre {navigationRoom.numero}
+              </h3>
+              <p className="text-muted text-sm mb-6">
+                Que souhaitez-vous faire ?
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleNavigation('equipment')}
+                  className="w-full px-4 py-3 rounded-lg border border-base hover:bg-accent/10 transition-colors flex items-center gap-3"
+                >
+                  <Settings size={20} className="text-accent" />
+                  <span className="text-primary font-medium">Équipement</span>
+                </button>
+
+                <button
+                  onClick={() => handleNavigation('maintenance')}
+                  className="w-full px-4 py-3 rounded-lg border border-base hover:bg-danger/10 transition-colors flex items-center gap-3"
+                >
+                  <Wrench size={20} className="text-danger" />
+                  <span className="text-primary font-medium">Maintenance</span>
+                </button>
+
+                <button
+                  onClick={() => handleNavigation('housekeeping')}
+                  className="w-full px-4 py-3 rounded-lg border border-base hover:bg-info/10 transition-colors flex items-center gap-3"
+                >
+                  <Brush size={20} className="text-info" />
+                  <span className="text-primary font-medium">Ménage</span>
+                </button>
+              </div>
+
+              <div className="mt-6">
+                <button
+                  onClick={() => {
+                    setIsNavigationModalOpen(false);
+                    setNavigationRoom(null);
+                  }}
+                  className="w-full px-4 py-2.5 rounded-lg border border-base text-primary font-medium hover:bg-surface-2 transition-colors"
+                >
+                  Annuler
                 </button>
               </div>
             </div>
