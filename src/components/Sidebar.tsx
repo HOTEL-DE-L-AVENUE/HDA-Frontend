@@ -618,6 +618,7 @@ const MobileBottomNav: React.FC = () => {
           backgroundColor: 'var(--color-surface)',
           borderTop: '1px solid var(--color-border)',
           paddingBottom: 'env(safe-area-inset-bottom)',
+          minHeight: '76px',
           boxShadow: 'var(--shadow-sm)',
         }}
       >
