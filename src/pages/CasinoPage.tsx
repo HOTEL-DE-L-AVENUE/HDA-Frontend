@@ -20,6 +20,7 @@ const getCurrentTime = () => {
 const createInitialPlayers = (): PlayerLine[] => [];
 const DEFAULT_TABLE_NUMBERS = Array.from({ length: 10 }, (_, index) => String(index + 1));
 const createInitialRackChecks = (): RackCheck[] => [{ id: Date.now(), date: new Date().toISOString().slice(0, 10), time: getCurrentTime(), type: 'Cash check', expected: 0, actual: '', missing: '', verified: false, variance: '' }];
+const LAST_CASINO_TABLE_KEY = 'hda-casino-last-table';
 
 const setFirstPlayerTimeIfMissing = (players: PlayerLine[]) => {
   if (!players.length) return players;
@@ -40,7 +41,7 @@ export const CasinoPage: React.FC = () => {
   const canManageCasino = userIsAdmin || ['croupier', 'manager', 'caisse', 'caissier'].includes(userRole);
   const [view, setView] = useState<CasinoView>('table');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [table, setTable] = useState('');
+  const [table, setTable] = useState(() => window.localStorage.getItem(LAST_CASINO_TABLE_KEY) || '');
   const [gameTables, setGameTables] = useState<TableJeu[]>([]);
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tablesError, setTablesError] = useState<string | null>(null);
@@ -78,6 +79,10 @@ export const CasinoPage: React.FC = () => {
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (table) window.localStorage.setItem(LAST_CASINO_TABLE_KEY, table);
+  }, [table]);
 
   const changeGameDate = (value: string) => {
     if (value === date) return;
@@ -133,7 +138,11 @@ export const CasinoPage: React.FC = () => {
     playerSheetApi.get(date, table).then((sheet) => {
       if (!active) return;
       if (sheet) {
-        setPlayers(setFirstPlayerTimeIfMissing(sheet.players));
+        const loadedPlayers = setFirstPlayerTimeIfMissing(sheet.players);
+        setPlayers(loadedPlayers);
+        if (loadedPlayers.some((player) => Boolean(player.casinoPlayerId || player.name.trim()))) {
+          setView('players');
+        }
         setChips(sheet.chips || CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
         setRackChecks(sheet.rackChecks?.length ? sheet.rackChecks : createInitialRackChecks());
         setRestaurantPayments(sheet.restaurantPayments || { especes: false, tpe: false });
