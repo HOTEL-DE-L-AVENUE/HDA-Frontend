@@ -199,19 +199,18 @@ export const CasinoPage: React.FC = () => {
     };
 
     const updated = await casinoPlayersApi.update(id, normalizedPlayer);
-    const nextDeposit = player.depot == null ? '' : String(player.depot);
-    const nextCredit = player.credit == null ? '' : String(player.credit);
+    const nextDeposit = updated.depot == null ? '' : String(updated.depot);
+    const nextCredit = updated.credit == null ? '' : String(updated.credit);
+    const nextName = [updated.nom, updated.prenom].filter(Boolean).join(' ');
 
     setRegisteredPlayers((current) => current.map((registeredPlayer) => registeredPlayer.id === id ? updated : registeredPlayer));
-    setPlayers((current) => current.map((line) =>
+    const nextPlayers = playersRef.current.map((line) =>
       line.casinoPlayerId === id
-        ? {
-          ...line,
-          initialDeposit: nextDeposit,
-          initialCredit: nextCredit,
-        }
+        ? { ...line, name: nextName, email: updated.email || '', initialDeposit: nextDeposit, initialCredit: nextCredit }
         : line
-    ));
+    );
+    setPlayers(nextPlayers);
+    await savePlayerSheet(nextPlayers);
   };
 
   const deleteRegisteredCasinoPlayer = async (player: CasinoRegisteredPlayer) => {
