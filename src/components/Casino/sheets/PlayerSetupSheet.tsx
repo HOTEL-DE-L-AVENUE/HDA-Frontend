@@ -87,7 +87,12 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
     {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
 
     <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <h3 className="font-semibold">Joueurs inscrits</h3>
+      <div className="flex items-center gap-3">
+        <h3 className="font-semibold">Joueurs inscrits</h3>
+        <span className="rounded-full border px-3 py-1 text-xs font-semibold text-accent" style={casinoBorder}>
+          Effectif inscrit : {registeredPlayers.length} joueur{registeredPlayers.length > 1 ? 's' : ''}
+        </span>
+      </div>
       <label className="flex w-full items-center gap-2 rounded-lg border px-2 py-1 sm:max-w-sm" style={casinoBorder}>
         <Search size={16} className="text-muted" aria-hidden="true" />
         <input className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-400" value={playerSearch} onChange={(event) => setPlayerSearch(event.target.value)} placeholder="Rechercher un joueur" aria-label="Rechercher un joueur inscrit" />
@@ -107,7 +112,12 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       })}</tbody></table>
     </div>
     {canManageGame && !isAdmin && registeredPlayers.some((player) => !playerList.some((line) => line.casinoPlayerId === player.id)) && <div className="mb-5 flex flex-wrap gap-2"><span className="self-center text-xs text-muted">Ajouter à la partie :</span>{registeredPlayers.filter((player) => !playerList.some((line) => line.casinoPlayerId === player.id)).map((player) => <button key={player.id} type="button" className="action secondary text-xs" onClick={() => play(player)}><Play size={14} /> {player.nom} {player.prenom || ''}</button>)}</div>}
-    <h3 className="mb-2 font-semibold">Joueurs de la partie</h3>
+    <div className="mb-2 flex items-center justify-between gap-3">
+      <h3 className="font-semibold">Joueurs de la partie</h3>
+      <span className="rounded-full border px-3 py-1 text-xs font-semibold text-accent" style={casinoBorder}>
+        Effectif total : {playerList.length} joueur{playerList.length > 1 ? 's' : ''}
+      </span>
+    </div>
 
     <div className="overflow-x-auto rounded-xl border" style={casinoBorder}>
       <table className="w-full min-w-[760px] border-collapse text-xs sm:text-sm">
