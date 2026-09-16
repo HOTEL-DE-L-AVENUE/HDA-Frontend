@@ -186,7 +186,7 @@ class AuthService {
     try {
       const refreshToken = SecureStorage.getItem("refresh-token");
       if (refreshToken) {
-        await api.post("/auth/logout", { refreshToken }).catch(() => { });
+        await api.post("/api/auth/logout", { refreshToken }).catch(() => { });
       }
     } finally {
       SecureStorage.clear();
@@ -204,7 +204,7 @@ class AuthService {
     }
     try {
       console.log("🔄 Rafraîchissement du token...");
-      const response = await api.post("/auth/refresh-token", { refreshToken });
+      const response = await api.post("/api/auth/refresh-token", { refreshToken });
       const data = response.data as ApiResponse;
       const newToken = data.token || data.data?.token;
       if (!newToken) {
@@ -220,7 +220,7 @@ class AuthService {
 
   static async getProfile(): Promise<User> {
     try {
-      const response = await api.get("/auth/me");
+      const response = await api.get("/api/auth/me");
       const data = response.data as ApiResponse<User>;
       const profileUser = data.user || data.data;
       if (!data.success || !profileUser) {
@@ -238,7 +238,7 @@ class AuthService {
       throw new Error(validation.error!);
     }
     try {
-      const response = await api.post("/auth/change-password", {
+      const response = await api.post("/api/auth/change-password", {
         oldPassword,
         newPassword,
       });
@@ -248,6 +248,15 @@ class AuthService {
       }
     } catch (error: any) {
       throw this.handleError(error, "Erreur lors du changement de mot de passe");
+    }
+  }
+
+  static async getConnectionHistory(page = 1, limit = 20): Promise<{ data: any[]; meta?: { page: number; limit: number; total: number } }> {
+    try {
+      const response = await api.get("/api/auth/connection-history", { params: { page, limit } });
+      return response.data;
+    } catch (error: any) {
+      throw this.handleError(error, "Erreur lors du chargement de l'historique de connexion");
     }
   }
 

@@ -78,7 +78,7 @@ export const isFinancialOutflow = (typeFlux?: string) =>
 export const financeService = {
   // ==================== INVOICES ====================
   
-  async getInvoices(params?: { client_id?: number; statut?: string }) {
+  async getInvoices(params?: { client_id?: number; statut?: string }): Promise<Invoice[]> {
     try {
       const response = await api.get('/api/finance/invoices', { params });
       return response.data.data || [];

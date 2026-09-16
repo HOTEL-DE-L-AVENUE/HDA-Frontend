@@ -83,7 +83,10 @@ export const roomService = {
     }
   },
 
-  createRoom: async (data: Omit<Room, 'id' | 'room_type'>): Promise<Room> => {
+  // prix_nuit est optionnel ici : le backend rejette ce champ pour les non-admins
+  // (voir hebergementController.js), donc RoomFormModal l'omet volontairement
+  // du payload quand l'utilisateur n'est pas admin.
+  createRoom: async (data: Omit<Room, 'id' | 'room_type' | 'prix_nuit'> & { prix_nuit?: number | null }): Promise<Room> => {
     try {
       const response = await api.post<ApiResponse<Room>>('/api/hebergement/rooms', data);
       return response.data.data;

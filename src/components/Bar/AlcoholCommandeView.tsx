@@ -383,7 +383,7 @@
 //           <div>
 //             <p className="font-semibold text-primary">{commande.client}</p>
 //             <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`} · {commande.nombre_personnes || 1} pers.</p>
-//             <p className="text-[11px] text-accent">{commande.moyen_paiement === 'CARTE' ? 'Carte bancaire' : commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'EURO' ? 'Euro' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'DOLLAR' ? 'Dollar' : commande.moyen_paiement === 'VIREMENT' ? 'Virement' : commande.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>
+//             <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
 //           </div>
 //         </div>
 //       ),
@@ -1233,7 +1233,7 @@ export const AlcoholCommandeView: React.FC<Props> = ({
           <div>
             <p className="font-semibold text-primary">{commande.client}</p>
             <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`} · {commande.nombre_personnes || 1} pers.</p>
-            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'CARTE' ? 'Carte bancaire' : commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'EURO' ? 'Euro' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'DOLLAR' ? 'Dollar' : commande.moyen_paiement === 'VIREMENT' ? 'Virement' : commande.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>
+            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
           </div>
         </div>
       ),
