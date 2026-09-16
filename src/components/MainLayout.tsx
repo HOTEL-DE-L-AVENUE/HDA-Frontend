@@ -1,22 +1,8 @@
-import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 
 export default function MainLayout() {
-  useEffect(() => {
-    const refreshPage = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (document.querySelector('[role="dialog"]')) return;
-      const activeElement = document.activeElement;
-      if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement || activeElement instanceof HTMLSelectElement) return;
-      window.location.reload();
-    };
-
-    const interval = window.setInterval(refreshPage, 30_000);
-    return () => window.clearInterval(interval);
-  }, []);
-
   return (
     <div
       className="min-h-screen w-full overflow-x-hidden"
