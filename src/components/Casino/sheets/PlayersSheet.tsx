@@ -32,7 +32,7 @@ const paperInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white o
 const darkInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
 const sheetActionPrimary = 'action inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-xs font-bold shadow-lg shadow-amber-500/10 transition duration-200 hover:-translate-y-0.5 hover:shadow-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-50';
 const sheetActionSecondary = 'action secondary inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-xs font-bold transition duration-200 hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-300/10 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-50';
-const paymentMethods = ['Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèque', 'Offert', 'Virement', 'Crédit'];
+const paymentMethods = ['Espèces', 'Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèque', 'Offert', 'Virement', 'Crédit'];
 
 const bonusCategories = ['7 et 2', 'Carré', 'Quinte flush', 'Quinte flush royal', 'Fetish'];
 const positiveResultOptions = ['Dépôt', 'Crédit payé', 'Espèce', 'MVola', 'Orange Money'];
