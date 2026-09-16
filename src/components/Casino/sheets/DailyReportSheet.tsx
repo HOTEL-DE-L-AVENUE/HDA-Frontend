@@ -38,10 +38,6 @@ const paymentLabel = (player: PlayerLine) => {
 
 export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
   const listedPlayers = uniquePlayers(players).filter((player) => player.name.trim() || playerAmount(player, players) > 0);
-  const playingRegisteredIds = new Set(players.map((player) => player.casinoPlayerId).filter((id): id is number => Number.isInteger(id)));
-  const waitingPlayers = registeredPlayers.filter((player) => player.statut === 'ACTIF'
-    && player.mode_jeu === 'EN_ATTENTE'
-    && !playingRegisteredIds.has(player.id));
   const totalCaves = listedPlayers.reduce((total, player) => total + playerAmount(player, players), 0);
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
   const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
@@ -69,8 +65,6 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     '',
     '# Joueur sortie :',
     '',
-    '# Joueurs en attente :',
-    ...(waitingPlayers.length ? waitingPlayers.map((player) => `${player.nom} ${player.prenom || ''}`.trim()) : ['']),
     '# Mobil :',
     '',
     '# TPE :',
