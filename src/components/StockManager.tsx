@@ -642,7 +642,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   };
 
   const handlePrintAllOrders = () => {
-    const printWindow = window.open('', '_blank', 'width=760,height=720');
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
     if (!printWindow) return;
 
     const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
@@ -732,14 +732,14 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const paidOrders = allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || ''));
     const ticketLines = allOrders.reduce((sum, order) => sum + (order.items || []).length, 0);
     const report = `<h1>Partial Cash Report</h1><p>Module : ${escapeHtml(moduleLabel)}</p><p>Cashier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}<br>Sequence : ${allOrders.length}<br>Start Date : ${escapeHtml(startDate)}<br>End Date : ${escapeHtml(generatedAt)}</p><div class="separator"></div><h2>Sales</h2><div class="row four head"><span>Name</span><span>Sold</span><span>Net</span><span>Total</span></div>${salesRows || '<p>Aucune vente.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Product Categories</h2><div class="row three head"><span>Category</span><span>Sold</span><span>Total</span></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Lines Removed</h2><div class="row two"><span>${escapeHtml(connectedCashier)}</span><span>${formatCurrency(0)}</span></div><h2>Taxes</h2><div class="row two"><span>Tax Exempt</span><span>${formatCurrency(0)}</span></div><h2>Payments</h2><div class="row two head"><span>Type</span><span>Total</span></div>${paymentRows}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>SUMMARY</h2><div class="row two"><span>Tickets</span><span>${allOrders.length}</span></div><div class="row two"><span>Ticket Lines</span><span>${ticketLines}</span></div><div class="row two"><span>Payments</span><span>${paidOrders.length}</span></div><div class="row two"><span>Net Sales</span><span>${formatCurrency(total)}</span></div><div class="row two"><span>Tax</span><span>${formatCurrency(0)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:2mm}body{font-family:monospace;width:76mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.four{grid-template-columns:minmax(0,1fr) 7ch 12ch 12ch;column-gap:7px}.row.four span:not(:first-child){white-space:nowrap}.row.three{grid-template-columns:minmax(0,1fr) 28px 60px}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:not(:first-child){text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.four{grid-template-columns:minmax(0,1fr) 7ch 12ch 12ch;column-gap:7px}.row.four span:not(:first-child){white-space:nowrap}.row.three{grid-template-columns:minmax(0,1fr) 28px 60px}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:not(:first-child){text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
   };
 
   const handlePrintCloseReport = (closedFund?: number) => {
-    const printWindow = window.open('', '_blank', 'width=760,height=720');
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
     if (!printWindow) return;
 
     const paidOrders = allOrders.filter((order) => order.statut === 'Encaissée');

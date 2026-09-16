@@ -343,7 +343,7 @@ export const BarCommandeView: React.FC<Props> = ({
   } as Record<string, string>)[char] || char);
 
   const handlePrintCommande = (commande: BarCommande) => {
-    const printWindow = window.open('', '_blank', 'width=720,height=640');
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
     if (!printWindow) {
       setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
       return;
@@ -354,7 +354,7 @@ export const BarCommandeView: React.FC<Props> = ({
       <tr><td>${escapePrintHtml(item.nom)}</td><td class="number">${item.quantite}</td><td class="number">${formatCurrency(item.prix)}</td><td class="number">${formatCurrency(item.prix * item.quantite)}</td></tr>`).join('');
 
     printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Commande #${commande.id}</title><style>
-      body { font-family: Arial, sans-serif; color: #111; margin: 32px; } h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 4px 0; } table { width: 100%; border-collapse: collapse; margin-top: 24px; } th, td { padding: 9px 4px; border-bottom: 1px solid #ddd; text-align: left; } .number { text-align: right; } .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 16px; } .muted { color: #555; font-size: 12px; } @media print { body { margin: 12px; } }
+      @page { size: 80mm auto; margin: 4mm; } body { width: 72mm; margin: 0; font-family: monospace; color: #111; font-size: 10px; line-height: 1.3; } h1 { margin: 0 0 8px; text-align: center; font-size: 14px; } p { margin: 3px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; } th, td { padding: 3px 1px; border-bottom: 1px dashed #999; text-align: left; overflow-wrap: anywhere; } th:first-child, td:first-child { width: 42%; } th:nth-child(2), td:nth-child(2) { width: 12%; } th:nth-child(3), td:nth-child(3) { width: 23%; } th:last-child, td:last-child { width: 23%; } .number { text-align: right; } .total { margin-top: 10px; padding-top: 6px; border-top: 1px solid #111; font-size: 14px; font-weight: bold; text-align: right; } .muted { color: #555; font-size: 9px; } @media print { body { width: 72mm; } }
     </style></head><body><h1>Commande Bar #${commande.id}</h1><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
     printWindow.document.close();
     printWindow.focus();
