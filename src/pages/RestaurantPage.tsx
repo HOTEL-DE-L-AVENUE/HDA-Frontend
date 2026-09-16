@@ -324,7 +324,7 @@ export const RestaurantPage: React.FC = () => {
         const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
         const blobUrl = URL.createObjectURL(blob);
 
-        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        const printWindow = window.open('', '_blank', 'width=420,height=720');
         if (!printWindow) {
           const a = document.createElement('a');
           a.href = blobUrl;
@@ -346,7 +346,7 @@ export const RestaurantPage: React.FC = () => {
 
       try {
         const html = await restaurantService.getInvoiceHtml(numericId as number);
-        const printWindow = window.open('', '_blank', 'width=720,height=640');
+        const printWindow = window.open('', '_blank', 'width=420,height=720');
         if (!printWindow) return alert('Impossible d\'ouvrir une nouvelle fenêtre');
         const autoPrintHtml = html + `<script>window.onload=function(){setTimeout(()=>{window.focus();window.print();},300)}<\/script>`;
         printWindow.document.open();
