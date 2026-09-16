@@ -157,12 +157,12 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             {mobileDisplay ? <CalculationResult value={mobileDisplay} /> : <CalculationInput value={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} />}
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
-            <CalculationInput value={values.autres} onChange={(value) => onUpdate('autres', value)} />
+            <CalculationInput value={values.autres} inputMode="text" onChange={(value) => onUpdate('autres', value)} />
             <CalculationCell label="TOTAL BONUS" separated />
             {bonusResults ? <CalculationResult value={bonusResults} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
-            <CalculationInput value={values.restaurant} onChange={(value) => onUpdate('restaurant', value)} />
+            <CalculationInput value={values.restaurant} inputMode="text" onChange={(value) => onUpdate('restaurant', value)} />
             <CalculationCell label="TOTAL OFFERT" separated />
             {paidCaveOffertResults ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => onUpdate('offert', value)} />}
 
