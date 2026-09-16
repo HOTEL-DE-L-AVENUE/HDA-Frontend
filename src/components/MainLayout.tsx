@@ -13,7 +13,7 @@ export default function MainLayout() {
       <div className="md:ml-[72px] w-full md:w-[calc(100%-72px)] min-h-screen">
         <Header />
 
-        <main className="p-4 md:p-6 lg:p-8">
+        <main className="p-4 pb-28 md:p-6 md:pb-6 lg:p-8">
           <Outlet />
         </main>
       </div>
