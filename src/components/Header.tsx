@@ -1,6 +1,6 @@
 // src/components/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, ChevronRight, X, LogOut, User, Settings, ChevronDown, RefreshCw } from 'lucide-react';
+import { Bell, ChevronRight, X, LogOut, User, Settings, ChevronDown, RefreshCw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthService from '../services/authService'; // ← Import du service
 import { useHDA } from '../context/HDAContext'; // Gardé uniquement pour les notifications
@@ -49,7 +49,6 @@ export const Header: React.FC = () => {
 
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const notifRef = useRef<HTMLDivElement>(null);
@@ -167,34 +166,7 @@ export const Header: React.FC = () => {
         </span>
       </div>
 
-      {/* Search - Desktop */}
-      <div className="hidden md:flex items-center flex-1 max-w-xs">
-        <div className="relative w-full">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            placeholder="Rechercher..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-xl text-primary placeholder-subtle text-sm transition-all"
-            style={{
-              backgroundColor: 'var(--color-surface-2)',
-              border: '1px solid var(--color-border)',
-              outline: 'none',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-accent)';
-              e.currentTarget.style.backgroundColor = 'var(--color-surface)';
-              e.currentTarget.style.boxShadow = '0 0 0 3px var(--color-accent-4)';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-border)';
-              e.currentTarget.style.backgroundColor = 'var(--color-surface-2)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          />
-        </div>
-      </div>
+
 
       {/* Actions */}
       <div className="flex items-center gap-2 flex-shrink-0">
