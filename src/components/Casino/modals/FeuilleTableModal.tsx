@@ -211,7 +211,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
                           src={l.signature_data}
                           alt="Signature"
                           className="inline-block h-6 max-w-[80px] object-contain"
-                          style={{ filter: 'invert(0)' }}
+                          style={{ filter: 'invert(1)' }}
                         />
                       ) : (
                         <Badge tone={l.signature_presente ? 'success' : 'danger'}>
@@ -263,6 +263,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
                             src={p.signature_data}
                             alt="Signature"
                             className="inline-block h-6 max-w-[80px] object-contain"
+                            style={{ filter: 'invert(1)' }}
                           />
                         ) : (
                           <Badge tone={p.signature_presente ? 'success' : 'danger'}>
