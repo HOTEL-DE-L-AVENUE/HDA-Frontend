@@ -30,6 +30,18 @@ interface PlayersSheetProps {
 
 const paperInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
 const darkInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-white outline-none placeholder:text-gray-400';
+const formatCompactAmount = (value: number) => {
+  const absoluteValue = Math.abs(value);
+  if (absoluteValue >= 1_000_000) {
+    const millions = value / 1_000_000;
+    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`;
+  }
+  if (absoluteValue >= 1_000) {
+    const thousands = value / 1_000;
+    return `${Number.isInteger(thousands) ? thousands : thousands.toFixed(1)}K`;
+  }
+  return casinoCurrency.format(value);
+};
 const sheetActionPrimary = 'action inline-flex min-h-10 items-center justify-center rounded-xl px-4 py-2 text-xs font-bold shadow-lg shadow-amber-500/10 transition duration-200 hover:-translate-y-0.5 hover:shadow-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-50';
 const sheetActionSecondary = 'action secondary inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-xs font-bold transition duration-200 hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-300/10 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-50';
 const paymentMethods = ['Espèces', 'Orange Money', 'MVola', 'Euro', 'Dollar', 'TPE', 'Chèque', 'Offert', 'Virement', 'Crédit'];
@@ -494,7 +506,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
               <td className="border" style={casinoBorder}><input type="time" className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} disabled={!isAdmin} /></td>
-              <td className="border" style={casinoBorder}><input className={paperInput} value={totalsByLineId[line.id] ? String(totalsByLineId[line.id]) : '0'} readOnly /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={totalsByLineId[line.id] ? formatCompactAmount(totalsByLineId[line.id]) : '0'} readOnly /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={isEmptyCaveLine ? '' : accumulatedByLineId[line.id] || '0'} readOnly /></td>
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Payé'} onChange={() => onUpdate(line.id, 'payment', 'Payé')} disabled={!isAdmin} /></td>
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} disabled={!isAdmin} /></td>
@@ -524,9 +536,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
 
     <div className="mt-4 grid md:grid-cols-[1.15fr_1fr_1.15fr] border text-white" style={{ ...casinoBorder, backgroundColor: 'var(--color-surface)' }}>
       <div className="border-r" style={casinoBorder}>
-        <SheetBottomRow label="TOTAL CAVEES :" value={casinoCurrency.format(selectedPlayerTotal)} />
-        <SheetBottomRow label="TOTAL CASHING EN JETONS" value={casinoCurrency.format(selectedPlayerCashing)} />
-        <SheetBottomRow label="RESULTAT :" value={casinoCurrency.format(selectedPlayerResult)} />
+        <SheetBottomRow label="TOTAL CAVEES :" value={formatCompactAmount(selectedPlayerTotal)} />
+        <SheetBottomRow label="TOTAL CASHING EN JETONS" value={formatCompactAmount(selectedPlayerCashing)} />
+        <SheetBottomRow label="RESULTAT :" value={formatCompactAmount(selectedPlayerResult)} />
         {resultOptions.length > 0 && (
           <div className="border-b p-3" style={casinoBorder}>
             <p className="mb-2 text-[10px] font-semibold">{selectedPlayerResult > 0 ? 'RÈGLEMENT DU DÉPÔT' : 'RÈGLEMENT DU CRÉDIT'}</p>

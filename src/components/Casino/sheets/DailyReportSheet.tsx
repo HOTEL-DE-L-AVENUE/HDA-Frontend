@@ -18,7 +18,18 @@ const uniquePlayers = (players: PlayerLine[]) => players.filter((player, index, 
   lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index
 );
 
-const formatAmount = (value: number) => `${casinoCurrency.format(value)} Ar`;
+const formatAmount = (value: number) => {
+  const absoluteValue = Math.abs(value);
+  if (absoluteValue >= 1_000_000) {
+    const millions = value / 1_000_000;
+    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M Ar`;
+  }
+  if (absoluteValue >= 1_000) {
+    const thousands = value / 1_000;
+    return `${Number.isInteger(thousands) ? thousands : thousands.toFixed(1)}K Ar`;
+  }
+  return `${casinoCurrency.format(value)} Ar`;
+};
 
 const isSamePlayer = (first: PlayerLine, second: PlayerLine) =>
   (first.ficheId ?? first.id) === (second.ficheId ?? second.id)
@@ -55,6 +66,8 @@ const parsePaymentOptions = (value?: string): Array<{ option: string; amount: nu
 
 const paymentCategory = (option: string) => {
   const normalized = option.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (normalized.includes('depot') && normalized.includes('paye')) return 'Dépôt payé';
+  if (normalized.includes('credit') && normalized.includes('paye')) return 'Crédit payé';
   if (normalized.includes('tpe')) return 'TPE';
   if (normalized.includes('orange')) return 'Orange Money';
   if (normalized.includes('mvola')) return 'MVola';
@@ -80,8 +93,9 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
   const paymentDetails = new Map<string, string[]>();
   reportPlayers.forEach((player) => {
     const result = playerResult(player, players);
-    const payments = parsePaymentOptions(player.resultPaymentOptions);
-    payments.forEach((payment) => {
+    const payments = getPlayerLines(player, players).flatMap((line) => parsePaymentOptions(line.resultPaymentOptions));
+    const uniquePayments = [...new Map(payments.map((payment) => [payment.option, payment])).values()];
+    uniquePayments.forEach((payment) => {
       const category = paymentCategory(payment.option);
       const amount = payment.amount > 0 ? payment.amount : Math.abs(result);
       if (!amount) return;
@@ -92,10 +106,9 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
       paymentDetails.set(category, entries);
     });
   });
-  const paymentSection = (category: string) => [
-    `# ${category} :`,
-    ...(paymentDetails.get(category) || ['']),
-  ];
+  const paymentSection = (category: string) => paymentDetails.has(category)
+    ? [`# ${category} :`, ...(paymentDetails.get(category) || [])]
+    : [];
   const finalValues = (key: string) => Object.values(finals)
     .map((values) => ({ values, amount: parseCasinoAmount(values?.[key]) }))
     .filter(({ amount }) => amount > 0)
@@ -123,18 +136,17 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     ...paymentSection('Orange Money'),
     ...paymentSection('MVola'),
     ...paymentSection('Crédit'),
+    ...paymentSection('Crédit payé'),
     ...paymentSection('Dépôt'),
+    ...paymentSection('Dépôt payé'),
+    ...paymentSection('Offert'),
+    ...paymentSection('Chèque'),
+    ...paymentSection('Virement'),
     '',
-    '# Offert :', '',
     '# Bonus :',
     ...listedPlayers.flatMap((player) => player.bonuses ? [`${player.name} : ${player.bonuses}`] : []),
     '',
     '# Euro / Dollars :', '',
-    '# Chèque :', '',
-    '# Crédit :', finalValue('credit'),
-    '# Crédit payé :', '',
-    '# Dépôt :', finalValue('depot'),
-    '# Dépôt payé :', '',
     '# Bar et Resto :',
     ...(restaurantPayments.especes ? ['Espèces'] : []),
     ...(restaurantPayments.tpe ? ['TPE'] : []),
