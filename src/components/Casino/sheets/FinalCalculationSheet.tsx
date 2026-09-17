@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { PlayerLine } from './types';
 
@@ -323,7 +324,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         {isFinished && <span className="text-xs text-green-700">Jeu terminé</span>}
         {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
         {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
-        <button type="button" className="action" onClick={() => onSave()} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}</button>
+        <button type="button" className="action inline-flex items-center gap-2" onClick={() => onSave()} disabled={saveState === 'saving'}>
+          {saveState === 'saving' && <Loader2 className="h-4 w-4 animate-spin" />}
+          {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}
+        </button>
         <button type="button" className="action secondary" onClick={() => setPaymentConfirmationOpen(true)} disabled={saveState === 'saving' || activePlayers.length === 0}>Paiement dépôt / crédit</button>
         {canFinish && <button type="button" className="action secondary" onClick={onFinish} disabled={isFinished || isFinishing || saveState === 'saving'}>{isFinishing ? 'Clôture...' : isFinished ? 'Jeu terminé' : 'Fin de jeu'}</button>}
       </div>
