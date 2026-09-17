@@ -162,7 +162,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             {tpeDisplay ? <CalculationResult value={tpeDisplay} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
 
             <CalculationCell label="TOTAL POURBOIRES" />
-            <CalculationInput value={values.pourboires} onChange={(value) => onUpdate('pourboires', value)} />
+            <CalculationInput value={values.pourboires} inputMode="text" onChange={(value) => onUpdate('pourboires', value)} />
             <BlankCell separated />
             <BlankCell />
 
