@@ -115,6 +115,14 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     .map(({ values, amount }) => `${formatAmount(amount)}${values?.name ? ` (${values.name})` : ''}`)
     .join(' - ');
   const finalValue = (key: string) => finalValues(key);
+  const observationEntries = Object.entries(finals)
+    .filter(([key]) => key !== '_global')
+    .map(([, values]) => {
+      const text = String(values?.observation ?? '').trim();
+      if (!text) return null;
+      return text;
+    })
+    .filter(Boolean) as string[];
   const lines = [
     `Rapport du ${date.split('-').reverse().join('/')}`,
     '',
@@ -145,6 +153,9 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     '',
     '# Bonus :',
     ...listedPlayers.flatMap((player) => player.bonuses ? [`${player.name} : ${player.bonuses}`] : []),
+    '',
+    '# Observation :',
+    ...(observationEntries.length ? observationEntries : ['Aucune observation.']),
     '',
     '# Euro / Dollars :', '',
     '# Bar et Resto :',

@@ -91,9 +91,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
-  const mobileDisplay = [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
   const creditDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
   const offertDisplay = paidCaveOffertResults || values.offert;
+  const mobileManualTotal = parseCasinoAmount(values.mobiles);
+  const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -105,7 +106,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + creditPaidTotal;
   const automaticTotal2 = (tpeResults ? tpePaymentsTotal : parseCasinoAmount(values.tpe))
     + paidCaveTpeTotal
-    + (mobilePaymentResults ? mobilePaymentsTotal : parseCasinoAmount(values.mobiles))
+    + mobileCalculatedTotal
     + paidCaveMobileTotal
     + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
     + (creditResults ? creditPaymentsTotal : parseCasinoAmount(values.credit))
@@ -162,22 +163,92 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             {tpeDisplay ? <CalculationResult value={tpeDisplay} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
 
             <CalculationCell label="TOTAL POURBOIRES" />
-            <CalculationInput value={values.pourboires} inputMode="text" onChange={(value) => onUpdate('pourboires', value)} />
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              value={values.pourboires || ''}
+              rows={3}
+              onChange={(event) => onUpdate('pourboires', event.target.value)}
+            />
             <BlankCell separated />
             <BlankCell />
 
             <CalculationCell label="TOTAL PROLONGATION" />
-            <CalculationInput value={values.prolongation} onChange={(value) => onUpdate('prolongation', value)} />
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              value={values.prolongation || ''}
+              rows={3}
+              onChange={(event) => onUpdate('prolongation', event.target.value)}
+            />
             <CalculationCell label="TOTAL MOBILES" separated />
-            {mobileDisplay ? <CalculationResult value={mobileDisplay} /> : <CalculationInput value={values.mobiles} inputMode="text" multiline rows={3} onChange={(value) => onUpdate('mobiles', value)} />}
+            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
+              <div className="mb-2 rounded border border-dashed px-2 py-1 text-[11px] font-bold text-yellow-300" style={casinoBorder}>
+                {mobilePaymentResults ? mobilePaymentResults.split('\n').map((line, index) => (
+                  <div key={`${line}-${index}`}>{line}</div>
+                )) : <div>{casinoCurrency.format(mobilePaymentsTotal || 0)} Ar</div>}
+              </div>
+              <textarea
+                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                style={casinoBorder}
+                inputMode="text"
+                rows={3}
+                value={values.mobiles || ''}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.shiftKey) return;
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const text = textarea.value;
+                  const cursorIndex = textarea.selectionStart ?? text.length;
+                  const before = text.slice(0, cursorIndex);
+                  const after = text.slice(cursorIndex);
+                  onUpdate('mobiles', `${before}\n${after}`);
+                  requestAnimationFrame(() => {
+                    textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
+                  });
+                }}
+                onChange={(event) => onUpdate('mobiles', event.target.value)}
+              />
+            </div>
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
-            <CalculationInput value={values.autres} inputMode="text" multiline rows={3} onChange={(value) => onUpdate('autres', value)} />
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              value={values.autres || ''}
+              rows={3}
+              onChange={(event) => onUpdate('autres', event.target.value)}
+            />
             <CalculationCell label="TOTAL BONUS" separated />
             {bonusResults ? <CalculationResult value={bonusResults} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
-            <CalculationInput value={values.restaurant} inputMode="text" multiline rows={3} onChange={(value) => onUpdate('restaurant', value)} />
+            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
+              <textarea
+                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                style={casinoBorder}
+                inputMode="text"
+                rows={3}
+                value={values.restaurant || ''}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.shiftKey) return;
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const text = textarea.value;
+                  const cursorIndex = textarea.selectionStart ?? text.length;
+                  const before = text.slice(0, cursorIndex);
+                  const after = text.slice(cursorIndex);
+                  onUpdate('restaurant', `${before}\n${after}`);
+                  requestAnimationFrame(() => {
+                    textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
+                  });
+                }}
+                onChange={(event) => onUpdate('restaurant', event.target.value)}
+              />
+            </div>
             <CalculationCell label="TOTAL OFFERT" separated />
             {paidCaveOffertResults ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => onUpdate('offert', value)} />}
 
@@ -227,10 +298,22 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               <BlankBottomRow />
               <BlankBottomRow />
             </div>
-            <label className="p-3 min-h-36 flex flex-col gap-2 text-xs font-semibold">
-              Signature Responsable
-              <TouchSignature value={values.signature || ''} onChange={(value) => onUpdate('signature', value)} />
-            </label>
+            <div className="flex min-h-36 flex-col gap-3 p-3 text-xs font-semibold">
+              <label className="flex flex-col gap-2">
+                Observation
+                <textarea
+                  className="min-h-[80px] w-full resize-y rounded border bg-transparent px-2 py-2 text-xs text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                  style={casinoBorder}
+                  value={values.observation || ''}
+                  onChange={(event) => onUpdate('observation', event.target.value)}
+                  placeholder="Observation sur le calcul final"
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                Signature Responsable
+                <TouchSignature value={values.signature || ''} onChange={(value) => onUpdate('signature', value)} />
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -315,6 +398,16 @@ const CalculationInput: React.FC<{ value?: string; onChange?: (value: string) =>
         value={value}
         readOnly={readOnly}
         rows={rows}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' || event.shiftKey || readOnly) return;
+          event.preventDefault();
+          const nextValue = value ? `${value}\n. ` : '. ';
+          onChange?.(nextValue);
+          requestAnimationFrame(() => {
+            const textarea = event.currentTarget;
+            textarea.selectionStart = textarea.selectionEnd = nextValue.length;
+          });
+        }}
         onChange={(event) => onChange?.(event.target.value)}
       />
     );

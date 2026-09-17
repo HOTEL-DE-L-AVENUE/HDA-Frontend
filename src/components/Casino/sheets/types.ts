@@ -67,6 +67,43 @@ export const casinoBorder = { borderColor: 'var(--color-border)' };
 export const casinoInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text-primary outline-none placeholder:text-muted';
 export const IDENTITY_VERIFICATION_THRESHOLD = 3_000_000;
 
+const normalizeListAmountToken = (token: string): number => {
+  const cleaned = token.replace(/[•·▪◆]/g, '').replace(/\s+/g, '').trim();
+  if (!cleaned) return 0;
+
+  const digits = cleaned.replace(/[^\d,.-]/g, '');
+  if (!digits) return 0;
+
+  if (digits.includes(',') && digits.includes('.')) {
+    const lastComma = digits.lastIndexOf(',');
+    const lastDot = digits.lastIndexOf('.');
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    return Number(decimalSeparator === ','
+      ? digits.replace(/\./g, '').replace(',', '.')
+      : digits.replace(/,/g, ''));
+  }
+
+  if (digits.includes(',')) {
+    const lastComma = digits.lastIndexOf(',');
+    const decimals = digits.slice(lastComma + 1);
+    if (decimals.length === 3 && /\d{1,3}(?:[.,]\d{3})+/.test(digits)) {
+      return Number(digits.replace(/,/g, ''));
+    }
+    return Number(digits.replace(',', '.'));
+  }
+
+  if (digits.includes('.')) {
+    const lastDot = digits.lastIndexOf('.');
+    const decimals = digits.slice(lastDot + 1);
+    if (decimals.length === 3 && /\d{1,3}(?:[.,]\d{3})+/.test(digits)) {
+      return Number(digits.replace(/\./g, ''));
+    }
+    return Number(digits);
+  }
+
+  return Number(digits);
+};
+
 export const parseCasinoAmount = (value: string | number | null | undefined): number => {
   const text = String(value ?? '').trim();
   if (!text) return 0;
@@ -79,12 +116,9 @@ export const parseCasinoAmount = (value: string | number | null | undefined): nu
   if (!lines.length) return 0;
 
   return lines.reduce((total, line) => {
-    const compact = line.replace(/\s/g, '');
-    const normalized = compact.includes(',')
-      ? compact.replace(/\./g, '').replace(',', '.')
-      : compact;
-    const amount = Number(normalized.replace(/[^\d.-]/g, ''));
-    return total + (Number.isFinite(amount) ? amount : 0);
+    const tokens = line.match(/-?\d{1,3}(?:[.,\s]\d{3})+|-?\d+(?:[.,]\d+)?/g) ?? [line];
+    const amount = tokens.reduce((sum, token) => sum + normalizeListAmountToken(token), 0);
+    return total + amount;
   }, 0);
 };
 
