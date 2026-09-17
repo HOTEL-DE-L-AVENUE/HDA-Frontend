@@ -12,7 +12,6 @@ import {
   ClipboardList,
   Hammer,
   Brush,
-  GlassWater,
   LucideIcon,
   Plus,
   BedDouble,
@@ -35,7 +34,6 @@ import { formatCurrency, formatDate } from '../utils/data';
 import { RoomList } from '../components/Hotel/HotelRoomList';
 import { ReservationList } from '../components/Hotel/HotellReservationList';
 import { EquipmentManager } from '../components/Hotel/HotelEquipmentManager';
-import { MinibarManager } from '../components/Hotel/HotelMinibarManager';
 import { MaintenanceManager } from '../components/Hotel/HotelMaintenanceManager';
 import { HousekeepingManager } from '../components/Hotel/HotelHousekeepingManager';
 import { ClientSearch } from '../components/Hotel/ClientSearch';
@@ -64,7 +62,6 @@ const tabs: Tab[] = [
   { id: 'equipements', label: 'Équipements', icon: Sparkles, mobileLabel: 'Équip.' },
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
-  { id: 'minibar', label: 'Mini-bar', icon: GlassWater, mobileLabel: 'Mini-bar' },
   { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
 ];
@@ -410,14 +407,6 @@ const HotelPage: React.FC = () => {
                 setDataRefreshKey((prev) => prev + 1);
                 setActiveTab('chambres');
               }}
-            />
-          </div>
-        )}
-        {activeTab === 'minibar' && (
-          <div className="overflow-x-auto">
-            <MinibarManager
-              rooms={safeRooms as any}
-              products={safeProducts as any}
             />
           </div>
         )}

@@ -24,6 +24,7 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
     updateEquipment,
     deleteEquipment,
     assignEquipment,
+    updateRoomEquipment,
     deleteRoomEquipment
   } = useEquipment();
 
@@ -81,18 +82,56 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
     }
   };
 
+  const groupedRoomEquipments = React.useMemo(() => {
+    const map = new Map<string, RoomEquipment>();
+
+    for (const item of roomEquipments) {
+      const normalizedZone = item.zone || 'CHAMBRE';
+      const key = `${item.room_id}:${item.equipment_id}:${normalizedZone}`;
+      const existing = map.get(key);
+
+      if (existing) {
+        map.set(key, {
+          ...existing,
+          quantite: Number(existing.quantite || 0) + Number(item.quantite || 0),
+          statut: existing.statut || item.statut || 'BON',
+        });
+      } else {
+        map.set(key, { ...item, zone: normalizedZone, quantite: Number(item.quantite || 0) });
+      }
+    }
+
+    return map;
+  }, [roomEquipments]);
+
   // Gestion de l'assignation
   const handleAssign = async (roomId: number, quantity: number, zone: 'CHAMBRE' | 'SALLE_DE_BAIN') => {
     if (!selectedEquipment) return;
-    
+
     try {
-      await assignEquipment({
-        room_id: roomId,
-        equipment_id: selectedEquipment.id,
-        quantite: quantity,
-        zone,
-        statut: 'BON'
+      const existing = roomEquipments.find((item) => {
+        return item.room_id === roomId && item.equipment_id === selectedEquipment.id && (item.zone || 'CHAMBRE') === zone;
       });
+
+      if (existing) {
+        const nextQuantity = Number(existing.quantite || 0) + Number(quantity || 0);
+        await updateRoomEquipment(existing.id, {
+          room_id: roomId,
+          equipment_id: selectedEquipment.id,
+          quantite: nextQuantity,
+          zone,
+          statut: existing.statut || 'BON'
+        });
+      } else {
+        await assignEquipment({
+          room_id: roomId,
+          equipment_id: selectedEquipment.id,
+          quantite: quantity,
+          zone,
+          statut: 'BON'
+        });
+      }
+
       toast.success('Équipement assigné avec succès');
       setIsAssignModalOpen(false);
       setSelectedEquipment(null);
@@ -147,173 +186,247 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-surface border border-base rounded-xl p-4">
-        <label className="block text-sm font-medium text-primary mb-2">Voir les équipements par chambre</label>
-        <select value={selectedRoomId} onChange={(e) => setSelectedRoomId(e.target.value ? Number(e.target.value) : '')} className="input-field w-full md:max-w-sm">
-          <option value="">Sélectionner une chambre</option>
-          {rooms.map(room => <option key={room.id} value={room.id}>Chambre {room.numero}</option>)}
-        </select>
+    <div className="space-y-6 text-white">
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-4 shadow-soft-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex-1">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300">Inventaire hôtel</p>
+            <h3 className="text-xl font-bold text-white">Gestion des équipements</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingEquipment(null);
+              setIsEquipmentModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/20 transition hover:bg-amber-300"
+          >
+            <Plus size={18} />
+            Nouvel équipement
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_2fr] lg:items-end">
+          <div>
+            <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+              Afficher par chambre
+            </label>
+            <select
+              value={selectedRoomId}
+              onChange={(e) => setSelectedRoomId(e.target.value ? Number(e.target.value) : '')}
+              className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-400/70"
+            >
+              <option value="">Sélectionner une chambre</option>
+              {rooms.map(room => (
+                <option key={room.id} value={room.id}>Chambre {room.numero}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="flex min-w-[120px] flex-1 flex-col rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-blue-200/80">Total</span>
+              <strong className="mt-1 text-xl font-bold text-blue-300">{equipments.length}</strong>
+            </div>
+            <div className="flex min-w-[120px] flex-1 flex-col rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">Assignés</span>
+              <strong className="mt-1 text-xl font-bold text-emerald-300">{roomEquipments.length}</strong>
+            </div>
+            <div className="flex min-w-[120px] flex-1 flex-col rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-red-200/80">En panne</span>
+              <strong className="mt-1 text-xl font-bold text-red-300">
+                {roomEquipments.filter(re => re.statut === 'EN_PANNE').length || 0}
+              </strong>
+            </div>
+          </div>
+        </div>
+
         {selectedRoomId !== '' && (() => {
-          const assigned = roomEquipments.filter(item => item.room_id === selectedRoomId);
+          const assigned = Array.from(groupedRoomEquipments.values()).filter(item => item.room_id === selectedRoomId);
           const renderZone = (zone: 'CHAMBRE' | 'SALLE_DE_BAIN') => assigned.filter(item => (item.zone || 'CHAMBRE') === zone);
           return (
-            <div className="grid md:grid-cols-2 gap-4 mt-4">
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
               {(['CHAMBRE', 'SALLE_DE_BAIN'] as const).map(zone => (
-                <div key={zone} className="rounded-lg border border-base p-3">
-                  <h4 className="font-semibold text-primary mb-2">{zone === 'CHAMBRE' ? 'Chambre' : 'Salle de bain'}</h4>
-                  {renderZone(zone).length === 0 ? <p className="text-sm text-muted">Aucun équipement</p> : renderZone(zone).map(item => {
-                    const equipment = equipments.find(entry => entry.id === item.equipment_id);
-                    return <div key={item.id} className="flex justify-between text-sm py-1"><span>{equipment?.nom || `Équipement #${item.equipment_id}`}</span><span className="text-muted">x{item.quantite}</span></div>;
-                  })}
+                <div key={zone} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-300">
+                      {zone === 'CHAMBRE' ? 'Chambre' : 'Salle de bain'}
+                    </h4>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                      {renderZone(zone).length} élément{renderZone(zone).length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {renderZone(zone).length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-white/10 bg-slate-900/70 px-3 py-4 text-sm text-slate-400">
+                      Aucun équipement
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {renderZone(zone).map(item => {
+                        const equipment = equipments.find(entry => entry.id === item.equipment_id);
+                        return (
+                          <div
+                            key={`${item.room_id}-${item.equipment_id}-${item.zone || 'CHAMBRE'}`}
+                            className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm"
+                          >
+                            <span className="text-slate-200">
+                              {equipment?.nom || `Équipement #${item.equipment_id}`}
+                            </span>
+                            <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">
+                              x{item.quantite}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           );
         })()}
       </div>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-white font-semibold text-lg">🔧 Gestion des équipements</h3>
-          <p className="text-gray-400 text-sm">
-            {equipments.length} équipement{equipments.length > 1 ? 's' : ''} au total
-          </p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingEquipment(null);
-            setIsEquipmentModalOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-accent text-black rounded-xl hover:bg-accent-2 transition font-medium"
-        >
-          <Plus size={18} />
-          Nouvel équipement
-        </button>
-      </div>
 
-      {/* Statistiques */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 text-center">
-            <p className="text-gray-400 text-xs">Total équipements</p>
-            <p className="text-white font-bold text-xl">{stats.total || 0}</p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Total</p>
+            <p className="mt-2 text-2xl font-bold text-white">{stats.total || 0}</p>
           </div>
-          <div className="bg-blue-900/20 border border-blue-800/30 rounded-xl p-4 text-center">
-            <p className="text-gray-400 text-xs">Assignés</p>
-            <p className="text-blue-400 font-bold text-xl">{stats.assigned || 0}</p>
+          <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-blue-200/80">Assignés</p>
+            <p className="mt-2 text-2xl font-bold text-blue-300">{stats.assigned || 0}</p>
           </div>
-          <div className="bg-emerald-900/20 border border-emerald-800/30 rounded-xl p-4 text-center">
-            <p className="text-gray-400 text-xs">En bon état</p>
-            <p className="text-emerald-400 font-bold text-xl">
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">Bon état</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-300">
               {roomEquipments.filter(re => re.statut === 'BON').length || 0}
             </p>
           </div>
-          <div className="bg-red-900/20 border border-red-800/30 rounded-xl p-4 text-center">
-            <p className="text-gray-400 text-xs">En panne</p>
-            <p className="text-red-400 font-bold text-xl">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-red-200/80">En panne</p>
+            <p className="mt-2 text-2xl font-bold text-red-300">
               {roomEquipments.filter(re => re.statut === 'EN_PANNE').length || 0}
             </p>
           </div>
         </div>
       )}
 
-      {/* Liste des équipements */}
       {equipments.length === 0 ? (
-        <div className="text-center py-12 bg-gray-900/50 rounded-2xl border-2 border-gray-700">
-          <Wrench size={48} className="mx-auto text-gray-600 mb-4" />
-          <p className="text-gray-400">Aucun équipement trouvé</p>
+        <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 py-14 text-center">
+          <Wrench size={48} className="mx-auto mb-4 text-slate-500" />
+          <p className="text-lg font-semibold text-white">Aucun équipement trouvé</p>
+          <p className="mt-2 text-sm text-slate-400">Commencez par ajouter votre premier élément d’inventaire.</p>
           <button
+            type="button"
             onClick={() => {
               setEditingEquipment(null);
               setIsEquipmentModalOpen(true);
             }}
-            className="mt-3 text-accent text-sm hover:underline"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl border border-amber-400/60 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 transition hover:bg-amber-500/20"
           >
-            Ajouter votre premier équipement
+            <Plus size={16} />
+            Ajouter un équipement
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {equipments.map(eq => {
-            const assigned = roomEquipments.filter(re => re.equipment_id === eq.id);
+            const assigned = Array.from(groupedRoomEquipments.values()).filter(re => re.equipment_id === eq.id);
             const assignedCount = assigned.length;
-            
+
             return (
-              <div key={eq.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5 hover:border-accent/30 transition-all">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+              <div
+                key={eq.id}
+                className="group rounded-2xl border border-slate-700 bg-slate-900/80 p-5 shadow-soft-sm transition hover:-translate-y-0.5 hover:border-amber-400/50 hover:bg-slate-900"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-white font-semibold">{eq.nom}</h4>
+                      <h4 className="truncate text-base font-semibold text-white">{eq.nom}</h4>
                       {eq.code && (
-                        <span className="text-xs font-mono text-gray-500">#{eq.code}</span>
+                        <span className="rounded-full border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                          #{eq.code}
+                        </span>
                       )}
                     </div>
-                    <p className="text-gray-400 text-sm">
-                      {eq.categorie || 'Non catégorisé'}
-                    </p>
+                    <p className="mt-1 text-sm text-slate-400">{eq.categorie || 'Non catégorisé'}</p>
                     {eq.description && (
-                      <p className="text-gray-500 text-xs mt-1">{eq.description}</p>
+                      <p className="mt-2 line-clamp-2 text-xs text-slate-500">{eq.description}</p>
                     )}
                   </div>
-                  <div className="flex gap-1">
+
+                  <div className="flex shrink-0 gap-1.5">
                     <button
+                      type="button"
                       onClick={() => {
                         setSelectedEquipment(eq);
                         setIsAssignModalOpen(true);
                       }}
-                      className="p-1.5 hover:bg-green-500/10 rounded-lg transition"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 transition hover:bg-emerald-500/20"
                       title="Assigner à une chambre"
+                      aria-label="Assigner à une chambre"
                     >
-                      <Plus size={15} className="text-green-400" />
+                      <Plus size={16} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setEditingEquipment(eq);
                         setIsEquipmentModalOpen(true);
                       }}
-                      className="p-1.5 hover:bg-blue-500/10 rounded-lg transition"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 transition hover:bg-blue-500/20"
                       title="Modifier"
+                      aria-label="Modifier"
                     >
-                      <Edit size={15} className="text-blue-400" />
+                      <Edit size={16} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDeleteClick(eq)}
-                      className="p-1.5 hover:bg-red-500/10 rounded-lg transition"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 transition hover:bg-red-500/20"
                       title="Supprimer"
+                      aria-label="Supprimer"
                     >
-                      <Trash2 size={15} className="text-red-400" />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
-                
-                <div className="mt-3 pt-3 border-t border-gray-800">
-                  <p className="text-xs text-gray-500">
-                    Assigné à {assignedCount} chambre{assignedCount > 1 ? 's' : ''}
-                  </p>
-                  {assignedCount > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+
+                <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/70 p-3">
+                  <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
+                    <span>Chambres affectées</span>
+                    <span className="font-semibold text-slate-200">{assignedCount}</span>
+                  </div>
+
+                  {assignedCount > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
                       {assigned.slice(0, 3).map(re => {
                         const room = rooms.find(r => r.id === re.room_id);
                         return (
-                          <span 
-                            key={re.id} 
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                              re.statut === 'BON' ? 'bg-emerald-500/20 text-emerald-400' :
-                              re.statut === 'EN_PANNE' ? 'bg-red-500/20 text-red-400' :
-                              'bg-gray-500/20 text-gray-400'
+                          <span
+                            key={`${re.room_id}-${re.equipment_id}-${re.zone || 'CHAMBRE'}`}
+                            className={`rounded-full px-2 py-1 text-[10px] font-medium ${
+                              re.statut === 'BON'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : re.statut === 'EN_PANNE'
+                                ? 'bg-red-500/20 text-red-300'
+                                : 'bg-slate-700 text-slate-300'
                             }`}
                           >
-                            {room?.numero || `#${re.room_id}`}
+                            {room?.numero || `#${re.room_id}`} {re.quantite > 1 ? `×${re.quantite}` : ''}
                           </span>
                         );
                       })}
                       {assignedCount > 3 && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-800 text-gray-400">
+                        <span className="rounded-full bg-slate-700 px-2 py-1 text-[10px] font-medium text-slate-300">
                           +{assignedCount - 3}
                         </span>
                       )}
                     </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Aucune chambre affectée</p>
                   )}
                 </div>
               </div>
