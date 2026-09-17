@@ -80,6 +80,51 @@ const paymentCategory = (option: string) => {
   return option;
 };
 
+const getPlayerResult = (player: PlayerLine, players: PlayerLine[]) => {
+  const playerLines = getPlayerLines(player, players);
+  const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+  const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+  return cashing - totalCaves;
+};
+
+const getNegativePaymentTotal = (players: PlayerLine[], ...methods: string[]): number => players
+  .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+  .reduce((total, player) => {
+    const playerId = player.ficheId ?? player.id;
+    const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+    const result = getPlayerResult(player, players);
+    const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
+    if (result >= 0 || (!payments.length && !methods.includes('Dépôt payé'))) return total;
+    const amount = payments.some((payment) => payment.amount > 0)
+      ? payments.reduce((sum, payment) => sum + payment.amount, 0)
+      : Math.abs(result);
+    return total + amount;
+  }, 0);
+
+const getPositivePaymentTotal = (players: PlayerLine[], ...methods: string[]): number => players
+  .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+  .reduce((total, player) => {
+    const result = getPlayerResult(player, players);
+    const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
+    if (result <= 0 || !payments.length) return total;
+    return total + payments.reduce((sum, payment) => sum + (payment.amount || result), 0);
+  }, 0);
+
+const getPaidCavePaymentTotal = (players: PlayerLine[], methods?: string[]): number => players.reduce((total, line) => {
+  const method = line.paymentMethod.trim();
+  const amount = parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount);
+  const isPaid = String(line.payment || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().startsWith('pay');
+  if (!isPaid || !method || amount <= 0 || (methods && !methods.includes(method))) return total;
+  return total + amount;
+}, 0);
+
+const readFinalCategoryValue = (finals: Record<string, Record<string, string>>, key: string, fallback: number) => {
+  const explicitValue = Object.values(finals)
+    .map((values) => parseCasinoAmount(values?.[key]))
+    .reduce((sum, amount) => sum + amount, 0);
+  return explicitValue > 0 ? explicitValue : fallback;
+};
+
 export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
   const reportPlayers = uniquePlayers(players).filter((player) => player.name.trim() || playerAmount(player, players) > 0);
   const listedPlayers = reportPlayers.filter((player) => !playerHasFinalSignature(player, players));
@@ -115,6 +160,13 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     .map(({ values, amount }) => `${formatAmount(amount)}${values?.name ? ` (${values.name})` : ''}`)
     .join(' - ');
   const finalValue = (key: string) => finalValues(key);
+  const finalCategoryValue = (key: string, fallback = '0') => {
+    const value = finalValue(key);
+    return value || fallback;
+  };
+  const euroDollarValue = [finalCategoryValue('euro', '0'), finalCategoryValue('dollar', '0')]
+    .filter((value) => value !== '0')
+    .join(' / ') || '0';
   const observationEntries = Object.entries(finals)
     .filter(([key]) => key !== '_global')
     .map(([, values]) => {
@@ -123,6 +175,38 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
       return text;
     })
     .filter(Boolean) as string[];
+  const tpeReportTotal = readFinalCategoryValue(finals, 'tpe', getNegativePaymentTotal(players, 'TPE'));
+  const creditReportTotal = readFinalCategoryValue(finals, 'credit', getNegativePaymentTotal(players, 'Crédit'));
+  const creditPaidReportTotal = readFinalCategoryValue(finals, 'creditPaye', getPositivePaymentTotal(players, 'Crédit payé'));
+  const depotReportTotal = readFinalCategoryValue(finals, 'depot', getPositivePaymentTotal(players, 'Dépôt'));
+  const depotPaidReportTotal = readFinalCategoryValue(finals, 'depotPaye', getNegativePaymentTotal(players, 'Dépôt payé'));
+  const offeredReportTotal = readFinalCategoryValue(finals, 'offert', getPaidCavePaymentTotal(players, ['Offert']));
+  const bonusReportTotal = readFinalCategoryValue(finals, 'bonus', 0);
+  const mobileReportTotal = readFinalCategoryValue(finals, 'mobiles', 0);
+  const restaurantReportTotal = readFinalCategoryValue(finals, 'restaurant', 0);
+  const prolongationReportTotal = readFinalCategoryValue(finals, 'prolongation', 0);
+  const pourboiresReportTotal = readFinalCategoryValue(finals, 'pourboires', 0);
+  const otherRetraitTotal = readFinalCategoryValue(finals, 'autres', withdrawn);
+  const finalCategoryLines = [
+    `# Mobile : ${formatAmount(mobileReportTotal)}`,
+    `# TPE : ${formatAmount(tpeReportTotal)}`,
+    `# Offert : ${formatAmount(offeredReportTotal)}`,
+    `# Bonus : ${formatAmount(bonusReportTotal)}`,
+    `# Euro / Dollars : ${euroDollarValue}`,
+    `# Chèque : ${formatAmount(readFinalCategoryValue(finals, 'cheque', 0))}`,
+    `# Crédit : ${formatAmount(creditReportTotal)}`,
+    `# Crédit payé : ${formatAmount(creditPaidReportTotal)}`,
+    `# Dépôt : ${formatAmount(depotReportTotal)}`,
+    `# Dépôt payé : ${formatAmount(depotPaidReportTotal)}`,
+    `# Bar et Resto : ${formatAmount(restaurantReportTotal)}`,
+    `# Prolongation : ${formatAmount(prolongationReportTotal)}`,
+    `# PB : ${formatAmount(pourboiresReportTotal)}`,
+    `# Retrait : ${formatAmount(otherRetraitTotal)}`,
+    `# Bureau : ${formatAmount(otherRetraitTotal)}`,
+    `# Devis : ${formatAmount(readFinalCategoryValue(finals, 'devis', 0))}`,
+    `# Espece : ${formatAmount(readFinalCategoryValue(finals, 'especes', totalCaves))}`,
+    ''
+  ];
   const lines = [
     `Rapport du ${date.split('-').reverse().join('/')}`,
     '',
@@ -139,36 +223,13 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     '',
     '# Joueur sortie :',
     ...(playersOut.length ? playersOut : ['']),
-    ...paymentSection('Espèces'),
-    ...paymentSection('TPE'),
-    ...paymentSection('Orange Money'),
-    ...paymentSection('MVola'),
-    ...paymentSection('Crédit'),
-    ...paymentSection('Crédit payé'),
-    ...paymentSection('Dépôt'),
-    ...paymentSection('Dépôt payé'),
-    ...paymentSection('Offert'),
-    ...paymentSection('Chèque'),
-    ...paymentSection('Virement'),
     '',
-    '# Bonus :',
-    ...listedPlayers.flatMap((player) => player.bonuses ? [`${player.name} : ${player.bonuses}`] : []),
+    '# Joueurs en attente :',
+    '',
+    ...finalCategoryLines,
     '',
     '# Observation :',
     ...(observationEntries.length ? observationEntries : ['Aucune observation.']),
-    '',
-    '# Euro / Dollars :', '',
-    '# Bar et Resto :',
-    ...(restaurantPayments.especes ? ['Espèces'] : []),
-    ...(restaurantPayments.tpe ? ['TPE'] : []),
-    '',
-    '# Prolongation :', finalValue('prolongation'),
-    '# PB :', finalValue('pourboires'),
-    '# Retrait :', `Total prélèvements jetons : ${formatAmount(withdrawn)}`,
-    '',
-    '# Bureau :', '',
-    '# Devis :', '',
-    '# Espece :', finalValue('especes') || `Total caves : ${formatAmount(totalCaves)}`,
     '',
     '# Cash checks horaires :',
     ...(cashChecks.length ? cashChecks.map((check) => `${check.date || date} ${check.time} — attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · écart ${formatAmount(parseCasinoAmount(check.variance))} · ${check.verified ? 'validé par le caissier' : 'en attente de validation'}`) : ['Aucun cash check enregistré.']),
