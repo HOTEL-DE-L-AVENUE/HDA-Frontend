@@ -20,29 +20,82 @@ const uniquePlayers = (players: PlayerLine[]) => players.filter((player, index, 
 
 const formatAmount = (value: number) => `${casinoCurrency.format(value)} Ar`;
 
-const playerAmount = (player: PlayerLine, players: PlayerLine[]) => players
-  .filter((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id))
+const isSamePlayer = (first: PlayerLine, second: PlayerLine) =>
+  (first.ficheId ?? first.id) === (second.ficheId ?? second.id)
+  || (first.name.trim() && second.name.trim() && first.name.trim().toLowerCase() === second.name.trim().toLowerCase());
+
+const getPlayerLines = (player: PlayerLine, players: PlayerLine[]) => players.filter((line) => isSamePlayer(line, player));
+
+const playerAmount = (player: PlayerLine, players: PlayerLine[]) => getPlayerLines(player, players)
   .reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
 
-const paymentLabel = (player: PlayerLine) => {
-  const options = (() => {
-    try {
-      const parsed = JSON.parse(player.resultPaymentOptions || '[]');
-      return Array.isArray(parsed) ? parsed.map((entry) => typeof entry === 'string' ? entry : entry?.option).filter(Boolean) : [];
-    } catch {
-      return [];
-    }
-  })();
-  return options.length ? ` (${options.join(', ')})` : player.paymentMethod ? ` (${player.paymentMethod})` : '';
+const playerResult = (player: PlayerLine, players: PlayerLine[]) => {
+  const playerLines = getPlayerLines(player, players);
+  const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+  return cashing - playerAmount(player, players);
+};
+
+const playerHasFinalSignature = (player: PlayerLine, players: PlayerLine[]) => getPlayerLines(player, players)
+  .some((line) => String(line.finalSignature ?? '').trim() !== '');
+
+const parsePaymentOptions = (value?: string): Array<{ option: string; amount: number }> => {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (typeof entry === 'string') return [{ option: entry, amount: 0 }];
+      return entry && typeof entry.option === 'string'
+        ? [{ option: entry.option, amount: Number(entry.amount) || 0 }]
+        : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+const paymentCategory = (option: string) => {
+  const normalized = option.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (normalized.includes('tpe')) return 'TPE';
+  if (normalized.includes('orange')) return 'Orange Money';
+  if (normalized.includes('mvola')) return 'MVola';
+  if (normalized.includes('espece') || normalized.includes('cash')) return 'Espèces';
+  if (normalized.includes('credit')) return 'Crédit';
+  if (normalized.includes('depot')) return 'Dépôt';
+  if (normalized.includes('offert')) return 'Offert';
+  if (normalized.includes('cheque')) return 'Chèque';
+  if (normalized.includes('virement')) return 'Virement';
+  return option;
 };
 
 export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
-  const listedPlayers = uniquePlayers(players).filter((player) => player.name.trim() || playerAmount(player, players) > 0);
+  const reportPlayers = uniquePlayers(players).filter((player) => player.name.trim() || playerAmount(player, players) > 0);
+  const listedPlayers = reportPlayers.filter((player) => !playerHasFinalSignature(player, players));
   const totalCaves = listedPlayers.reduce((total, player) => total + playerAmount(player, players), 0);
+  const playersOut = reportPlayers
+    .filter((player) => playerHasFinalSignature(player, players) && playerResult(player, players) < 0)
+    .map((player) => `${formatAmount(Math.abs(playerResult(player, players)))} (${player.name.trim() || `Joueur ${player.ficheId ?? player.id}`})`);
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
   const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
   const rackChecksReport = rackChecks.filter((check) => check.type.startsWith('Rack check') || check.type === 'Retour croupier' || check.type === 'Sortie croupier');
-  const tpePlayers = listedPlayers.filter((player) => player.paymentMethod.toLowerCase().includes('tpe'));
+  const paymentDetails = new Map<string, string[]>();
+  reportPlayers.forEach((player) => {
+    const result = playerResult(player, players);
+    const payments = parsePaymentOptions(player.resultPaymentOptions);
+    payments.forEach((payment) => {
+      const category = paymentCategory(payment.option);
+      const amount = payment.amount > 0 ? payment.amount : Math.abs(result);
+      if (!amount) return;
+      const signedAmount = result < 0 ? -amount : amount;
+      const playerName = player.name.trim() || `Joueur ${player.ficheId ?? player.id}`;
+      const entries = paymentDetails.get(category) || [];
+      entries.push(`${playerName} : ${formatAmount(signedAmount)}`);
+      paymentDetails.set(category, entries);
+    });
+  });
+  const paymentSection = (category: string) => [
+    `# ${category} :`,
+    ...(paymentDetails.get(category) || ['']),
+  ];
   const finalValues = (key: string) => Object.values(finals)
     .map((values) => ({ values, amount: parseCasinoAmount(values?.[key]) }))
     .filter(({ amount }) => amount > 0)
@@ -58,17 +111,19 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     ...listedPlayers.map((player) => {
       const amount = playerAmount(player, players);
       const status = player.payment === 'Non payé' || player.paymentMethod.toLowerCase() === 'np' ? ' np' : '';
-      return `${player.name.trim() || `Joueur ${player.ficheId ?? player.id}`} : ${formatAmount(amount)}${status}${paymentLabel(player)}`;
+      return `${player.name.trim() || `Joueur ${player.ficheId ?? player.id}`} : ${formatAmount(amount)}${status}`;
     }),
     '',
     '# Sit out :',
     '',
     '# Joueur sortie :',
-    '',
-    '# Mobil :',
-    '',
-    '# TPE :',
-    ...(tpePlayers.length ? tpePlayers.map((player) => `${formatAmount(playerAmount(player, players))} (${player.name})`) : restaurantPayments.tpe ? ['À préciser'] : ['']),
+    ...(playersOut.length ? playersOut : ['']),
+    ...paymentSection('Espèces'),
+    ...paymentSection('TPE'),
+    ...paymentSection('Orange Money'),
+    ...paymentSection('MVola'),
+    ...paymentSection('Crédit'),
+    ...paymentSection('Dépôt'),
     '',
     '# Offert :', '',
     '# Bonus :',
