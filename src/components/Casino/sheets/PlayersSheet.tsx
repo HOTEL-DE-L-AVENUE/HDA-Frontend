@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Copy, Trash2 } from 'lucide-react';
+import { Camera, Copy, Loader2, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
@@ -131,6 +131,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const [signatureError, setSignatureError] = useState('');
   const [signatureConfirmationOpen, setSignatureConfirmationOpen] = useState(false);
   const [confirmedSignatures, setConfirmedSignatures] = useState<string[]>([]);
+  const [isSignatureConfirmationSaving, setIsSignatureConfirmationSaving] = useState(false);
   const [lineSignatureModal, setLineSignatureModal] = useState<{ id: number; name: string; value: string; field: 'signature' | 'finalSignature' } | null>(null);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerName = selectedPlayer?.name?.trim() || `Joueur ${selectedPlayer?.ficheId ?? selectedPlayer?.id ?? selectedPlayerId}`;
@@ -192,9 +193,16 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   };
 
   const confirmSignaturesAndSave = () => {
-    if (confirmedSignatures.length !== signatureConfirmationItems.length) return;
-    setSignatureConfirmationOpen(false);
-    onSave();
+    if (confirmedSignatures.length !== signatureConfirmationItems.length || isSignatureConfirmationSaving) return;
+    setIsSignatureConfirmationSaving(true);
+    try {
+      onSave();
+    } finally {
+      window.setTimeout(() => {
+        setIsSignatureConfirmationSaving(false);
+        setSignatureConfirmationOpen(false);
+      }, 350);
+    }
   };
 
   // Chaque fiche possède son propre cumul : une recave ne doit jamais
@@ -622,7 +630,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       </button>
     </div>
     {pendingBonus && <BonusRouletteModal bonus={pendingBonus} rotation={rouletteRotation} result={rouletteResult} number={rouletteNumber} isSpinning={isSpinning} onSpin={spinRoulette} onConfirm={confirmBonusResult} onClose={() => !isSpinning && setPendingBonus(null)} />}
-    {signatureConfirmationOpen && <SignatureConfirmationModal items={signatureConfirmationItems} confirmedKeys={confirmedSignatures} onToggle={(key, checked) => setConfirmedSignatures((current) => checked ? [...current, key] : current.filter((item) => item !== key))} onClose={() => setSignatureConfirmationOpen(false)} onConfirm={confirmSignaturesAndSave} />}
+    {signatureConfirmationOpen && <SignatureConfirmationModal items={signatureConfirmationItems} confirmedKeys={confirmedSignatures} isSubmitting={isSignatureConfirmationSaving} onToggle={(key, checked) => setConfirmedSignatures((current) => checked ? [...current, key] : current.filter((item) => item !== key))} onClose={() => setSignatureConfirmationOpen(false)} onConfirm={confirmSignaturesAndSave} />}
     {lineSignatureModal && <LineSignatureModal playerName={lineSignatureModal.name} value={lineSignatureModal.value} onClose={() => setLineSignatureModal(null)} onValidate={(value) => { onUpdate(lineSignatureModal.id, lineSignatureModal.field, value); setLineSignatureModal(null); }} />}
     <IdentityVerificationModal
       open={identityModal.open}
@@ -638,23 +646,27 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
 const SignatureConfirmationModal: React.FC<{
   items: { key: string; label: string }[];
   confirmedKeys: string[];
+  isSubmitting?: boolean;
   onToggle: (key: string, checked: boolean) => void;
   onClose: () => void;
   onConfirm: () => void;
-}> = ({ items, confirmedKeys, onToggle, onClose, onConfirm }) => (
+}> = ({ items, confirmedKeys, isSubmitting = false, onToggle, onClose, onConfirm }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="signature-confirmation-title">
     <div className="w-full max-w-xl rounded-2xl border p-5 text-white shadow-2xl" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
       <h2 id="signature-confirmation-title" className="text-lg font-bold">Confirmation des signatures</h2>
       <p className="mt-2 text-sm text-muted">Le joueur doit confirmer que chaque signature ci-dessous est bien la sienne avant l’enregistrement de la fiche.</p>
       <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
         {items.map((item) => <label key={item.key} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm" style={casinoBorder}>
-          <input type="checkbox" className="mt-0.5" checked={confirmedKeys.includes(item.key)} onChange={(event) => onToggle(item.key, event.target.checked)} />
+          <input type="checkbox" className="mt-0.5" checked={confirmedKeys.includes(item.key)} onChange={(event) => onToggle(item.key, event.target.checked)} disabled={isSubmitting} />
           <span>Je confirme : {item.label}</span>
         </label>)}
       </div>
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" className="action secondary" onClick={onClose}>Annuler</button>
-        <button type="button" className="action" onClick={onConfirm} disabled={confirmedKeys.length !== items.length}>Confirmer et enregistrer</button>
+        <button type="button" className="action secondary" onClick={onClose} disabled={isSubmitting}>Annuler</button>
+        <button type="button" className="action inline-flex items-center gap-2" onClick={onConfirm} disabled={confirmedKeys.length !== items.length || isSubmitting}>
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isSubmitting ? 'Enregistrement...' : 'Confirmer et enregistrer'}
+        </button>
       </div>
     </div>
   </div>
