@@ -118,22 +118,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = players
-    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
-    .reduce((sum, player) => {
-      const playerId = player.ficheId ?? player.id;
-      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
-      const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-      const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-      const result = cashing - totalCaves;
-      const cashPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => {
-        const normalized = payment.option.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-        return normalized.includes('espece') || normalized.includes('cash');
-      });
-      if (!cashPayments.length) return sum;
-      const amount = cashPayments.reduce((paymentTotal, payment) => paymentTotal + (payment.amount > 0 ? payment.amount : (cashPayments.length === 1 ? Math.abs(result) : 0)), 0);
-      return sum + amount;
-    }, 0);
+  const totalEspeces = parseCasinoAmount(values.totalEspecesCaisse || '');
   const resultatFinal = difference - totalEspeces;
 
   return (
@@ -290,7 +275,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
           <div className="grid grid-cols-[1.35fr_.85fr_1.2fr] border-t" style={casinoBorder}>
             <div className="border-r" style={casinoBorder}>
               <BottomRow label="TOTAL 2 - TOTAL 1" value={casinoCurrency.format(difference)} readOnly />
-              <BottomRow label="TOTAL ESPECES CAISSE" value={String(totalEspeces)} readOnly />
+              <BottomRow label="TOTAL ESPECES CAISSE" value={values.totalEspecesCaisse || ''} onChange={(value) => onUpdate('totalEspecesCaisse', value)} />
               <BottomRow label="RESULTAT FINAL" value={casinoCurrency.format(resultatFinal)} readOnly />
             </div>
             <div className="border-r" style={casinoBorder}>
