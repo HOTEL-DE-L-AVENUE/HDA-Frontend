@@ -169,15 +169,15 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PROLONGATION" />
             <CalculationInput value={values.prolongation} onChange={(value) => onUpdate('prolongation', value)} />
             <CalculationCell label="TOTAL MOBILES" separated />
-            {mobileDisplay ? <CalculationResult value={mobileDisplay} /> : <CalculationInput value={values.mobiles} onChange={(value) => onUpdate('mobiles', value)} />}
+            {mobileDisplay ? <CalculationResult value={mobileDisplay} /> : <CalculationInput value={values.mobiles} inputMode="text" multiline rows={3} onChange={(value) => onUpdate('mobiles', value)} />}
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
-            <CalculationInput value={values.autres} inputMode="text" onChange={(value) => onUpdate('autres', value)} />
+            <CalculationInput value={values.autres} inputMode="text" multiline rows={3} onChange={(value) => onUpdate('autres', value)} />
             <CalculationCell label="TOTAL BONUS" separated />
             {bonusResults ? <CalculationResult value={bonusResults} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
-            <CalculationInput value={values.restaurant} inputMode="text" onChange={(value) => onUpdate('restaurant', value)} />
+            <CalculationInput value={values.restaurant} inputMode="text" multiline rows={3} onChange={(value) => onUpdate('restaurant', value)} />
             <CalculationCell label="TOTAL OFFERT" separated />
             {paidCaveOffertResults ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => onUpdate('offert', value)} />}
 
@@ -305,9 +305,25 @@ const CalculationCell: React.FC<{ label: string; separated?: boolean }> = ({ lab
   <div className={`min-h-20 border-r border-b p-3 flex items-center font-semibold text-[11px] leading-tight${separated ? ' border-l-4' : ''}`} style={casinoBorder}>{label}</div>
 );
 
-const CalculationInput: React.FC<{ value?: string; onChange?: (value: string) => void; readOnly?: boolean; inputMode?: 'decimal' | 'text' }> = ({ value = '', onChange, readOnly = false, inputMode = 'decimal' }) => (
-  <input className="min-h-20 w-full min-w-0 border-r border-b bg-transparent px-3 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" style={casinoBorder} inputMode={inputMode} value={value} readOnly={readOnly} onChange={(event) => onChange?.(event.target.value)} />
-);
+const CalculationInput: React.FC<{ value?: string; onChange?: (value: string) => void; readOnly?: boolean; inputMode?: 'decimal' | 'text'; multiline?: boolean; rows?: number }> = ({ value = '', onChange, readOnly = false, inputMode = 'decimal', multiline = false, rows = 3 }) => {
+  if (multiline) {
+    return (
+      <textarea
+        className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+        style={casinoBorder}
+        inputMode={inputMode}
+        value={value}
+        readOnly={readOnly}
+        rows={rows}
+        onChange={(event) => onChange?.(event.target.value)}
+      />
+    );
+  }
+
+  return (
+    <input className="min-h-20 w-full min-w-0 border-r border-b bg-transparent px-3 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" style={casinoBorder} inputMode={inputMode} value={value} readOnly={readOnly} onChange={(event) => onChange?.(event.target.value)} />
+  );
+};
 
 const CalculationResult: React.FC<{ value: string }> = ({ value }) => (
   <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>

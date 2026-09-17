@@ -68,13 +68,24 @@ export const casinoInput = 'w-full min-w-0 bg-transparent px-2 py-2 text-xs text
 export const IDENTITY_VERIFICATION_THRESHOLD = 3_000_000;
 
 export const parseCasinoAmount = (value: string | number | null | undefined): number => {
-  const text = String(value ?? '').trim().replace(/\s/g, '');
+  const text = String(value ?? '').trim();
   if (!text) return 0;
-  const normalized = text.includes(',')
-    ? text.replace(/\./g, '').replace(',', '.')
-    : text;
-  const amount = Number(normalized.replace(/[^\d.-]/g, ''));
-  return Number.isFinite(amount) ? amount : 0;
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return 0;
+
+  return lines.reduce((total, line) => {
+    const compact = line.replace(/\s/g, '');
+    const normalized = compact.includes(',')
+      ? compact.replace(/\./g, '').replace(',', '.')
+      : compact;
+    const amount = Number(normalized.replace(/[^\d.-]/g, ''));
+    return total + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
 };
 
 export const createPlayerLine = (id: number, ficheId = id): PlayerLine => ({
