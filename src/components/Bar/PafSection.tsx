@@ -378,6 +378,10 @@ export const PafSection: React.FC = () => {
               </button>
             )}
           </div>
+          <div className="mb-3 flex items-center justify-between rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
+            <span className="text-sm text-slate-300">Somme des transactions</span>
+            <strong className="text-lg text-accent">{formatCurrency(summary.totalAmount)}</strong>
+          </div>
           <div className="space-y-2">
             {history.length === 0 ? (
               <p className="text-sm text-slate-500">Aucun ticket Paf imprimé pour le moment.</p>
