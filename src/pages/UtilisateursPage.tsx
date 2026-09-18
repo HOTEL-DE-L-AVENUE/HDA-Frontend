@@ -21,7 +21,7 @@ const roleLabels: Record<string, string> = {
 const formRoleLabels: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
-  receptioniste: 'Réceptionniste (accès à l\'hôtel)',
+  receptioniste: 'Réceptionniste (accès à l\'hôtel et au bar)',
   caisse: 'Caissier (encaissement uniquement)',
   water: 'Barman',
   croupier: 'Croupier (accès au casino)',
@@ -211,9 +211,12 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
-    if (form.role === 'receptioniste' && (parseModules(form.module).length !== 1 || parseModules(form.module)[0] !== 'hotel')) {
-      setErrorMessage('Un réceptionniste est affecté uniquement au module Hôtel.');
-      return;
+    if (form.role === 'receptioniste') {
+      const receptionModules = parseModules(form.module);
+      if (receptionModules.length < 1 || receptionModules.some(m => !['hotel', 'bar'].includes(m))) {
+        setErrorMessage('Un réceptionniste doit être affecté au module Hôtel et/ou Bar.');
+        return;
+      }
     }
 
     if (form.role === 'croupier' && (parseModules(form.module).length !== 1 || parseModules(form.module)[0] !== 'casino')) {
@@ -275,7 +278,7 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
-    if (form.role === 'croupier' || form.role === 'receptioniste') return;
+    if (form.role === 'croupier') return;
 
     setErrorMessage('');
     setForm(prev => {
@@ -500,7 +503,7 @@ export const UtilisateursPage: React.FC = () => {
 
           <Select label="Rôle" value={form.role} onChange={e => {
             const role = e.target.value as UserRole;
-            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : role === 'receptioniste' ? ['hotel'] : role === 'croupier' ? ['casino'] : form.module });
+            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' ? ['bar'] : role === 'receptioniste' ? ['hotel', 'bar'] : role === 'croupier' ? ['casino'] : form.module });
           }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
@@ -509,7 +512,7 @@ export const UtilisateursPage: React.FC = () => {
               <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse(s) autorisée(s)' : 'Modules autorisés'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel', 'bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (
@@ -517,7 +520,7 @@ export const UtilisateursPage: React.FC = () => {
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={form.role === 'water' || form.role === 'receptioniste' || form.role === 'croupier'}
+                    disabled={form.role === 'water' || form.role === 'croupier'}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
                       : 'bg-surface-2 text-muted border-base hover:text-primary'
@@ -530,7 +533,7 @@ export const UtilisateursPage: React.FC = () => {
             </div>
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier peut être affecté à : Bar, Restaurant, Hôtel ou Casino.</p>}
             {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
-            {form.role === 'receptioniste' && <p className="mt-2 text-xs text-muted">Le réceptionniste travaille uniquement dans le module Hôtel.</p>}
+            {form.role === 'receptioniste' && <p className="mt-2 text-xs text-muted">Le réceptionniste travaille dans les modules Hôtel et Bar.</p>}
             {form.role === 'croupier' && <p className="mt-2 text-xs text-muted">Le croupier travaille uniquement dans le module Casino.</p>}
           </div>
 

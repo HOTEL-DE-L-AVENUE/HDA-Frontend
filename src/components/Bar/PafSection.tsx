@@ -1,29 +1,88 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Select } from '../UI';
+import { Button } from '../UI';
 import { Copy, Check, Printer, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/data';
 
 const pafOptions = [
-  { value: '20000', label: '20 000 Ar' },
-  { value: '10000', label: '10 000 Ar' },
-  { value: '5000', label: '5 000 Ar' },
-  { value: '0', label: '0 Ar' },
+  { value: 20000, label: 'Paf 20 000 Ar' },
+  { value: 10000, label: 'Paf 10 000 Ar' },
+  { value: 5000, label: 'Paf 5 000 Ar' },
+  { value: 0, label: 'Paf 0 Ar' },
 ] as const;
 
 const STORAGE_KEY = 'hda-bar-paf-history';
 
+type PaymentMethod = 'ESPECES' | 'CREDIT' | 'TPE' | 'ORANGE_MONEY' | 'MVOLA' | 'GRATUIT';
+type PafGender = 'Homme' | 'Femme' | 'Mixte';
+
+type PafTicketDetail = {
+  price: number;
+  gender: 'Homme' | 'Femme';
+  qty: number;
+};
+
+const paymentOptions: { value: PaymentMethod; label: string }[] = [
+  { value: 'ESPECES', label: 'Espèces' },
+  { value: 'CREDIT', label: 'Crédit' },
+  { value: 'TPE', label: 'TPE' },
+  { value: 'ORANGE_MONEY', label: 'Orange Money' },
+  { value: 'MVOLA', label: 'MVola' },
+  { value: 'GRATUIT', label: 'Gratuit' },
+];
+
 type PafHistoryEntry = {
   id: number;
   date: string;
-  gender: 'Homme' | 'Femme';
+  gender: PafGender;
   price: number;
+  paymentMethod?: PaymentMethod;
+  details: PafTicketDetail[];
 };
 
+type PafTicketLine = {
+  id: number;
+  price: number;
+  gender: 'Homme' | 'Femme';
+  qty: number;
+};
+
+const normalizeHistory = (entries: PafHistoryEntry[]) =>
+  entries.map((entry) => {
+    const details = Array.isArray(entry.details) && entry.details.length > 0
+      ? entry.details.map((detail) => ({
+          price: Number(detail.price || 0),
+          gender: detail.gender === 'Femme' ? 'Femme' : 'Homme',
+          qty: Number(detail.qty || 0) || 1,
+        }))
+      : [{
+          price: Number(entry.price || 0),
+          gender: entry.gender === 'Femme' ? 'Femme' : 'Homme',
+          qty: 1,
+        }];
+
+    const totalPrice = details.reduce((sum, detail) => sum + detail.price * detail.qty, 0);
+    const gender = details.some((detail) => detail.gender === 'Homme') && details.some((detail) => detail.gender === 'Femme')
+      ? 'Mixte'
+      : details[0]?.gender ?? 'Homme';
+
+    return {
+      ...entry,
+      gender,
+      price: totalPrice || Number(entry.price || 0),
+      details,
+    } as PafHistoryEntry;
+  });
+
+const getEntryDetailsText = (item: PafHistoryEntry) =>
+  item.details.length > 0
+    ? item.details.map((detail) => `${detail.gender} x${detail.qty} • ${formatCurrency(detail.price * detail.qty)}`).join(' | ')
+    : `${item.gender} • ${formatCurrency(item.price)}`;
+
 export const PafSection: React.FC = () => {
-  const [pafPrice, setPafPrice] = useState<number>(20000);
-  const [pafGender, setPafGender] = useState<'Homme' | 'Femme'>('Homme');
   const [history, setHistory] = useState<PafHistoryEntry[]>([]);
   const [copiedHistory, setCopiedHistory] = useState(false);
+  const [ticketLines, setTicketLines] = useState<PafTicketLine[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ESPECES');
 
   useEffect(() => {
     try {
@@ -31,7 +90,7 @@ export const PafSection: React.FC = () => {
       if (!raw) return;
       const parsed = JSON.parse(raw) as PafHistoryEntry[];
       if (Array.isArray(parsed)) {
-        setHistory(parsed);
+        setHistory(normalizeHistory(parsed));
       }
     } catch (error) {
       console.error('Erreur lecture historique Paf:', error);
@@ -53,36 +112,96 @@ export const PafSection: React.FC = () => {
   const summary = useMemo(() => {
     const totalTickets = history.length;
     const totalAmount = history.reduce((sum, item) => sum + Number(item.price || 0), 0);
-    const homme = history.filter((item) => item.gender === 'Homme').length;
-    const femme = history.filter((item) => item.gender === 'Femme').length;
-    const byPrice = Array.from(new Map(
-      pafOptions.map((option) => [Number(option.value), 0])
-    )).map(([price, _]) => {
-      const count = history.filter((item) => Number(item.price) === price).length;
+    const homme = history.reduce((sum, item) => sum + item.details.filter((detail) => detail.gender === 'Homme').reduce((inner, detail) => inner + detail.qty, 0), 0);
+    const femme = history.reduce((sum, item) => sum + item.details.filter((detail) => detail.gender === 'Femme').reduce((inner, detail) => inner + detail.qty, 0), 0);
+    const byPrice = pafOptions.map((option) => {
+      const price = Number(option.value);
+      const count = history.reduce((sum, item) => sum + item.details.filter((detail) => Number(detail.price) === price).reduce((inner, detail) => inner + detail.qty, 0), 0);
       return { price, count, amount: count * price };
     });
 
     return { totalTickets, totalAmount, homme, femme, byPrice };
   }, [history]);
 
+  const ticketTotal = ticketLines.reduce((sum, line) => sum + line.price * line.qty, 0);
+
+  const groupTicketLines = (lines: PafTicketLine[]) =>
+    lines.reduce<PafTicketDetail[]>((acc, line) => {
+      const match = acc.find((detail) => detail.price === line.price && detail.gender === line.gender);
+      if (match) {
+        match.qty += line.qty;
+        return acc;
+      }
+
+      acc.push({ price: line.price, gender: line.gender, qty: line.qty });
+      return acc;
+    }, []);
+
+  const handleAddPafLine = (price: number) => {
+    setTicketLines((prev) => {
+      const existing = prev.find((line) => line.price === price && line.gender === 'Homme');
+
+      if (existing) {
+        return prev.map((line) =>
+          line.id === existing.id ? { ...line, qty: line.qty + 1 } : line,
+        );
+      }
+
+      return [...prev, { id: Date.now() + Math.random(), price, gender: 'Homme', qty: 1 }];
+    });
+  };
+
+  const handleUpdateTicketLineGender = (id: number, gender: 'Homme' | 'Femme') => {
+    setTicketLines((prev) => prev.map((line) => (line.id === id ? { ...line, gender } : line)));
+  };
+
+  const handleRemoveTicketLine = (id: number) => {
+    setTicketLines((prev) => prev.filter((line) => line.id !== id));
+  };
+
+  const handleClearTicket = () => {
+    setTicketLines([]);
+  };
+
   const handlePrintPafTicket = () => {
+    if (ticketLines.length === 0) return;
+
     const printWindow = window.open('', '_blank', 'width=420,height=620');
     if (!printWindow) {
       return;
     }
 
-    const priceLabel = formatCurrency(pafPrice);
-    const genderLabel = pafGender === 'Homme' ? 'Homme' : 'Femme';
     const logoSrc = '/logo_s.png';
+    const rowsHtml = groupTicketLines(ticketLines).map((line) => `
+      <tr>
+        <td>${line.gender} x${line.qty}</td>
+        <td class="number">${formatCurrency(line.price * line.qty)}</td>
+      </tr>
+    `).join('');
 
     printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Ticket Paf</title><style>
-      @page { size: 80mm auto; margin: 4mm; } body { width: 80mm; margin: 0; font-family: monospace; color: #111; font-size: 11px; line-height: 1.4; } .header { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; } .header img { width: 36px; height: 36px; object-fit: contain; } h1 { margin: 0; text-align: center; font-size: 18px; } p { margin: 4px 0; } .box { border: 1px dashed #444; padding: 8px; border-radius: 6px; } .total { margin-top: 12px; padding-top: 8px; border-top: 1px solid #111; font-size: 16px; font-weight: bold; text-align: right; } .muted { color: #555; font-size: 9px; } @media print { body { width: 80mm; } }
-    </style></head><body><div class="header"><img src="${logoSrc}" alt="HDA" /><h1>Ticket Paf</h1></div><div class="box"><p><strong>Sexe :</strong> ${genderLabel}</p><p><strong>Prix d'entrée :</strong> ${priceLabel}</p><p class="muted">Imprime le ${new Date().toLocaleString('fr-FR')}</p></div><p class="total">Total : ${priceLabel}</p></body></html>`);
+      @page { size: 80mm auto; margin: 4mm; } body { width: 80mm; margin: 0; font-family: monospace; color: #111; font-size: 11px; line-height: 1.4; } .header { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; } .header img { width: 36px; height: 36px; object-fit: contain; } h1 { margin: 0; text-align: center; font-size: 18px; } p { margin: 4px 0; } .box { border: 1px dashed #444; padding: 8px; border-radius: 6px; } table { width: 100%; border-collapse: collapse; margin-top: 10px; } th, td { padding: 4px 2px; border-bottom: 1px dashed #999; text-align: left; } .number { text-align: right; } .total { margin-top: 12px; padding-top: 8px; border-top: 1px solid #111; font-size: 16px; font-weight: bold; text-align: right; } .muted { color: #555; font-size: 9px; } @media print { body { width: 80mm; } }
+    </style></head><body><div class="header"><img src="${logoSrc}" alt="HDA" /><h1>Ticket Paf</h1></div><div class="box"><p class="muted">Imprimé le ${new Date().toLocaleString('fr-FR')}</p><table><thead><tr><th>Sexe</th><th class="number">Montant</th></tr></thead><tbody>${rowsHtml}</tbody></table><p class="total">Total : ${formatCurrency(ticketTotal)}</p></div></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
+  };
 
-    setHistory((prev) => [{ id: Date.now(), date: new Date().toISOString(), gender: pafGender, price: pafPrice }, ...prev].slice(0, 100));
+  const handleEncaissementPaf = () => {
+    if (ticketLines.length === 0) return;
+
+    const details = groupTicketLines(ticketLines);
+    const newEntry: PafHistoryEntry = {
+      id: Date.now() + Math.random(),
+      date: new Date().toISOString(),
+      gender: details.some((detail) => detail.gender === 'Homme') && details.some((detail) => detail.gender === 'Femme') ? 'Mixte' : details[0]?.gender ?? 'Homme',
+      price: ticketTotal,
+      paymentMethod,
+      details,
+    };
+
+    setHistory((prev) => [newEntry, ...prev].slice(0, 100));
+    setTicketLines([]);
   };
 
   const handleCopyHistory = async () => {
@@ -90,7 +209,7 @@ export const PafSection: React.FC = () => {
 
     const text = history
       .slice(0, 50)
-      .map((item) => `${item.gender} - ${formatCurrency(item.price)} - ${new Date(item.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+      .map((item) => `${getEntryDetailsText(item)} - ${new Date(item.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - ${paymentOptions.find((option) => option.value === item.paymentMethod)?.label || 'Espèces'}`)
       .join('\n');
 
     try {
@@ -109,50 +228,110 @@ export const PafSection: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-base bg-surface p-4 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <h3 className="text-primary font-semibold">Paf</h3>
-            <p className="text-sm text-slate-500">Choisissez le prix d’entrée puis le sexe pour imprimer le ticket.</p>
+            <p className="text-sm text-slate-500">Cliquez sur le montant voulu, puis choisissez le sexe de chaque ligne. Plusieurs choix peuvent être ajoutés dans un même ticket.</p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {pafOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleAddPafLine(Number(option.value))}
+                className="rounded-xl border border-accent/35 bg-accent/10 px-3 py-4 text-left transition hover:border-accent hover:bg-accent/15"
+              >
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Paf</div>
+                <div className="mt-2 text-lg font-bold text-primary">{option.label}</div>
+              </button>
+            ))}
           </div>
         </div>
+      </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <Select
-            label="Prix d'entrée"
-            value={String(pafPrice)}
-            onChange={(event) => setPafPrice(Number(event.target.value) || 0)}
-            options={pafOptions.map((option) => ({ value: option.value, label: option.label }))}
-          />
+      <div className="rounded-xl border border-base bg-surface p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="font-semibold text-primary">Ticket courant</h3>
+          {ticketLines.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearTicket}
+              className="text-xs text-slate-400 transition hover:text-white"
+            >
+              Vider
+            </button>
+          )}
+        </div>
 
-          <div className="rounded-xl border border-base bg-surface-2 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Sexe</p>
-            <div className="flex gap-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="paf-gender"
-                  checked={pafGender === 'Homme'}
-                  onChange={() => setPafGender('Homme')}
-                  className="h-4 w-4 accent-accent"
-                />
-                Homme
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="radio"
-                  name="paf-gender"
-                  checked={pafGender === 'Femme'}
-                  onChange={() => setPafGender('Femme')}
-                  className="h-4 w-4 accent-accent"
-                />
-                Femme
-              </label>
-            </div>
+        {ticketLines.length === 0 ? (
+          <p className="text-sm text-slate-500">Aucun choix ajouté pour le moment.</p>
+        ) : (
+          <div className="space-y-2">
+            {ticketLines.map((line) => (
+              <div key={line.id} className="flex flex-col gap-2 rounded-lg border border-base bg-surface-2 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 font-semibold text-accent">
+                  <span>{formatCurrency(line.price)}</span>
+                  {line.qty > 1 && <span className="text-xs text-slate-400">x{line.qty}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateTicketLineGender(line.id, 'Homme')}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${line.gender === 'Homme' ? 'bg-red-500 text-white' : 'border border-base bg-surface text-slate-300'}`}
+                  >
+                    Homme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateTicketLineGender(line.id, 'Femme')}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${line.gender === 'Femme' ? 'bg-pink-500 text-white' : 'border border-base bg-surface text-slate-300'}`}
+                  >
+                    Femme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTicketLine(line.id)}
+                    className="inline-flex items-center justify-center rounded-md border border-red-500/40 bg-red-500/10 p-1.5 text-red-300 transition hover:border-red-400 hover:text-red-200"
+                    aria-label="Supprimer la ligne du ticket"
+                    title="Supprimer"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {ticketLines.length > 0 && (
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
+            <span className="text-sm text-slate-300">Total du ticket</span>
+            <span className="text-lg font-bold text-accent">{formatCurrency(ticketTotal)}</span>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-[180px] flex-1">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Mode d’encaissement</label>
+            <select
+              value={paymentMethod}
+              onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+              className="w-full rounded-xl border border-base bg-surface-2 px-3 py-2 text-sm text-primary outline-none focus:border-accent"
+            >
+              {paymentOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </div>
 
-          <Button type="button" onClick={handlePrintPafTicket} className="self-end">
+          <Button type="button" onClick={handlePrintPafTicket} disabled={ticketLines.length === 0} className="w-full sm:w-auto">
             <Printer size={16} />
-            Imprimer ticket
+            Imprimer le ticket
+          </Button>
+
+          <Button type="button" onClick={handleEncaissementPaf} disabled={ticketLines.length === 0} className="w-full sm:w-auto">
+            Encaisser
           </Button>
         </div>
       </div>
@@ -204,23 +383,27 @@ export const PafSection: React.FC = () => {
               <p className="text-sm text-slate-500">Aucun ticket Paf imprimé pour le moment.</p>
             ) : (
               history.slice(0, 8).map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                  <div>
-                    <span className="text-primary">{item.gender}</span>
-                    <div className="text-[11px] text-slate-500">{new Date(item.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                <div key={item.id} className="flex items-start justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-primary">{item.gender}</span>
+                      <span className="text-accent">{formatCurrency(item.price)}</span>
+                    </div>
+                    {item.details.length > 0 && (
+                      <div className="mt-1 text-[10px] text-slate-400">{item.details.map((detail) => `${detail.gender} x${detail.qty} • ${formatCurrency(detail.price * detail.qty)}`).join(' | ')}</div>
+                    )}
+                    <div className="mt-1 text-[11px] text-slate-500">{new Date(item.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                    <div className="mt-1 text-[10px] text-slate-400">Paiement : {paymentOptions.find((option) => option.value === item.paymentMethod)?.label || 'Espèces'}</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <strong className="text-accent">{formatCurrency(item.price)}</strong>
-                    <button
-                      type="button"
-                      onClick={() => handleDeletePafEntry(item.id)}
-                      className="inline-flex items-center justify-center rounded-md border border-red-500/40 bg-red-500/10 p-1.5 text-red-300 transition hover:border-red-400 hover:text-red-200"
-                      aria-label={`Supprimer le ticket Paf de ${item.gender}`}
-                      title="Supprimer"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePafEntry(item.id)}
+                    className="inline-flex items-center justify-center rounded-md border border-red-500/40 bg-red-500/10 p-1.5 text-red-300 transition hover:border-red-400 hover:text-red-200"
+                    aria-label={`Supprimer le ticket Paf de ${item.gender}`}
+                    title="Supprimer"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               ))
             )}
