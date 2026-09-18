@@ -48,6 +48,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     room_id: undefined,
     date_arrivee: '',
     date_depart: '',
+    pdj_inclus: false,
     montant_total: 0,
     statut: 'CONFIRMEE',
   });
@@ -87,6 +88,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         room_id: initialData.room_id,
         date_arrivee: initialData.date_arrivee?.split('T')[0] || '',
         date_depart: initialData.date_depart?.split('T')[0] || '',
+        pdj_inclus: Boolean(initialData.pdj_inclus),
         montant_total: initialData.montant_total || 0,
         statut: initialData.statut || 'CONFIRMEE',
       });
@@ -104,6 +106,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         room_id: undefined,
         date_arrivee: '',
         date_depart: '',
+        pdj_inclus: false,
         montant_total: 0,
         statut: 'CONFIRMEE',
       });
@@ -260,6 +263,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         room_id: formData.room_id!,
         date_arrivee: formData.date_arrivee!,
         date_depart: formData.date_depart!,
+        pdj_inclus: Boolean(formData.pdj_inclus),
         montant_total: formData.montant_total || 0,
         statut: formData.statut || 'CONFIRMEE',
         remise_pourcentage: discountMode === 'discount' ? discountPercent : 0,
@@ -541,6 +545,31 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 </div>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-primary">
+                <CheckCircle size={14} className="inline mr-1.5" />
+                Petit-déjeuner
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, pdj_inclus: true }))}
+                  className={`p-2 rounded-lg border ${formData.pdj_inclus ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  PDJ inclus
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, pdj_inclus: false }))}
+                  className={`p-2 rounded-lg border ${!formData.pdj_inclus ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  PDJ non inclus
+                </button>
+              </div>
+            </div>
 
             {/* Remise */}
             <div className="space-y-1.5">

@@ -78,6 +78,38 @@ const getEntryDetailsText = (item: PafHistoryEntry) =>
     ? item.details.map((detail) => `${detail.gender} x${detail.qty} • ${formatCurrency(detail.price * detail.qty)}`).join(' | ')
     : `${item.gender} • ${formatCurrency(item.price)}`;
 
+const getPaymentLabel = (paymentMethod?: PaymentMethod) =>
+  paymentOptions.find((option) => option.value === paymentMethod)?.label || 'Espèces';
+
+const getPafReportText = (history: PafHistoryEntry[], totalAmount: number) => {
+  const separator = '========================================';
+  const reportDate = new Date().toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const transactionBlocks = history.slice(0, 50).map((item, index) => [
+    `TRANSACTION ${String(index + 1).padStart(2, '0')}`,
+    `Details  : ${getEntryDetailsText(item)}`,
+    `Paiement : ${getPaymentLabel(item.paymentMethod)}`,
+    `Montant  : ${formatCurrency(item.price)}`,
+  ].join('\n'));
+
+  return [
+    'PAF HDA',
+    `Date : ${reportDate}`,
+    separator,
+    `TRANSACTIONS : ${history.length}`,
+    `TOTAL        : ${formatCurrency(totalAmount)}`,
+    separator,
+    ...(transactionBlocks.length > 0 ? transactionBlocks : ['Aucune transaction']),
+    separator,
+    `TOTAL DES TRANSACTIONS : ${formatCurrency(totalAmount)}`,
+  ].join('\n');
+};
+
 export const PafSection: React.FC = () => {
   const [history, setHistory] = useState<PafHistoryEntry[]>([]);
   const [copiedHistory, setCopiedHistory] = useState(false);
@@ -207,10 +239,7 @@ export const PafSection: React.FC = () => {
   const handleCopyHistory = async () => {
     if (history.length === 0) return;
 
-    const text = history
-      .slice(0, 50)
-      .map((item) => `${getEntryDetailsText(item)} - ${new Date(item.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - ${paymentOptions.find((option) => option.value === item.paymentMethod)?.label || 'Espèces'}`)
-      .join('\n');
+    const text = getPafReportText(history, summary.totalAmount);
 
     try {
       await navigator.clipboard.writeText(text);
@@ -366,7 +395,7 @@ export const PafSection: React.FC = () => {
 
         <div className="rounded-xl border border-base bg-surface p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="font-semibold text-primary">Historique récent</h3>
+            <h3 className="font-semibold text-primary">Rapport PAF HDA</h3>
             {history.length > 0 && (
               <button
                 type="button"
@@ -374,7 +403,7 @@ export const PafSection: React.FC = () => {
                 className="inline-flex items-center gap-2 rounded-lg border border-base bg-surface px-2.5 py-1.5 text-xs text-slate-300 transition hover:text-white"
               >
                 {copiedHistory ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                {copiedHistory ? 'Copié' : 'Copier tout'}
+                {copiedHistory ? 'Copié' : 'Copier le rapport'}
               </button>
             )}
           </div>
