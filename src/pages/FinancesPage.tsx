@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency, formatDate } from '../utils/data';
-import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, CreditCard } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, CreditCard, CalendarRange } from 'lucide-react';
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
+import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats, MonthlyDepartmentReport, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import { CreateInvoiceModal } from '../components/Finance/modals/CreateInvoiceModal';
 import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
 import { Modal } from '../components/ui/Modal';
@@ -22,6 +22,11 @@ const moduleConfig: Record<string, { label: string; gradient: string; color: str
 
 const financeModules = Object.keys(moduleConfig);
 const defaultModuleConfig = { label: 'Module', gradient: 'from-gray-500 to-gray-600', color: '#6b7280' };
+
+const MONTH_LABELS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+];
 
 // Normalizes module names to consistent keys for financial data processing
 // Handles various naming conventions and historical data references
@@ -56,7 +61,14 @@ export const FinancesPage: React.FC = () => {
     modules: [],
   });
   const [modulesSoldes, setModulesSoldes] = useState<Array<{ module: string } & ModuleCaisseSolde>>([]);
-  
+
+  // Monthly / department breakdown (CA & charges per month for a given department)
+  const [monthlyDepartment, setMonthlyDepartment] = useState<string>(financeModules[0]);
+  const [monthlyYear, setMonthlyYear] = useState<number>(new Date().getFullYear());
+  const [monthlyMonthFilter, setMonthlyMonthFilter] = useState<number>(0); // 0 = tous les mois
+  const [monthlyRows, setMonthlyRows] = useState<MonthlyDepartmentReport[]>([]);
+  const [monthlyLoading, setMonthlyLoading] = useState<boolean>(false);
+
   // Modal states
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
@@ -68,6 +80,25 @@ export const FinancesPage: React.FC = () => {
   useEffect(() => {
     fetchFinancialData();
   }, []);
+
+  // Fetch the monthly/department breakdown whenever the department or year filter changes
+  useEffect(() => {
+    let cancelled = false;
+    const fetchMonthlyReport = async () => {
+      setMonthlyLoading(true);
+      try {
+        const rows = await financeService.getMonthlyDepartmentReport({
+          department: monthlyDepartment,
+          year: monthlyYear,
+        });
+        if (!cancelled) setMonthlyRows(rows);
+      } finally {
+        if (!cancelled) setMonthlyLoading(false);
+      }
+    };
+    fetchMonthlyReport();
+    return () => { cancelled = true; };
+  }, [monthlyDepartment, monthlyYear]);
 
   const fetchFinancialData = async () => {
     try {
@@ -267,6 +298,17 @@ export const FinancesPage: React.FC = () => {
   const totalEntrees = financialStats.totalRevenu;
   const totalSorties = displayedTotalSorties;
 
+  // Full 12-month table for the selected department/year, filling in months with no data.
+  const monthlyRowsByMonth = new Map(monthlyRows.map(row => [row.month, row]));
+  const monthlyTableRows = Array.from({ length: 12 }, (_, i) => {
+    const month = i + 1;
+    return monthlyRowsByMonth.get(month) || { department: monthlyDepartment, year: monthlyYear, month, ca: 0, charges: 0, solde: 0 };
+  });
+  const visibleMonthlyRows = monthlyMonthFilter === 0
+    ? monthlyTableRows
+    : monthlyTableRows.filter(row => row.month === monthlyMonthFilter);
+  const selectedMonthRow = monthlyMonthFilter === 0 ? null : monthlyTableRows[monthlyMonthFilter - 1];
+
   const handleCreateOperation = async (event: React.FormEvent) => {
     event.preventDefault();
     const montant = Number(operation.montant);
@@ -419,6 +461,92 @@ export const FinancesPage: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Ventilation mensuelle par département */}
+      <div className="bg-surface border border-base rounded-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
+          <div className="flex items-center gap-2">
+            <CalendarRange size={18} className="text-accent" />
+            <h3 className="text-primary font-semibold">CA &amp; Charges par mois et par département</h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={monthlyDepartment}
+              onChange={(event) => setMonthlyDepartment(event.target.value)}
+              className="bg-surface-2 border border-base rounded-lg px-3 py-1.5 text-sm text-primary"
+            >
+              {financeModules.map((module) => (
+                <option key={module} value={module}>{moduleConfig[module].label}</option>
+              ))}
+            </select>
+            <select
+              value={monthlyYear}
+              onChange={(event) => setMonthlyYear(Number(event.target.value))}
+              className="bg-surface-2 border border-base rounded-lg px-3 py-1.5 text-sm text-primary"
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <select
+              value={monthlyMonthFilter}
+              onChange={(event) => setMonthlyMonthFilter(Number(event.target.value))}
+              className="bg-surface-2 border border-base rounded-lg px-3 py-1.5 text-sm text-primary"
+            >
+              <option value={0}>Tous les mois</option>
+              {MONTH_LABELS.map((label, i) => (
+                <option key={label} value={i + 1}>{label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {selectedMonthRow && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-4 border-b border-base bg-surface-2/40">
+            <div>
+              <p className="text-muted text-xs mb-1">CA — {MONTH_LABELS[monthlyMonthFilter - 1]} {monthlyYear}</p>
+              <p className="text-success font-bold text-xl">{formatCurrency(selectedMonthRow.ca)}</p>
+            </div>
+            <div>
+              <p className="text-muted text-xs mb-1">Charges — {MONTH_LABELS[monthlyMonthFilter - 1]} {monthlyYear}</p>
+              <p className="text-danger font-bold text-xl">{formatCurrency(selectedMonthRow.charges)}</p>
+            </div>
+            <div>
+              <p className="text-muted text-xs mb-1">Solde</p>
+              <p className="text-primary font-bold text-xl">{formatCurrency(selectedMonthRow.solde)}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          {monthlyLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="text-muted text-sm">Chargement…</div>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted text-xs uppercase tracking-wide border-b border-base">
+                  <th className="px-6 py-3 font-medium">Mois</th>
+                  <th className="px-6 py-3 font-medium text-right">CA</th>
+                  <th className="px-6 py-3 font-medium text-right">Charges</th>
+                  <th className="px-6 py-3 font-medium text-right">Solde</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-base">
+                {visibleMonthlyRows.map((row) => (
+                  <tr key={row.month} className="hover:bg-surface-2">
+                    <td className="px-6 py-3 text-primary">{MONTH_LABELS[row.month - 1]}</td>
+                    <td className="px-6 py-3 text-right text-success">{formatCurrency(row.ca)}</td>
+                    <td className="px-6 py-3 text-right text-danger">{formatCurrency(row.charges)}</td>
+                    <td className={`px-6 py-3 text-right font-semibold ${row.solde >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(row.solde)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
