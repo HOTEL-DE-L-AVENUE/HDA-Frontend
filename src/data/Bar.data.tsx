@@ -1,9 +1,9 @@
 import type { BarProduct, BestSeller } from '../types/bar.type';
 
 export const BAR_TABS = [
+  { id: 'paf', label: 'Paf' },
   { id: 'commandes', label: 'Commandes' },
   { id: 'bar', label: 'Bar & Cocktails' },
-
   { id: 'stock', label: 'Stock' },
   { id: 'rapports', label: 'Rapports' },
   { id: 'caisse', label: 'Caisse' },

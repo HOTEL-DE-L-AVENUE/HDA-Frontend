@@ -15,6 +15,7 @@ import { CocktailMenu } from '../components/Bar/CocktailMenu';
 import { BestSellers } from '../components/Bar/BestSellers';
 import { BarCommandeView } from '../components/Bar/BarCommande';
 import { BarReports } from '../components/Bar/BarReports';
+import { PafSection } from '../components/Bar/PafSection';
 import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
@@ -263,6 +264,8 @@ export const BarPage: React.FC = () => {
           stockMap={stockMap}
         />
       )}
+
+      {activeTab === 'paf' && <PafSection />}
 
       {activeTab === 'stock' && (
         <StockManager
