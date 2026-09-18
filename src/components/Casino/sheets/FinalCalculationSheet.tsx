@@ -40,7 +40,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     });
   const bonusTotal = bonusEntries.reduce((total, entry) => total + entry.total, 0);
   const bonusResults = bonusEntries.length
-    ? `${bonusEntries.map((entry) => entry.text).join('\n')}\nTOTAL : ${casinoCurrency.format(bonusTotal)} Ar`
+    ? bonusEntries.map((entry) => entry.text).join('\n')
     : '';
   const mobileReturnResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -56,6 +56,8 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         : [];
     })
     .join('\n');
+  const hasManualBonusValue = String(values.bonus ?? '').trim().length > 0;
+  const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -77,7 +79,11 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
   const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
+  const depositPaidAutoDisplay = depositPaidResults;
+  const hasManualDepositPaidValue = String(values.depotPaye ?? '').trim().length > 0;
+  const depositPaidFieldValue = hasManualDepositPaidValue ? values.depotPaye : depositPaidAutoDisplay;
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
+  const hasManualTpeValue = String(values.tpe ?? '').trim().length > 0;
   const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
   const depositPaidTotal = getNegativePaymentTotal(players, 'Dépôt payé');
   const creditPaymentsTotal = getNegativePaymentTotal(players, 'Crédit');
@@ -92,14 +98,16 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
-  const hasManualCreditValue = String(values.credit ?? '').trim().length > 0;
-  const creditDisplay = hasManualCreditValue ? values.credit : [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
+  const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
+  const creditDisplay = String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay;
+  const bonusAutoDisplay = bonusResults;
   const offertDisplay = paidCaveOffertResults || values.offert;
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
-  const manualCreditTotal = parseCasinoAmount(values.credit);
-  const automaticCreditTotal = creditResults ? creditPaymentsTotal : 0;
-  const creditEntryTotal = hasManualCreditValue ? manualCreditTotal : automaticCreditTotal + paidCaveCreditTotal;
+  const tpeEntryTotal = hasManualTpeValue ? parseCasinoAmount(values.tpe) : tpePaymentsTotal;
+  const bonusEntryTotal = hasManualBonusValue ? parseCasinoAmount(values.bonus) : bonusTotal;
+  const creditEntryTotal = parseCasinoAmount(String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay || '');
+  const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -109,13 +117,13 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + depositPaymentTotal
     + mobileReturnTotal
     + creditPaidTotal;
-  const automaticTotal2 = (tpeResults ? tpePaymentsTotal : parseCasinoAmount(values.tpe))
+  const automaticTotal2 = tpeEntryTotal
     + paidCaveTpeTotal
     + mobileCalculatedTotal
     + paidCaveMobileTotal
-    + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
+    + bonusEntryTotal
     + creditEntryTotal
-    + (depositPaidResults ? depositPaidTotal : parseCasinoAmount(values.depotPaye))
+    + depositPaidEntryTotal
     + parseCasinoAmount(values.offert)
     + paidCaveOffertTotal
     + paidCaveOtherTotal;
@@ -149,11 +157,36 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PRELEVEMENTS" />
             <CalculationInput value={String(withdrawnTotal)} readOnly />
             <CalculationCell label="TOTAL TPE" separated />
-            {tpeDisplay ? <CalculationResult value={tpeDisplay} /> : <CalculationInput value={values.tpe} onChange={(value) => onUpdate('tpe', value)} />}
+            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
+              {tpeDisplay && (
+                <div className="mb-2 text-[10px] font-semibold text-muted whitespace-pre-wrap">TPE fiche joueur : {tpeDisplay}</div>
+              )}
+              <textarea
+                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                style={casinoBorder}
+                inputMode="text"
+                rows={3}
+                value={values.tpe || ''}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.shiftKey) return;
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const text = textarea.value;
+                  const cursorIndex = textarea.selectionStart ?? text.length;
+                  const before = text.slice(0, cursorIndex);
+                  const after = text.slice(cursorIndex);
+                  onUpdate('tpe', `${before}\n${after}`);
+                  requestAnimationFrame(() => {
+                    textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
+                  });
+                }}
+                onChange={(event) => onUpdate('tpe', event.target.value)}
+              />
+            </div>
 
             <CalculationCell label="TOTAL POURBOIRES" />
             <textarea
-              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
               style={casinoBorder}
               inputMode="text"
               value={values.pourboires || ''}
@@ -165,7 +198,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
 
             <CalculationCell label="TOTAL PROLONGATION" />
             <textarea
-              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
               style={casinoBorder}
               inputMode="text"
               value={values.prolongation || ''}
@@ -180,7 +213,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 )) : <div>{casinoCurrency.format(mobilePaymentsTotal || 0)} Ar</div>}
               </div>
               <textarea
-                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
                 style={casinoBorder}
                 inputMode="text"
                 rows={3}
@@ -204,7 +237,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
             <textarea
-              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
               style={casinoBorder}
               inputMode="text"
               value={values.autres || ''}
@@ -212,12 +245,39 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               onChange={(event) => onUpdate('autres', event.target.value)}
             />
             <CalculationCell label="TOTAL BONUS" separated />
-            {bonusResults ? <CalculationResult value={bonusResults} /> : <CalculationInput value={values.bonus} onChange={(value) => onUpdate('bonus', value)} />}
+            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
+              {bonusAutoDisplay && (
+                <div className="mb-2 text-[10px] font-semibold text-muted whitespace-pre-wrap">Bonus fiche joueur : {bonusAutoDisplay}</div>
+              )}
+              <textarea
+                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                style={casinoBorder}
+                inputMode="text"
+                rows={3}
+                value={bonusFieldValue || ''}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.shiftKey) return;
+                  event.preventDefault();
+                  const textarea = event.currentTarget;
+                  const current = textarea.value;
+                  const cursorIndex = textarea.selectionStart ?? current.length;
+                  const before = current.slice(0, cursorIndex);
+                  const after = current.slice(cursorIndex);
+                  const nextValue = `${before}\n${after}`;
+                  onUpdate('bonus', nextValue || current);
+                  requestAnimationFrame(() => {
+                    const nextCursor = before.length + 1;
+                    textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                  });
+                }}
+                onChange={(event) => onUpdate('bonus', event.target.value)}
+              />
+            </div>
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
             <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
               <textarea
-                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-base text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
                 style={casinoBorder}
                 inputMode="text"
                 rows={3}
@@ -244,16 +304,56 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="AUTRE" />
             <CalculationInput value={values.autre} onChange={(value) => onUpdate('autre', value)} />
             <CalculationCell label="CREDIT" separated />
-            {creditDisplay ? (
-              <CalculationResult value={creditDisplay} />
-            ) : (
-              <CalculationInput value={values.credit} onChange={(value) => onUpdate('credit', value)} />
-            )}
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={creditDisplay || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                onUpdate('credit', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => onUpdate('credit', event.target.value)}
+            />
 
             <CalculationCell label="DEPOT" />
             <CalculationResult value={depositPaymentResults || depositResults} />
             <CalculationCell label="DEPOT PAYE" separated />
-            {depositPaidResults ? <CalculationResult value={depositPaidResults} /> : <CalculationInput value={values.depotPaye} onChange={(value) => onUpdate('depotPaye', value)} />}
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={depositPaidFieldValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                onUpdate('depotPaye', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => onUpdate('depotPaye', event.target.value)}
+            />
 
             <CalculationCell label="RETOUR MOBILE" />
             <CalculationResult value={mobileReturnResults} />
@@ -412,7 +512,7 @@ const CalculationInput: React.FC<{ value?: string; onChange?: (value: string) =>
 
 const CalculationResult: React.FC<{ value: string }> = ({ value }) => (
   <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
-    <div className="whitespace-pre-wrap text-sm font-semibold text-primary">{value || '—'}</div>
+    <div className="whitespace-pre-wrap text-[11px] font-semibold text-primary">{value || '—'}</div>
   </div>
 );
 
@@ -751,7 +851,7 @@ const buildPositivePaymentResults = (players: PlayerLine[], ...methods: string[]
 
 const BlankCell: React.FC<{ separated?: boolean }> = ({ separated = false }) => <div className={`min-h-20 border-r border-b${separated ? ' border-l-4' : ''}`} style={casinoBorder} />;
 const TotalCell: React.FC<{ label: string; separated?: boolean }> = ({ label, separated = false }) => <div className={`min-h-14 border-r p-2 flex items-center justify-center font-bold text-[11px]${separated ? ' border-l-4' : ''}`} style={casinoBorder}>{label}</div>;
-const BottomRow: React.FC<{ label: string; value?: string; onChange?: (value: string) => void; readOnly?: boolean }> = ({ label, value = '', onChange, readOnly = false }) => <label className="grid grid-cols-[1fr_.85fr] min-h-12 border-b last:border-b-0" style={casinoBorder}><span className="px-2 py-2 font-semibold text-center border-r flex items-center justify-center text-[10px] leading-tight" style={casinoBorder}>{label}</span><input className="w-full min-w-0 bg-transparent px-2 text-sm text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" inputMode="decimal" value={value} readOnly={readOnly} onChange={(event) => onChange?.(event.target.value)} /></label>;
+const BottomRow: React.FC<{ label: string; value?: string; onChange?: (value: string) => void; readOnly?: boolean }> = ({ label, value = '', onChange, readOnly = false }) => <label className="grid grid-cols-[1fr_.85fr] min-h-12 border-b last:border-b-0" style={casinoBorder}><span className="px-2 py-2 font-semibold text-center border-r flex items-center justify-center text-[10px] leading-tight" style={casinoBorder}>{label}</span><input className="w-full min-w-0 bg-transparent px-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]" inputMode="decimal" value={value} readOnly={readOnly} onChange={(event) => onChange?.(event.target.value)} /></label>;
 const BlankBottomRow: React.FC = () => <div className="min-h-12 border-b last:border-b-0" style={casinoBorder} />;
 
 const TouchSignature: React.FC<{ value: string; onChange: (value: string) => void }> = ({ value, onChange }) => {
