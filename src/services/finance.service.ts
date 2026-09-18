@@ -52,6 +52,15 @@ export interface ModuleCaisseSolde {
   sorties: number;
 }
 
+export interface MonthlyDepartmentReport {
+  department: string;
+  year: number;
+  month: number;
+  ca: number;
+  charges: number;
+  solde: number;
+}
+
 export interface FinancialStats {
   totalEntrees: number;
   totalSorties: number;
@@ -251,6 +260,18 @@ export const financeService = {
         entrees: 0,
         sorties: 0
       };
+    }
+  },
+
+  // ==================== MONTHLY / DEPARTMENT REPORTING ====================
+
+  async getMonthlyDepartmentReport(params?: { department?: string; year?: number }): Promise<MonthlyDepartmentReport[]> {
+    try {
+      const response = await api.get('/api/finance/reports/monthly', { params });
+      return response.data.data || [];
+    } catch (error) {
+      console.error('❌ Erreur getMonthlyDepartmentReport:', error);
+      return [];
     }
   },
 
