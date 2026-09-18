@@ -8,6 +8,7 @@ import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucid
 import { clientService, type Client } from '../../services/client.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isManager } from '../../utils/permissions';
+import { PafSection } from './PafSection';
 
 interface Props {
   commandes: BarCommande[];
@@ -350,12 +351,13 @@ export const BarCommandeView: React.FC<Props> = ({
     }
 
     const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
+    const logoSrc = '/logo_s.png';
     const items = commande.items.map((item) => `
       <tr><td>${escapePrintHtml(item.nom)}</td><td class="number">${item.quantite}</td><td class="number">${formatCurrency(item.prix)}</td><td class="number">${formatCurrency(item.prix * item.quantite)}</td></tr>`).join('');
 
     printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Commande #${commande.id}</title><style>
-      @page { size: 80mm auto; margin: 4mm; } body { width: 72mm; margin: 0; font-family: monospace; color: #111; font-size: 10px; line-height: 1.3; } h1 { margin: 0 0 8px; text-align: center; font-size: 14px; } p { margin: 3px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; } th, td { padding: 3px 1px; border-bottom: 1px dashed #999; text-align: left; overflow-wrap: anywhere; } th:first-child, td:first-child { width: 42%; } th:nth-child(2), td:nth-child(2) { width: 12%; } th:nth-child(3), td:nth-child(3) { width: 23%; } th:last-child, td:last-child { width: 23%; } .number { text-align: right; } .total { margin-top: 10px; padding-top: 6px; border-top: 1px solid #111; font-size: 14px; font-weight: bold; text-align: right; } .muted { color: #555; font-size: 9px; } @media print { body { width: 72mm; } }
-    </style></head><body><h1>Commande Bar #${commande.id}</h1><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
+      @page { size: 80mm auto; margin: 4mm; } body { width: 80mm; margin: 0; font-family: monospace; color: #111; font-size: 10px; line-height: 1.3; } .header { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; } .header img { width: 34px; height: 34px; object-fit: contain; } .title { margin: 0; text-align: center; font-size: 14px; } p { margin: 3px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; } th, td { padding: 3px 1px; border-bottom: 1px dashed #999; text-align: left; overflow-wrap: anywhere; } th:first-child, td:first-child { width: 42%; } th:nth-child(2), td:nth-child(2) { width: 12%; } th:nth-child(3), td:nth-child(3) { width: 23%; } th:last-child, td:last-child { width: 23%; } .number { text-align: right; } .total { margin-top: 10px; padding-top: 6px; border-top: 1px solid #111; font-size: 14px; font-weight: bold; text-align: right; } .muted { color: #555; font-size: 9px; } @media print { body { width: 80mm; } }
+    </style></head><body><div class="header"><img src="${logoSrc}" alt="HDA" /><h1 class="title">Commande Bar #${commande.id}</h1></div><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
@@ -569,6 +571,10 @@ export const BarCommandeView: React.FC<Props> = ({
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? `Ajouter des articles · Commande #${editingOrderId ?? ''}` : 'Nouvelle commande · Bar'} size="full">
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
+          <div className="rounded-2xl border border-base bg-surface p-2">
+            <PafSection />
+          </div>
+
           {feedback && (
             <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
               <span>{feedback.message}</span>
