@@ -229,7 +229,9 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const offertDisplay = paidCaveOffertResults || values.offert;
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
-  const tpeEntryTotal = hasManualTpeValue ? parseCasinoAmount(values.tpe) : tpePaymentsTotal;
+  const tpeEntryTotal = hasManualTpeValue
+    ? parseCasinoAmount(values.tpe)
+    : tpePaymentsTotal + paidCaveTpeTotal;
   const bonusEntryTotal = parseCasinoAmount(hasManualBonusValue ? String(values.bonus ?? '').trim() || '0' : String(bonusResults ?? '').trim() || '0');
   const creditEntryTotal = parseCasinoAmount(String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay || '');
   const depositEntryTotal = hasManualDepositValue ? parseCasinoAmount(values.depot) : depositPaymentTotal;
@@ -246,7 +248,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + mobileReturnEntryTotal
     + creditPaidEntryTotal;
   const automaticTotal2 = tpeEntryTotal
-    + paidCaveTpeTotal
     + mobileCalculatedTotal
     + paidCaveMobileTotal
     + bonusEntryTotal
