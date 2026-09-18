@@ -77,7 +77,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
   const mobileDisplayValue = String(values.mobiles ?? '').trim().length > 0 ? values.mobiles : mobilePaymentResults;
   const manualBonusValue = String(values.bonus ?? '').trim();
-  const hasManualBonusValue = bonusManualOverrideRef.current && manualBonusValue.length > 0 && manualBonusValue !== String(bonusResults ?? '').trim();
+  const hasManualBonusValue = bonusManualOverrideRef.current && manualBonusValue.length > 0;
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -126,7 +126,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue ? parseCasinoAmount(values.tpe) : tpePaymentsTotal;
-  const bonusEntryTotal = hasManualBonusValue ? parseCasinoAmount(values.bonus) : bonusTotal;
+  const bonusEntryTotal = parseCasinoAmount(hasManualBonusValue ? String(values.bonus ?? '').trim() || '0' : String(bonusResults ?? '').trim() || '0');
   const creditEntryTotal = parseCasinoAmount(String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay || '');
   const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
   const automaticTotal1 = withdrawnTotal
