@@ -25,23 +25,41 @@ interface FinalCalculationSheetProps {
 
 export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onPlayerUpdate, onSave, isFinished = false, isFinishing = false, canFinish = false, onFinish, showIdentityVerifications = true, identityVerifications = {} }) => {
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
+  const bonusManualOverrideRef = useRef(false);
+  const lastAutoBonusRef = useRef('');
   const activePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const identity = identityVerifications[selectedPlayerId];
   const bonusEntries = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
-    .flatMap((player) => {
-      const bonuses = parseBonuses(player.bonuses);
+    .map((player) => {
+      const bonuses = parseBonuses(player.bonuses).filter((bonus) => bonus !== '7 et 2');
       const bonusAmounts = parseBonusResults(player.bonusResults);
       const playerId = player.ficheId ?? player.id;
-      const formattedBonuses = bonuses.map((bonus) => `${bonus} : ${casinoCurrency.format(bonusAmounts[bonus] || 0)} Ar`);
       const total = bonuses.reduce((sum, bonus) => sum + (bonusAmounts[bonus] || 0), 0);
-      return formattedBonuses.length ? [{ text: `${player.name || `Joueur ${playerId}`} : ${formattedBonuses.join(', ')}`, total }] : [];
-    });
-  const bonusTotal = bonusEntries.reduce((total, entry) => total + entry.total, 0);
-  const bonusResults = bonusEntries.length
-    ? bonusEntries.map((entry) => entry.text).join('\n')
-    : '';
+      return total > 0 ? `${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(total)} Ar` : '';
+    })
+    .filter(Boolean);
+  const bonusTotal = bonusEntries.reduce((total, entry) => total + parseCasinoAmount(entry.split(':').pop() || '0'), 0);
+  const bonusResults = bonusEntries.length ? bonusEntries.join('\n') : '';
+
+  useEffect(() => {
+    const currentStoredBonus = String(values.bonus ?? '').trim();
+    const currentAutoBonus = String(bonusResults ?? '').trim();
+
+    if (currentStoredBonus === currentAutoBonus) {
+      bonusManualOverrideRef.current = false;
+      lastAutoBonusRef.current = currentAutoBonus;
+      return;
+    }
+
+    if (!bonusManualOverrideRef.current && (!currentStoredBonus || currentStoredBonus === lastAutoBonusRef.current || currentStoredBonus === '')) {
+      onUpdate('bonus', currentAutoBonus);
+    }
+
+    lastAutoBonusRef.current = currentAutoBonus;
+  }, [bonusResults, values.bonus, onUpdate]);
+
   const mobileReturnResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -56,7 +74,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         : [];
     })
     .join('\n');
-  const hasManualBonusValue = String(values.bonus ?? '').trim().length > 0;
+  const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
+  const mobileDisplayValue = String(values.mobiles ?? '').trim().length > 0 ? values.mobiles : mobilePaymentResults;
+  const manualBonusValue = String(values.bonus ?? '').trim();
+  const hasManualBonusValue = bonusManualOverrideRef.current && manualBonusValue.length > 0 && manualBonusValue !== String(bonusResults ?? '').trim();
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
@@ -77,7 +98,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
   const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
-  const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
   const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
   const depositPaidAutoDisplay = depositPaidResults;
   const hasManualDepositPaidValue = String(values.depotPaye ?? '').trim().length > 0;
@@ -98,6 +118,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
+  const tpeFieldValue = String(values.tpe ?? '').trim().length > 0 ? values.tpe : tpeDisplay;
   const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
   const creditDisplay = String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay;
   const bonusAutoDisplay = bonusResults;
@@ -157,32 +178,29 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <CalculationCell label="TOTAL PRELEVEMENTS" />
             <CalculationInput value={String(withdrawnTotal)} readOnly />
             <CalculationCell label="TOTAL TPE" separated />
-            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
-              {tpeDisplay && (
-                <div className="mb-2 text-[10px] font-semibold text-muted whitespace-pre-wrap">TPE fiche joueur : {tpeDisplay}</div>
-              )}
-              <textarea
-                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
-                style={casinoBorder}
-                inputMode="text"
-                rows={3}
-                value={values.tpe || ''}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || event.shiftKey) return;
-                  event.preventDefault();
-                  const textarea = event.currentTarget;
-                  const text = textarea.value;
-                  const cursorIndex = textarea.selectionStart ?? text.length;
-                  const before = text.slice(0, cursorIndex);
-                  const after = text.slice(cursorIndex);
-                  onUpdate('tpe', `${before}\n${after}`);
-                  requestAnimationFrame(() => {
-                    textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
-                  });
-                }}
-                onChange={(event) => onUpdate('tpe', event.target.value)}
-              />
-            </div>
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={tpeFieldValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                onUpdate('tpe', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => onUpdate('tpe', event.target.value)}
+            />
 
             <CalculationCell label="TOTAL POURBOIRES" />
             <textarea
@@ -206,34 +224,29 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               onChange={(event) => onUpdate('prolongation', event.target.value)}
             />
             <CalculationCell label="TOTAL MOBILES" separated />
-            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
-              <div className="mb-2 rounded border border-dashed px-2 py-1 text-[11px] font-bold text-yellow-300" style={casinoBorder}>
-                {mobilePaymentResults ? mobilePaymentResults.split('\n').map((line, index) => (
-                  <div key={`${line}-${index}`}>{line}</div>
-                )) : <div>{casinoCurrency.format(mobilePaymentsTotal || 0)} Ar</div>}
-              </div>
-              <textarea
-                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
-                style={casinoBorder}
-                inputMode="text"
-                rows={3}
-                value={values.mobiles || ''}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || event.shiftKey) return;
-                  event.preventDefault();
-                  const textarea = event.currentTarget;
-                  const text = textarea.value;
-                  const cursorIndex = textarea.selectionStart ?? text.length;
-                  const before = text.slice(0, cursorIndex);
-                  const after = text.slice(cursorIndex);
-                  onUpdate('mobiles', `${before}\n${after}`);
-                  requestAnimationFrame(() => {
-                    textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
-                  });
-                }}
-                onChange={(event) => onUpdate('mobiles', event.target.value)}
-              />
-            </div>
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={mobileDisplayValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                onUpdate('mobiles', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => onUpdate('mobiles', event.target.value)}
+            />
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
             <textarea
@@ -245,34 +258,33 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               onChange={(event) => onUpdate('autres', event.target.value)}
             />
             <CalculationCell label="TOTAL BONUS" separated />
-            <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
-              {bonusAutoDisplay && (
-                <div className="mb-2 text-[10px] font-semibold text-muted whitespace-pre-wrap">Bonus fiche joueur : {bonusAutoDisplay}</div>
-              )}
-              <textarea
-                className="w-full min-w-0 resize-y border bg-transparent px-2 py-1 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
-                style={casinoBorder}
-                inputMode="text"
-                rows={3}
-                value={bonusFieldValue || ''}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' || event.shiftKey) return;
-                  event.preventDefault();
-                  const textarea = event.currentTarget;
-                  const current = textarea.value;
-                  const cursorIndex = textarea.selectionStart ?? current.length;
-                  const before = current.slice(0, cursorIndex);
-                  const after = current.slice(cursorIndex);
-                  const nextValue = `${before}\n${after}`;
-                  onUpdate('bonus', nextValue || current);
-                  requestAnimationFrame(() => {
-                    const nextCursor = before.length + 1;
-                    textarea.selectionStart = textarea.selectionEnd = nextCursor;
-                  });
-                }}
-                onChange={(event) => onUpdate('bonus', event.target.value)}
-              />
-            </div>
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={bonusFieldValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                bonusManualOverrideRef.current = true;
+                onUpdate('bonus', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => {
+                bonusManualOverrideRef.current = true;
+                onUpdate('bonus', event.target.value);
+              }}
+            />
 
             <CalculationCell label="TOTAL RESTAURANT PAYE" />
             <div className="min-h-20 border-r border-b px-3 py-2" style={casinoBorder}>
