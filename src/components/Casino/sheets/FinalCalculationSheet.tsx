@@ -27,6 +27,16 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
   const bonusManualOverrideRef = useRef(false);
   const lastAutoBonusRef = useRef('');
+  const mobileManualOverrideRef = useRef(false);
+  const lastAutoMobileRef = useRef('');
+  const mobileReturnManualOverrideRef = useRef(false);
+  const lastAutoMobileReturnRef = useRef('');
+  const depositManualOverrideRef = useRef(false);
+  const lastAutoDepositRef = useRef('');
+  const depositPaidManualOverrideRef = useRef(false);
+  const lastAutoDepositPaidRef = useRef('');
+  const creditPaidManualOverrideRef = useRef(false);
+  const lastAutoCreditPaidRef = useRef('');
   const activePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const identity = identityVerifications[selectedPlayerId];
@@ -42,6 +52,38 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     .filter(Boolean);
   const bonusTotal = bonusEntries.reduce((total, entry) => total + parseCasinoAmount(entry.split(':').pop() || '0'), 0);
   const bonusResults = bonusEntries.length ? bonusEntries.join('\n') : '';
+  const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
+  const creditPaidResults = players
+    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+    .flatMap((player) => {
+      const playerId = player.ficheId ?? player.id;
+      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+      const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+      const result = cashing - totalCaves;
+      const creditPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'Crédit payé');
+      return result > 0 && creditPayments.length
+        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(creditPayments.reduce((sum, payment) => sum + (payment.amount || result), 0))}`]
+        : [];
+    })
+    .join('\n');
+  const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
+  const depositPaymentResults = buildPositivePaymentResults(players, 'Dépôt');
+  const depositPaymentTotal = getPositivePaymentTotal(players, 'Dépôt');
+  const mobileReturnResults = players
+    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+    .flatMap((player) => {
+      const playerId = player.ficheId ?? player.id;
+      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+      const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+      const result = cashing - totalCaves;
+      const mobileMethods = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'MVola' || payment.option === 'Orange Money');
+      return result > 0 && mobileMethods.length
+        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(mobileMethods.reduce((sum, payment) => sum + (payment.amount || result), 0))} (${mobileMethods.map((payment) => payment.option).join(' / ')})`]
+        : [];
+    })
+    .join('\n');
 
   useEffect(() => {
     const currentStoredBonus = String(values.bonus ?? '').trim();
@@ -60,48 +102,110 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     lastAutoBonusRef.current = currentAutoBonus;
   }, [bonusResults, values.bonus, onUpdate]);
 
-  const mobileReturnResults = players
-    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
-    .flatMap((player) => {
-      const playerId = player.ficheId ?? player.id;
-      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
-      const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-      const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-      const result = cashing - totalCaves;
-      const mobileMethods = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'MVola' || payment.option === 'Orange Money');
-      return result > 0 && mobileMethods.length
-        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(mobileMethods.reduce((sum, payment) => sum + (payment.amount || result), 0))} (${mobileMethods.map((payment) => payment.option).join(' / ')})`]
-        : [];
-    })
-    .join('\n');
-  const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
-  const mobileDisplayValue = String(values.mobiles ?? '').trim().length > 0 ? values.mobiles : mobilePaymentResults;
+  useEffect(() => {
+    const currentStoredMobile = String(values.mobiles ?? '').trim();
+    const currentAutoMobile = String(mobilePaymentResults ?? '').trim();
+
+    if (currentStoredMobile === currentAutoMobile) {
+      mobileManualOverrideRef.current = false;
+      lastAutoMobileRef.current = currentAutoMobile;
+      return;
+    }
+
+    if (!mobileManualOverrideRef.current && (!currentStoredMobile || currentStoredMobile === lastAutoMobileRef.current || currentStoredMobile === '')) {
+      onUpdate('mobiles', currentAutoMobile);
+    }
+
+    lastAutoMobileRef.current = currentAutoMobile;
+  }, [mobilePaymentResults, values.mobiles, onUpdate]);
+
+  useEffect(() => {
+    const currentStoredMobileReturn = String(values.retourMobile ?? '').trim();
+    const currentAutoMobileReturn = String(mobileReturnResults ?? '').trim();
+
+    if (currentStoredMobileReturn === currentAutoMobileReturn) {
+      mobileReturnManualOverrideRef.current = false;
+      lastAutoMobileReturnRef.current = currentAutoMobileReturn;
+      return;
+    }
+
+    if (!mobileReturnManualOverrideRef.current && (!currentStoredMobileReturn || currentStoredMobileReturn === lastAutoMobileReturnRef.current || currentStoredMobileReturn === '')) {
+      onUpdate('retourMobile', currentAutoMobileReturn);
+    }
+
+    lastAutoMobileReturnRef.current = currentAutoMobileReturn;
+  }, [mobileReturnResults, values.retourMobile, onUpdate]);
+
+  useEffect(() => {
+    const currentStoredDeposit = String(values.depot ?? '').trim();
+    const currentAutoDeposit = String(depositPaymentResults || depositResults || '').trim();
+
+    if (currentStoredDeposit === currentAutoDeposit) {
+      depositManualOverrideRef.current = false;
+      lastAutoDepositRef.current = currentAutoDeposit;
+      return;
+    }
+
+    if (!depositManualOverrideRef.current && (!currentStoredDeposit || currentStoredDeposit === lastAutoDepositRef.current || currentStoredDeposit === '')) {
+      onUpdate('depot', currentAutoDeposit);
+    }
+
+    lastAutoDepositRef.current = currentAutoDeposit;
+  }, [depositPaymentResults, depositResults, values.depot, onUpdate]);
+
+  useEffect(() => {
+    const currentStoredDepositPaid = String(values.depotPaye ?? '').trim();
+    const currentAutoDepositPaid = String(depositPaidResults ?? '').trim();
+
+    if (currentStoredDepositPaid === currentAutoDepositPaid) {
+      depositPaidManualOverrideRef.current = false;
+      lastAutoDepositPaidRef.current = currentAutoDepositPaid;
+      return;
+    }
+
+    if (!depositPaidManualOverrideRef.current && (!currentStoredDepositPaid || currentStoredDepositPaid === lastAutoDepositPaidRef.current || currentStoredDepositPaid === '')) {
+      onUpdate('depotPaye', currentAutoDepositPaid);
+    }
+
+    lastAutoDepositPaidRef.current = currentAutoDepositPaid;
+  }, [depositPaidResults, values.depotPaye, onUpdate]);
+
+  useEffect(() => {
+    const currentStoredCreditPaid = String(values.creditPaye ?? '').trim();
+    const currentAutoCreditPaid = String(creditPaidResults ?? '').trim();
+
+    if (currentStoredCreditPaid === currentAutoCreditPaid) {
+      creditPaidManualOverrideRef.current = false;
+      lastAutoCreditPaidRef.current = currentAutoCreditPaid;
+      return;
+    }
+
+    if (!creditPaidManualOverrideRef.current && (!currentStoredCreditPaid || currentStoredCreditPaid === lastAutoCreditPaidRef.current || currentStoredCreditPaid === '')) {
+      onUpdate('creditPaye', currentAutoCreditPaid);
+    }
+
+    lastAutoCreditPaidRef.current = currentAutoCreditPaid;
+  }, [creditPaidResults, values.creditPaye, onUpdate]);
+
+  const hasManualMobileValue = mobileManualOverrideRef.current && String(values.mobiles ?? '').trim().length > 0;
+  const mobileDisplayValue = hasManualMobileValue ? values.mobiles : mobilePaymentResults;
   const manualBonusValue = String(values.bonus ?? '').trim();
   const hasManualBonusValue = bonusManualOverrideRef.current && manualBonusValue.length > 0;
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
-  const creditPaidResults = players
-    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
-    .flatMap((player) => {
-      const playerId = player.ficheId ?? player.id;
-      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
-      const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-      const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-      const result = cashing - totalCaves;
-      const creditPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'Crédit payé');
-      return result > 0 && creditPayments.length
-        ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(creditPayments.reduce((sum, payment) => sum + (payment.amount || result), 0))}`]
-        : [];
-    })
-    .join('\n');
-  const depositPaymentResults = buildPositivePaymentResults(players, 'Dépôt');
-  const depositPaymentTotal = getPositivePaymentTotal(players, 'Dépôt');
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
+  const hasManualMobileReturnValue = mobileReturnManualOverrideRef.current && String(values.retourMobile ?? '').trim().length > 0;
+  const mobileReturnFieldValue = hasManualMobileReturnValue ? values.retourMobile : mobileReturnResults;
   const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
+  const depositAutoDisplay = depositPaymentResults || depositResults;
+  const hasManualDepositValue = depositManualOverrideRef.current && String(values.depot ?? '').trim().length > 0;
+  const depositFieldValue = hasManualDepositValue ? values.depot : depositAutoDisplay;
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
-  const depositPaidResults = buildNegativePaymentResults(players, 'Dépôt payé');
   const depositPaidAutoDisplay = depositPaidResults;
-  const hasManualDepositPaidValue = String(values.depotPaye ?? '').trim().length > 0;
+  const hasManualDepositPaidValue = depositPaidManualOverrideRef.current && String(values.depotPaye ?? '').trim().length > 0;
   const depositPaidFieldValue = hasManualDepositPaidValue ? values.depotPaye : depositPaidAutoDisplay;
+  const creditPaidAutoDisplay = creditPaidResults;
+  const hasManualCreditPaidValue = creditPaidManualOverrideRef.current && String(values.creditPaye ?? '').trim().length > 0;
+  const creditPaidFieldValue = hasManualCreditPaidValue ? values.creditPaye : creditPaidAutoDisplay;
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
   const hasManualTpeValue = String(values.tpe ?? '').trim().length > 0;
   const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
@@ -128,16 +232,19 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const tpeEntryTotal = hasManualTpeValue ? parseCasinoAmount(values.tpe) : tpePaymentsTotal;
   const bonusEntryTotal = parseCasinoAmount(hasManualBonusValue ? String(values.bonus ?? '').trim() || '0' : String(bonusResults ?? '').trim() || '0');
   const creditEntryTotal = parseCasinoAmount(String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay || '');
+  const depositEntryTotal = hasManualDepositValue ? parseCasinoAmount(values.depot) : depositPaymentTotal;
+  const mobileReturnEntryTotal = hasManualMobileReturnValue ? parseCasinoAmount(values.retourMobile) : mobileReturnTotal;
   const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
+  const creditPaidEntryTotal = hasManualCreditPaidValue ? parseCasinoAmount(values.creditPaye) : creditPaidTotal;
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
     + parseCasinoAmount(values.autre)
     + parseCasinoAmount(values.restaurant)
     + parseCasinoAmount(values.prolongation)
-    + depositPaymentTotal
-    + mobileReturnTotal
-    + creditPaidTotal;
+    + depositEntryTotal
+    + mobileReturnEntryTotal
+    + creditPaidEntryTotal;
   const automaticTotal2 = tpeEntryTotal
     + paidCaveTpeTotal
     + mobileCalculatedTotal
@@ -239,13 +346,17 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 const before = current.slice(0, cursorIndex);
                 const after = current.slice(cursorIndex);
                 const nextValue = `${before}\n${after}`;
+                mobileManualOverrideRef.current = true;
                 onUpdate('mobiles', nextValue || current);
                 requestAnimationFrame(() => {
                   const nextCursor = before.length + 1;
                   textarea.selectionStart = textarea.selectionEnd = nextCursor;
                 });
               }}
-              onChange={(event) => onUpdate('mobiles', event.target.value)}
+              onChange={(event) => {
+                mobileManualOverrideRef.current = true;
+                onUpdate('mobiles', event.target.value);
+              }}
             />
 
             <CalculationCell label="TOTAL RETRAIT AUTRES DEPARTEMENT" />
@@ -341,7 +452,33 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             />
 
             <CalculationCell label="DEPOT" />
-            <CalculationResult value={depositPaymentResults || depositResults} />
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={depositFieldValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                depositManualOverrideRef.current = true;
+                onUpdate('depot', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => {
+                depositManualOverrideRef.current = true;
+                onUpdate('depot', event.target.value);
+              }}
+            />
             <CalculationCell label="DEPOT PAYE" separated />
             <textarea
               className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
@@ -358,22 +495,78 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 const before = current.slice(0, cursorIndex);
                 const after = current.slice(cursorIndex);
                 const nextValue = `${before}\n${after}`;
+                depositPaidManualOverrideRef.current = true;
                 onUpdate('depotPaye', nextValue || current);
                 requestAnimationFrame(() => {
                   const nextCursor = before.length + 1;
                   textarea.selectionStart = textarea.selectionEnd = nextCursor;
                 });
               }}
-              onChange={(event) => onUpdate('depotPaye', event.target.value)}
+              onChange={(event) => {
+                depositPaidManualOverrideRef.current = true;
+                onUpdate('depotPaye', event.target.value);
+              }}
             />
 
             <CalculationCell label="RETOUR MOBILE" />
-            <CalculationResult value={mobileReturnResults} />
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={mobileReturnFieldValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                mobileReturnManualOverrideRef.current = true;
+                onUpdate('retourMobile', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => {
+                mobileReturnManualOverrideRef.current = true;
+                onUpdate('retourMobile', event.target.value);
+              }}
+            />
             <BlankCell separated />
             <BlankCell separated />
 
             <CalculationCell label="CREDIT PAYE" />
-            {creditPaidResults ? <CalculationResult value={creditPaidResults} /> : <CalculationInput value={values.creditPaye} onChange={(value) => onUpdate('creditPaye', value)} />}
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={creditPaidFieldValue || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                creditPaidManualOverrideRef.current = true;
+                onUpdate('creditPaye', nextValue || current);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => {
+                creditPaidManualOverrideRef.current = true;
+                onUpdate('creditPaye', event.target.value);
+              }}
+            />
             <BlankCell />
             <BlankCell />
 
@@ -663,7 +856,7 @@ const PaymentStatusRow: React.FC<{
   onExtraAmountChange?: (amount: string) => void;
   onMethodChange: (method: string) => void;
 }> = ({ label, amount, status, amountValue, extraAmountValue = '', paymentMethod, showExtraAmount = false, extraAmountLabel = 'Montant additionnel', onStatusChange, onAmountChange, onExtraAmountChange, onMethodChange }) => {
-  const displayedAmount = Number.parseFloat(amountValue || '0') || amount;
+  const displayedAmount = parseCasinoAmount(amountValue || String(amount)) || amount;
 
   return (
     <div className="rounded-xl border p-3" style={casinoBorder}>
@@ -699,10 +892,24 @@ const PaymentStatusRow: React.FC<{
 
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
           Montant manuel
-          <input
-            type="text"
+          <textarea
+            rows={3}
             inputMode="decimal"
             value={amountValue}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.shiftKey) return;
+              event.preventDefault();
+              const textarea = event.currentTarget;
+              const text = textarea.value;
+              const cursorIndex = textarea.selectionStart ?? text.length;
+              const before = text.slice(0, cursorIndex);
+              const after = text.slice(cursorIndex);
+              const nextValue = `${before}\n${after}`;
+              onAmountChange(nextValue || text);
+              requestAnimationFrame(() => {
+                textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
+              });
+            }}
             onChange={(event) => onAmountChange(event.target.value)}
             placeholder="0"
             className="mt-1 w-full rounded-lg border bg-transparent px-2 py-2 text-sm text-primary outline-none placeholder:text-muted"
@@ -715,11 +922,25 @@ const PaymentStatusRow: React.FC<{
         <div className="mt-3">
           <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
             {extraAmountLabel}
-            <input
-              type="text"
+            <textarea
+              rows={3}
               inputMode="decimal"
               value={extraAmountValue}
-              onChange={(event) => onExtraAmountChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const text = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? text.length;
+                const before = text.slice(0, cursorIndex);
+                const after = text.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                onExtraAmountChange?.(nextValue || text);
+                requestAnimationFrame(() => {
+                  textarea.selectionStart = textarea.selectionEnd = cursorIndex + 1;
+                });
+              }}
+              onChange={(event) => onExtraAmountChange?.(event.target.value)}
               placeholder="0"
               className="mt-1 w-full rounded-lg border bg-transparent px-2 py-2 text-sm text-primary outline-none placeholder:text-muted"
               style={casinoBorder}
