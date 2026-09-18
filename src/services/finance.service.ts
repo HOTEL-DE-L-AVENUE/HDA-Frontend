@@ -33,12 +33,18 @@ export interface FinancialTransaction {
   module: string;
   type_flux: string;
   montant: number;
+  moyen_paiement?: string;
   reference_id: number | null;
   ref_flux_global: string | null;
   description: string;
   statut_sync: string;
   synced_at: string | null;
   created_at: string;
+  pdj_inclus?: boolean;
+  reservation_moyen_paiement?: string;
+  reservation_client_nom?: string;
+  reservation_client_prenom?: string;
+  reservation_room_numero?: string;
 }
 
 export interface InvoiceWithDetails extends Invoice {

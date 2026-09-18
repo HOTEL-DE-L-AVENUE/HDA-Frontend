@@ -51,6 +51,8 @@ export interface Reservation {
   room_id: number;
   date_arrivee: string;
   date_depart: string;
+  pdj_inclus?: boolean;
+  moyen_paiement?: 'ESPECES' | 'TPE' | 'MVOLA' | 'ORANGE_MONEY' | 'CARTE' | 'VIREMENT' | 'CREDIT' | 'GRATUIT';
   montant_total: number | null;
   montant_brut?: number | null;
   remise_pourcentage?: number;

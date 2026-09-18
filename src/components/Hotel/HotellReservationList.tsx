@@ -280,6 +280,12 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                           {res.room?.numero || 'N/A'}
                         </span>
                         <span>{formatDate(res.date_arrivee)} → {formatDate(res.date_depart)}</span>
+                        <span className={res.pdj_inclus ? 'text-emerald-400' : 'text-gray-500'}>
+                          {res.pdj_inclus ? 'PDJ inclus' : 'PDJ non inclus'}
+                        </span>
+                        {res.moyen_paiement && res.statut === 'TERMINEE' && (
+                          <span className="text-sky-300">Paiement : {res.moyen_paiement.replace('_', ' ')}</span>
+                        )}
                         <span className="text-accent font-medium">{formatCurrency(res.montant_total || 0)}</span>
                         {Number(res.remise_pourcentage || 0) > 0 && (
                           <span className={res.remise_validee_par ? 'text-emerald-400' : 'text-orange-400'}>

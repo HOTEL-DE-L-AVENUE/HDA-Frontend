@@ -1,11 +1,15 @@
 import api from '../lib/api';
 import { Reservation } from '../types/hotel.types';
 
+export type HotelPaymentMethod = 'ESPECES' | 'TPE' | 'MVOLA' | 'ORANGE_MONEY' | 'CARTE' | 'VIREMENT' | 'CREDIT' | 'GRATUIT';
+
 export interface ReservationFormData {
   client_id: number;
   room_id: number;
   date_arrivee: string;
   date_depart: string;
+  pdj_inclus?: boolean;
+  moyen_paiement?: HotelPaymentMethod;
   montant_total: number;
   remise_pourcentage?: number;
   statut?: 'CONFIRMEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE';
@@ -90,9 +94,9 @@ export const reservationService = {
     }
   },
 
-  updateReservationStatus: async (id: number, statut: string): Promise<Reservation> => {
+  updateReservationStatus: async (id: number, statut: string, moyen_paiement?: HotelPaymentMethod): Promise<Reservation> => {
     try {
-      const response = await api.put<ApiResponse<Reservation>>(`${BASE_URL}/${id}`, { statut });
+      const response = await api.put<ApiResponse<Reservation>>(`${BASE_URL}/${id}`, { statut, moyen_paiement });
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateReservationStatus ${id}:`, error);

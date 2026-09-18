@@ -619,6 +619,11 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         categorie: transaction.module,
         userName: 'Système',
         heure: transaction.created_at,
+        moyen_paiement: transaction.reservation_moyen_paiement || transaction.moyen_paiement,
+        pdj_inclus: transaction.pdj_inclus,
+        reservation_client: [transaction.reservation_client_prenom, transaction.reservation_client_nom].filter(Boolean).join(' '),
+        reservation_room: transaction.reservation_room_numero,
+        is_reservation: String(transaction.ref_flux_global || '').includes('RESERVATION-'),
       }))
     : allRestaurantTransactions;
 
@@ -1019,6 +1024,15 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                     <div>
                       <p className="text-white font-medium text-sm">{t.description}</p>
                       <p className="text-slate-500 text-xs">{t.categorie} • {t.userName || 'Système'} {t.heure ? `• ${t.heure}` : ''}</p>
+                      {isHotel && t.is_reservation && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          {t.reservation_client ? `Client : ${t.reservation_client}` : ''}
+                          {t.reservation_room ? ` • Chambre ${t.reservation_room}` : ''}
+                          {t.reservation_client || t.reservation_room ? ' • ' : ''}
+                          {t.pdj_inclus ? 'PDJ inclus' : 'PDJ non inclus'}
+                          {t.moyen_paiement ? ` • Paiement : ${t.moyen_paiement.replace('_', ' ')}` : ''}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
