@@ -403,13 +403,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   };
 
   useEffect(() => {
-    const hasBalancePayment = selectedResultPayments.some((payment) => payment.option === 'Dépôt payé' || payment.option === 'Crédit payé');
-    if (selectedPlayer && hasBalancePayment) {
-      updateResultBalances(selectedResultPayments);
-    }
-  }, [selectedPlayer?.id, selectedPlayerResult]);
-
-  useEffect(() => {
     const cashingAmount = parseCasinoAmount(selectedPlayer?.cashing);
     const caveAmount = selectedPlayerCaveToVerify >= IDENTITY_VERIFICATION_THRESHOLD ? selectedPlayerCaveToVerify : 0;
     const verificationAmount = Math.max(caveAmount, cashingAmount);

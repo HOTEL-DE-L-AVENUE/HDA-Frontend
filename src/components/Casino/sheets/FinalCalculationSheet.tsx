@@ -92,10 +92,14 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
-  const creditDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
+  const hasManualCreditValue = String(values.credit ?? '').trim().length > 0;
+  const creditDisplay = hasManualCreditValue ? values.credit : [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
   const offertDisplay = paidCaveOffertResults || values.offert;
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
+  const manualCreditTotal = parseCasinoAmount(values.credit);
+  const automaticCreditTotal = creditResults ? creditPaymentsTotal : 0;
+  const creditEntryTotal = hasManualCreditValue ? manualCreditTotal : automaticCreditTotal + paidCaveCreditTotal;
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -110,8 +114,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + mobileCalculatedTotal
     + paidCaveMobileTotal
     + (bonusEntries.length ? bonusTotal : parseCasinoAmount(values.bonus))
-    + (creditResults ? creditPaymentsTotal : parseCasinoAmount(values.credit))
-    + paidCaveCreditTotal
+    + creditEntryTotal
     + (depositPaidResults ? depositPaidTotal : parseCasinoAmount(values.depotPaye))
     + parseCasinoAmount(values.offert)
     + paidCaveOffertTotal
