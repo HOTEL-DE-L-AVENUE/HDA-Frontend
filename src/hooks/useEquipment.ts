@@ -111,6 +111,19 @@ export const useEquipment = () => {
     }
   }, []);
 
+  const updateRoomEquipment = useCallback(async (id: number, data: any) => {
+    try {
+      setError(null);
+      const updated = await equipmentService.updateRoomEquipment(id, data);
+      setRoomEquipments(prev => prev.map(re => re.id === id ? updated : re));
+      return updated;
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Erreur lors de la mise à jour de l\'assignation');
+      console.error('❌ updateRoomEquipment error:', err);
+      throw err;
+    }
+  }, []);
+
   // Supprimer un équipement de chambre
   const deleteRoomEquipment = useCallback(async (id: number) => {
     try {

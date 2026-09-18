@@ -104,6 +104,26 @@ export const CasinoPage: React.FC = () => {
   const openingTotal = useMemo(() => chips.reduce((total, line) => total + line.value * (Number(line.opening) || 0), 0), [chips]);
   const closingTotal = useMemo(() => chips.reduce((total, line) => total + line.value * (Number(line.closing) || 0), 0), [chips]);
   const withdrawnTotal = useMemo(() => chips.reduce((total, line) => total + line.value * parseCasinoAmount(line.withdrawn), 0), [chips]);
+
+  const parsePaymentEntries = (value?: string): Array<{ option: string; amount: number }> => {
+    try {
+      const parsed = JSON.parse(value || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed.flatMap((entry) => {
+        if (typeof entry === 'string') return [{ option: entry, amount: 0 }];
+        if (entry && typeof entry.option === 'string') return [{ option: entry.option, amount: Number(entry.amount) || 0 }];
+        return [];
+      });
+    } catch {
+      return [];
+    }
+  };
+
+  const getPlayerPaymentTotal = (player: PlayerLine, option: string): number => {
+    const payments = parsePaymentEntries(player.resultPaymentOptions).filter((entry) => entry.option === option);
+    return payments.reduce((total, entry) => total + (entry.amount || 0), 0);
+  };
+
   const playerResults = useMemo(() => players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .map((player) => {
@@ -111,20 +131,37 @@ export const CasinoPage: React.FC = () => {
       const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
       const cavesTotal = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
       const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+      const result = cashing - cavesTotal;
       return {
         name: player.name || `Joueur ${playerId}`,
-        result: cashing - cavesTotal,
-        paymentOptions: parseResultPaymentOptions(player.resultPaymentOptions),
+        result,
+        paymentEntries: parsePaymentEntries(player.resultPaymentOptions),
+        depositTotal: getPlayerPaymentTotal(player, 'Dépôt'),
+        creditTotal: getPlayerPaymentTotal(player, 'Crédit'),
       };
     }), [players]);
-  const depositResults = useMemo(() => playerResults
-    .filter(({ result, paymentOptions }) => result > 0 && paymentOptions.includes('Dépôt'))
-    .map(({ name, result }) => `${name} : ${casinoCurrency.format(result)}`)
-    .join(' - '), [playerResults]);
-  const creditResults = useMemo(() => playerResults
-    .filter(({ result, paymentOptions }) => result < 0 && paymentOptions.includes('Crédit'))
-    .map(({ name, result }) => `${name} : ${casinoCurrency.format(Math.abs(result))}`)
-    .join(' - '), [playerResults]);
+
+  const depositResults = useMemo(() => players
+    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+    .flatMap((player) => {
+      const playerId = player.ficheId ?? player.id;
+      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+      const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      const total = getPlayerPaymentTotal(player, 'Dépôt');
+      return result > 0 && total > 0 ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(total)}`] : [];
+    })
+    .join(' - '), [players]);
+
+  const creditResults = useMemo(() => players
+    .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
+    .flatMap((player) => {
+      const playerId = player.ficheId ?? player.id;
+      const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+      const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      const total = getPlayerPaymentTotal(player, 'Crédit');
+      return result < 0 && total > 0 ? [`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(total)}`] : [];
+    })
+    .join(' - '), [players]);
 
   useEffect(() => {
     let active = true;
