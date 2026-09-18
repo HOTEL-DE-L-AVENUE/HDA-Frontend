@@ -8,7 +8,7 @@ import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucid
 import { clientService, type Client } from '../../services/client.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isManager } from '../../utils/permissions';
-import { PafSection } from './PafSection';
+
 
 interface Props {
   commandes: BarCommande[];
@@ -571,9 +571,6 @@ export const BarCommandeView: React.FC<Props> = ({
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? `Ajouter des articles · Commande #${editingOrderId ?? ''}` : 'Nouvelle commande · Bar'} size="full">
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
-          <div className="rounded-2xl border border-base bg-surface p-2">
-            <PafSection />
-          </div>
 
           {feedback && (
             <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>

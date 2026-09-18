@@ -16,7 +16,7 @@ export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
   caissier: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
   caisse: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
   stock_manager: ['hotel', 'restaurant', 'bar', 'alcool', 'hebergement'],
-  receptioniste: ['hebergement', 'hotel', 'clients'],
+  receptioniste: ['hebergement', 'hotel', 'bar', 'clients'],
   water: ['bar'],
   barman: ['bar'],
   housekeeping: ['hotel', 'hebergement'],
