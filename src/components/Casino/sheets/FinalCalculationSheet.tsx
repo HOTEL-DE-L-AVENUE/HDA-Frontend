@@ -256,9 +256,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + parseCasinoAmount(paidCaveOtherResults);
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
-  const hasManualTotal2 = String(values.total2 ?? '').trim().length > 0;
-  const effectiveTotal2 = hasManualTotal2 ? parseCasinoAmount(values.total2) : total2;
-  const difference = Math.abs(effectiveTotal2 - total1);
+  const difference = Math.abs(total2 - total1);
   const totalEspeces = parseCasinoAmount(values.totalEspecesCaisse || '');
   const resultatFinal = difference - totalEspeces;
 
@@ -579,7 +577,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <TotalCell label="TOTAL 1" />
             <CalculationInput value={casinoCurrency.format(total1)} onChange={(value) => onUpdate('total1', value)} />
             <TotalCell label="TOTAL 2" separated />
-            <CalculationInput value={hasManualTotal2 ? values.total2 : casinoCurrency.format(total2)} onChange={(value) => onUpdate('total2', value)} />
+            <CalculationInput value={casinoCurrency.format(total2)} readOnly />
           </div>
 
           <div className="grid grid-cols-[1.35fr_.85fr_1.2fr] border-t" style={casinoBorder}>
