@@ -188,7 +188,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   }, [creditPaidResults, values.creditPaye, onUpdate]);
 
   const hasManualMobileValue = mobileManualOverrideRef.current && String(values.mobiles ?? '').trim().length > 0;
-  const mobileDisplayValue = hasManualMobileValue ? values.mobiles : mobilePaymentResults;
   const manualBonusValue = String(values.bonus ?? '').trim();
   const hasManualBonusValue = bonusManualOverrideRef.current && manualBonusValue.length > 0;
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
@@ -223,6 +222,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
   const tpeFieldValue = String(values.tpe ?? '').trim().length > 0 ? values.tpe : tpeDisplay;
+  const mobileDisplayValue = hasManualMobileValue ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
   const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
   const creditDisplay = String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay;
   const bonusAutoDisplay = bonusResults;
@@ -247,15 +247,13 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + depositEntryTotal
     + mobileReturnEntryTotal
     + creditPaidEntryTotal;
-  const automaticTotal2 = tpeEntryTotal
-    + mobileCalculatedTotal
-    + paidCaveMobileTotal
-    + bonusEntryTotal
-    + creditEntryTotal
-    + depositPaidEntryTotal
-    + parseCasinoAmount(values.offert)
-    + paidCaveOffertTotal
-    + paidCaveOtherTotal;
+  const automaticTotal2 = parseCasinoAmount(tpeFieldValue)
+    + parseCasinoAmount(mobileDisplayValue)
+    + parseCasinoAmount(bonusFieldValue)
+    + parseCasinoAmount(creditDisplay)
+    + parseCasinoAmount(depositPaidFieldValue)
+    + parseCasinoAmount(offertDisplay)
+    + parseCasinoAmount(paidCaveOtherResults);
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const hasManualTotal2 = String(values.total2 ?? '').trim().length > 0;
