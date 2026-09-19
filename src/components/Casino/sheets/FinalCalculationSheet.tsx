@@ -264,7 +264,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const hasCreditResultPayment = players.some((player) => parsePaymentOptions(player.resultPaymentOptions).some((payment) => payment.option === 'Crédit'));
   const creditDisplay = creditAutoDisplay || (creditManualOverrideRef.current ? values.credit : '');
   const bonusAutoDisplay = bonusResults;
-  const offertDisplay = [offertPaymentResults, offertManualOverrideRef.current || String(values.offert ?? '').trim().length > 0 ? values.offert : ''].filter(Boolean).join('\n');
+  const offertDisplay = uniqueDisplayLines([
+    offertPaymentResults,
+    offertManualOverrideRef.current || String(values.offert ?? '').trim().length > 0 ? values.offert : '',
+  ].filter(Boolean).join('\n'));
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue
@@ -484,7 +487,29 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               />
             </div>
             <CalculationCell label="TOTAL OFFERT" separated />
-            {offertDisplay ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => { offertManualOverrideRef.current = true; onUpdate('offert', value); }} />}
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={offertDisplay || ''}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                const textarea = event.currentTarget;
+                const current = textarea.value;
+                const cursorIndex = textarea.selectionStart ?? current.length;
+                const before = current.slice(0, cursorIndex);
+                const after = current.slice(cursorIndex);
+                const nextValue = `${before}\n${after}`;
+                updateManualValue('offert', nextValue || current, offertManualOverrideRef);
+                requestAnimationFrame(() => {
+                  const nextCursor = before.length + 1;
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
+              }}
+              onChange={(event) => updateManualValue('offert', event.target.value, offertManualOverrideRef)}
+            />
 
             <CalculationCell label="AUTRE" />
             <CalculationInput value={values.autre} onChange={(value) => onUpdate('autre', value)} />
@@ -1053,6 +1078,19 @@ const buildOffertResults = (players: PlayerLine[]): string => {
   });
 
   return results.join('\n');
+};
+
+const uniqueDisplayLines = (value: string): string => {
+  const seen = new Set<string>();
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line || seen.has(line)) return false;
+      seen.add(line);
+      return true;
+    })
+    .join('\n');
 };
 
 const buildCreditResults = (players: PlayerLine[]): string => {
