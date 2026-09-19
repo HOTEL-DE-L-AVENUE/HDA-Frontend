@@ -14,7 +14,7 @@ interface FinalCalculationSheetProps {
   onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
   onPlayerUpdate?: (id: number, key: keyof PlayerLine, value: string) => void;
-  onSave: () => void;
+  onSave: (values?: Record<string, string>) => void;
   isFinished?: boolean;
   isFinishing?: boolean;
   canFinish?: boolean;
@@ -157,6 +157,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     const currentStoredDepositPaid = String(values.depotPaye ?? '').trim();
     const currentAutoDepositPaid = String(depositPaidResults ?? '').trim();
 
+    if (currentStoredDepositPaid && currentStoredDepositPaid !== currentAutoDepositPaid && currentStoredDepositPaid !== lastAutoDepositPaidRef.current) {
+      depositPaidManualOverrideRef.current = true;
+    }
+
     if (currentStoredDepositPaid === currentAutoDepositPaid) {
       depositPaidManualOverrideRef.current = false;
       lastAutoDepositPaidRef.current = currentAutoDepositPaid;
@@ -259,6 +263,42 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const difference = Math.abs(total2 - total1);
   const totalEspeces = parseCasinoAmount(values.totalEspecesCaisse || '');
   const resultatFinal = difference - totalEspeces;
+  const finalValuesToSave: Record<string, string> = {
+    ...values,
+    tpe: tpeFieldValue,
+    mobiles: mobileDisplayValue,
+    bonus: bonusFieldValue,
+    credit: creditDisplay,
+    depot: depositFieldValue,
+    depotPaye: depositPaidFieldValue,
+    retourMobile: mobileReturnFieldValue,
+    creditPaye: creditPaidFieldValue,
+    total1: casinoCurrency.format(total1),
+    total2: casinoCurrency.format(total2),
+    difference: casinoCurrency.format(difference),
+    resultatFinal: casinoCurrency.format(resultatFinal),
+  };
+
+  useEffect(() => {
+    const calculatedFields: Array<[string, string]> = [
+      ['tpe', tpeFieldValue],
+      ['mobiles', mobileDisplayValue],
+      ['bonus', bonusFieldValue],
+      ['credit', creditDisplay],
+      ['depot', depositFieldValue],
+      ['depotPaye', depositPaidFieldValue],
+      ['retourMobile', mobileReturnFieldValue],
+      ['creditPaye', creditPaidFieldValue],
+      ['total1', casinoCurrency.format(total1)],
+      ['total2', casinoCurrency.format(total2)],
+      ['difference', casinoCurrency.format(difference)],
+      ['resultatFinal', casinoCurrency.format(resultatFinal)],
+    ];
+
+    calculatedFields.forEach(([key, value]) => {
+      if (String(values[key] ?? '') !== value) onUpdate(key, value);
+    });
+  }, [tpeFieldValue, mobileDisplayValue, bonusFieldValue, creditDisplay, depositFieldValue, depositPaidFieldValue, mobileReturnFieldValue, creditPaidFieldValue, total1, total2, difference, resultatFinal, values, onUpdate]);
 
   return (
     <div className="text-sm text-primary">
@@ -631,7 +671,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         {isFinished && <span className="text-xs text-green-700">Jeu terminé</span>}
         {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
         {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
-        <button type="button" className="action inline-flex items-center gap-2" onClick={() => onSave()} disabled={saveState === 'saving'}>
+        <button type="button" className="action inline-flex items-center gap-2" onClick={() => onSave(finalValuesToSave)} disabled={saveState === 'saving'}>
           {saveState === 'saving' && <Loader2 className="h-4 w-4 animate-spin" />}
           {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}
         </button>
@@ -670,7 +710,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               }
             });
             setPaymentConfirmationOpen(false);
-            onSave();
+            onSave(finalValuesToSave);
           }}
         />
       ) : (
