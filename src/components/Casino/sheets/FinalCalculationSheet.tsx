@@ -35,6 +35,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const tpeManualOverrideRef = useRef(false);
   const creditManualOverrideRef = useRef(false);
   const offertManualOverrideRef = useRef(false);
+  const otherCavePaymentsManualOverrideRef = useRef(false);
 
   useEffect(() => {
     bonusManualOverrideRef.current = false;
@@ -46,6 +47,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     tpeManualOverrideRef.current = false;
     creditManualOverrideRef.current = false;
     offertManualOverrideRef.current = false;
+    otherCavePaymentsManualOverrideRef.current = false;
     lastAutoBonusRef.current = '';
     lastAutoMobileRef.current = '';
     lastAutoMobileReturnRef.current = '';
@@ -258,16 +260,18 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOffertTotal = getPaidCavePaymentTotal(players, ['Offert']);
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
-  const tpeFieldValue = String(values.tpe ?? '').trim().length > 0 ? values.tpe : tpeDisplay;
+  const tpeFieldValue = tpeManualOverrideRef.current ? values.tpe : tpeDisplay;
   const mobileDisplayValue = hasManualMobileValue ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
   const creditAutoDisplay = buildCreditResults(players);
   const hasCreditResultPayment = players.some((player) => parsePaymentOptions(player.resultPaymentOptions).some((payment) => payment.option === 'Crédit'));
-  const creditDisplay = creditAutoDisplay || (creditManualOverrideRef.current ? values.credit : '');
+  const creditDisplay = creditManualOverrideRef.current ? values.credit : creditAutoDisplay;
   const bonusAutoDisplay = bonusResults;
   const offertDisplay = uniqueDisplayLines([
-    offertPaymentResults,
-    offertManualOverrideRef.current || String(values.offert ?? '').trim().length > 0 ? values.offert : '',
+    offertManualOverrideRef.current ? values.offert : offertPaymentResults,
   ].filter(Boolean).join('\n'));
+  const otherCavePaymentsDisplay = otherCavePaymentsManualOverrideRef.current
+    ? values.autresPaiementsCaves || ''
+    : paidCaveOtherResults;
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue
@@ -294,7 +298,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + parseCasinoAmount(creditDisplay)
     + parseCasinoAmount(depositPaidFieldValue)
     + parseCasinoAmount(offertDisplay)
-    + parseCasinoAmount(paidCaveOtherResults);
+    + parseCasinoAmount(otherCavePaymentsDisplay);
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
@@ -309,6 +313,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     depot: depositFieldValue,
     depotPaye: depositPaidFieldValue,
     offert: offertDisplay,
+    autresPaiementsCaves: otherCavePaymentsDisplay,
     retourMobile: mobileReturnFieldValue,
     creditPaye: creditPaidFieldValue,
     total1: casinoCurrency.format(total1),
@@ -662,7 +667,17 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
             <BlankCell />
             <BlankCell />
             <CalculationCell label="AUTRES PAIEMENTS CAVES" separated />
-            <CalculationResult value={paidCaveOtherResults} />
+            <textarea
+              className="min-h-20 w-full min-w-0 resize-y border-r border-b bg-transparent px-3 py-2 text-[11px] text-primary outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]"
+              style={casinoBorder}
+              inputMode="text"
+              rows={3}
+              value={otherCavePaymentsDisplay}
+              onChange={(event) => {
+                otherCavePaymentsManualOverrideRef.current = true;
+                onUpdate('autresPaiementsCaves', event.target.value);
+              }}
+            />
 
             <TotalCell label="TOTAL 1" />
             <CalculationInput value={casinoCurrency.format(total1)} onChange={(value) => onUpdate('total1', value)} />
