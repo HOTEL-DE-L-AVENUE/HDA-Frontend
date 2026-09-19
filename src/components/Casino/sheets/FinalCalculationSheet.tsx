@@ -10,6 +10,7 @@ interface FinalCalculationSheetProps {
   withdrawnTotal: number;
   depositResults: string;
   creditResults: string;
+  calculationRevision?: number;
   saveState?: 'idle' | 'saving' | 'saved' | 'error';
   onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
@@ -18,7 +19,7 @@ interface FinalCalculationSheetProps {
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
 
-export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
+export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, calculationRevision = 0, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
   const bonusManualOverrideRef = useRef(false);
   const lastAutoBonusRef = useRef('');
   const mobileManualOverrideRef = useRef(false);
@@ -31,6 +32,27 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const lastAutoDepositPaidRef = useRef('');
   const creditPaidManualOverrideRef = useRef(false);
   const lastAutoCreditPaidRef = useRef('');
+  const tpeManualOverrideRef = useRef(false);
+  const creditManualOverrideRef = useRef(false);
+  const offertManualOverrideRef = useRef(false);
+
+  useEffect(() => {
+    bonusManualOverrideRef.current = false;
+    mobileManualOverrideRef.current = false;
+    mobileReturnManualOverrideRef.current = false;
+    depositManualOverrideRef.current = false;
+    depositPaidManualOverrideRef.current = false;
+    creditPaidManualOverrideRef.current = false;
+    tpeManualOverrideRef.current = false;
+    creditManualOverrideRef.current = false;
+    offertManualOverrideRef.current = false;
+    lastAutoBonusRef.current = '';
+    lastAutoMobileRef.current = '';
+    lastAutoMobileReturnRef.current = '';
+    lastAutoDepositRef.current = '';
+    lastAutoDepositPaidRef.current = '';
+    lastAutoCreditPaidRef.current = '';
+  }, [calculationRevision]);
   const activePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const identity = identityVerifications[selectedPlayerId];
@@ -47,6 +69,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const bonusTotal = bonusEntries.reduce((total, entry) => total + parseCasinoAmount(entry.split(':').pop() || '0'), 0);
   const bonusResults = bonusEntries.length ? bonusEntries.join('\n') : '';
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
+  const offertPaymentResults = buildNegativePaymentResults(players, 'Offert');
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -201,26 +224,26 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     lastAutoCreditPaidRef.current = currentAutoCreditPaid;
   }, [creditPaidResults, values.creditPaye, onUpdate]);
 
-  const hasManualMobileValue = String(values.mobiles ?? '').trim().length > 0;
+  const hasManualMobileValue = mobileManualOverrideRef.current;
   const manualBonusValue = String(values.bonus ?? '').trim();
-  const hasManualBonusValue = manualBonusValue.length > 0;
+  const hasManualBonusValue = bonusManualOverrideRef.current;
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
   const hasManualMobileReturnValue = String(values.retourMobile ?? '').trim().length > 0;
   const mobileReturnFieldValue = hasManualMobileReturnValue ? values.retourMobile : mobileReturnResults;
   const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
   const depositAutoDisplay = depositPaymentResults || depositResults;
-  const hasManualDepositValue = String(values.depot ?? '').trim().length > 0;
+  const hasManualDepositValue = depositManualOverrideRef.current;
   const depositFieldValue = hasManualDepositValue ? values.depot : depositAutoDisplay;
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const depositPaidAutoDisplay = depositPaidResults;
-  const hasManualDepositPaidValue = String(values.depotPaye ?? '').trim().length > 0;
+  const hasManualDepositPaidValue = depositPaidManualOverrideRef.current;
   const depositPaidFieldValue = hasManualDepositPaidValue ? values.depotPaye : depositPaidAutoDisplay;
   const creditPaidAutoDisplay = creditPaidResults;
-  const hasManualCreditPaidValue = String(values.creditPaye ?? '').trim().length > 0;
+  const hasManualCreditPaidValue = creditPaidManualOverrideRef.current;
   const creditPaidFieldValue = hasManualCreditPaidValue ? values.creditPaye : creditPaidAutoDisplay;
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
-  const hasManualTpeValue = String(values.tpe ?? '').trim().length > 0;
+  const hasManualTpeValue = tpeManualOverrideRef.current;
   const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
   const depositPaidTotal = getNegativePaymentTotal(players, 'Dépôt payé');
   const creditPaymentsTotal = getNegativePaymentTotal(players, 'Crédit');
@@ -238,9 +261,9 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const tpeFieldValue = String(values.tpe ?? '').trim().length > 0 ? values.tpe : tpeDisplay;
   const mobileDisplayValue = hasManualMobileValue ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
   const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
-  const creditDisplay = String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay;
+  const creditDisplay = creditManualOverrideRef.current ? values.credit : creditAutoDisplay;
   const bonusAutoDisplay = bonusResults;
-  const offertDisplay = paidCaveOffertResults || values.offert;
+  const offertDisplay = [offertPaymentResults, paidCaveOffertResults, offertManualOverrideRef.current ? values.offert : ''].filter(Boolean).join('\n');
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue
@@ -272,7 +295,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
   const totalEspeces = parseCasinoAmount(values.totalEspecesCaisse || '');
-  const resultatFinal = difference - totalEspeces;
+  const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
     tpe: tpeFieldValue,
@@ -281,6 +304,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     credit: creditDisplay,
     depot: depositFieldValue,
     depotPaye: depositPaidFieldValue,
+    offert: offertDisplay,
     retourMobile: mobileReturnFieldValue,
     creditPaye: creditPaidFieldValue,
     total1: casinoCurrency.format(total1),
@@ -333,13 +357,17 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 const before = current.slice(0, cursorIndex);
                 const after = current.slice(cursorIndex);
                 const nextValue = `${before}\n${after}`;
+                tpeManualOverrideRef.current = true;
                 onUpdate('tpe', nextValue || current);
                 requestAnimationFrame(() => {
                   const nextCursor = before.length + 1;
                   textarea.selectionStart = textarea.selectionEnd = nextCursor;
                 });
               }}
-              onChange={(event) => onUpdate('tpe', event.target.value)}
+              onChange={(event) => {
+                tpeManualOverrideRef.current = true;
+                onUpdate('tpe', event.target.value);
+              }}
             />
 
             <CalculationCell label="TOTAL POURBOIRES" />
@@ -455,7 +483,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               />
             </div>
             <CalculationCell label="TOTAL OFFERT" separated />
-            {paidCaveOffertResults ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => onUpdate('offert', value)} />}
+            {offertDisplay ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => { offertManualOverrideRef.current = true; onUpdate('offert', value); }} />}
 
             <CalculationCell label="AUTRE" />
             <CalculationInput value={values.autre} onChange={(value) => onUpdate('autre', value)} />
@@ -475,13 +503,17 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 const before = current.slice(0, cursorIndex);
                 const after = current.slice(cursorIndex);
                 const nextValue = `${before}\n${after}`;
+                creditManualOverrideRef.current = true;
                 onUpdate('credit', nextValue || current);
                 requestAnimationFrame(() => {
                   const nextCursor = before.length + 1;
                   textarea.selectionStart = textarea.selectionEnd = nextCursor;
                 });
               }}
-              onChange={(event) => onUpdate('credit', event.target.value)}
+              onChange={(event) => {
+                creditManualOverrideRef.current = true;
+                onUpdate('credit', event.target.value);
+              }}
             />
 
             <CalculationCell label="DEPOT" />
@@ -510,7 +542,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               onChange={(event) => {
                 updateManualValue('depot', event.target.value, depositManualOverrideRef);
               }}
-              onBlur={(event) => onSave({ ...finalValuesToSave, depot: event.currentTarget.value })}
             />
             <CalculationCell label="DEPOT PAYE" separated />
             <textarea
@@ -538,7 +569,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               onChange={(event) => {
                 updateManualValue('depotPaye', event.target.value, depositPaidManualOverrideRef);
               }}
-              onBlur={(event) => onSave({ ...finalValuesToSave, depotPaye: event.currentTarget.value })}
             />
 
             <CalculationCell label="RETOUR MOBILE" />

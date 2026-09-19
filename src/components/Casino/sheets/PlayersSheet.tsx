@@ -48,7 +48,7 @@ const paymentMethods = ['Espèces', 'Orange Money', 'MVola', 'Euro', 'Dollar', '
 
 const bonusCategories = ['7 et 2', 'Carré', 'Quinte flush', 'Quinte flush royal', 'Fetish'];
 const positiveResultOptions = ['Dépôt', 'Crédit payé', 'Espèce', 'MVola', 'Orange Money'];
-const negativeResultOptions = ['Dépôt payé', 'Crédit', 'TPE', 'MVola', 'Orange Money', 'Espèce'];
+const negativeResultOptions = ['Dépôt payé', 'Crédit', 'Offert', 'TPE', 'MVola', 'Orange Money', 'Espèce'];
 const ROULETTE_PRIZES = [10000, 5000, 100000, 20000, 10000, 0, 50000, 10000, 10000, 20000, 100000, 10000, 5000, 50000, 20000, 5000, 40000, 5000, 50000, 5000, 0, 100000, 10000, 20000];
 
 const parseBonuses = (value?: string): string[] => {
