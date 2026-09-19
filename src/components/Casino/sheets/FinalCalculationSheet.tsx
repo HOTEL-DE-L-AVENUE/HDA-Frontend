@@ -69,6 +69,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const bonusTotal = bonusEntries.reduce((total, entry) => total + parseCasinoAmount(entry.split(':').pop() || '0'), 0);
   const bonusResults = bonusEntries.length ? bonusEntries.join('\n') : '';
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
+  const offertPaymentResults = buildNegativePaymentResults(players, 'Offert');
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -262,7 +263,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
   const creditDisplay = creditManualOverrideRef.current ? values.credit : creditAutoDisplay;
   const bonusAutoDisplay = bonusResults;
-  const offertDisplay = paidCaveOffertResults || (offertManualOverrideRef.current ? values.offert : '');
+  const offertDisplay = [offertPaymentResults, paidCaveOffertResults, offertManualOverrideRef.current ? values.offert : ''].filter(Boolean).join('\n');
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue
@@ -303,6 +304,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     credit: creditDisplay,
     depot: depositFieldValue,
     depotPaye: depositPaidFieldValue,
+    offert: offertDisplay,
     retourMobile: mobileReturnFieldValue,
     creditPaye: creditPaidFieldValue,
     total1: casinoCurrency.format(total1),
@@ -481,7 +483,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               />
             </div>
             <CalculationCell label="TOTAL OFFERT" separated />
-            {paidCaveOffertResults ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => { offertManualOverrideRef.current = true; onUpdate('offert', value); }} />}
+            {offertDisplay ? <CalculationResult value={offertDisplay} /> : <CalculationInput value={values.offert} onChange={(value) => { offertManualOverrideRef.current = true; onUpdate('offert', value); }} />}
 
             <CalculationCell label="AUTRE" />
             <CalculationInput value={values.autre} onChange={(value) => onUpdate('autre', value)} />
