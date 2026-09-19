@@ -197,9 +197,13 @@ export const CasinoPage: React.FC = () => {
         const loadedFinals = sheet.finals || {};
         // Compatibilité avec les signatures précédemment enregistrées dans une fiche joueur.
         const previousSignature = Object.values(loadedFinals).find((entry) => entry?.signature)?.signature;
-        setFinalsByPlayer(previousSignature && !loadedFinals._global
+        const normalizedFinals = previousSignature && !loadedFinals._global
           ? { ...loadedFinals, _global: { signature: previousSignature } }
-          : loadedFinals);
+          : loadedFinals;
+        finalsByPlayerRef.current = normalizedFinals;
+        setFinalsByPlayer(normalizedFinals);
+        const firstLoadedPlayer = loadedPlayers.find((player) => player.ficheId ?? player.id);
+        if (firstLoadedPlayer) setSelectedFinalPlayerId(firstLoadedPlayer.ficheId ?? firstLoadedPlayer.id);
         setIsGameFinished(Boolean(sheet.isFinished));
         setGameFinishedAt(sheet.finishedAt || '');
       } else {
@@ -209,6 +213,7 @@ export const CasinoPage: React.FC = () => {
         setRestaurantPayments({ especes: false, tpe: false });
         setCashingPaymentMethod('');
         setEndGameTime('');
+        finalsByPlayerRef.current = {};
         setFinalsByPlayer({});
         setIsGameFinished(false);
         setGameFinishedAt('');

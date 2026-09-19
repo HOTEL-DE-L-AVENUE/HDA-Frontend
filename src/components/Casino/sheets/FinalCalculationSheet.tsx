@@ -224,23 +224,23 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     lastAutoCreditPaidRef.current = currentAutoCreditPaid;
   }, [creditPaidResults, values.creditPaye, onUpdate]);
 
-  const hasManualMobileValue = mobileManualOverrideRef.current;
+  const hasManualMobileValue = mobileManualOverrideRef.current || String(values.mobiles ?? '').trim().length > 0;
   const manualBonusValue = String(values.bonus ?? '').trim();
-  const hasManualBonusValue = bonusManualOverrideRef.current;
+  const hasManualBonusValue = bonusManualOverrideRef.current || manualBonusValue.length > 0;
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
   const hasManualMobileReturnValue = String(values.retourMobile ?? '').trim().length > 0;
   const mobileReturnFieldValue = hasManualMobileReturnValue ? values.retourMobile : mobileReturnResults;
   const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
   const depositAutoDisplay = depositPaymentResults || depositResults;
-  const hasManualDepositValue = depositManualOverrideRef.current;
+  const hasManualDepositValue = depositManualOverrideRef.current || String(values.depot ?? '').trim().length > 0;
   const depositFieldValue = hasManualDepositValue ? values.depot : depositAutoDisplay;
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const depositPaidAutoDisplay = depositPaidResults;
-  const hasManualDepositPaidValue = depositPaidManualOverrideRef.current;
+  const hasManualDepositPaidValue = depositPaidManualOverrideRef.current || String(values.depotPaye ?? '').trim().length > 0;
   const depositPaidFieldValue = hasManualDepositPaidValue ? values.depotPaye : depositPaidAutoDisplay;
   const creditPaidAutoDisplay = creditPaidResults;
-  const hasManualCreditPaidValue = creditPaidManualOverrideRef.current;
+  const hasManualCreditPaidValue = creditPaidManualOverrideRef.current || String(values.creditPaye ?? '').trim().length > 0;
   const creditPaidFieldValue = hasManualCreditPaidValue ? values.creditPaye : creditPaidAutoDisplay;
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
   const hasManualTpeValue = tpeManualOverrideRef.current;
@@ -261,9 +261,9 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const tpeFieldValue = String(values.tpe ?? '').trim().length > 0 ? values.tpe : tpeDisplay;
   const mobileDisplayValue = hasManualMobileValue ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
   const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
-  const creditDisplay = creditManualOverrideRef.current ? values.credit : creditAutoDisplay;
+  const creditDisplay = creditManualOverrideRef.current || String(values.credit ?? '').trim().length > 0 ? values.credit : creditAutoDisplay;
   const bonusAutoDisplay = bonusResults;
-  const offertDisplay = [offertPaymentResults, paidCaveOffertResults, offertManualOverrideRef.current ? values.offert : ''].filter(Boolean).join('\n');
+  const offertDisplay = [offertPaymentResults, paidCaveOffertResults, offertManualOverrideRef.current || String(values.offert ?? '').trim().length > 0 ? values.offert : ''].filter(Boolean).join('\n');
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue
@@ -1069,13 +1069,10 @@ const getNegativePaymentTotal = (players: PlayerLine[], ...methods: string[]): n
     const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
     const result = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing) - totalCaves;
     const payments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => methods.includes(payment.option));
-    const hasAdvancedDepositLoss = methods.includes('Dépôt payé') && result < 0 && parseCasinoAmount(player.initialDeposit) > 0;
     const amount = payments.some((payment) => payment.amount > 0)
       ? payments.reduce((sum, payment) => sum + payment.amount, 0)
-      : hasAdvancedDepositLoss
-        ? Math.min(Math.abs(result), parseCasinoAmount(player.initialDeposit))
-        : Math.abs(result);
-    return result < 0 && (payments.length || hasAdvancedDepositLoss) ? total + amount : total;
+      : Math.abs(result);
+    return result < 0 && payments.length ? total + amount : total;
   }, 0);
 
 const getPositivePaymentTotal = (players: PlayerLine[], ...methods: string[]): number => players
