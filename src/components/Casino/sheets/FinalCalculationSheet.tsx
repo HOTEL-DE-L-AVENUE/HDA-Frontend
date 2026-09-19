@@ -69,7 +69,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const bonusTotal = bonusEntries.reduce((total, entry) => total + parseCasinoAmount(entry.split(':').pop() || '0'), 0);
   const bonusResults = bonusEntries.length ? bonusEntries.join('\n') : '';
   const mobilePaymentResults = buildNegativePaymentResults(players, 'MVola', 'Orange Money');
-  const offertPaymentResults = buildNegativePaymentResults(players, 'Offert');
+  const offertPaymentResults = buildOffertResults(players);
   const creditPaidResults = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .flatMap((player) => {
@@ -260,17 +260,18 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
   const tpeFieldValue = String(values.tpe ?? '').trim().length > 0 ? values.tpe : tpeDisplay;
   const mobileDisplayValue = hasManualMobileValue ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
-  const creditAutoDisplay = [creditResults, paidCaveCreditResults].filter(Boolean).join('\n');
-  const creditDisplay = creditManualOverrideRef.current || String(values.credit ?? '').trim().length > 0 ? values.credit : creditAutoDisplay;
+  const creditAutoDisplay = buildCreditResults(players);
+  const hasCreditResultPayment = players.some((player) => parsePaymentOptions(player.resultPaymentOptions).some((payment) => payment.option === 'Crédit'));
+  const creditDisplay = creditAutoDisplay || (creditManualOverrideRef.current ? values.credit : '');
   const bonusAutoDisplay = bonusResults;
-  const offertDisplay = [offertPaymentResults, paidCaveOffertResults, offertManualOverrideRef.current || String(values.offert ?? '').trim().length > 0 ? values.offert : ''].filter(Boolean).join('\n');
+  const offertDisplay = [offertPaymentResults, offertManualOverrideRef.current || String(values.offert ?? '').trim().length > 0 ? values.offert : ''].filter(Boolean).join('\n');
   const mobileManualTotal = parseCasinoAmount(values.mobiles);
   const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
   const tpeEntryTotal = hasManualTpeValue
     ? parseCasinoAmount(values.tpe)
     : tpePaymentsTotal + paidCaveTpeTotal;
   const bonusEntryTotal = parseCasinoAmount(hasManualBonusValue ? String(values.bonus ?? '').trim() || '0' : String(bonusResults ?? '').trim() || '0');
-  const creditEntryTotal = parseCasinoAmount(String(values.credit ?? '').trim() ? values.credit : creditAutoDisplay || '');
+  const creditEntryTotal = parseCasinoAmount(creditDisplay);
   const depositEntryTotal = hasManualDepositValue ? parseCasinoAmount(values.depot) : depositPaymentTotal;
   const mobileReturnEntryTotal = hasManualMobileReturnValue ? parseCasinoAmount(values.retourMobile) : mobileReturnTotal;
   const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
@@ -1021,6 +1022,68 @@ const isPaidCave = (payment?: string) => {
     .toLowerCase();
   // Accepte aussi les anciennes fiches enregistrées avec « PayÃ© ».
   return normalized.startsWith('pay') && !normalized.includes('non');
+};
+
+const buildOffertResults = (players: PlayerLine[]): string => {
+  const results: string[] = [];
+  const uniquePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
+
+  uniquePlayers.forEach((player) => {
+    const playerId = player.ficheId ?? player.id;
+    const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+    const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+    const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+    const result = cashing - totalCaves;
+    const offertPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'Offert');
+
+    if (result < 0 && offertPayments.length) {
+      const amount = offertPayments.some((payment) => payment.amount > 0)
+        ? offertPayments.reduce((sum, payment) => sum + payment.amount, 0)
+        : Math.abs(result);
+      results.push(`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(amount)} Ar (Offert)`);
+      return;
+    }
+
+    const offeredCaves = playerLines
+      .filter((line) => isPaidCave(line.payment) && line.paymentMethod.trim() === 'Offert')
+      .reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+    if (offeredCaves > 0) {
+      results.push(`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(offeredCaves)} Ar (Offert)`);
+    }
+  });
+
+  return results.join('\n');
+};
+
+const buildCreditResults = (players: PlayerLine[]): string => {
+  const results: string[] = [];
+  const uniquePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
+
+  uniquePlayers.forEach((player) => {
+    const playerId = player.ficheId ?? player.id;
+    const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+    const totalCaves = playerLines.reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+    const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+    const result = cashing - totalCaves;
+    const creditPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => payment.option === 'Crédit');
+
+    if (result < 0 && creditPayments.length) {
+      const amount = creditPayments.some((payment) => payment.amount > 0)
+        ? creditPayments.reduce((sum, payment) => sum + payment.amount, 0)
+        : Math.abs(result);
+      results.push(`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(amount)} Ar (Crédit)`);
+      return;
+    }
+
+    const creditCaves = playerLines
+      .filter((line) => isPaidCave(line.payment) && ['Crédit', 'Credit'].includes(line.paymentMethod.trim()))
+      .reduce((total, line) => total + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+    if (creditCaves > 0) {
+      results.push(`${player.name || `Joueur ${playerId}`} : ${casinoCurrency.format(creditCaves)} Ar (Crédit)`);
+    }
+  });
+
+  return results.join('\n');
 };
 
 const getPaidCavePaymentTotal = (players: PlayerLine[], methods?: string[]): number => players.reduce(
