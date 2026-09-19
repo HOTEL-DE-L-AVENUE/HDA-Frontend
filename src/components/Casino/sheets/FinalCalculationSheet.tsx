@@ -295,7 +295,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
   const totalEspeces = parseCasinoAmount(values.totalEspecesCaisse || '');
-  const resultatFinal = difference - totalEspeces;
+  const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
     tpe: tpeFieldValue,
