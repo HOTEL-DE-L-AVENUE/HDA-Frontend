@@ -89,6 +89,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     const currentStoredBonus = String(values.bonus ?? '').trim();
     const currentAutoBonus = String(bonusResults ?? '').trim();
 
+    if (currentStoredBonus && currentStoredBonus !== currentAutoBonus && currentStoredBonus !== lastAutoBonusRef.current) {
+      bonusManualOverrideRef.current = true;
+    }
+
     if (currentStoredBonus === currentAutoBonus) {
       bonusManualOverrideRef.current = false;
       lastAutoBonusRef.current = currentAutoBonus;
@@ -106,6 +110,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     const currentStoredMobile = String(values.mobiles ?? '').trim();
     const currentAutoMobile = String(mobilePaymentResults ?? '').trim();
 
+    if (currentStoredMobile && currentStoredMobile !== currentAutoMobile && currentStoredMobile !== lastAutoMobileRef.current) {
+      mobileManualOverrideRef.current = true;
+    }
+
     if (currentStoredMobile === currentAutoMobile) {
       mobileManualOverrideRef.current = false;
       lastAutoMobileRef.current = currentAutoMobile;
@@ -122,6 +130,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   useEffect(() => {
     const currentStoredMobileReturn = String(values.retourMobile ?? '').trim();
     const currentAutoMobileReturn = String(mobileReturnResults ?? '').trim();
+
+    if (currentStoredMobileReturn && currentStoredMobileReturn !== currentAutoMobileReturn && currentStoredMobileReturn !== lastAutoMobileReturnRef.current) {
+      mobileReturnManualOverrideRef.current = true;
+    }
 
     if (currentStoredMobileReturn === currentAutoMobileReturn) {
       mobileReturnManualOverrideRef.current = false;
@@ -178,6 +190,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     const currentStoredCreditPaid = String(values.creditPaye ?? '').trim();
     const currentAutoCreditPaid = String(creditPaidResults ?? '').trim();
 
+    if (currentStoredCreditPaid && currentStoredCreditPaid !== currentAutoCreditPaid && currentStoredCreditPaid !== lastAutoCreditPaidRef.current) {
+      creditPaidManualOverrideRef.current = true;
+    }
+
     if (currentStoredCreditPaid === currentAutoCreditPaid) {
       creditPaidManualOverrideRef.current = false;
       lastAutoCreditPaidRef.current = currentAutoCreditPaid;
@@ -191,23 +207,23 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     lastAutoCreditPaidRef.current = currentAutoCreditPaid;
   }, [creditPaidResults, values.creditPaye, onUpdate]);
 
-  const hasManualMobileValue = mobileManualOverrideRef.current && String(values.mobiles ?? '').trim().length > 0;
+  const hasManualMobileValue = String(values.mobiles ?? '').trim().length > 0;
   const manualBonusValue = String(values.bonus ?? '').trim();
-  const hasManualBonusValue = bonusManualOverrideRef.current && manualBonusValue.length > 0;
+  const hasManualBonusValue = manualBonusValue.length > 0;
   const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
-  const hasManualMobileReturnValue = mobileReturnManualOverrideRef.current && String(values.retourMobile ?? '').trim().length > 0;
+  const hasManualMobileReturnValue = String(values.retourMobile ?? '').trim().length > 0;
   const mobileReturnFieldValue = hasManualMobileReturnValue ? values.retourMobile : mobileReturnResults;
   const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
   const depositAutoDisplay = depositPaymentResults || depositResults;
-  const hasManualDepositValue = depositManualOverrideRef.current && String(values.depot ?? '').trim().length > 0;
+  const hasManualDepositValue = String(values.depot ?? '').trim().length > 0;
   const depositFieldValue = hasManualDepositValue ? values.depot : depositAutoDisplay;
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
   const depositPaidAutoDisplay = depositPaidResults;
-  const hasManualDepositPaidValue = depositPaidManualOverrideRef.current && String(values.depotPaye ?? '').trim().length > 0;
+  const hasManualDepositPaidValue = String(values.depotPaye ?? '').trim().length > 0;
   const depositPaidFieldValue = hasManualDepositPaidValue ? values.depotPaye : depositPaidAutoDisplay;
   const creditPaidAutoDisplay = creditPaidResults;
-  const hasManualCreditPaidValue = creditPaidManualOverrideRef.current && String(values.creditPaye ?? '').trim().length > 0;
+  const hasManualCreditPaidValue = String(values.creditPaye ?? '').trim().length > 0;
   const creditPaidFieldValue = hasManualCreditPaidValue ? values.creditPaye : creditPaidAutoDisplay;
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
   const hasManualTpeValue = String(values.tpe ?? '').trim().length > 0;
@@ -279,26 +295,10 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     resultatFinal: casinoCurrency.format(resultatFinal),
   };
 
-  useEffect(() => {
-    const calculatedFields: Array<[string, string]> = [
-      ['tpe', tpeFieldValue],
-      ['mobiles', mobileDisplayValue],
-      ['bonus', bonusFieldValue],
-      ['credit', creditDisplay],
-      ['depot', depositFieldValue],
-      ['depotPaye', depositPaidFieldValue],
-      ['retourMobile', mobileReturnFieldValue],
-      ['creditPaye', creditPaidFieldValue],
-      ['total1', casinoCurrency.format(total1)],
-      ['total2', casinoCurrency.format(total2)],
-      ['difference', casinoCurrency.format(difference)],
-      ['resultatFinal', casinoCurrency.format(resultatFinal)],
-    ];
-
-    calculatedFields.forEach(([key, value]) => {
-      if (String(values[key] ?? '') !== value) onUpdate(key, value);
-    });
-  }, [tpeFieldValue, mobileDisplayValue, bonusFieldValue, creditDisplay, depositFieldValue, depositPaidFieldValue, mobileReturnFieldValue, creditPaidFieldValue, total1, total2, difference, resultatFinal, values, onUpdate]);
+  const updateManualValue = (key: string, value: string, overrideRef: React.MutableRefObject<boolean>) => {
+    overrideRef.current = true;
+    onUpdate(key, value);
+  };
 
   return (
     <div className="text-sm text-primary">
@@ -394,7 +394,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               }}
               onChange={(event) => {
                 mobileManualOverrideRef.current = true;
-                onUpdate('mobiles', event.target.value);
+                updateManualValue('mobiles', event.target.value, mobileManualOverrideRef);
               }}
             />
 
@@ -432,7 +432,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               }}
               onChange={(event) => {
                 bonusManualOverrideRef.current = true;
-                onUpdate('bonus', event.target.value);
+                updateManualValue('bonus', event.target.value, bonusManualOverrideRef);
               }}
             />
 
@@ -507,16 +507,16 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 const after = current.slice(cursorIndex);
                 const nextValue = `${before}\n${after}`;
                 depositManualOverrideRef.current = true;
-                onUpdate('depot', nextValue || current);
+                updateManualValue('depot', nextValue || current, depositManualOverrideRef);
                 requestAnimationFrame(() => {
                   const nextCursor = before.length + 1;
                   textarea.selectionStart = textarea.selectionEnd = nextCursor;
                 });
               }}
               onChange={(event) => {
-                depositManualOverrideRef.current = true;
-                onUpdate('depot', event.target.value);
+                updateManualValue('depot', event.target.value, depositManualOverrideRef);
               }}
+              onBlur={(event) => onSave({ ...finalValuesToSave, depot: event.currentTarget.value })}
             />
             <CalculationCell label="DEPOT PAYE" separated />
             <textarea
@@ -535,16 +535,16 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
                 const after = current.slice(cursorIndex);
                 const nextValue = `${before}\n${after}`;
                 depositPaidManualOverrideRef.current = true;
-                onUpdate('depotPaye', nextValue || current);
+                updateManualValue('depotPaye', nextValue || current, depositPaidManualOverrideRef);
                 requestAnimationFrame(() => {
                   const nextCursor = before.length + 1;
                   textarea.selectionStart = textarea.selectionEnd = nextCursor;
                 });
               }}
               onChange={(event) => {
-                depositPaidManualOverrideRef.current = true;
-                onUpdate('depotPaye', event.target.value);
+                updateManualValue('depotPaye', event.target.value, depositPaidManualOverrideRef);
               }}
+              onBlur={(event) => onSave({ ...finalValuesToSave, depotPaye: event.currentTarget.value })}
             />
 
             <CalculationCell label="RETOUR MOBILE" />
@@ -572,7 +572,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               }}
               onChange={(event) => {
                 mobileReturnManualOverrideRef.current = true;
-                onUpdate('retourMobile', event.target.value);
+                updateManualValue('retourMobile', event.target.value, mobileReturnManualOverrideRef);
               }}
             />
             <BlankCell separated />
@@ -603,7 +603,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
               }}
               onChange={(event) => {
                 creditPaidManualOverrideRef.current = true;
-                onUpdate('creditPaye', event.target.value);
+                updateManualValue('creditPaye', event.target.value, creditPaidManualOverrideRef);
               }}
             />
             <BlankCell />
