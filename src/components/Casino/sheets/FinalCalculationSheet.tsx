@@ -13,18 +13,12 @@ interface FinalCalculationSheetProps {
   saveState?: 'idle' | 'saving' | 'saved' | 'error';
   onPlayerChange: (id: number) => void;
   onUpdate: (key: string, value: string) => void;
-  onPlayerUpdate?: (id: number, key: keyof PlayerLine, value: string) => void;
   onSave: (values?: Record<string, string>) => void;
-  isFinished?: boolean;
-  isFinishing?: boolean;
-  canFinish?: boolean;
-  onFinish: () => void;
   showIdentityVerifications?: boolean;
   identityVerifications?: Record<number, { id?: number; full_name: string; id_type: string; id_number: string; issue_date: string; transaction_type: string; amount: number; verified_at: string }>;
 }
 
-export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onPlayerUpdate, onSave, isFinished = false, isFinishing = false, canFinish = false, onFinish, showIdentityVerifications = true, identityVerifications = {} }) => {
-  const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
+export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
   const bonusManualOverrideRef = useRef(false);
   const lastAutoBonusRef = useRef('');
   const mobileManualOverrideRef = useRef(false);
@@ -668,54 +662,13 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
         </div>
       )}
       <div className="mt-4 flex items-center justify-end gap-3 print:hidden">
-        {isFinished && <span className="text-xs text-green-700">Jeu terminé</span>}
         {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
         {saveState === 'error' && <span className="text-xs text-red-700">Erreur d’enregistrement</span>}
         <button type="button" className="action inline-flex items-center gap-2" onClick={() => onSave(finalValuesToSave)} disabled={saveState === 'saving'}>
           {saveState === 'saving' && <Loader2 className="h-4 w-4 animate-spin" />}
           {saveState === 'saving' ? 'Enregistrement...' : 'Enregistrer le calcul'}
         </button>
-        <button type="button" className="action secondary" onClick={() => setPaymentConfirmationOpen(true)} disabled={saveState === 'saving' || activePlayers.length === 0}>Paiement dépôt / crédit</button>
-        {canFinish && <button type="button" className="action secondary" onClick={onFinish} disabled={isFinished || isFinishing || saveState === 'saving'}>{isFinishing ? 'Clôture...' : isFinished ? 'Jeu terminé' : 'Fin de jeu'}</button>}
       </div>
-      {paymentConfirmationOpen && (activePlayers.length > 0 ? (
-        <PlayerPaymentConfirmationModal
-          players={activePlayers}
-          onClose={() => setPaymentConfirmationOpen(false)}
-          onConfirm={(entries) => {
-            entries.forEach((entry) => {
-              const player = players.find((item) => (item.ficheId ?? item.id) === entry.id);
-              if (!player) return;
-              const playerId = player.ficheId ?? player.id;
-              const playerLines = players.filter((item) => (item.ficheId ?? item.id) === playerId);
-              const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-              const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-              const loss = totalCaves - cashing;
-              const depositWasAlreadyPaid = parsePaymentOptions(player.resultPaymentOptions).some((payment) => payment.option === 'Dépôt payé');
-              const payments: Array<{ option: string; amount: number }> = [];
-              if (entry.depositStatus === 'Payé') {
-                const amount = parseCasinoAmount(entry.lossAmount || entry.depositAmount || String(entry.deposit));
-                if (amount > 0) payments.push({ option: 'Dépôt payé', amount });
-              }
-              if (entry.creditStatus === 'Payé') {
-                const amount = parseCasinoAmount(entry.creditAmount || String(entry.credit));
-                if (amount > 0) payments.push({ option: 'Crédit payé', amount });
-              }
-              if (payments.length) {
-                onPlayerUpdate?.(player.id, 'resultPaymentOptions', JSON.stringify(payments));
-              }
-              if (entry.depositStatus === 'Payé' && !depositWasAlreadyPaid && loss > 0) {
-                const nextDeposit = Math.max(0, parseCasinoAmount(player.initialDeposit) - loss);
-                onPlayerUpdate?.(player.id, 'initialDeposit', String(nextDeposit));
-              }
-            });
-            setPaymentConfirmationOpen(false);
-            onSave(finalValuesToSave);
-          }}
-        />
-      ) : (
-        <EmptyPaymentPlayersModal onClose={() => setPaymentConfirmationOpen(false)} />
-      ))}
     </div>
   );
 };
