@@ -81,24 +81,41 @@ export const FinancesPage: React.FC = () => {
     fetchFinancialData();
   }, []);
 
-  // Fetch the monthly/department breakdown whenever the department or year filter changes
+  // Fetch the monthly/department breakdown whenever the year filter changes.
+  // Fetched for all backend departments (not just the selected one) because
+  // 'hebergement' must be merged into the 'hotel' bucket below, the same way
+  // normalizeModuleKey already merges it for the "Caisses par Module" cards —
+  // otherwise selecting "Hôtel" here would silently miss hebergement data
+  // that's visible everywhere else on this page.
   useEffect(() => {
     let cancelled = false;
     const fetchMonthlyReport = async () => {
       setMonthlyLoading(true);
       try {
-        const rows = await financeService.getMonthlyDepartmentReport({
-          department: monthlyDepartment,
-          year: monthlyYear,
+        const rows = await financeService.getMonthlyDepartmentReport({ year: monthlyYear });
+        if (cancelled) return;
+
+        const merged = new Map<string, MonthlyDepartmentReport>();
+        rows.forEach((row) => {
+          const department = normalizeModuleKey(row.department);
+          const key = `${department}|${row.month}`;
+          const existing = merged.get(key);
+          if (existing) {
+            existing.ca += row.ca;
+            existing.charges += row.charges;
+            existing.solde += row.solde;
+          } else {
+            merged.set(key, { ...row, department });
+          }
         });
-        if (!cancelled) setMonthlyRows(rows);
+        setMonthlyRows([...merged.values()]);
       } finally {
         if (!cancelled) setMonthlyLoading(false);
       }
     };
     fetchMonthlyReport();
     return () => { cancelled = true; };
-  }, [monthlyDepartment, monthlyYear]);
+  }, [monthlyYear]);
 
   const fetchFinancialData = async () => {
     try {
@@ -299,7 +316,9 @@ export const FinancesPage: React.FC = () => {
   const totalSorties = displayedTotalSorties;
 
   // Full 12-month table for the selected department/year, filling in months with no data.
-  const monthlyRowsByMonth = new Map(monthlyRows.map(row => [row.month, row]));
+  const monthlyRowsByMonth = new Map(
+    monthlyRows.filter(row => row.department === monthlyDepartment).map(row => [row.month, row])
+  );
   const monthlyTableRows = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
     return monthlyRowsByMonth.get(month) || { department: monthlyDepartment, year: monthlyYear, month, ca: 0, charges: 0, solde: 0 };
