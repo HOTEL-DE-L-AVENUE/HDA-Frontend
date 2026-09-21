@@ -39,6 +39,7 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | ''>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
 
   useEffect(() => {
     if (initialRoomId) setSelectedRoomId(initialRoomId);
@@ -223,6 +224,19 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
             </select>
           </div>
 
+          <div>
+            <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+              Filtrer par catégorie
+            </label>
+            <input
+              type="text"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              placeholder="Rechercher par catégorie..."
+              className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-400/70"
+            />
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <div className="flex min-w-[120px] flex-1 flex-col rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
               <span className="text-[10px] uppercase tracking-[0.18em] text-blue-200/80">Total</span>
@@ -332,7 +346,7 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {equipments.map(eq => {
+          {filteredEquipments.map(eq => {
             const assigned = Array.from(groupedRoomEquipments.values()).filter(re => re.equipment_id === eq.id);
             const assignedCount = assigned.length;
 
@@ -350,8 +364,16 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
                           #{eq.code}
                         </span>
                       )}
+                      {eq.is_consumable && (
+                        <span className="rounded-full border border-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                          Consommable
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-slate-400">{eq.categorie || 'Non catégorisé'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-500">Quantité: {eq.quantite || 1}</span>
+                    </div>
                     {eq.description && (
                       <p className="mt-2 line-clamp-2 text-xs text-slate-500">{eq.description}</p>
                     )}

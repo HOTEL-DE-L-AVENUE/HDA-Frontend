@@ -51,6 +51,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     pdj_inclus: false,
     montant_total: 0,
     statut: 'CONFIRMEE',
+    type_reservation: 'BOOKING',
+    laundry_included: false,
+    laundry_price: 0,
+    manual_price: 0,
   });
 
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
@@ -60,6 +64,9 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [apiError, setApiError] = useState<string | null>(null);
   const [discountMode, setDiscountMode] = useState<'none' | 'discount'>('none');
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [showAllClients, setShowAllClients] = useState(false);
+  const [roomAvailabilityError, setRoomAvailabilityError] = useState<string | null>(null);
 
   // États pour le formulaire de création rapide de client
   const [showClientModal, setShowClientModal] = useState(false);
@@ -91,6 +98,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         pdj_inclus: Boolean(initialData.pdj_inclus),
         montant_total: initialData.montant_total || 0,
         statut: initialData.statut || 'CONFIRMEE',
+        type_reservation: initialData.type_reservation || 'BOOKING',
+        laundry_included: Boolean(initialData.laundry_included),
+        laundry_price: initialData.laundry_price || 0,
+        manual_price: initialData.manual_price || 0,
       });
       setDiscountPercent(initialData.remise_pourcentage || 0);
       setDiscountMode(initialData.remise_pourcentage ? 'discount' : 'none');
@@ -109,6 +120,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         pdj_inclus: false,
         montant_total: 0,
         statut: 'CONFIRMEE',
+        type_reservation: 'BOOKING',
+        laundry_included: false,
+        laundry_price: 0,
+        manual_price: 0,
       });
       setDiscountPercent(0);
       setDiscountMode('none');
@@ -117,12 +132,27 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     }
     setErrors({});
     setApiError(null);
+    setRoomAvailabilityError(null);
   }, [initialData, isOpen, rooms, clients]);
 
-  const handleRoomChange = (roomId: number) => {
+  const handleRoomChange = async (roomId: number) => {
     const room = rooms.find(r => r.id === roomId);
     setSelectedRoom(room || null);
     setFormData({ ...formData, room_id: roomId });
+    setRoomAvailabilityError(null);
+    
+    // Check room availability if dates are set
+    if (formData.date_arrivee && formData.date_depart && !initialData) {
+      try {
+        const response = await fetch(`/api/hebergement/rooms/availability?room_id=${roomId}&date_arrivee=${formData.date_arrivee}&date_depart=${formData.date_depart}`);
+        const data = await response.json();
+        if (!data.available) {
+          setRoomAvailabilityError('Cette chambre est déjà réservée pour ces dates');
+        }
+      } catch (error) {
+        console.error('Error checking room availability:', error);
+      }
+    }
     
     calculateTotal(room as any, formData.date_arrivee, formData.date_depart);
   };
@@ -140,9 +170,26 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         (1000 * 60 * 60 * 24)
       );
       if (days > 0) {
+        let total = days * (room.prix_nuit || 0);
+        
+        // Add laundry price if included
+        if (formData.laundry_included) {
+          total += formData.laundry_price || 0;
+        }
+        
+        // Add manual price if booking type
+        if (formData.type_reservation === 'BOOKING' && formData.manual_price) {
+          total = formData.manual_price;
+        }
+        
+        // Apply discount
+        if (discountMode === 'discount' && discountPercent > 0) {
+          total = total * (1 - discountPercent / 100);
+        }
+        
         setFormData(prev => ({
           ...prev,
-          montant_total: days * (room.prix_nuit || 0)
+          montant_total: total
         }));
       }
     }
@@ -267,6 +314,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         montant_total: formData.montant_total || 0,
         statut: formData.statut || 'CONFIRMEE',
         remise_pourcentage: discountMode === 'discount' ? discountPercent : 0,
+        type_reservation: formData.type_reservation || 'BOOKING',
+        laundry_included: Boolean(formData.laundry_included),
+        laundry_price: formData.laundry_price || 0,
+        manual_price: formData.manual_price || 0,
       };
 
       if (initialData) {
@@ -393,7 +444,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Client avec bouton Ajouter */}
+            {/* Client avec bouton Ajouter et recherche */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-primary">
@@ -414,23 +465,47 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 </button>
               </div>
               <div className="flex gap-2">
-                <select
-                  value={formData.client_id || ''}
-                  onChange={(e) => handleClientChange(Number(e.target.value))}
-                  className={`input-field flex-1 w-full text-sm py-2.5 px-3.5 rounded-lg ${
-                    errors.client_id ? 'border-red-500 focus:border-red-500' : ''
-                  }`}
-                  required
-                  disabled={isSubmitting}
-                  style={{ minHeight: '42px' }}
-                >
-                  <option value="">Sélectionner un client</option>
-                  {clients.map(client => (
-                    <option key={client.id} value={client.id}>
-                      {client.prenom} {client.nom} {client.telephone ? `- ${client.telephone}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    placeholder="Rechercher un client..."
+                    value={clientSearchTerm}
+                    onChange={(e) => {
+                      setClientSearchTerm(e.target.value);
+                      setShowAllClients(true);
+                    }}
+                    onFocus={() => setShowAllClients(true)}
+                    className={`input-field w-full text-sm py-2.5 px-3.5 rounded-lg ${
+                      errors.client_id ? 'border-red-500 focus:border-red-500' : ''
+                    }`}
+                    disabled={isSubmitting}
+                    style={{ minHeight: '42px' }}
+                  />
+                  {showAllClients && (
+                    <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg max-h-60 overflow-y-auto">
+                      {clients
+                        .filter(client => 
+                          clientSearchTerm === '' || 
+                          client.nom?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+                          client.prenom?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+                          client.telephone?.includes(clientSearchTerm)
+                        )
+                        .map(client => (
+                          <div
+                            key={client.id}
+                            onClick={() => {
+                              handleClientChange(client.id);
+                              setClientSearchTerm(`${client.prenom} ${client.nom}`);
+                              setShowAllClients(false);
+                            }}
+                            className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-sm text-white"
+                          >
+                            {client.prenom} {client.nom} {client.telephone ? `- ${client.telephone}` : ''}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
               {errors.client_id && (
                 <p className="text-red-400 text-xs flex items-center gap-1">
@@ -456,16 +531,19 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 style={{ minHeight: '42px' }}
               >
                 <option value="">Sélectionner une chambre</option>
-                {rooms
-                  .filter(r => r.statut === 'LIBRE' || r.id === initialData?.room_id)
-                  .map(room => (
-                    <option key={room.id} value={room.id}>
-                      Chambre {room.numero} - {room.room_type?.nom || 'Standard'} - {formatCurrency(room.prix_nuit || 0)}/nuit
-                      {room.statut === 'OCCUPEE' && ' (Occupée)'}
-                      {room.statut === 'RESERVEE' && ' (Réservée)'}
-                    </option>
-                  ))}
+                {rooms.map(room => (
+                  <option key={room.id} value={room.id}>
+                    Chambre {room.numero} - {room.room_type?.nom || 'Standard'} - {formatCurrency(room.prix_nuit || 0)}/nuit
+                    {room.statut === 'OCCUPEE' && ' (Occupée)'}
+                    {room.statut === 'RESERVEE' && ' (Réservée)'}
+                  </option>
+                ))}
               </select>
+              {roomAvailabilityError && (
+                <p className="text-red-400 text-xs flex items-center gap-1">
+                  <AlertCircle size={11} /> {roomAvailabilityError}
+                </p>
+              )}
               {errors.room_id && (
                 <p className="text-red-400 text-xs flex items-center gap-1">
                   <AlertCircle size={11} /> {errors.room_id}
@@ -521,6 +599,108 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Type de réservation */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-primary">
+                <Calendar size={14} className="inline mr-1.5" />
+                Type de réservation
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type_reservation: 'BOOKING' }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${formData.type_reservation === 'BOOKING' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Booking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type_reservation: 'ON_SITE' }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${formData.type_reservation === 'ON_SITE' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Sur place
+                </button>
+              </div>
+            </div>
+
+            {/* Manual pricing for Booking */}
+            {formData.type_reservation === 'BOOKING' && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-primary">
+                  <DollarSign size={14} className="inline mr-1.5" />
+                  Prix manuel (optionnel)
+                </label>
+                <input
+                  type="number"
+                  value={formData.manual_price || ''}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, manual_price: Number(e.target.value) || 0 }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className="input-field w-full text-sm py-2.5 rounded-lg"
+                  min="0"
+                  placeholder="Laisser vide pour calcul automatique"
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
+
+            {/* Laundry option */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-primary">
+                <CheckCircle size={14} className="inline mr-1.5" />
+                Blanchisserie
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, laundry_included: true }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${formData.laundry_included ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Inclure
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, laundry_included: false }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${!formData.laundry_included ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Exclure
+                </button>
+              </div>
+              {formData.laundry_included && (
+                <div className="mt-2">
+                  <input
+                    type="number"
+                    value={formData.laundry_price || ''}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, laundry_price: Number(e.target.value) || 0 }));
+                      calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                    }}
+                    className="input-field w-full text-sm py-2.5 rounded-lg"
+                    min="0"
+                    placeholder="Prix de la blanchisserie"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Résumé des nuits */}

@@ -54,6 +54,9 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
+  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [historyFromDate, setHistoryFromDate] = useState('');
+  const [historyToDate, setHistoryToDate] = useState('');
   const isDirection = ['admin', 'manager'].includes(String(AuthService.getCurrentUser()?.role || '').toLowerCase());
 
   // 🟢 État local pour stocker les IDs des réservations déjà encaissées
@@ -95,7 +98,19 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       res.client?.nom?.toLowerCase().includes(searchLower) ||
       res.client?.prenom?.toLowerCase().includes(searchLower) ||
       res.room?.numero?.includes(searchTerm);
-    return matchesStatus && matchesSearch;
+    
+    // Filter by history dates
+    const matchesHistoryDate = activeTab === 'history' 
+      ? (!historyFromDate || new Date(res.date_arrivee) >= new Date(historyFromDate)) &&
+        (!historyToDate || new Date(res.date_depart) <= new Date(historyToDate))
+      : true;
+    
+    // Filter by tab (active vs history)
+    const matchesTab = activeTab === 'active' 
+      ? !['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut)
+      : ['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut);
+    
+    return matchesStatus && matchesSearch && matchesHistoryDate && matchesTab;
   });
 
   const isLoading = reservationsLoading || clientsLoading || roomsLoading;
@@ -105,13 +120,15 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       CONFIRMEE: 'bg-emerald-500/20 text-emerald-400',
       EN_COURS: 'bg-blue-500/20 text-blue-400',
       TERMINEE: 'bg-gray-500/20 text-gray-400',
-      ANNULEE: 'bg-red-500/20 text-red-400'
+      ANNULEE: 'bg-red-500/20 text-red-400',
+      NO_SHOW: 'bg-orange-500/20 text-orange-400'
     };
     const labels: Record<string, string> = {
       CONFIRMEE: 'Confirmée',
       EN_COURS: 'En cours',
       TERMINEE: 'Terminée',
-      ANNULEE: 'Annulée'
+      ANNULEE: 'Annulée',
+      NO_SHOW: 'No Show'
     };
     return (
       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[statut] || colors.CONFIRMEE}`}>
@@ -127,6 +144,21 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
         setIsProcessing(true);
         await cancelReservation(reservation.id);
         toast.success('Réservation annulée');
+        await loadReservations();
+      } catch (error: any) {
+        toast.error(error.response?.data?.message || 'Erreur');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  const handleNoShow = async (reservation: Reservation) => {
+    if (window.confirm(`Marquer comme No Show la réservation de ${reservation.client?.prenom} ${reservation.client?.nom} ?`)) {
+      try {
+        setIsProcessing(true);
+        await reservationService.updateReservationStatus(reservation.id, 'NO_SHOW');
+        toast.success('Réservation marquée comme No Show');
         await loadReservations();
       } catch (error: any) {
         toast.error(error.response?.data?.message || 'Erreur');
@@ -214,6 +246,22 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
       {/* Filtres */}
       <div className="flex gap-2">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('active')}
+            className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'active' ? 'bg-accent text-black' : 'bg-gray-900 text-gray-400'}`}
+          >
+            Actives
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'history' ? 'bg-accent text-black' : 'bg-gray-900 text-gray-400'}`}
+          >
+            Historique
+          </button>
+        </div>
         <input
           type="text"
           placeholder="Rechercher..."
@@ -231,15 +279,36 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           <option value="EN_COURS">En cours</option>
           <option value="TERMINEE">Terminées</option>
           <option value="ANNULEE">Annulées</option>
+          <option value="NO_SHOW">No Show</option>
         </select>
         <button
-          type="button" // AJOUTÉ : Empêche le rechargement
+          type="button"
           onClick={() => Promise.all([loadReservations(), loadClients(), loadRooms()])}
           className="px-3 py-2 bg-accent text-black rounded-lg text-sm hover:bg-accent-2 transition"
         >
           🔄
         </button>
       </div>
+
+      {/* History date filters */}
+      {activeTab === 'history' && (
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={historyFromDate}
+            onChange={(e) => setHistoryFromDate(e.target.value)}
+            className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
+            placeholder="Du"
+          />
+          <input
+            type="date"
+            value={historyToDate}
+            onChange={(e) => setHistoryToDate(e.target.value)}
+            className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
+            placeholder="Au"
+          />
+        </div>
+      )}
 
       {/* Liste */}
       <div className="space-y-2">
@@ -337,6 +406,11 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                     {res.statut !== 'ANNULEE' && res.statut !== 'TERMINEE' && (
                       <button type="button" onClick={() => handleCancel(res)} className="p-1.5 hover:bg-red-500/10 rounded">
                         <X size={14} className="text-red-400" />
+                      </button>
+                    )}
+                    {res.statut === 'CONFIRMEE' && (
+                      <button type="button" onClick={() => handleNoShow(res)} className="p-1.5 hover:bg-orange-500/10 rounded" title="Marquer comme No Show">
+                        <User size={14} className="text-orange-400" />
                       </button>
                     )}
                     <button type="button" onClick={() => handleDeleteClick(res)} className="p-1.5 hover:bg-red-500/10 rounded">

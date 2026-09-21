@@ -156,6 +156,10 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
 
   const getTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
+      POST_OCCUPANCY: 'bg-emerald-500/20 text-emerald-400',
+      AFTER_OCCUPANCY: 'bg-blue-500/20 text-blue-400',
+      DEEP_CLEANING: 'bg-purple-500/20 text-purple-400',
+      EXCEPTIONAL: 'bg-red-500/20 text-red-400',
       CHAMBRE: 'bg-emerald-500/20 text-emerald-400',
       ESCALIER_RAMPE: 'bg-blue-500/20 text-blue-400',
       DECORATIONS: 'bg-purple-500/20 text-purple-400',
@@ -168,6 +172,10 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
       TOILETTES: 'bg-orange-500/20 text-orange-400'
     };
     const labels: Record<string, string> = {
+      POST_OCCUPANCY: 'Post-occupation',
+      AFTER_OCCUPANCY: 'After-occupation',
+      DEEP_CLEANING: 'Deep cleaning',
+      EXCEPTIONAL: 'Exceptionnel',
       CHAMBRE: 'Chambre',
       ESCALIER_RAMPE: 'Escalier/rampe',
       DECORATIONS: 'Décorations',
@@ -274,6 +282,10 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
           className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-accent text-sm"
         >
           <option value="TOUS">Tous les types</option>
+          <option value="POST_OCCUPANCY">Post-occupation</option>
+          <option value="AFTER_OCCUPANCY">After-occupation</option>
+          <option value="DEEP_CLEANING">Deep cleaning</option>
+          <option value="EXCEPTIONAL">Exceptionnel</option>
           <option value="CHAMBRE">Chambre</option>
           <option value="ESCALIER_RAMPE">Escalier/rampe</option>
           <option value="DECORATIONS">Décorations</option>

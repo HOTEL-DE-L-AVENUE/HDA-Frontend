@@ -12,6 +12,11 @@ export interface MaintenanceWorkerFormData {
   date_debut?: string;
   date_fin?: string;
   statut?: 'ACTIF' | 'INACTIF';
+  photo_url?: string;
+  id_photo_url?: string;
+  contract_url?: string;
+  quote_url?: string;
+  time_slot?: string;
 }
 
 const BASE_URL = '/api/hebergement/maintenance-workers';

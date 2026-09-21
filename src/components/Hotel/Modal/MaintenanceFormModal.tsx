@@ -39,6 +39,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
     finish_date: '',
     materials_cost: 0,
     labor_cost: 0,
+    other_intervention_description: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -59,6 +60,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
         finish_date: initialData.finish_date || '',
         materials_cost: initialData.materials_cost || 0,
         labor_cost: initialData.labor_cost || 0,
+        other_intervention_description: '',
       });
     } else {
       setFormData({
@@ -70,6 +72,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
         cout: 0,
         location: '', equipment_label: '', worker_id: null,
         execution_date: '', finish_date: '', materials_cost: 0, labor_cost: 0,
+        other_intervention_description: '',
       });
     }
     setErrors({});
@@ -173,6 +176,23 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
               <option value="AUTRE">Autres</option>
             </select>
           </div>
+
+          {/* Other intervention description */}
+          {formData.type_intervention === 'AUTRE' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Description de l'intervention autre <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={formData.other_intervention_description}
+                onChange={(e) => setFormData({ ...formData, other_intervention_description: e.target.value })}
+                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent resize-none"
+                rows={2}
+                placeholder="Spécifiez le type d'intervention..."
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Ouvrier responsable</label>

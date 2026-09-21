@@ -7,6 +7,8 @@ export interface EquipmentFormData {
   categorie?: string;
   description?: string;
   zone?: 'CHAMBRE' | 'SALLE_DE_BAIN';
+  quantite?: number;
+  is_consumable?: boolean;
 }
 
 export interface RoomEquipmentFormData {

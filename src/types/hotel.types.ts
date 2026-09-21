@@ -60,6 +60,10 @@ export interface Reservation {
   remise_validee_par?: number | null;
   remise_validee_at?: string | null;
   statut: 'EN_ATTENTE' | 'CONFIRMEE' | 'ANNULEE' | 'TERMINEE' | 'NO_SHOW';
+  type_reservation?: 'BOOKING' | 'ON_SITE';
+  laundry_included?: boolean;
+  laundry_price?: number;
+  manual_price?: number;
   client?: Client;
   room?: Room;
   created_at?: string;
@@ -89,6 +93,8 @@ export interface Equipment {
   categorie: string | null;
   description: string | null;
   zone?: 'CHAMBRE' | 'SALLE_DE_BAIN';
+  quantite?: number;
+  is_consumable?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -141,6 +147,11 @@ export interface MaintenanceWorker {
   date_debut: string | null;
   date_fin: string | null;
   statut: 'ACTIF' | 'INACTIF';
+  photo_url?: string | null;
+  id_photo_url?: string | null;
+  contract_url?: string | null;
+  quote_url?: string | null;
+  time_slot?: string | null;
 }
 
 // ============================================
@@ -151,7 +162,7 @@ export interface HousekeepingTask {
   id: number;
   room_id: number;
   assigned_user_id: number | null;
-  type_tache: 'CHAMBRE' | 'ESCALIER_RAMPE' | 'DECORATIONS' | 'MUR' | 'PLAFOND' | 'SOL_MOQUETTE' | 'MEUBLES' | 'COULOIR' | 'TERASSE' | 'TOILETTES';
+  type_tache: 'POST_OCCUPANCY' | 'AFTER_OCCUPANCY' | 'DEEP_CLEANING' | 'EXCEPTIONAL' | 'CHAMBRE' | 'ESCALIER_RAMPE' | 'DECORATIONS' | 'MUR' | 'PLAFOND' | 'SOL_MOQUETTE' | 'MEUBLES' | 'COULOIR' | 'TERASSE' | 'TOILETTES';
   statut: 'A_FAIRE' | 'EN_COURS' | 'TERMINE';
   commentaire: string | null;
   planned_at: string | null;
