@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Copy, Loader2, Trash2 } from 'lucide-react';
+import { Copy, Loader2, MessageCircle, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
@@ -104,8 +104,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
-  const [capturingPlayer, setCapturingPlayer] = useState(false);
-  const playerCaptureRef = useRef<HTMLDivElement>(null);
   const resultPaymentBackups = useRef<Record<number, string>>({});
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
@@ -218,55 +216,115 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     }, 0);
   };
 
-  const capturePlayerSheet = async () => {
-    if (!selectedPlayer || !playerCaptureRef.current || capturingPlayer) return;
-    setCapturingPlayer(true);
-    try {
-      const { default: html2canvas } = await import('html2canvas');
-      const canvas = await html2canvas(playerCaptureRef.current, {
-        backgroundColor: '#161616',
-        scale: Math.min(window.devicePixelRatio || 1, 2),
-        useCORS: true,
-        onclone: (clonedDocument) => {
-          const clonedRoot = clonedDocument.querySelector('[data-player-capture]');
-          if (!clonedRoot) return;
+  const getPlayerContactNumber = () => {
+    if (selectedPlayer?.whatsapp?.trim()) return selectedPlayer.whatsapp.trim();
+    const registeredPlayer = registeredPlayers.find((player) => player.id === selectedPlayer?.casinoPlayerId);
+    return registeredPlayer?.whatsapp?.trim() || registeredPlayer?.telephone?.trim() || '';
+  };
 
-          const colorProperties = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor', 'fill', 'stroke', 'boxShadow'];
-          const clonedElements: Array<HTMLElement | SVGElement> = [clonedRoot as HTMLElement, ...clonedRoot.querySelectorAll<HTMLElement | SVGElement>('*')];
-          clonedElements.forEach((element) => {
-            const computedStyle = clonedDocument.defaultView?.getComputedStyle(element);
-            if (!computedStyle) return;
-            colorProperties.forEach((property) => {
-              const value = computedStyle[property as keyof CSSStyleDeclaration];
-              if (typeof value === 'string' && /okl(ab|ch)/i.test(value)) {
-                const fallback = property === 'backgroundColor' ? '#161616' : property === 'boxShadow' ? 'none' : '#ffffff';
-                element.style.setProperty(property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`), fallback, 'important');
-              }
-            });
-          });
+  const normalizeContactNumber = (value: string) => {
+    const compact = value.trim().replace(/[^\d+]/g, '');
+    if (compact.startsWith('+')) return compact.slice(1);
+    if (compact.startsWith('00')) return compact.slice(2);
+    if (compact.startsWith('0')) return `261${compact.slice(1)}`;
+    return compact;
+  };
 
-          // html2canvas also parses pseudo-elements, which cannot be fixed through
-          // the cloned element's inline style.
-          const captureStyle = clonedDocument.createElement('style');
-          captureStyle.textContent = `[data-player-capture] *::before, [data-player-capture] *::after { color: inherit !important; background: transparent !important; border-color: transparent !important; outline-color: transparent !important; box-shadow: none !important; text-shadow: none !important; }`;
-          clonedDocument.head.appendChild(captureStyle);
-        },
-      });
-      const playerName = (selectedPlayer.name || `joueur-${selectedPlayer.ficheId ?? selectedPlayer.id}`)
-        .trim()
-        .replace(/[^a-z0-9]+/gi, '-')
-        .replace(/^-|-$/g, '')
-        .toLowerCase();
-      const link = document.createElement('a');
-      link.download = `fiche-${playerName || 'joueur'}-${date}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (error) {
-      console.error('Erreur lors de la capture de la fiche joueur :', error);
-      setSignatureError('Impossible de capturer la fiche joueur.');
-    } finally {
-      setCapturingPlayer(false);
+  const buildShareMessage = () => {
+    const caveLines = selectedPlayerLines
+      .filter((line) => line.caves.trim() || line.amount.trim())
+      .map((line) => `- Cave ${line.caves || '—'} x ${line.amount || '—'} : ${line.paymentMethod || line.payment || '—'}`)
+      .join('\n');
+    return [
+      `Fiche joueur - ${selectedPlayerName}`,
+      `Date : ${date}`,
+      `Total caves : ${formatCompactAmount(selectedPlayerTotal)} Ar`,
+      `Cashing : ${formatCompactAmount(selectedPlayerCashing)} Ar`,
+      `Resultat : ${formatCompactAmount(selectedPlayerResult)} Ar`,
+      caveLines ? `Caves:\n${caveLines}` : '',
+    ].filter(Boolean).join('\n');
+  };
+
+  const createPlayerPdf = async () => {
+    const printArea = document.querySelector<HTMLElement>('.player-sheet-print');
+    if (!printArea) throw new Error('Fiche joueur introuvable');
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
+    const canvas = await html2canvas(printArea, {
+      backgroundColor: '#161616',
+      scale: Math.min(window.devicePixelRatio || 1, 2),
+      useCORS: true,
+      onclone: (clonedDocument) => {
+        clonedDocument.querySelectorAll<HTMLElement>('.print\\:hidden').forEach((element) => {
+          element.style.display = 'none';
+        });
+      },
+    });
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imageWidth = pageWidth;
+    const imageHeight = (canvas.height * imageWidth) / canvas.width;
+    let offset = 0;
+    const imageData = canvas.toDataURL('image/jpeg', 0.92);
+    while (offset < imageHeight) {
+      if (offset > 0) pdf.addPage();
+      pdf.addImage(imageData, 'JPEG', 0, -offset, imageWidth, imageHeight);
+      offset += pageHeight;
     }
+    return pdf.output('blob');
+  };
+
+  const sharePlayerSheet = async (channel: 'whatsapp' | 'viber') => {
+    if (!selectedPlayer) return;
+    const number = normalizeContactNumber(getPlayerContactNumber());
+    if (!number) {
+      setSignatureError('Ajoutez d’abord un numéro WhatsApp ou Viber pour ce joueur.');
+      return;
+    }
+    const message = buildShareMessage();
+    if (channel === 'whatsapp') {
+      const encodedMessage = encodeURIComponent(message);
+      const isMobileDevice = /Android|iPhone|iPad|iPod|webOS|Mobile/i.test(navigator.userAgent);
+      if (isMobileDevice) {
+        const appUrl = `whatsapp://send?phone=${number}&text=${encodedMessage}`;
+        const webFallback = `https://wa.me/${number}?text=${encodedMessage}`;
+        window.location.href = appUrl;
+        window.setTimeout(() => {
+          if (!document.hidden) window.location.href = webFallback;
+        }, 1200);
+      } else {
+        window.location.assign(`https://web.whatsapp.com/send?phone=${number}&text=${encodedMessage}`);
+      }
+      return;
+    }
+    try {
+      const pdfBlob = await createPlayerPdf();
+      const file = new File([pdfBlob], `fiche-${selectedPlayerName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${date}.pdf`, { type: 'application/pdf' });
+      if (typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share({ title: `Fiche joueur - ${selectedPlayerName}`, text: message, files: [file] });
+        return;
+      }
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.download = file.name;
+      downloadLink.click();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.error('Erreur lors de la génération de la fiche PDF :', error);
+      setSignatureError('Impossible de générer le PDF de la fiche joueur.');
+      return;
+    }
+    try {
+      await navigator.clipboard?.writeText(message);
+    } catch {
+      // Le chat Viber peut s'ouvrir même si le presse-papiers est indisponible.
+    }
+    window.location.assign(`viber://chat?number=${encodeURIComponent(`+${number}`)}`);
   };
 
   const addPlayerLine = () => {
@@ -400,11 +458,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
         {isAdmin && <button type="button" className={sheetActionSecondary} onClick={onGoToRegisteredPlayers}>Ajouter un joueur</button>}
         {isAdmin && <button type="button" className={sheetActionSecondary} onClick={addPlayerLine} disabled={!selectedPlayer}>Ajouter une ligne</button>}
-        <button type="button" className={sheetActionSecondary} onClick={capturePlayerSheet} disabled={!selectedPlayer || capturingPlayer}><Camera size={15} /> {capturingPlayer ? 'Capture...' : 'Capture'}</button>
         <button type="button" className={sheetActionSecondary} onClick={printPlayerSheet} disabled={!selectedPlayer}>Imprimer la fiche</button>
+        <button type="button" className={sheetActionSecondary} onClick={() => void sharePlayerSheet('whatsapp')} disabled={!selectedPlayer}><MessageCircle size={15} /> WhatsApp</button>
+        <button type="button" className={sheetActionSecondary} onClick={() => void sharePlayerSheet('viber')} disabled={!selectedPlayer}><MessageCircle size={15} /> Viber</button>
       </div>
     </div>
-    <div ref={playerCaptureRef} data-player-capture>
     <div className="player-print-header mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-end sm:justify-between print:mb-3 print:rounded-none print:border-2 print:border-black print:bg-white print:p-3" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-300">Fiche joueur</p>
@@ -557,7 +615,6 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
         </div>
       </div>
     )}
-    </div>
     <div className="mt-5 flex flex-col items-stretch gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center sm:justify-end print:hidden" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }}>
       {saveState === 'saved' && <span className="text-xs text-green-700">Enregistré</span>}
       {(saveState === 'error' || signatureError) && <span className="text-xs text-red-400">{signatureError || 'Erreur d’enregistrement'}</span>}

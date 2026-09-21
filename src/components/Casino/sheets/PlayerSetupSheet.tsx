@@ -14,7 +14,7 @@ interface PlayerSetupSheetProps {
   onRemove: (ficheId: number) => void;
   onSave: () => void;
   registeredPlayers: CasinoRegisteredPlayer[];
-  onRegister: (player: { nom: string; prenom: string; email: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => Promise<void>;
+  onRegister: (player: { nom: string; prenom: string; surnom: string; whatsapp: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => Promise<void>;
   onPlay: (player: CasinoRegisteredPlayer, deposit?: string, credit?: string) => Promise<void>;
   onDeleteRegisteredPlayer?: (player: CasinoRegisteredPlayer) => Promise<void>;
   onUpdateRegisteredPlayer: (id: number, player: Partial<CasinoRegisteredPlayer>) => Promise<void>;
@@ -24,7 +24,7 @@ const inputClass = 'w-full rounded border bg-transparent px-2 py-2 text-sm text-
 
 export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isAdmin, canManageGame, saveState = 'idle', onUpdate, onAdd, onRemove, onSave, registeredPlayers = [], onRegister, onPlay, onDeleteRegisteredPlayer, onUpdateRegisteredPlayer }) => {
   const playerList = players.filter((player, index, lines) => Boolean(player.casinoPlayerId || player.name.trim()) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
-  const emptyPlayer: { nom: string; prenom: string; email: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' } = { nom: '', prenom: '', email: '', telephone: '', date_inscription: new Date().toISOString().slice(0, 10), depot: '', credit: '', mode_jeu: 'EN_ATTENTE' };
+  const emptyPlayer: { nom: string; prenom: string; surnom: string; whatsapp: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' } = { nom: '', prenom: '', surnom: '', whatsapp: '', telephone: '', date_inscription: new Date().toISOString().slice(0, 10), depot: '', credit: '', mode_jeu: 'EN_ATTENTE' };
   const [newPlayer, setNewPlayer] = useState(emptyPlayer);
   const [amounts, setAmounts] = useState<Record<number, { deposit: string; credit: string }>>({});
   const [error, setError] = useState('');
@@ -34,7 +34,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
   const normalizedSearch = playerSearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const filteredRegisteredPlayers = registeredPlayers.filter((player) => {
     if (!normalizedSearch) return true;
-    return [player.nom, player.prenom, player.email, player.telephone]
+    return [player.nom, player.prenom, player.surnom, player.whatsapp, player.telephone]
       .filter(Boolean)
       .join(' ')
       .normalize('NFD')
@@ -99,8 +99,8 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       </label>
     </div>
     <div className="mb-5 overflow-x-auto rounded-xl border" style={casinoBorder}>
-      <table className="w-full min-w-[820px] border-collapse text-xs sm:text-sm"><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>
-        <th className="border p-2 text-left" style={casinoBorder}>Joueur</th><th className="border p-2 text-left" style={casinoBorder}>E-mail</th><th className="border p-2 text-left" style={casinoBorder}>Inscrit le</th><th className="border p-2 text-left" style={casinoBorder}>Dépôt Avant</th><th className="border p-2 text-left" style={casinoBorder}>Crédit Avant</th>{isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
+      <table className="w-full min-w-[980px] border-collapse text-xs sm:text-sm"><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>
+        <th className="border p-2 text-left" style={casinoBorder}>Joueur</th><th className="border p-2 text-left" style={casinoBorder}>Surnom</th><th className="border p-2 text-left" style={casinoBorder}>WhatsApp</th><th className="border p-2 text-left" style={casinoBorder}>Inscrit le</th><th className="border p-2 text-left" style={casinoBorder}>Dépôt Avant</th><th className="border p-2 text-left" style={casinoBorder}>Crédit Avant</th>{isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
       </tr></thead><tbody>{filteredRegisteredPlayers.map((player) => {
         const playerInGame = playerList.find((line) => line.casinoPlayerId === player.id);
         const alreadyPlaying = Boolean(playerInGame);
@@ -108,7 +108,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
           deposit: playerInGame ? playerInGame.initialDeposit : String(player.depot || ''),
           credit: playerInGame ? playerInGame.initialCredit : String(player.credit || ''),
         };
-        return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.email || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' })}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
+        return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.surnom || '—'}</td><td className="border p-2" style={casinoBorder}>{player.whatsapp || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' })}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
       })}</tbody></table>
     </div>
     {canManageGame && !isAdmin && registeredPlayers.some((player) => !playerList.some((line) => line.casinoPlayerId === player.id)) && <div className="mb-5 flex flex-wrap gap-2"><span className="self-center text-xs text-muted">Ajouter à la partie :</span>{registeredPlayers.filter((player) => !playerList.some((line) => line.casinoPlayerId === player.id)).map((player) => <button key={player.id} type="button" className="action secondary text-xs" onClick={() => play(player)}><Play size={14} /> {player.nom} {player.prenom || ''}</button>)}</div>}
@@ -123,7 +123,8 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       <table className="w-full min-w-[760px] border-collapse text-xs sm:text-sm">
         <thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>
           <th className="border p-2 text-left" style={casinoBorder}>Joueur</th>
-          <th className="border p-2 text-left" style={casinoBorder}>E-mail (récapitulatif)</th>
+          <th className="border p-2 text-left" style={casinoBorder}>Surnom</th>
+          <th className="border p-2 text-left" style={casinoBorder}>WhatsApp</th>
           <th className="border p-2 text-left" style={casinoBorder}>Dépôt initial (Ar)</th>
           <th className="border p-2 text-left" style={casinoBorder}>Crédit initial (Ar)</th>
           {isAdmin && <th className="border p-2 text-center" style={casinoBorder}>Action</th>}
@@ -132,7 +133,8 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
           const ficheId = player.ficheId ?? player.id;
           return <tr key={ficheId}>
             <td className="border p-1" style={casinoBorder}><input className={inputClass} value={player.name} disabled={!canManageGame} onChange={(event) => onUpdate(player.id, 'name', event.target.value)} placeholder="Nom complet" /></td>
-            <td className="border p-1" style={casinoBorder}><input className={inputClass} type="email" value={player.email || ''} disabled={!canManageGame} onChange={(event) => onUpdate(player.id, 'email', event.target.value)} placeholder="joueur@email.com" /></td>
+            <td className="border p-1" style={casinoBorder}><input className={inputClass} value={player.surnom || ''} disabled={!canManageGame} onChange={(event) => onUpdate(player.id, 'surnom', event.target.value)} placeholder="Surnom" /></td>
+            <td className="border p-1" style={casinoBorder}><input className={inputClass} value={player.whatsapp || ''} disabled={!canManageGame} onChange={(event) => onUpdate(player.id, 'whatsapp', event.target.value)} placeholder="WhatsApp" /></td>
             <td className="border p-1" style={casinoBorder}><input className={inputClass} inputMode="decimal" value={player.initialDeposit || ''} disabled={!canManageGame} onChange={(event) => onUpdate(player.id, 'initialDeposit', event.target.value)} placeholder="0" /></td>
             <td className="border p-1" style={casinoBorder}><input className={inputClass} inputMode="decimal" value={player.initialCredit || ''} disabled={!canManageGame} onChange={(event) => onUpdate(player.id, 'initialCredit', event.target.value)} placeholder="0" /></td>
             {isAdmin && <td className="border p-1 text-center" style={casinoBorder}><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.name || 'ce joueur'}`} onClick={() => window.confirm(`Supprimer ${player.name || 'ce joueur'} et ses lignes de jeu ?`) && onRemove(ficheId)}><Trash2 size={16} /></button></td>}
@@ -149,8 +151,8 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       <div className="grid gap-3 sm:grid-cols-2">
         <input className={inputClass} value={newPlayer.nom} onChange={(event) => setNewPlayer((current: any) => ({ ...current, nom: event.target.value }))} placeholder="Nom *" />
         <input className={inputClass} value={newPlayer.prenom} onChange={(event) => setNewPlayer((current: any) => ({ ...current, prenom: event.target.value }))} placeholder="Prénom" />
-        <input className={inputClass} type="email" value={newPlayer.email} onChange={(event) => setNewPlayer((current: any) => ({ ...current, email: event.target.value }))} placeholder="E-mail" />
-        <input className={inputClass} value={newPlayer.telephone} onChange={(event) => setNewPlayer((current: any) => ({ ...current, telephone: event.target.value }))} placeholder="Téléphone" />
+        <input className={inputClass} value={newPlayer.surnom} onChange={(event) => setNewPlayer((current: any) => ({ ...current, surnom: event.target.value }))} placeholder="Surnom" />
+        <input className={inputClass} value={newPlayer.whatsapp} onChange={(event) => setNewPlayer((current: any) => ({ ...current, whatsapp: event.target.value }))} placeholder="WhatsApp" />
         <input className={inputClass} type="date" value={newPlayer.date_inscription} onChange={(event) => setNewPlayer((current: any) => ({ ...current, date_inscription: event.target.value }))} aria-label="Date d'inscription" />
         <input className={inputClass} inputMode="decimal" value={newPlayer.depot} onChange={(event) => setNewPlayer((current: any) => ({ ...current, depot: event.target.value }))} placeholder="Dépôt initial (Ar)" />
         <input className={inputClass} inputMode="decimal" value={newPlayer.credit} onChange={(event) => setNewPlayer((current: any) => ({ ...current, credit: event.target.value }))} placeholder="Crédit initial (Ar)" />
@@ -164,8 +166,8 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       <div className="grid gap-3 sm:grid-cols-2">
         <input className={inputClass} value={editingPlayer.nom} onChange={(event) => setEditingPlayer((current) => current ? { ...current, nom: event.target.value } : current)} placeholder="Nom" />
         <input className={inputClass} value={editingPlayer.prenom || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, prenom: event.target.value } : current)} placeholder="Prénom" />
-        <input className={inputClass} type="email" value={editingPlayer.email || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, email: event.target.value } : current)} placeholder="E-mail" />
-        <input className={inputClass} value={editingPlayer.telephone || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, telephone: event.target.value } : current)} placeholder="Téléphone" />
+        <input className={inputClass} value={editingPlayer.surnom || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, surnom: event.target.value } : current)} placeholder="Surnom" />
+        <input className={inputClass} value={editingPlayer.whatsapp || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, whatsapp: event.target.value } : current)} placeholder="WhatsApp" />
         <input className={inputClass} type="date" value={editingPlayer.date_inscription || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, date_inscription: event.target.value } : current)} />
         <input className={inputClass} inputMode="decimal" value={String(editingPlayer.depot || '')} onChange={(event) => setEditingPlayer((current) => current ? { ...current, depot: event.target.value } : current)} placeholder="Dépôt (Ar)" />
         <input className={inputClass} inputMode="decimal" value={String(editingPlayer.credit || '')} onChange={(event) => setEditingPlayer((current) => current ? { ...current, credit: event.target.value } : current)} placeholder="Crédit (Ar)" />

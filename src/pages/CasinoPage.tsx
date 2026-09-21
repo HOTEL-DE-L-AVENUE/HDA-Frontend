@@ -237,7 +237,7 @@ export const CasinoPage: React.FC = () => {
     return () => { active = false; };
   }, []);
 
-  const registerCasinoPlayer = async (player: { nom: string; prenom: string; email: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => {
+  const registerCasinoPlayer = async (player: { nom: string; prenom: string; surnom: string; whatsapp: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => {
     if (!canManageCasino) return;
     const created = await casinoPlayersApi.create({ ...player, depot: parseCasinoAmount(player.depot), credit: parseCasinoAmount(player.credit), statut: 'ACTIF' });
     setRegisteredPlayers((current) => [...current, created]);
@@ -260,7 +260,7 @@ export const CasinoPage: React.FC = () => {
     setRegisteredPlayers((current) => current.map((registeredPlayer) => registeredPlayer.id === id ? updated : registeredPlayer));
     const nextPlayers = playersRef.current.map((line) =>
       line.casinoPlayerId === id
-        ? { ...line, name: nextName, email: updated.email || '', initialDeposit: nextDeposit, initialCredit: nextCredit }
+        ? { ...line, name: nextName, surnom: updated.surnom || '', whatsapp: updated.whatsapp || '', initialDeposit: nextDeposit, initialCredit: nextCredit }
         : line
     );
     setPlayers(nextPlayers);
@@ -286,7 +286,7 @@ export const CasinoPage: React.FC = () => {
     const ficheId = Math.max(0, ...players.map((line) => line.ficheId ?? line.id)) + 1;
     const lineId = Math.max(0, ...players.map((line) => line.id)) + 1;
     const name = [player.nom, player.prenom].filter(Boolean).join(' ');
-    const nextPlayers = [...players, { ...createPlayerLine(lineId, ficheId), casinoPlayerId: player.id, casinoPlayerGameId: game.id, time: getCurrentTime(), name, email: player.email || '', initialDeposit: String(initialDeposit), initialCredit: String(initialCredit) }];
+    const nextPlayers = [...players, { ...createPlayerLine(lineId, ficheId), casinoPlayerId: player.id, casinoPlayerGameId: game.id, time: getCurrentTime(), name, surnom: player.surnom || '', whatsapp: player.whatsapp || '', initialDeposit: String(initialDeposit), initialCredit: String(initialCredit) }];
     setPlayers(nextPlayers);
     await savePlayerSheet(nextPlayers);
   };

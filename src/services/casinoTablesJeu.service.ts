@@ -102,7 +102,8 @@ export interface CasinoRegisteredPlayer {
   id: number;
   nom: string;
   prenom?: string | null;
-  email?: string | null;
+  surnom?: string | null;
+  whatsapp?: string | null;
   telephone?: string | null;
   date_inscription?: string | null;
   depot: number | string;
@@ -121,7 +122,8 @@ export interface CasinoPlayerGame {
   credit: number | string;
   nom: string;
   prenom?: string | null;
-  email?: string | null;
+  surnom?: string | null;
+  whatsapp?: string | null;
 }
 
 export interface IdentityVerification {
