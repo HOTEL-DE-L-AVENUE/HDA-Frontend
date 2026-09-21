@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { HousekeepingTask, Room } from '../../../types/hotel.types';
 import { X, Loader, AlertCircle } from 'lucide-react';
 import { Modal } from '../../Modal';
+import { TYPE_TACHE_LABELS } from '../../../constants/housekeeping';
 
 interface HousekeepingFormModalProps {
   isOpen: boolean;
@@ -125,20 +126,9 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
               className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
               disabled={isSubmitting}
             >
-              <option value="POST_OCCUPANCY">Post-occupation</option>
-              <option value="AFTER_OCCUPANCY">After-occupation</option>
-              <option value="DEEP_CLEANING">Deep cleaning</option>
-              <option value="EXCEPTIONAL">Exceptional</option>
-              <option value="CHAMBRE">Chambre</option>
-              <option value="ESCALIER_RAMPE">Escalier/rampe</option>
-              <option value="DECORATIONS">Décorations</option>
-              <option value="MUR">Mur</option>
-              <option value="PLAFOND">Plafond</option>
-              <option value="SOL_MOQUETTE">Sol/moquette</option>
-              <option value="MEUBLES">Meubles</option>
-              <option value="COULOIR">Couloir</option>
-              <option value="TERASSE">Terrasse</option>
-              <option value="TOILETTES">Toilettes</option>
+              {Object.entries(TYPE_TACHE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
 

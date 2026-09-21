@@ -20,9 +20,10 @@ import { useRooms } from '../../hooks/useRooms';
 import { useEquipment } from '../../hooks/useEquipment';
 
 import { toast } from 'react-hot-toast';
-import { maintenanceWorkerService } from '../../services/maintenanceWorker.service';
+import { maintenanceWorkerService, MaintenanceWorkerFormData } from '../../services/maintenanceWorker.service';
 import { MaintenanceWorker } from '../../types/hotel.types';
 import { MaintenanceFormModal } from './Modal/MaintenanceFormModal';
+import { WorkerFormModal } from './Modal/WorkerFormModal';
 
 interface MaintenanceManagerProps { initialRoomId?: number | null; onMaintenanceCompleted?: () => void; }
 
@@ -52,21 +53,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
   const [filterType, setFilterType] = useState<string>('TOUS');
   const [historyFrom, setHistoryFrom] = useState('');
   const [historyTo, setHistoryTo] = useState('');
-  const [showWorkerForm, setShowWorkerForm] = useState(false);
-  const [workerForm, setWorkerForm] = useState({ 
-    nom: '', 
-    prenom: '', 
-    telephone: '', 
-    email: '', 
-    specialite: '', 
-    date_debut: '',
-    date_fin: '',
-    time_slot: '',
-    photo_url: '',
-    id_photo_url: '',
-    contract_url: '',
-    quote_url: ''
-  });
+  const [isWorkerModalOpen, setIsWorkerModalOpen] = useState(false);
   useEffect(() => {
     if (initialRoomId) {
       setSelectedMaintenance(null);
@@ -159,27 +146,15 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
     }
   };
 
-  const handleCreateWorker = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!workerForm.nom.trim()) return;
-    const worker = await maintenanceWorkerService.createWorker(workerForm);
-    setWorkers((current) => [...current, worker]);
-    setWorkerForm({ 
-      nom: '', 
-      prenom: '', 
-      telephone: '', 
-      email: '', 
-      specialite: '', 
-      date_debut: '',
-      date_fin: '',
-      time_slot: '',
-      photo_url: '',
-      id_photo_url: '',
-      contract_url: '',
-      quote_url: ''
-    });
-    setShowWorkerForm(false);
-    toast.success('Ouvrier ajouté');
+  const handleCreateWorker = async (data: MaintenanceWorkerFormData) => {
+    try {
+      const worker = await maintenanceWorkerService.createWorker(data);
+      setWorkers((current) => [...current, worker]);
+      setIsWorkerModalOpen(false);
+      toast.success('Ouvrier ajouté');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Erreur lors de l’ajout de l’ouvrier');
+    }
   };
 
   const getStatusBadge = (statut: string) => {
@@ -270,26 +245,8 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
           <Plus size={18} />
           Nouvelle intervention
         </button>
-        <button onClick={() => setShowWorkerForm((value) => !value)} className="px-4 py-2.5 border border-accent/40 text-accent rounded-xl text-sm">Ouvriers</button>
+        <button onClick={() => setIsWorkerModalOpen(true)} className="px-4 py-2.5 border border-accent/40 text-accent rounded-xl text-sm">Ouvriers</button>
       </div>
-
-      {showWorkerForm && (
-        <form onSubmit={handleCreateWorker} className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-900 border border-gray-700 rounded-xl p-4">
-          <input required placeholder="Nom *" value={workerForm.nom} onChange={(e) => setWorkerForm({ ...workerForm, nom: e.target.value })} className="input-field" />
-          <input placeholder="Prénom" value={workerForm.prenom} onChange={(e) => setWorkerForm({ ...workerForm, prenom: e.target.value })} className="input-field" />
-          <input placeholder="Téléphone" value={workerForm.telephone} onChange={(e) => setWorkerForm({ ...workerForm, telephone: e.target.value })} className="input-field" />
-          <input placeholder="Email" value={workerForm.email} onChange={(e) => setWorkerForm({ ...workerForm, email: e.target.value })} className="input-field" />
-          <input placeholder="Spécialité" value={workerForm.specialite} onChange={(e) => setWorkerForm({ ...workerForm, specialite: e.target.value })} className="input-field" />
-          <input type="date" value={workerForm.date_debut} onChange={(e) => setWorkerForm({ ...workerForm, date_debut: e.target.value })} className="input-field" placeholder="Date début collaboration" />
-          <input type="date" value={workerForm.date_fin} onChange={(e) => setWorkerForm({ ...workerForm, date_fin: e.target.value })} className="input-field" placeholder="Date fin collaboration" />
-          <input placeholder="Créneau horaire" value={workerForm.time_slot} onChange={(e) => setWorkerForm({ ...workerForm, time_slot: e.target.value })} className="input-field" />
-          <input placeholder="URL photo personnelle" value={workerForm.photo_url} onChange={(e) => setWorkerForm({ ...workerForm, photo_url: e.target.value })} className="input-field" />
-          <input placeholder="URL photo pièce d'identité" value={workerForm.id_photo_url} onChange={(e) => setWorkerForm({ ...workerForm, id_photo_url: e.target.value })} className="input-field" />
-          <input placeholder="URL contrat" value={workerForm.contract_url} onChange={(e) => setWorkerForm({ ...workerForm, contract_url: e.target.value })} className="input-field" />
-          <input placeholder="URL devis" value={workerForm.quote_url} onChange={(e) => setWorkerForm({ ...workerForm, quote_url: e.target.value })} className="input-field" />
-          <button type="submit" className="btn-primary md:col-span-3">Ajouter l'ouvrier</button>
-        </form>
-      )}
 
       {/* Statistiques */}
       {stats && (
@@ -444,6 +401,13 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
         workers={workers}
         defaultRoomId={initialRoomId || undefined}
         onSave={handleSave}
+      />
+
+      {/* Modal d'ajout d'un ouvrier */}
+      <WorkerFormModal
+        isOpen={isWorkerModalOpen}
+        onClose={() => setIsWorkerModalOpen(false)}
+        onSave={handleCreateWorker}
       />
 
       {/* Modal de confirmation de suppression */}

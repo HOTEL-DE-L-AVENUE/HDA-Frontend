@@ -22,8 +22,10 @@ import { Modal } from '../../Modal';
 import { useRooms } from '../../../hooks/useRooms';
 import { useClients } from '../../../hooks/useClients';
 import { useReservations } from '../../../hooks/useReservations';
-import { clientService } from '../../../services/client.service';
+import { clientService, ClientFormData } from '../../../services/client.service';
+import { signatureService } from '../../../services/signature.service';
 import { toast } from 'react-hot-toast';
+import { ClientCoreFormFields } from '../../Clients/ClientCoreFormFields';
 
 interface ReservationFormModalProps {
   isOpen: boolean;
@@ -69,15 +71,26 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [roomAvailabilityError, setRoomAvailabilityError] = useState<string | null>(null);
 
   // États pour le formulaire de création rapide de client
+  // Réutilise les mêmes champs que la page "Clients" (voir ClientCoreFormFields)
+  // au lieu d'un formulaire réduit dupliqué.
   const [showClientModal, setShowClientModal] = useState(false);
-  const [quickClientData, setQuickClientData] = useState({
+  const emptyQuickClientData: ClientFormData = {
     nom: '',
     prenom: '',
     telephone: '',
     email: '',
-  });
+    adresse: '',
+    date_naissance: '',
+    type_piece: '',
+    numero_piece: '',
+    code_client: '',
+    statut: 'ACTIF',
+    is_casino_player: false,
+  };
+  const [quickClientData, setQuickClientData] = useState<ClientFormData>(emptyQuickClientData);
   const [quickClientErrors, setQuickClientErrors] = useState<Record<string, string>>({});
   const [isSubmittingClient, setIsSubmittingClient] = useState(false);
+  const [quickClientSignature, setQuickClientSignature] = useState<string | null>(null);
 
   // Charger les données au montage et quand le modal s'ouvre
   useEffect(() => {
@@ -205,25 +218,49 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     }
   };
 
-  // Validation du formulaire client rapide
+  // Validation du formulaire client rapide (mêmes règles que la page Clients)
   const validateQuickClient = (): boolean => {
     const errors: Record<string, string> = {};
-    
+
     if (!quickClientData.nom?.trim()) {
       errors.nom = 'Le nom est requis';
     }
     if (quickClientData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(quickClientData.email)) {
       errors.email = 'Email invalide';
     }
-    
+    if (quickClientData.telephone && !/^[0-9+\s-]{8,}$/.test(quickClientData.telephone)) {
+      errors.telephone = 'Téléphone invalide';
+    }
+
     setQuickClientErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const closeQuickClientModal = () => {
+    setShowClientModal(false);
+    setQuickClientData(emptyQuickClientData);
+    setQuickClientErrors({});
+    setQuickClientSignature(null);
+  };
+
+  const handleQuickClientChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+
+    setQuickClientData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+
+    if (quickClientErrors[name]) {
+      setQuickClientErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   // Création rapide d'un client
   const handleQuickClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateQuickClient()) {
       toast.error('Veuillez corriger les erreurs');
       return;
@@ -232,28 +269,25 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     setIsSubmittingClient(true);
 
     try {
-      const newClient = await clientService.createClient({
-        nom: quickClientData.nom.trim(),
-        prenom: quickClientData.prenom.trim() || undefined,
-        telephone: quickClientData.telephone.trim() || undefined,
-        email: quickClientData.email.trim() || undefined,
-        statut: 'ACTIF',
-        is_casino_player: false,
-      });
+      const newClient = await clientService.createClient(quickClientData);
+
+      if (quickClientSignature) {
+        await signatureService.createSignature('client_kyc', newClient.id, quickClientSignature, newClient.id);
+      }
 
       toast.success('Client créé avec succès');
-      
+
       // Recharger la liste des clients
       await loadClients();
-      
+
       // Sélectionner automatiquement le nouveau client
       setSelectedClient(newClient);
       setFormData(prev => ({ ...prev, client_id: newClient.id }));
-      
+      setClientSearchTerm(`${newClient.prenom || ''} ${newClient.nom}`.trim());
+      setShowAllClients(false);
+
       // Fermer le modal de création
-      setShowClientModal(false);
-      setQuickClientData({ nom: '', prenom: '', telephone: '', email: '' });
-      setQuickClientErrors({});
+      closeQuickClientModal();
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Erreur lors de la création du client';
       toast.error(errorMessage);
@@ -446,7 +480,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Client avec bouton Ajouter et recherche */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="block text-sm font-medium text-primary">
                   <User size={14} className="inline mr-1.5" />
                   Client *
@@ -454,11 +488,12 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setShowClientModal(true);
-                    setQuickClientData({ nom: '', prenom: '', telephone: '', email: '' });
+                    setQuickClientData(emptyQuickClientData);
                     setQuickClientErrors({});
+                    setQuickClientSignature(null);
+                    setShowClientModal(true);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent hover:bg-accent/20 rounded-lg text-xs font-medium transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-black hover:bg-accent-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all"
                 >
                   <UserPlus size={14} />
                   Nouveau client
@@ -850,8 +885,8 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
       {/* Modal de création rapide de client */}
       {showClientModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-          <div className="bg-gray-900 rounded-2xl w-full max-w-md shadow-2xl border border-gray-700 animate-scaleIn">
-            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-700 animate-scaleIn">
+            <div className="sticky top-0 bg-gray-900 p-6 border-b border-gray-800 flex items-center justify-between z-10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center">
                   <UserPlus size={20} className="text-accent" />
@@ -862,11 +897,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setShowClientModal(false);
-                  setQuickClientData({ nom: '', prenom: '', telephone: '', email: '' });
-                  setQuickClientErrors({});
-                }}
+                onClick={closeQuickClientModal}
                 className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-gray-300"
               >
                 <X size={20} />
@@ -882,89 +913,19 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Nom <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={quickClientData.nom}
-                  onChange={(e) => setQuickClientData({ ...quickClientData, nom: e.target.value })}
-                  className={`
-                    w-full px-4 py-2.5 bg-gray-800 border-2 rounded-xl 
-                    text-white placeholder-gray-500
-                    focus:outline-none focus:border-accent focus:ring-4 focus:ring-accent/20
-                    transition-all duration-200
-                    ${quickClientErrors.nom ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-700'}
-                  `}
-                  placeholder="Dupont"
-                  disabled={isSubmittingClient}
-                  autoFocus
-                />
-                {quickClientErrors.nom && (
-                  <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {quickClientErrors.nom}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Prénom</label>
-                <input
-                  type="text"
-                  value={quickClientData.prenom}
-                  onChange={(e) => setQuickClientData({ ...quickClientData, prenom: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-gray-800 border-2 border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 transition-all duration-200"
-                  placeholder="Jean"
-                  disabled={isSubmittingClient}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Téléphone</label>
-                <input
-                  type="tel"
-                  value={quickClientData.telephone}
-                  onChange={(e) => setQuickClientData({ ...quickClientData, telephone: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-gray-800 border-2 border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 transition-all duration-200"
-                  placeholder="+33 6 12 34 56 78"
-                  disabled={isSubmittingClient}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
-                <input
-                  type="email"
-                  value={quickClientData.email}
-                  onChange={(e) => setQuickClientData({ ...quickClientData, email: e.target.value })}
-                  className={`
-                    w-full px-4 py-2.5 bg-gray-800 border-2 rounded-xl 
-                    text-white placeholder-gray-500
-                    focus:outline-none focus:border-accent focus:ring-4 focus:ring-accent/20
-                    transition-all duration-200
-                    ${quickClientErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-700'}
-                  `}
-                  placeholder="jean.dupont@email.com"
-                  disabled={isSubmittingClient}
-                />
-                {quickClientErrors.email && (
-                  <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {quickClientErrors.email}
-                  </p>
-                )}
-              </div>
+              <ClientCoreFormFields
+                formData={quickClientData}
+                formErrors={quickClientErrors}
+                onChange={handleQuickClientChange}
+                isSubmitting={isSubmittingClient}
+                signature={quickClientSignature}
+                onSignatureChange={setQuickClientSignature}
+              />
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowClientModal(false);
-                    setQuickClientData({ nom: '', prenom: '', telephone: '', email: '' });
-                    setQuickClientErrors({});
-                  }}
+                  onClick={closeQuickClientModal}
                   className="px-5 py-2.5 bg-gray-800 text-gray-300 font-medium rounded-xl hover:bg-gray-700 transition-all"
                   disabled={isSubmittingClient}
                 >
