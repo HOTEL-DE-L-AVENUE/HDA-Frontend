@@ -105,6 +105,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
   const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const resultPaymentBackups = useRef<Record<number, string>>({});
+  const resultBalanceBases = useRef<Record<number, { deposit: number; credit: number }>>({});
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
   const [rouletteRotation, setRouletteRotation] = useState(0);
   const [rouletteResult, setRouletteResult] = useState<number | null>(null);
@@ -117,8 +118,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const [confirmedSignatures, setConfirmedSignatures] = useState<string[]>([]);
   const [isSignatureConfirmationSaving, setIsSignatureConfirmationSaving] = useState(false);
   const [lineSignatureModal, setLineSignatureModal] = useState<{ id: number; name: string; value: string; field: 'signature' | 'finalSignature' } | null>(null);
+  const getPlayerDisplayName = (player?: PlayerLine) => player?.surnom?.trim() || player?.name?.trim() || `Joueur ${player?.ficheId ?? player?.id ?? selectedPlayerId}`;
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
-  const selectedPlayerName = selectedPlayer?.name?.trim() || `Joueur ${selectedPlayer?.ficheId ?? selectedPlayer?.id ?? selectedPlayerId}`;
+  const selectedPlayerName = getPlayerDisplayName(selectedPlayer);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
   const selectedPlayerCaveToVerify = selectedPlayerTotal;
@@ -132,8 +134,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     .filter((payment) => resultOptions.includes(payment.option));
   const caveLinesToSign = selectedPlayerLines.filter((line) => line.caves.trim() || line.amount.trim());
   const signatureConfirmationItems = [
-    ...caveLinesToSign.map((line) => ({ key: `cave-${line.id}`, label: `Cave ${line.caves || '—'} × ${line.amount || '—'} — ${line.name || `Joueur ${line.ficheId ?? line.id}`}` })),
-    ...(selectedBonuses.length ? [{ key: `bonus-${selectedPlayerId}`, label: `Signature bonus — ${selectedPlayer?.name || `Joueur ${selectedPlayerId}`}` }] : []),
+    ...caveLinesToSign.map((line) => ({ key: `cave-${line.id}`, label: `Cave ${line.caves || '—'} × ${line.amount || '—'} — ${getPlayerDisplayName(line)}` })),
+    ...(selectedBonuses.length ? [{ key: `bonus-${selectedPlayerId}`, label: `Signature bonus — ${selectedPlayerName}` }] : []),
   ];
 
   useEffect(() => {
@@ -147,7 +149,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     } else if (selectedResultPayments.length === 1) {
       const payment = selectedResultPayments[0];
       if (payment.amount <= 0) {
-        onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify([{ ...payment, amount: Math.abs(selectedPlayerResult) }]));
+        // Le montant sera appliqué aux soldes uniquement après confirmation de l'enregistrement.
       }
     } else if (selectedResultPayments.length > 1) {
       if (selectedResultPayments.some((payment) => payment.amount <= 0)) {
@@ -164,11 +166,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     if (unsignedCave) {
       const ficheId = unsignedCave.ficheId ?? unsignedCave.id;
       setSelectedPlayerId(ficheId);
-      setSignatureError(`La signature est obligatoire pour la cave du joueur ${unsignedCave.name || ficheId}.`);
+      setSignatureError(`La signature est obligatoire pour la cave du joueur ${getPlayerDisplayName(unsignedCave)}.`);
       return;
     }
     if (selectedBonuses.length && !selectedPlayer?.bonusSignature) {
-      setSignatureError(`La signature bonus est obligatoire pour ${selectedPlayer?.name || 'ce joueur'}.`);
+      setSignatureError(`La signature bonus est obligatoire pour ${selectedPlayerName}.`);
       return;
     }
     setSignatureError('');
@@ -180,6 +182,12 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     if (confirmedSignatures.length !== signatureConfirmationItems.length || isSignatureConfirmationSaving) return;
     setIsSignatureConfirmationSaving(true);
     try {
+      if (selectedPlayer && selectedResultPayments.length) {
+        const paymentsToApply = selectedResultPayments.length === 1 && selectedResultPayments[0].amount <= 0
+          ? [{ ...selectedResultPayments[0], amount: Math.abs(selectedPlayerResult) }]
+          : selectedResultPayments;
+        updateResultBalances(paymentsToApply);
+      }
       onSave();
     } finally {
       window.setTimeout(() => {
@@ -332,7 +340,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     const ficheId = selectedPlayer.ficheId ?? selectedPlayer.id;
     resultPaymentBackups.current[ficheId] = selectedPlayer.resultPaymentOptions || '';
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', '');
-    onAdd(selectedPlayer.ficheId ?? selectedPlayer.id, selectedPlayer.name);
+    onAdd(selectedPlayer.ficheId ?? selectedPlayer.id, selectedPlayer.surnom || selectedPlayer.name);
     setSelectedPlayerId(selectedPlayer.ficheId ?? selectedPlayer.id);
   };
 
@@ -381,10 +389,26 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
 
   const updateResultBalances = (nextPayments: ResultPayment[]) => {
     if (!selectedPlayer) return;
+    const ficheId = selectedPlayer.ficheId ?? selectedPlayer.id;
+    const balanceBase = resultBalanceBases.current[ficheId] ?? {
+      deposit: parseCasinoAmount(selectedPlayer.initialDeposit),
+      credit: parseCasinoAmount(selectedPlayer.initialCredit),
+    };
+    resultBalanceBases.current[ficheId] = balanceBase;
     const normalizedPayments = nextPayments.length === 1
       ? [{ ...nextPayments[0], amount: Math.abs(selectedPlayerResult) }]
       : nextPayments;
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(normalizedPayments));
+
+    // Dépôt payé réduit le crédit ; Crédit payé réduit le dépôt.
+    const creditReduction = normalizedPayments
+      .filter((payment) => payment.option === 'Dépôt payé')
+      .reduce((total, payment) => total + (payment.amount || 0), 0);
+    const depositReduction = normalizedPayments
+      .filter((payment) => payment.option === 'Crédit payé')
+      .reduce((total, payment) => total + (payment.amount || 0), 0);
+    onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, balanceBase.deposit - depositReduction)));
+    onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, balanceBase.credit - creditReduction)));
   };
 
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
@@ -393,14 +417,12 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       ? [...selectedResultPayments.filter((payment) => payment.option !== option), { option, amount: 0 }]
       : selectedResultPayments.filter((payment) => payment.option !== option);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
-    updateResultBalances(nextPayments);
   };
 
   const updateResultPaymentAmount = (option: string, amount: string) => {
     if (!selectedPlayer) return;
     const nextPayments = selectedResultPayments.map((payment) => payment.option === option ? { ...payment, amount: parseCasinoAmount(amount) } : payment);
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(nextPayments));
-    updateResultBalances(nextPayments);
   };
 
   useEffect(() => {
@@ -451,7 +473,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
           </select>
         ) : <>
         <select id="player-to-print" value={selectedPlayerId} onChange={(event) => setSelectedPlayerId(Number(event.target.value))} className="w-full rounded border bg-transparent px-2 py-1 text-white sm:w-auto" style={{ ...casinoBorder, color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!players.length}>
-          {activePlayers.map((player, index) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Fiche {index + 1} — {player.name}</option>)}
+          {activePlayers.map((player, index) => <option key={player.ficheId ?? player.id} value={player.ficheId ?? player.id} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Fiche {index + 1} — {getPlayerDisplayName(player)}</option>)}
         </select>
         </>}
       </div>
@@ -504,7 +526,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
 
             return (
             <tr key={line.id} className="h-9">
-              <td className="border" style={casinoBorder}><input className={paperInput} value={line.name} onChange={(event) => onUpdate(line.id, 'name', event.target.value)} placeholder="Nom du joueur" disabled={!isAdmin} /></td>
+              <td className="border" style={casinoBorder}><input className={paperInput} value={line.surnom} onChange={(event) => onUpdate(line.id, 'surnom', event.target.value)} placeholder="Surnom du joueur" disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><input type="time" className={paperInput} value={line.time} onChange={(event) => onUpdate(line.id, 'time', event.target.value)} disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.caves} onChange={(event) => onUpdate(line.id, 'caves', event.target.value)} disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><input className={paperInput} value={line.amount} onChange={(event) => onUpdate(line.id, 'amount', event.target.value)} disabled={!isAdmin} /></td>
@@ -514,13 +536,13 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
               <td className="border text-center" style={casinoBorder}><input type="radio" name={`payment-${line.id}`} checked={line.payment === 'Non payé'} onChange={() => onUpdate(line.id, 'payment', 'Non payé')} disabled={!isAdmin} /></td>
               <td className="border" style={casinoBorder}><select className={paperInput} value={line.paymentMethod || ''} onChange={(event) => onUpdate(line.id, 'paymentMethod', event.target.value)} style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }} disabled={!isAdmin}><option value="" className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>Sélectionner</option>{paymentMethods.map((method) => <option key={method} value={method} className="text-white" style={{ color: '#fff', backgroundColor: 'var(--color-surface)' }}>{method}</option>)}</select></td>
               <td className="border p-1" style={casinoBorder}>
-                <button type="button" className="flex min-h-14 w-full items-center justify-center rounded border border-dashed px-1 text-[10px] text-yellow-200 transition hover:border-yellow-300 hover:bg-yellow-300/10 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: line.id, name: line.name || `Joueur ${line.ficheId ?? line.id}`, value: line.signature || '', field: 'signature' })} disabled={!isAdmin} aria-label={`Signer pour ${line.name || 'ce joueur'}`}>
+                <button type="button" className="flex min-h-14 w-full items-center justify-center rounded border border-dashed px-1 text-[10px] text-yellow-200 transition hover:border-yellow-300 hover:bg-yellow-300/10 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: line.id, name: getPlayerDisplayName(line), value: line.signature || '', field: 'signature' })} disabled={!isAdmin} aria-label={`Signer pour ${getPlayerDisplayName(line)}`}>
                   {line.signature ? <img src={line.signature} alt="Signature du joueur" className="max-h-12 max-w-full object-contain" style={{ filter: 'invert(1)' }} /> : 'Cliquer pour signer'}
                 </button>
               </td>
               {isAdmin && <td className="border p-1 text-center print:hidden" style={casinoBorder}>
                 <div className="flex justify-center gap-1">
-                  <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-500/10 p-2 text-amber-200 transition hover:bg-amber-500/20 hover:text-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onDuplicate(line)} title="Copier cette ligne" aria-label={`Copier la ligne de ${line.name || 'ce joueur'}`} disabled={isEmptyCaveLine}><Copy size={16} /></button>
+                  <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-500/10 p-2 text-amber-200 transition hover:bg-amber-500/20 hover:text-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => onDuplicate(line)} title="Copier cette ligne" aria-label={`Copier la ligne de ${getPlayerDisplayName(line)}`} disabled={isEmptyCaveLine}><Copy size={16} /></button>
                   {canDeletePlayerLine && <button type="button" className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-red-400/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:border-red-400/60 focus:outline-none focus:ring-2 focus:ring-red-400" onClick={() => { if (!window.confirm(`Supprimer la ligne de ${line.name || 'ce joueur'} ?`)) return; const ficheId = line.ficheId ?? line.id; const previousPayment = resultPaymentBackups.current[ficheId]; if (previousPayment !== undefined) { onUpdate(line.id, 'resultPaymentOptions', `__restore_remove__:${previousPayment}`); return; } onRemove(line.id); }} title="Supprimer la ligne" aria-label={`Supprimer la ligne de ${line.name || 'ce joueur'}`}><Trash2 size={16} /></button>}
                 </div>
               </td>}
@@ -557,7 +579,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
         )}
         <div className="flex flex-col gap-2 border-b p-3" style={casinoBorder}>
           <p className="text-[10px] font-semibold tracking-[0.12em] text-yellow-200">SIGNATURE FINALE</p>
-          {selectedPlayer && <button type="button" className="flex min-h-16 w-full items-center justify-center rounded border border-dashed bg-white px-2 text-[10px] text-slate-600 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: selectedPlayer.id, name: selectedPlayer.name || `Joueur ${selectedPlayer.ficheId ?? selectedPlayer.id}`, value: selectedPlayer.finalSignature || '', field: 'finalSignature' })} disabled={!isAdmin} aria-label={`Signer la fiche finale de ${selectedPlayer.name || 'ce joueur'}`}>
+          {selectedPlayer && <button type="button" className="flex min-h-16 w-full items-center justify-center rounded border border-dashed bg-white px-2 text-[10px] text-slate-600 transition hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60" style={casinoBorder} onClick={() => setLineSignatureModal({ id: selectedPlayer.id, name: selectedPlayerName, value: selectedPlayer.finalSignature || '', field: 'finalSignature' })} disabled={!isAdmin} aria-label={`Signer la fiche finale de ${selectedPlayerName}`}>
             {selectedPlayer.finalSignature ? <img src={selectedPlayer.finalSignature} alt="Signature finale du joueur" className="max-h-14 max-w-full object-contain" /> : 'Cliquer pour signer'}
           </button>}
         </div>

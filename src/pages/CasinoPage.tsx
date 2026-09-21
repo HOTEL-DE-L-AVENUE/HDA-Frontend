@@ -302,7 +302,6 @@ export const CasinoPage: React.FC = () => {
     const ficheId = sourceLine?.ficheId ?? sourceLine?.id;
     const isDeposit = key === 'initialDeposit';
     const isCredit = key === 'initialCredit';
-    const enteredAmount = parseCasinoAmount(value);
     const resetResultPaymentAmounts = (paymentOptions: string) => {
       try {
         const parsed = JSON.parse(paymentOptions || '[]');
@@ -337,9 +336,6 @@ export const CasinoPage: React.FC = () => {
           ...line,
           [key]: value,
           ...(shouldRecalculateResultPayments ? { resultPaymentOptions: resetResultPaymentAmounts(line.resultPaymentOptions) } : {}),
-          ...(enteredAmount > 0
-            ? { [isDeposit ? 'initialCredit' : 'initialDeposit']: '0' }
-            : {}),
         };
       }
       return key === 'resultPaymentOptions' && sameFiche
@@ -356,8 +352,8 @@ export const CasinoPage: React.FC = () => {
     setRegisteredPlayers((current) => current.map((player) => player.id === casinoPlayerId
       ? {
         ...player,
-        ...(isDeposit ? { depot: enteredAmount, ...(enteredAmount > 0 ? { credit: 0 } : {}) } : {}),
-        ...(isCredit ? { credit: enteredAmount, ...(enteredAmount > 0 ? { depot: 0 } : {}) } : {}),
+        ...(isDeposit ? { depot: parseCasinoAmount(value) } : {}),
+        ...(isCredit ? { credit: parseCasinoAmount(value) } : {}),
       }
       : player
     ));
@@ -425,6 +421,12 @@ export const CasinoPage: React.FC = () => {
       const saved = await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, rackChecks: rackChecksRef.current, restaurantPayments, finals: finalsToSave, endGameTime, cashingPaymentMethod, isFinished: isGameFinished, finishedAt: gameFinishedAt });
       finalsByPlayerRef.current = finalsToSave;
       resultPaymentOverridesRef.current = {};
+      setRegisteredPlayers((current) => current.map((registeredPlayer) => {
+        const savedPlayer = playersWithAccumulatedCaves.find((player) => player.casinoPlayerId === registeredPlayer.id);
+        return savedPlayer
+          ? { ...registeredPlayer, depot: parseCasinoAmount(savedPlayer.initialDeposit), credit: parseCasinoAmount(savedPlayer.initialCredit) }
+          : registeredPlayer;
+      }));
       setSaveState('saved');
       // Les vérifications d'identité sont liées à la fiche, mais leur échec
       // ne doit pas bloquer l'enregistrement principal de la fiche.
