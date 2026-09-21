@@ -18,6 +18,7 @@ import { useHousekeeping } from '../../hooks/useHousekeeping';
 import { useRooms } from '../../hooks/useRooms';
 import { HousekeepingFormModal } from './Modal/HousekeepingFormModal';
 import { toast } from 'react-hot-toast';
+import { TYPE_TACHE_LABELS } from '../../constants/housekeeping';
 
 interface HousekeepingManagerProps {
   initialRoomId?: number | null;
@@ -171,25 +172,9 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
       TERASSE: 'bg-orange-500/20 text-orange-400',
       TOILETTES: 'bg-orange-500/20 text-orange-400'
     };
-    const labels: Record<string, string> = {
-      POST_OCCUPANCY: 'Post-occupation',
-      AFTER_OCCUPANCY: 'After-occupation',
-      DEEP_CLEANING: 'Deep cleaning',
-      EXCEPTIONAL: 'Exceptionnel',
-      CHAMBRE: 'Chambre',
-      ESCALIER_RAMPE: 'Escalier/rampe',
-      DECORATIONS: 'Décorations',
-      MUR: 'Mur',
-      PLAFOND: 'Plafond',
-      SOL_MOQUETTE: 'Sol/moquette',
-      MEUBLES: 'Meubles',
-      COULOIR: 'Couloir',
-      TERASSE: 'Terrasse',
-      TOILETTES: 'Toilettes'
-    };
     return (
       <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${colors[type] || colors.CHAMBRE}`}>
-        {labels[type] || type}
+        {TYPE_TACHE_LABELS[type] || type}
       </span>
     );
   };
@@ -282,20 +267,9 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
           className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-accent text-sm"
         >
           <option value="TOUS">Tous les types</option>
-          <option value="POST_OCCUPANCY">Post-occupation</option>
-          <option value="AFTER_OCCUPANCY">After-occupation</option>
-          <option value="DEEP_CLEANING">Deep cleaning</option>
-          <option value="EXCEPTIONAL">Exceptionnel</option>
-          <option value="CHAMBRE">Chambre</option>
-          <option value="ESCALIER_RAMPE">Escalier/rampe</option>
-          <option value="DECORATIONS">Décorations</option>
-          <option value="MUR">Mur</option>
-          <option value="PLAFOND">Plafond</option>
-          <option value="SOL_MOQUETTE">Sol/moquette</option>
-          <option value="MEUBLES">Meubles</option>
-          <option value="COULOIR">Couloir</option>
-          <option value="TERASSE">Terrasse</option>
-          <option value="TOILETTES">Toilettes</option>
+          {Object.entries(TYPE_TACHE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
         </select>
         <button
           onClick={() => {

@@ -181,6 +181,7 @@ export const useEquipment = () => {
     updateEquipment,
     deleteEquipment,
     assignEquipment,
+    updateRoomEquipment,
     deleteRoomEquipment,
     updateRoomEquipmentStatus
   };

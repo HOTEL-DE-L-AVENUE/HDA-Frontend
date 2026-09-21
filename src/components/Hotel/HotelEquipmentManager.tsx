@@ -40,6 +40,7 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
   const [stats, setStats] = useState<any>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'TOUS' | 'ASSIGNED' | 'BON' | 'EN_PANNE'>('TOUS');
 
   useEffect(() => {
     if (initialRoomId) setSelectedRoomId(initialRoomId);
@@ -104,6 +105,20 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
 
     return map;
   }, [roomEquipments]);
+
+  const filteredEquipments = React.useMemo(() => {
+    const query = categoryFilter.trim().toLowerCase();
+    const assignmentsByEquipment = Array.from(groupedRoomEquipments.values());
+
+    return equipments.filter((eq: Equipment) => {
+      if (query && !(eq.categorie || '').toLowerCase().includes(query)) return false;
+
+      if (statusFilter === 'TOUS') return true;
+      const assigned = assignmentsByEquipment.filter(re => re.equipment_id === eq.id);
+      if (statusFilter === 'ASSIGNED') return assigned.length > 0;
+      return assigned.some(re => re.statut === statusFilter);
+    });
+  }, [equipments, categoryFilter, statusFilter, groupedRoomEquipments]);
 
   // Gestion de l'assignation
   const handleAssign = async (roomId: number, quantity: number, zone: 'CHAMBRE' | 'SALLE_DE_BAIN') => {
@@ -304,26 +319,58 @@ export const EquipmentManager: React.FC<EquipmentManagerProps> = ({ initialRoomI
 
       {stats && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('TOUS')}
+            className={`rounded-2xl border p-4 text-left transition ${
+              statusFilter === 'TOUS'
+                ? 'border-slate-400 bg-slate-800 ring-2 ring-slate-400/40'
+                : 'border-slate-700 bg-slate-900/70 hover:border-slate-500'
+            }`}
+          >
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Total</p>
             <p className="mt-2 text-2xl font-bold text-white">{stats.total || 0}</p>
-          </div>
-          <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4">
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'ASSIGNED' ? 'TOUS' : 'ASSIGNED')}
+            className={`rounded-2xl border p-4 text-left transition ${
+              statusFilter === 'ASSIGNED'
+                ? 'border-blue-400 bg-blue-500/20 ring-2 ring-blue-400/40'
+                : 'border-blue-500/30 bg-blue-500/10 hover:border-blue-400/60'
+            }`}
+          >
             <p className="text-[10px] uppercase tracking-[0.18em] text-blue-200/80">Assignés</p>
             <p className="mt-2 text-2xl font-bold text-blue-300">{stats.assigned || 0}</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'BON' ? 'TOUS' : 'BON')}
+            className={`rounded-2xl border p-4 text-left transition ${
+              statusFilter === 'BON'
+                ? 'border-emerald-400 bg-emerald-500/20 ring-2 ring-emerald-400/40'
+                : 'border-emerald-500/30 bg-emerald-500/10 hover:border-emerald-400/60'
+            }`}
+          >
             <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">Bon état</p>
             <p className="mt-2 text-2xl font-bold text-emerald-300">
               {roomEquipments.filter(re => re.statut === 'BON').length || 0}
             </p>
-          </div>
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'EN_PANNE' ? 'TOUS' : 'EN_PANNE')}
+            className={`rounded-2xl border p-4 text-left transition ${
+              statusFilter === 'EN_PANNE'
+                ? 'border-red-400 bg-red-500/20 ring-2 ring-red-400/40'
+                : 'border-red-500/30 bg-red-500/10 hover:border-red-400/60'
+            }`}
+          >
             <p className="text-[10px] uppercase tracking-[0.18em] text-red-200/80">En panne</p>
             <p className="mt-2 text-2xl font-bold text-red-300">
               {roomEquipments.filter(re => re.statut === 'EN_PANNE').length || 0}
             </p>
-          </div>
+          </button>
         </div>
       )}
 
