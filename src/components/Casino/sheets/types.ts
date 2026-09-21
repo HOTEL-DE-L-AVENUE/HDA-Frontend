@@ -18,7 +18,8 @@ export type PlayerLine = {
   time: string;
   playerTime: string;
   name: string;
-  email: string;
+  surnom: string;
+  whatsapp: string;
   initialDeposit: string;
   initialCredit: string;
   member: string;
@@ -128,7 +129,8 @@ export const createPlayerLine = (id: number, ficheId = id): PlayerLine => ({
   time: '',
   playerTime: '',
   name: '',
-  email: '',
+  surnom: '',
+  whatsapp: '',
   initialDeposit: '',
   initialCredit: '',
   member: '',
