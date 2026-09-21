@@ -53,7 +53,20 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
   const [historyFrom, setHistoryFrom] = useState('');
   const [historyTo, setHistoryTo] = useState('');
   const [showWorkerForm, setShowWorkerForm] = useState(false);
-  const [workerForm, setWorkerForm] = useState({ nom: '', prenom: '', telephone: '', email: '', specialite: '', date_debut: '' });
+  const [workerForm, setWorkerForm] = useState({ 
+    nom: '', 
+    prenom: '', 
+    telephone: '', 
+    email: '', 
+    specialite: '', 
+    date_debut: '',
+    date_fin: '',
+    time_slot: '',
+    photo_url: '',
+    id_photo_url: '',
+    contract_url: '',
+    quote_url: ''
+  });
   useEffect(() => {
     if (initialRoomId) {
       setSelectedMaintenance(null);
@@ -151,7 +164,20 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
     if (!workerForm.nom.trim()) return;
     const worker = await maintenanceWorkerService.createWorker(workerForm);
     setWorkers((current) => [...current, worker]);
-    setWorkerForm({ nom: '', prenom: '', telephone: '', email: '', specialite: '', date_debut: '' });
+    setWorkerForm({ 
+      nom: '', 
+      prenom: '', 
+      telephone: '', 
+      email: '', 
+      specialite: '', 
+      date_debut: '',
+      date_fin: '',
+      time_slot: '',
+      photo_url: '',
+      id_photo_url: '',
+      contract_url: '',
+      quote_url: ''
+    });
     setShowWorkerForm(false);
     toast.success('Ouvrier ajouté');
   };
@@ -254,8 +280,14 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
           <input placeholder="Téléphone" value={workerForm.telephone} onChange={(e) => setWorkerForm({ ...workerForm, telephone: e.target.value })} className="input-field" />
           <input placeholder="Email" value={workerForm.email} onChange={(e) => setWorkerForm({ ...workerForm, email: e.target.value })} className="input-field" />
           <input placeholder="Spécialité" value={workerForm.specialite} onChange={(e) => setWorkerForm({ ...workerForm, specialite: e.target.value })} className="input-field" />
-          <input type="date" value={workerForm.date_debut} onChange={(e) => setWorkerForm({ ...workerForm, date_debut: e.target.value })} className="input-field" />
-          <button type="submit" className="btn-primary md:col-span-3">Ajouter l’ouvrier</button>
+          <input type="date" value={workerForm.date_debut} onChange={(e) => setWorkerForm({ ...workerForm, date_debut: e.target.value })} className="input-field" placeholder="Date début collaboration" />
+          <input type="date" value={workerForm.date_fin} onChange={(e) => setWorkerForm({ ...workerForm, date_fin: e.target.value })} className="input-field" placeholder="Date fin collaboration" />
+          <input placeholder="Créneau horaire" value={workerForm.time_slot} onChange={(e) => setWorkerForm({ ...workerForm, time_slot: e.target.value })} className="input-field" />
+          <input placeholder="URL photo personnelle" value={workerForm.photo_url} onChange={(e) => setWorkerForm({ ...workerForm, photo_url: e.target.value })} className="input-field" />
+          <input placeholder="URL photo pièce d'identité" value={workerForm.id_photo_url} onChange={(e) => setWorkerForm({ ...workerForm, id_photo_url: e.target.value })} className="input-field" />
+          <input placeholder="URL contrat" value={workerForm.contract_url} onChange={(e) => setWorkerForm({ ...workerForm, contract_url: e.target.value })} className="input-field" />
+          <input placeholder="URL devis" value={workerForm.quote_url} onChange={(e) => setWorkerForm({ ...workerForm, quote_url: e.target.value })} className="input-field" />
+          <button type="submit" className="btn-primary md:col-span-3">Ajouter l'ouvrier</button>
         </form>
       )}
 
@@ -306,15 +338,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
           <option value="CLIMATISATION">Climatisation</option>
           <option value="AUTRE">Autres</option>
         </select>
-        <button
-          onClick={() => {
-            setFilterStatus('TOUS');
-            setFilterType('TOUS');
-          }}
-          className="px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-gray-400 hover:text-white transition text-sm"
-        >
-          Réinitialiser
-        </button>
         <input type="date" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)} className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm" title="Historique à partir du" />
         <input type="date" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)} className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm" title="Historique jusqu’au" />
       </div>

@@ -25,9 +25,13 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     categorie: '',
     description: '',
     zone: 'CHAMBRE' as 'CHAMBRE' | 'SALLE_DE_BAIN',
+    quantite: 1,
+    is_consumable: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [categorySearchTerm, setCategorySearchTerm] = useState('');
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -37,6 +41,8 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         categorie: initialData.categorie || '',
         description: initialData.description || '',
         zone: initialData.zone || 'CHAMBRE',
+        quantite: initialData.quantite || 1,
+        is_consumable: initialData.is_consumable || false,
       });
     } else {
       setFormData({
@@ -45,6 +51,8 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         categorie: '',
         description: '',
         zone: 'CHAMBRE',
+        quantite: 1,
+        is_consumable: false,
       });
     }
     setErrors({});
@@ -54,6 +62,9 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
     const newErrors: Record<string, string> = {};
     if (!formData.nom.trim()) {
       newErrors.nom = 'Le nom est requis';
+    }
+    if (formData.quantite <= 0) {
+      newErrors.quantite = 'La quantité doit être supérieure à 0';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -141,20 +152,83 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Catégorie</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.categorie}
+                onChange={(e) => {
+                  setFormData({ ...formData, categorie: e.target.value });
+                  setCategorySearchTerm(e.target.value);
+                  setShowAllCategories(true);
+                }}
+                onFocus={() => setShowAllCategories(true)}
+                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
+                placeholder="Catégorie (ex: Électronique, Mobilier...)"
+                disabled={isSubmitting}
+              />
+              {showAllCategories && categories.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg max-h-40 overflow-y-auto">
+                  {categories
+                    .filter(cat => 
+                      categorySearchTerm === '' || 
+                      cat.toLowerCase().includes(categorySearchTerm.toLowerCase())
+                    )
+                    .map(cat => (
+                      <div
+                        key={cat}
+                        onClick={() => {
+                          setFormData({ ...formData, categorie: cat });
+                          setCategorySearchTerm(cat);
+                          setShowAllCategories(false);
+                        }}
+                        className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-sm text-white"
+                      >
+                        {cat}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Quantité</label>
             <input
-              type="text"
-              value={formData.categorie}
-              onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
+              type="number"
+              value={formData.quantite}
+              onChange={(e) => setFormData({ ...formData, quantite: Number(e.target.value) || 1 })}
               className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-              placeholder="Catégorie (ex: Électronique, Mobilier...)"
+              min="1"
               disabled={isSubmitting}
-              list="categories"
             />
-            <datalist id="categories">
-              {categories.map(cat => (
-                <option key={cat} value={cat} />
-              ))}
-            </datalist>
+            {errors.quantite && (
+              <p className="text-red-400 text-xs mt-1">{errors.quantite}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">Type d'équipement</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, is_consumable: false })}
+                className={`p-2 rounded-lg border ${!formData.is_consumable ? 'border-accent bg-accent/10 text-accent' : 'border-gray-700 text-gray-300'}`}
+                disabled={isSubmitting}
+              >
+                Non consommable
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, is_consumable: true })}
+                className={`p-2 rounded-lg border ${formData.is_consumable ? 'border-accent bg-accent/10 text-accent' : 'border-gray-700 text-gray-300'}`}
+                disabled={isSubmitting}
+              >
+                Consommable
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.is_consumable ? 'Sera ajouté automatiquement au stock' : 'Ne sera pas ajouté au stock'}
+            </p>
           </div>
 
           <div>

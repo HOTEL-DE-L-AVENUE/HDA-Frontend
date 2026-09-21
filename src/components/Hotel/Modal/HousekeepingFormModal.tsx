@@ -23,10 +23,11 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     room_id: 0,
-    type_tache: 'CHAMBRE' as HousekeepingTask['type_tache'],
+    type_tache: 'POST_OCCUPANCY' as HousekeepingTask['type_tache'],
     statut: 'A_FAIRE' as 'A_FAIRE' | 'EN_COURS' | 'TERMINE',
     commentaire: '',
     planned_at: '',
+    exceptional_details: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -39,14 +40,16 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
         statut: initialData.statut,
         commentaire: initialData.commentaire || '',
         planned_at: initialData.planned_at?.split('T')[0] || '',
+        exceptional_details: '',
       });
     } else {
       setFormData({
         room_id: defaultRoomId || 0,
-        type_tache: 'CHAMBRE',
+        type_tache: 'POST_OCCUPANCY',
         statut: 'A_FAIRE',
         commentaire: '',
         planned_at: new Date().toISOString().split('T')[0],
+        exceptional_details: '',
       });
     }
     setErrors({});
@@ -122,6 +125,10 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
               className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-accent"
               disabled={isSubmitting}
             >
+              <option value="POST_OCCUPANCY">Post-occupation</option>
+              <option value="AFTER_OCCUPANCY">After-occupation</option>
+              <option value="DEEP_CLEANING">Deep cleaning</option>
+              <option value="EXCEPTIONAL">Exceptional</option>
               <option value="CHAMBRE">Chambre</option>
               <option value="ESCALIER_RAMPE">Escalier/rampe</option>
               <option value="DECORATIONS">Décorations</option>
@@ -134,6 +141,23 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
               <option value="TOILETTES">Toilettes</option>
             </select>
           </div>
+
+          {/* Exceptional cleaning details */}
+          {formData.type_tache === 'EXCEPTIONAL' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Détails du nettoyage exceptionnel <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={formData.exceptional_details}
+                onChange={(e) => setFormData({ ...formData, exceptional_details: e.target.value })}
+                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent resize-none"
+                rows={2}
+                placeholder="Spécifiez les détails du nettoyage exceptionnel..."
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
 
           {/* Statut */}
           <div>
