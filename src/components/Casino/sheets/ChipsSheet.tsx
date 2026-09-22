@@ -31,6 +31,34 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ date, chips, players, ra
     }
   }, [withdrawnTotal, firstPlayer]);
 
+  useEffect(() => {
+    const addScheduledRackCheck = () => {
+      const now = new Date();
+      if (now.getMinutes() % 30 !== 0) return;
+      const time = now.toTimeString().slice(0, 5);
+      const alreadyAdded = rackChecks.some((check) => check.type === 'Rack check périodique' && check.date === date && check.time === time);
+      if (alreadyAdded) return;
+      onRackChecksChange([...rackChecks, {
+        id: Date.now(),
+        date,
+        time,
+        type: 'Rack check périodique',
+        expected: 220000,
+        actual: '',
+        missing: '',
+        verified: false,
+        variance: '',
+        croupierEntrant: '',
+        croupierSortant: '',
+        validatedBy: '',
+        validatedAt: '',
+      }]);
+    };
+    addScheduledRackCheck();
+    const interval = window.setInterval(addScheduledRackCheck, 30000);
+    return () => window.clearInterval(interval);
+  }, [date, rackChecks, onRackChecksChange]);
+
   const saveExchangeVerification = async (data: IdentityVerificationData) => {
     if (!firstPlayer) return;
     try {
@@ -95,7 +123,7 @@ const RackCheckSection: React.FC<{ date: string; checks: RackCheck[]; players: P
   const isRackCheck = (check: RackCheck) => check.type === 'Rack check entrée' || check.type === 'Rack check sortie' || check.type === 'Rack check périodique' || check.type === 'Retour croupier' || check.type === 'Sortie croupier';
   const expectedForCheck = (check: RackCheck, index: number) => isRackCheck(check) ? 220000 : expectedByCheck(index);
   const expectedByCheck = (index: number) => Math.max(0, openingTotal - caveTotal + checks.slice(0, index + 1).reduce((total, check) => total + movementAmount(check), 0));
-  const addCheck = (type: RackCheck['type']) => onChange([...checks, { id: Date.now(), date, time: new Date().toTimeString().slice(0, 5), type, expected: isRackCheck({ type } as RackCheck) ? 220000 : 0, actual: '', missing: '', verified: false, amount: type === 'Rajout bureau' ? '' : undefined, variance: '' }]);
+  const addCheck = (type: RackCheck['type']) => onChange([...checks, { id: Date.now(), date, time: new Date().toTimeString().slice(0, 5), type, expected: isRackCheck({ type } as RackCheck) ? 220000 : 0, actual: '', missing: '', verified: false, amount: type === 'Rajout bureau' ? '' : undefined, variance: '', croupierEntrant: '', croupierSortant: '', validatedBy: '', validatedAt: '' }]);
   const updateCheck = (id: number, changes: Partial<RackCheck>) => onChange(checks.map((check) => {
     if (check.id !== id) return check;
     const next = { ...check, ...changes };
@@ -121,17 +149,20 @@ const RackCheckSection: React.FC<{ date: string; checks: RackCheck[]; players: P
 
 const CheckTable: React.FC<{ title: string; checks: RackCheck[]; date: string; emptyLabel: string; isRackCheck: (check: RackCheck) => boolean; onUpdate: (id: number, changes: Partial<RackCheck>) => void; onRemove: (id: number) => void }> = ({ title, checks, date, emptyLabel, isRackCheck, onUpdate, onRemove }) => <section className="mb-4">
   <h3 className="mb-2 text-sm font-bold text-primary">{title}</h3>
-  <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-xs border" style={casinoBorder}><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>{['Date', 'Heure', 'Type', 'Rajout bureau', 'Montant attendu', 'Montant constaté', 'Écart', 'Validation caissier', 'Action'].map((header) => <th key={header} className="p-3 text-left border-r last:border-r-0" style={casinoBorder}>{header}</th>)}</tr></thead><tbody>
-    {!checks.length && <tr><td colSpan={9} className="p-3 text-muted" style={casinoBorder}>{emptyLabel}</td></tr>}
+  <div className="overflow-x-auto"><table className="w-full min-w-[1500px] text-xs border" style={casinoBorder}><thead style={{ backgroundColor: 'var(--color-bg)' }}><tr>{['Date', 'Heure', 'Type', 'Croupier entrant', 'Croupier sortant', 'Rajout bureau', 'Montant attendu', 'Montant constaté', 'Écart', 'Responsable validation', 'Validé', 'Action'].map((header) => <th key={header} className="p-3 text-left border-r last:border-r-0" style={casinoBorder}>{header}</th>)}</tr></thead><tbody>
+    {!checks.length && <tr><td colSpan={12} className="p-3 text-muted" style={casinoBorder}>{emptyLabel}</td></tr>}
     {checks.map((check) => <tr key={check.id}>
       <td className="border-r border-b" style={casinoBorder}><input type="date" className={casinoInput} value={check.date || date} onChange={(event) => onUpdate(check.id, { date: event.target.value })} /></td>
       <td className="border-r border-b" style={casinoBorder}><input type="time" className={casinoInput} value={check.time} onChange={(event) => onUpdate(check.id, { time: event.target.value })} /></td>
       <td className="border-r border-b p-2 font-semibold" style={casinoBorder}>{check.type}</td>
+      <td className="border-r border-b" style={casinoBorder}><input className={casinoInput} placeholder="Croupier entrant" value={check.croupierEntrant || ''} onChange={(event) => onUpdate(check.id, { croupierEntrant: event.target.value })} /></td>
+      <td className="border-r border-b" style={casinoBorder}><input className={casinoInput} placeholder="Croupier sortant" value={check.croupierSortant || ''} onChange={(event) => onUpdate(check.id, { croupierSortant: event.target.value })} /></td>
       <td className="border-r border-b" style={casinoBorder}>{check.type === 'Rajout bureau' ? <input className={casinoInput} inputMode="numeric" placeholder="Montant ajouté" value={check.amount || ''} onChange={(event) => onUpdate(check.id, { amount: event.target.value })} /> : <span className="block p-2 text-right">—</span>}</td>
       <td className="border-r border-b" style={casinoBorder}>{check.type === 'Cash check' ? <input className={casinoInput} inputMode="numeric" placeholder="Montant théorique" value={check.expected || ''} onChange={(event) => onUpdate(check.id, { expected: parseCasinoAmount(event.target.value) })} /> : <span className="block p-2 text-right font-semibold">{casinoCurrency.format(check.expected)} Ar</span>}</td>
       <td className="border-r border-b" style={casinoBorder}><input className={casinoInput} inputMode="numeric" placeholder={isRackCheck(check) ? 'Jetons dans le rack' : 'Espèces constatées'} value={check.actual} onChange={(event) => onUpdate(check.id, { actual: event.target.value })} /></td>
       <td className={`border-r border-b p-2 text-right font-bold ${check.actual.trim() && parseCasinoAmount(check.actual) - check.expected < 0 ? 'text-red-400' : 'text-green-400'}`} style={casinoBorder}>{check.actual.trim() ? `${parseCasinoAmount(check.actual) - check.expected > 0 ? '+' : ''}${casinoCurrency.format(parseCasinoAmount(check.actual) - check.expected)} Ar` : '—'}</td>
-      <td className="border-r border-b p-2 text-center" style={casinoBorder}><label className="inline-flex items-center gap-2"><input type="checkbox" checked={check.verified} disabled={!check.actual.trim()} onChange={(event) => onUpdate(check.id, { verified: event.target.checked })} /> Confirmé</label></td>
+      <td className="border-r border-b" style={casinoBorder}><input className={casinoInput} placeholder="Nom du responsable" value={check.validatedBy || ''} onChange={(event) => onUpdate(check.id, { validatedBy: event.target.value })} /></td>
+      <td className="border-r border-b p-2 text-center" style={casinoBorder}><label className="inline-flex items-center gap-2"><input type="checkbox" checked={check.verified} disabled={!check.actual.trim() || !check.validatedBy?.trim()} onChange={(event) => onUpdate(check.id, { verified: event.target.checked, validatedAt: event.target.checked ? new Date().toISOString() : '' })} /> Validé</label></td>
       <td className="border-b p-2 text-center" style={casinoBorder}><button type="button" className="action secondary text-xs" onClick={() => onRemove(check.id)}>Supprimer</button></td>
     </tr>)}
   </tbody></table></div>

@@ -235,7 +235,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     ...(cashChecks.length ? cashChecks.map((check) => `${check.date || date} ${check.time} — attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · écart ${formatAmount(parseCasinoAmount(check.variance))} · ${check.verified ? 'validé par le caissier' : 'en attente de validation'}`) : ['Aucun cash check enregistré.']),
     '',
     '# Rack checks :',
-    ...(rackChecksReport.length ? rackChecksReport.map((check) => `${check.date || date} ${check.time} — ${check.type} · attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · manque ${formatAmount(parseCasinoAmount(check.missing))} · ${check.verified ? 'validé par le caissier' : 'en attente de validation'}`) : ['Aucun rack check enregistré.']),
+    ...(rackChecksReport.length ? rackChecksReport.map((check) => `${check.date || date} ${check.time} — ${check.type} · entrant : ${check.croupierEntrant || 'non renseigné'} · sortant : ${check.croupierSortant || 'non renseigné'} · attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · manque ${formatAmount(parseCasinoAmount(check.missing))} · ${check.verified ? `validé par ${check.validatedBy || 'le responsable'}` : 'en attente de validation'}`) : ['Aucun rack check enregistré.']),
   ];
   return lines.join('\n');
 };

@@ -60,6 +60,10 @@ export type RackCheck = {
   verified: boolean;
   amount?: string;
   variance?: string;
+  croupierEntrant?: string;
+  croupierSortant?: string;
+  validatedBy?: string;
+  validatedAt?: string;
 };
 
 export const CHIP_VALUES = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000];
