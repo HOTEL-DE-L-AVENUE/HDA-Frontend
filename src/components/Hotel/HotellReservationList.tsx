@@ -349,6 +349,12 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                           {res.room?.numero || 'N/A'}
                         </span>
                         <span>{formatDate(res.date_arrivee)} → {formatDate(res.date_depart)}</span>
+                        <span className={res.type_reservation === 'BOOKING' ? 'text-blue-400' : 'text-gray-500'}>
+                          {res.type_reservation === 'BOOKING' ? 'Booking' : 'Sur place'}
+                        </span>
+                        {res.laundry_included && (
+                          <span className="text-purple-400">Blanchisserie {formatCurrency(res.laundry_price || 0)}</span>
+                        )}
                         <span className={res.pdj_inclus ? 'text-emerald-400' : 'text-gray-500'}>
                           {res.pdj_inclus ? 'PDJ inclus' : 'PDJ non inclus'}
                         </span>

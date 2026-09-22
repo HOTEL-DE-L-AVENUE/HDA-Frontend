@@ -1,6 +1,7 @@
 // hotel/modals/ReservationFormModal.tsx
 import React, { useState, useEffect } from 'react';
 import { Reservation, Room, Client } from '../../../types/hotel.types';
+import api from '../../../lib/api';
 import { 
   X, 
   Calendar, 
@@ -69,6 +70,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [showAllClients, setShowAllClients] = useState(false);
   const [roomAvailabilityError, setRoomAvailabilityError] = useState<string | null>(null);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
 
   // États pour le formulaire de création rapide de client
   // Réutilise les mêmes champs que la page "Clients" (voir ClientCoreFormFields)
@@ -146,6 +148,9 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     setErrors({});
     setApiError(null);
     setRoomAvailabilityError(null);
+    setShowAvailabilityModal(false);
+    setClientSearchTerm('');
+    setShowAllClients(false);
   }, [initialData, isOpen, rooms, clients]);
 
   const handleRoomChange = async (roomId: number) => {
@@ -157,10 +162,11 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     // Check room availability if dates are set
     if (formData.date_arrivee && formData.date_depart && !initialData) {
       try {
-        const response = await fetch(`/api/hebergement/rooms/availability?room_id=${roomId}&date_arrivee=${formData.date_arrivee}&date_depart=${formData.date_depart}`);
-        const data = await response.json();
+        const response = await api.get(`/api/hebergement/rooms/availability?room_id=${roomId}&date_arrivee=${formData.date_arrivee}&date_depart=${formData.date_depart}`);
+        const data = response.data.data;
+        console.log('Room availability check:', data);
         if (!data.available) {
-          setRoomAvailabilityError('Cette chambre est déjà réservée pour ces dates');
+          setShowAvailabilityModal(true);
         }
       } catch (error) {
         console.error('Error checking room availability:', error);
@@ -185,36 +191,51 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
       if (days > 0) {
         let total = days * (room.prix_nuit || 0);
         
+        // For Booking.com, use manual price if set, otherwise use calculated
+        if (formData.type_reservation === 'BOOKING' && formData.manual_price > 0) {
+          total = formData.manual_price;
+        }
+        
         // Add laundry price if included
         if (formData.laundry_included) {
           total += formData.laundry_price || 0;
         }
         
-        // Add manual price if booking type
-        if (formData.type_reservation === 'BOOKING' && formData.manual_price) {
-          total = formData.manual_price;
-        }
-        
-        // Apply discount
+        // Apply discount (only for On-site or if manual price not set for Booking)
         if (discountMode === 'discount' && discountPercent > 0) {
           total = total * (1 - discountPercent / 100);
         }
         
+        const newTotal = total;
         setFormData(prev => ({
           ...prev,
-          montant_total: total
+          montant_total: newTotal
         }));
       }
     }
   };
 
-  const handleDateChange = (field: 'date_arrivee' | 'date_depart', value: string) => {
+  const handleDateChange = async (field: 'date_arrivee' | 'date_depart', value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
     if (field === 'date_arrivee' || field === 'date_depart') {
       const arrivee = field === 'date_arrivee' ? value : formData.date_arrivee;
       const depart = field === 'date_depart' ? value : formData.date_depart;
       calculateTotal(selectedRoom, arrivee, depart);
+      
+      // Check room availability when dates change
+      if (formData.room_id && arrivee && depart && !initialData) {
+        try {
+          const response = await api.get(`/api/hebergement/rooms/availability?room_id=${formData.room_id}&date_arrivee=${arrivee}&date_depart=${depart}`);
+          const data = response.data.data;
+          console.log('Date change availability check:', data);
+          if (!data.available) {
+            setShowAvailabilityModal(true);
+          }
+        } catch (error) {
+          console.error('Error checking room availability:', error);
+        }
+      }
     }
   };
 
@@ -339,6 +360,22 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     setApiError(null);
 
     try {
+      // Check room availability before creating new reservation
+      if (!initialData && formData.room_id && formData.date_arrivee && formData.date_depart) {
+        try {
+          const response = await api.get(`/api/hebergement/rooms/availability?room_id=${formData.room_id}&date_arrivee=${formData.date_arrivee}&date_depart=${formData.date_depart}`);
+          console.log('Availability check in submit:', response.data);
+          if (!response.data.data.available) {
+            setShowAvailabilityModal(true);
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking room availability:', error);
+          // Continue with submission if availability check fails
+        }
+      }
+
       const submitData = {
         client_id: formData.client_id!,
         room_id: formData.room_id!,
@@ -679,7 +716,8 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                   type="number"
                   value={formData.manual_price || ''}
                   onChange={(e) => {
-                    setFormData(prev => ({ ...prev, manual_price: Number(e.target.value) || 0 }));
+                    const newPrice = Number(e.target.value) || 0;
+                    setFormData(prev => ({ ...prev, manual_price: newPrice }));
                     calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
                   }}
                   className="input-field w-full text-sm py-2.5 rounded-lg"
@@ -738,29 +776,6 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
               )}
             </div>
 
-            {/* Résumé des nuits */}
-            {nights > 0 && selectedRoom && (
-              <div className="p-3.5 rounded-lg bg-surface-2 border border-base flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-accent-4 flex items-center justify-center">
-                    <Clock size={15} className="text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted">Durée du séjour</p>
-                    <p className="text-primary font-semibold text-sm">
-                      {nights} nuit{nights > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted">Prix total</p>
-                  <p className="text-accent font-bold text-base">
-                    {formatCurrency((selectedRoom.prix_nuit || 0) * nights)}
-                  </p>
-                </div>
-              </div>
-            )}
-
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-primary">
                 <CheckCircle size={14} className="inline mr-1.5" />
@@ -815,11 +830,20 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
               )}
               <p className="text-xs text-muted">La remise sera soumise à validation de la direction.</p>
               <div className="rounded-lg bg-surface-2 p-3 text-sm space-y-1">
-                <div className="flex justify-between"><span>Montant brut</span><strong>{formatCurrency((selectedRoom?.prix_nuit || 0) * nights)}</strong></div>
-                <div className="flex justify-between"><span>Remise</span><strong>{discountMode === 'discount' ? `${discountPercent}%` : 'Aucune'}</strong></div>
-                <div className="flex justify-between text-accent"><span>Total</span><strong>{formatCurrency((selectedRoom?.prix_nuit || 0) * nights * (1 - (discountMode === 'discount' ? discountPercent : 0) / 100))}</strong></div>
+                <div className="flex justify-between"><span>Durée</span><strong>{nights} nuit{nights > 1 ? 's' : ''}</strong></div>
+                <div className="flex justify-between"><span>Type</span><strong>{formData.type_reservation === 'BOOKING' ? 'Booking.com' : 'Sur place'}</strong></div>
+                {formData.type_reservation === 'BOOKING' && formData.manual_price > 0 && (
+                  <div className="flex justify-between"><span>Prix Booking.com</span><strong>{formatCurrency(formData.manual_price)}</strong></div>
+                )}
+                {formData.laundry_included && (
+                  <div className="flex justify-between"><span>Blanchisserie</span><strong>{formatCurrency(formData.laundry_price || 0)}</strong></div>
+                )}
+                {discountMode === 'discount' && discountPercent > 0 && (
+                  <div className="flex justify-between"><span>Remise</span><strong>{discountPercent}%</strong></div>
+                )}
+                <div className="flex justify-between text-accent pt-2 border-t border-base"><span>Total</span><strong>{formatCurrency(formData.montant_total || 0)}</strong></div>
               </div>
-              {selectedRoom && nights > 0 && (
+              {selectedRoom && nights > 0 && formData.type_reservation !== 'BOOKING' && (
                 <p className="text-xs text-muted">
                   💡 Calculé automatiquement : {nights} nuit{nights > 1 ? 's' : ''} × {formatCurrency(selectedRoom.prix_nuit || 0)} = {formatCurrency((selectedRoom.prix_nuit || 0) * nights)}
                 </p>
@@ -881,6 +905,36 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
           </form>
         </div>
       </Modal>
+
+      {/* Room availability warning modal */}
+      {showAvailabilityModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md shadow-2xl border border-gray-700 animate-scaleIn">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <AlertCircle size={24} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Chambre non disponible</h3>
+                  <p className="text-sm text-gray-400">Conflit de réservation</p>
+                </div>
+              </div>
+              <p className="text-gray-300 mb-6">
+                Cette chambre est déjà réservée pour les dates sélectionnées. Veuillez choisir d'autres dates ou une autre chambre.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAvailabilityModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-gray-600 text-gray-300 font-medium text-sm hover:bg-gray-800 transition-all"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de création rapide de client */}
       {showClientModal && (
