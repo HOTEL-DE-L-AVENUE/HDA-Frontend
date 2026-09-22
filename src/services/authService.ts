@@ -12,6 +12,7 @@ export const UserRole = {
   WAITER: "water",
   HOUSEKEEPING: "housekeeping",
   CROUPIER: "croupier",
+  HOSTESS: "hotesse",
 } as const;
 
 export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];
@@ -330,6 +331,7 @@ class AuthService {
       case 'receptioniste':
         return "/hotel";
       case 'water':
+      case 'hotesse':
         return "/bar";
       case 'housekeeping':
         return "/hotel";

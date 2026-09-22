@@ -241,6 +241,7 @@ export const LoginPage: React.FC = () => {
         receptioniste: 'Réceptionniste',
         caisse: 'Caissier',
         water: 'Barman',
+        hotesse: 'Hôtesse',
         housekeeping: 'Housekeeping',
       };
       const roleLabel = roleNames[user.role] || user.role;
