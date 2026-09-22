@@ -155,7 +155,7 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const handleOpenEditModal = (commande: BarCommande) => {
-    const specialMode = commande.observation?.toUpperCase();
+    const specialMode = commande.observation?.trim().toUpperCase();
     const location = specialMode === 'POCKER'
       ? { kind: 'special' as const, label: 'Pocker gratuit', tableId: 0 }
       : specialMode === 'CHAMBRE'
@@ -448,7 +448,8 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const getOrderLocationLabel = (commande: BarCommande) => {
-    if (getOrderSpecialType(commande) || commande.table === 0) return 'Emplacement spécial';
+    if (getOrderSpecialType(commande)) return getOrderSpecialType(commande);
+    if (commande.table === 0) return 'Gratuit';
     return tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
   };
 
@@ -456,18 +457,22 @@ export const BarCommandeView: React.FC<Props> = ({
     {
       key: 'table',
       label: 'Table',
-      render: (commande: BarCommande) => (
-        <div className="flex items-center gap-3">
-          <div className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-accent px-2 text-center text-xs font-bold text-black shadow-[0_0_20px_rgba(234,179,8,0.25)]">
-            {getOrderLocationLabel(commande)}
+      render: (commande: BarCommande) => {
+        const specialType = getOrderSpecialType(commande);
+        const locationLabel = getOrderLocationLabel(commande);
+        return (
+          <div className="flex items-center gap-3">
+            <div className={`flex min-h-10 items-center justify-center rounded-xl px-2 text-center text-xs font-bold shadow-[0_0_20px_rgba(234,179,8,0.25)] ${specialType ? 'min-w-[88px] bg-accent text-black' : 'min-w-10 bg-accent text-black'}`}>
+              <span className="leading-tight">{locationLabel}</span>
+            </div>
+            <div>
+              <p className="font-semibold text-primary">{commande.client}</p>
+              <p className="text-xs text-slate-500">{commande.nombre_personnes || 1} pers.</p>
+              <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-primary">{commande.client}</p>
-            <p className="text-xs text-slate-500">{getOrderSpecialType(commande) || getOrderLocationLabel(commande)} · {commande.nombre_personnes || 1} pers.</p>
-            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'items',
