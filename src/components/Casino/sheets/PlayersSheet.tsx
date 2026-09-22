@@ -400,15 +400,24 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       : nextPayments;
     onUpdate(selectedPlayer.id, 'resultPaymentOptions', JSON.stringify(normalizedPayments));
 
-    // Dépôt payé réduit le crédit ; Crédit payé réduit le dépôt.
-    const creditReduction = normalizedPayments
+    // Règle métier détaillée :
+    // - Dépôt payé => réduit le dépôt initial.
+    // - Crédit payé => réduit le crédit initial.
+    // - Si le crédit initial est positif et le règlement dépasse ce crédit, le surplus est reporté sur le dépôt.
+    const depositReduction = normalizedPayments
       .filter((payment) => payment.option === 'Dépôt payé')
       .reduce((total, payment) => total + (payment.amount || 0), 0);
-    const depositReduction = normalizedPayments
+    const creditReduction = normalizedPayments
       .filter((payment) => payment.option === 'Crédit payé')
       .reduce((total, payment) => total + (payment.amount || 0), 0);
-    onUpdate(selectedPlayer.id, 'initialDeposit', String(Math.max(0, balanceBase.deposit - depositReduction)));
-    onUpdate(selectedPlayer.id, 'initialCredit', String(Math.max(0, balanceBase.credit - creditReduction)));
+
+    const nextDeposit = Math.max(0, balanceBase.deposit - depositReduction);
+    const remainingCredit = Math.max(0, balanceBase.credit - creditReduction);
+    const creditOverflow = Math.max(0, creditReduction - balanceBase.credit);
+    const finalDeposit = Math.max(0, nextDeposit + creditOverflow);
+
+    onUpdate(selectedPlayer.id, 'initialDeposit', String(finalDeposit));
+    onUpdate(selectedPlayer.id, 'initialCredit', String(remainingCredit));
   };
 
   const toggleResultPaymentOption = (option: string, checked: boolean) => {
