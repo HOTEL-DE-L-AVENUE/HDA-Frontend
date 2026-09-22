@@ -19,6 +19,7 @@ export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
   receptioniste: ['hebergement', 'hotel', 'bar', 'clients'],
   water: ['bar'],
   barman: ['bar'],
+  hotesse: ['bar'],
   housekeeping: ['hotel', 'hebergement'],
   croupier: ['casino'],
 };
@@ -94,10 +95,10 @@ export function canAccessModule(
   // pas être court-circuité par elle. Le contenu réellement affiché/autorisé est
   // filtré dans RHPage et côté backend via /rh/me ; seuls admin/manager voient la
   // vue de gestion complète.
-  if (moduleId === 'rh') return true;
+  if (moduleId === 'rh' && role !== 'hotesse') return true;
 
   // 3. Barman : accès UNIQUEMENT au module bar (en dehors de RH ci-dessus)
-  if (role === 'water' || role === 'barman') {
+  if (role === 'water' || role === 'barman' || role === 'hotesse') {
     return moduleId === 'bar';
   }
 
@@ -172,6 +173,12 @@ export function isBarman(userOrRole?: { role?: string } | string | null): boolea
   return ['water', 'barman'].includes((role || '').toLowerCase());
 }
 
+export function isHostess(userOrRole?: { role?: string } | string | null): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+  return (role || '').toLowerCase() === 'hotesse';
+}
+
 export function isManager(userOrRole?: { role?: string } | string | null): boolean {
   if (!userOrRole) return false;
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
@@ -195,7 +202,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   }
 
   // 2. Barman : UNIQUEMENT l'onglet commandes
-  if (role === 'water' || role === 'barman') {
+  if (role === 'water' || role === 'barman' || role === 'hotesse') {
     return tabs.filter(t => t.id === 'commandes');
   }
 
@@ -220,7 +227,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
  */
 export function getDefaultTabForRole(defaultTab: string, userRole?: string): string {
   const role = userRole?.toLowerCase() || '';
-  if (role === 'water' || role === 'barman') return 'commandes';
+  if (role === 'water' || role === 'barman' || role === 'hotesse') return 'commandes';
   if (role === 'caisse' || role === 'caissier') return 'caisse';
   if (role === 'stock_manager') return 'stock';
   if (role !== 'admin' && (defaultTab === 'caisse' || defaultTab.includes('caisse'))) {
@@ -251,6 +258,7 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
   switch (role) {
     case 'water':
     case 'barman':
+    case 'hotesse':
       return '/bar';
     case 'croupier':
       return '/casino';

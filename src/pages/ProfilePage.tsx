@@ -57,6 +57,7 @@ const ProfilePage: React.FC = () => {
       receptioniste: 'Réceptionniste',
       caisse: 'Caissier',
       water: 'Serveur',
+      hotesse: 'Hôtesse',
       housekeeping: 'Ménage',
     };
     return roleLabels[role] || role;
@@ -69,6 +70,7 @@ const ProfilePage: React.FC = () => {
       receptioniste: 'var(--color-info)',
       caisse: 'var(--color-success)',
       water: 'var(--color-primary)',
+      hotesse: 'var(--color-accent)',
       housekeeping: 'var(--color-muted)',
     };
     return roleColors[role] || 'var(--color-muted)';
