@@ -12,8 +12,8 @@ import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/
 
 interface Props {
   commandes: BarCommande[];
-  onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; items: BarCommande['items'] }) => Promise<void> | void;
-  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; items: BarCommande['items'] }) => Promise<void> | void;
+  onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items'] }) => Promise<void> | void;
+  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items'] }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
   onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
@@ -27,6 +27,23 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
   'Servie': { label: 'Servie', variant: 'success' },
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
 };
+
+type OrderLocationOption = {
+  kind: 'table' | 'special';
+  label: string;
+  tableId: number;
+};
+
+const orderLocationOptions: OrderLocationOption[] = [
+  ...Array.from({ length: 16 }, (_, index) => ({
+    kind: 'table' as const,
+    label: `T${index + 1}`,
+    tableId: index + 1,
+  })),
+  { kind: 'special', label: 'Gratuit', tableId: 0 },
+  { kind: 'special', label: 'Pocker gratuit', tableId: 0 },
+  { kind: 'special', label: 'Chambre', tableId: 0 },
+];
 
 export const BarCommandeView: React.FC<Props> = ({
   commandes,
@@ -58,6 +75,8 @@ export const BarCommandeView: React.FC<Props> = ({
   const [moyenPaiement, setMoyenPaiement] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
   const [tables, setTables] = useState<BarTable[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLocationSelectionOpen, setIsLocationSelectionOpen] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<OrderLocationOption | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState<BarCommande | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
@@ -68,8 +87,10 @@ export const BarCommandeView: React.FC<Props> = ({
   const [menuCategory, setMenuCategory] = useState('Toutes');
   const [menuSubcategory, setMenuSubcategory] = useState('Toutes');
   const [commandeSearchTerm, setCommandeSearchTerm] = useState('');
-  const [isCreatingTable, setIsCreatingTable] = useState(false);
-  const [newTableNumber, setNewTableNumber] = useState('');
+  const [specialPersonName, setSpecialPersonName] = useState('');
+  const [pokerActivePerson, setPokerActivePerson] = useState('');
+  const [pokerPeople, setPokerPeople] = useState<string[]>([]);
+  const [pokerOrders, setPokerOrders] = useState<Record<string, BarCommande['items']>>({});
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -95,11 +116,15 @@ export const BarCommandeView: React.FC<Props> = ({
     setMoyenPaiement('ESPECES');
     setSelectedItems([]);
     setSearchTerm('');
-    setIsCreatingTable(false);
-    setNewTableNumber('');
+    setSpecialPersonName('');
+    setPokerActivePerson('');
+    setPokerPeople([]);
+    setPokerOrders({});
     setFeedback(null);
     setIsEditingOrder(false);
     setEditingOrderId(null);
+    setSelectedLocation(null);
+    setIsLocationSelectionOpen(false);
     setIsModalOpen(false);
   };
 
@@ -110,27 +135,49 @@ export const BarCommandeView: React.FC<Props> = ({
     setMoyenPaiement('ESPECES');
     setSelectedItems([]);
     setSearchTerm('');
+    setSpecialPersonName('');
+    setPokerActivePerson('');
+    setPokerPeople([]);
+    setPokerOrders({});
     setFeedback(null);
-    setIsCreatingTable(tables.length === 0);
-    setNewTableNumber('');
     setIsEditingOrder(false);
     setEditingOrderId(null);
-    setIsModalOpen(true);
+    setIsModalOpen(false);
+    setIsLocationSelectionOpen(true);
     void loadClients();
   };
 
+  const handleSelectLocation = (location: OrderLocationOption) => {
+    setSelectedLocation(location);
+    setTable(String(location.tableId));
+    setIsLocationSelectionOpen(false);
+    setIsModalOpen(true);
+  };
+
   const handleOpenEditModal = (commande: BarCommande) => {
+    const specialMode = commande.observation?.toUpperCase();
+    const location = specialMode === 'POCKER'
+      ? { kind: 'special' as const, label: 'Pocker gratuit', tableId: 0 }
+      : specialMode === 'CHAMBRE'
+        ? { kind: 'special' as const, label: 'Chambre', tableId: 0 }
+        : specialMode === 'GRATUIT'
+          ? { kind: 'special' as const, label: 'Gratuit', tableId: 0 }
+          : { kind: 'table' as const, label: `T${commande.table}`, tableId: commande.table };
     setClient(commande.client);
     setTable(String(commande.table));
     setNombrePersonnes(String(commande.nombre_personnes || 1));
     setMoyenPaiement(commande.moyen_paiement || 'ESPECES');
     setSelectedItems(commande.items.map((item) => ({ ...item })));
     setSearchTerm('');
+    setSelectedLocation(location);
+    setSpecialPersonName(location.kind === 'special' ? commande.client : '');
+    setPokerActivePerson(location.label === 'Pocker gratuit' ? commande.client : '');
+    setPokerPeople(location.label === 'Pocker gratuit' ? [commande.client] : []);
+    setPokerOrders(location.label === 'Pocker gratuit' ? { [commande.client]: commande.items.map((item) => ({ ...item })) } : {});
     setFeedback(null);
-    setIsCreatingTable(false);
-    setNewTableNumber('');
     setIsEditingOrder(true);
     setEditingOrderId(commande.id);
+    setIsLocationSelectionOpen(false);
     setIsModalOpen(true);
     void loadClients();
   };
@@ -165,7 +212,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setSelectedItems((prev) =>
       prev.flatMap((item, itemIndex) => {
         if (itemIndex !== index) return [item];
-        const nextQuantity = Math.max(1, value);
+        const nextQuantity = Number.isFinite(value) ? Math.max(1, Math.floor(value)) : 1;
         return [{ ...item, quantite: nextQuantity }];
       })
     );
@@ -175,36 +222,51 @@ export const BarCommandeView: React.FC<Props> = ({
     setSelectedItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const handleCreateTable = async (event?: React.FormEvent | React.MouseEvent<HTMLButtonElement>) => {
-    event?.preventDefault();
-    const numero = newTableNumber.trim();
-    if (!numero) {
-      setFeedback({ type: 'error', message: 'Renseignez un nom de table.' });
+  const isPokerLocation = selectedLocation?.label === 'Pocker gratuit';
+  const isNamedLocation = selectedLocation?.kind === 'special';
+
+  const handleSelectPokerPerson = (name: string) => {
+    const currentName = pokerActivePerson.trim();
+    if (currentName && currentName !== name) {
+      setPokerOrders((prev) => ({ ...prev, [currentName]: selectedItems }));
+    }
+    setSpecialPersonName(name);
+    setPokerActivePerson(name);
+    setSelectedItems(pokerOrders[name] || []);
+    setFeedback(null);
+  };
+
+  const handleAddPokerPerson = () => {
+    const name = specialPersonName.trim();
+    if (!name) {
+      setFeedback({ type: 'error', message: 'Saisissez le nom de la personne.' });
       return;
     }
 
-    try {
-      const createdTable = await barService.createBarTable({ numero, capacite: 4 });
-      const tableName = createdTable?.numero || numero;
-      setTables((prev) => [...prev, createdTable]);
-      setTable(String(createdTable.id));
-      setIsCreatingTable(false);
-      setNewTableNumber('');
-      setFeedback({ type: 'success', message: `Table ${tableName} créée avec succès.` });
-    } catch (error: any) {
-      console.error('Erreur création table bar:', error);
-      const errorMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'La table n’a pas pu être créée.';
-      setFeedback({ type: 'error', message: errorMsg });
-    }
+    const currentName = pokerActivePerson.trim();
+    setPokerOrders((prev) => ({
+      ...prev,
+      ...(currentName && currentName !== name ? { [currentName]: selectedItems } : {}),
+      [name]: prev[name] || [],
+    }));
+    setPokerPeople((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setSpecialPersonName(name);
+    setPokerActivePerson(name);
+    setSelectedItems(pokerOrders[name] || []);
+    setFeedback(null);
   };
 
   const handleAjouterCommande = async (event: React.FormEvent) => {
     event.preventDefault();
-    const clientNom = client.trim() || 'Client anonyme';
+    const clientNom = isNamedLocation ? specialPersonName.trim() : client.trim() || 'Client anonyme';
     const tableNumber = Number(table);
     const guestCount = Number(nombrePersonnes);
 
-    if (!table || Number.isNaN(tableNumber) || tableNumber <= 0 || !Number.isInteger(guestCount) || guestCount < 1 || selectedItems.length === 0) {
+    const invalidTable = !table || Number.isNaN(tableNumber) || (selectedLocation?.kind !== 'special' && tableNumber <= 0);
+    if (invalidTable || !Number.isInteger(guestCount) || guestCount < 1 || selectedItems.length === 0 || (isNamedLocation && !clientNom)) {
+      if (isNamedLocation && !clientNom) {
+        setFeedback({ type: 'error', message: 'Saisissez le nom de la personne avant de créer la commande.' });
+      }
       return;
     }
 
@@ -231,6 +293,7 @@ export const BarCommandeView: React.FC<Props> = ({
           nombre_personnes: guestCount,
           moyen_paiement: moyenPaiement,
           items: selectedItems,
+          observation: selectedLocation?.kind === 'special' ? selectedLocation.label === 'Pocker gratuit' ? 'POCKER' : selectedLocation.label.toUpperCase() : undefined,
         });
       } else {
         await onCreateCommande?.({
@@ -239,6 +302,7 @@ export const BarCommandeView: React.FC<Props> = ({
           nombre_personnes: guestCount,
           moyen_paiement: moyenPaiement,
           items: selectedItems,
+          observation: selectedLocation?.kind === 'special' ? selectedLocation.label === 'Pocker gratuit' ? 'POCKER' : selectedLocation.label.toUpperCase() : undefined,
         });
       }
       resetModal();
@@ -372,18 +436,34 @@ export const BarCommandeView: React.FC<Props> = ({
     });
   };
 
+  const getOrderSpecialType = (commande: BarCommande) => {
+    const specialLabels: Record<string, string> = {
+      POCKER: 'Pocker',
+      'POCKER GRATUIT': 'Pocker',
+      GRATUIT: 'Gratuit',
+      CHAMBRE: 'Chambre',
+    };
+    const specialLabel = specialLabels[commande.observation?.trim().toUpperCase() || ''];
+    return specialLabel || (commande.table === 0 && commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : undefined);
+  };
+
+  const getOrderLocationLabel = (commande: BarCommande) => {
+    if (getOrderSpecialType(commande) || commande.table === 0) return 'Emplacement spécial';
+    return tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
+  };
+
   const columns = [
     {
       key: 'table',
       label: 'Table',
       render: (commande: BarCommande) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-sm font-bold text-black shadow-[0_0_20px_rgba(234,179,8,0.25)]">
-            {commande.table}
+          <div className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-accent px-2 text-center text-xs font-bold text-black shadow-[0_0_20px_rgba(234,179,8,0.25)]">
+            {getOrderLocationLabel(commande)}
           </div>
           <div>
             <p className="font-semibold text-primary">{commande.client}</p>
-            <p className="text-xs text-slate-500">{tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`} · {commande.nombre_personnes || 1} pers.</p>
+            <p className="text-xs text-slate-500">{getOrderSpecialType(commande) || getOrderLocationLabel(commande)} · {commande.nombre_personnes || 1} pers.</p>
             <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
           </div>
         </div>
@@ -570,7 +650,28 @@ export const BarCommandeView: React.FC<Props> = ({
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? `Ajouter des articles · Commande #${editingOrderId ?? ''}` : 'Nouvelle commande · Bar'} size="full">
+      <Modal isOpen={isLocationSelectionOpen} onClose={handleCloseModal} title="Choisir l'emplacement de la commande" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">Sélectionnez une table ou un type de réservation.</p>
+          <div className="grid grid-cols-4 gap-2">
+            {orderLocationOptions.map((location) => (
+              <button
+                key={location.kind === 'table' ? location.tableId : location.label}
+                type="button"
+                onClick={() => handleSelectLocation(location)}
+                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition hover:border-accent hover:bg-accent/10 ${location.kind === 'table' ? 'border-base bg-surface-2 text-primary' : 'border-amber-500/40 bg-amber-500/10 text-amber-300'}`}
+              >
+                {location.label}
+              </button>
+            ))}
+          </div>
+          <Button variant="danger" size="sm" type="button" onClick={handleCloseModal} className="w-auto self-end rounded-md px-3 py-1.5">
+            Annuler
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? 'Modifier la commande · Bar' : 'Nouvelle commande · Bar'} size="full">
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
 
           {feedback && (
@@ -580,16 +681,41 @@ export const BarCommandeView: React.FC<Props> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 sm:grid-cols-3">
-            <Select
-              label="Table"
-              value={table}
-              onChange={(event) => setTable(event.target.value)}
-              options={[
-                { value: '', label: 'Choisir une table' },
-                ...tables.map((tableItem) => ({ value: String(tableItem.id), label: tableItem.numero }))
-              ]}
-            />
+          {isNamedLocation && (
+            <div className="rounded-xl border border-accent/20 bg-accent/5 p-3">
+              {isPokerLocation ? (
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                  <Input
+                    label="Nom de la personne"
+                    value={specialPersonName}
+                    onChange={(event) => setSpecialPersonName(event.target.value)}
+                    placeholder="Ex. Théophile"
+                  />
+                  <Button type="button" onClick={handleAddPokerPerson} className="w-full sm:w-auto">
+                    Ajouter
+                  </Button>
+                  {pokerPeople.length > 0 && (
+                    <Select
+                      label="Personne active"
+                      value={specialPersonName}
+                      onChange={(event) => handleSelectPokerPerson(event.target.value)}
+                      options={pokerPeople.map((name) => ({ value: name, label: name }))}
+                      className="sm:col-span-2"
+                    />
+                  )}
+                </div>
+              ) : (
+                <Input
+                  label="Nom de la personne"
+                  value={specialPersonName}
+                  onChange={(event) => setSpecialPersonName(event.target.value)}
+                  placeholder={selectedLocation?.label === 'Chambre' ? 'Ex. Nom du client' : 'Ex. Théophile'}
+                />
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 sm:grid-cols-2">
             <Input label="Personnes" type="number" min="1" value={nombrePersonnes} onChange={(event) => setNombrePersonnes(event.target.value)} />
             <Select
               label="Paiement prévu"
@@ -606,54 +732,50 @@ export const BarCommandeView: React.FC<Props> = ({
             />
           </div>
 
-          <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-950/40 p-3 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <p className="text-sm font-medium text-slate-300">Créer une table si besoin</p>
-              <Button type="button" size="sm" variant="secondary" onClick={() => setIsCreatingTable((prev) => !prev)} className="w-full sm:w-auto">
-                {isCreatingTable ? 'Fermer' : 'Nouvelle table'}
-              </Button>
+          <section className="rounded-xl border border-base bg-[#171b1c] p-3 shadow-inner">
+            <div className="mb-3 flex items-center justify-between border-b border-base pb-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Ticket</p>
+                {isEditingOrder && <p className="mt-1 text-lg font-semibold text-primary">{client || specialPersonName || 'Client anonyme'}</p>}
+              </div>
+              <span className="text-xs text-muted">{selectedItems.length} article{selectedItems.length > 1 ? 's' : ''}</span>
             </div>
-
-            {(isCreatingTable || tables.length === 0) && (
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-[1fr_auto]">
-                <Input
-                  label="Nom de table"
-                  value={newTableNumber}
-                  onChange={(event) => setNewTableNumber(event.target.value)}
-                  placeholder="Ex. Bar 12"
-                />
-                <div className="flex items-end">
-                  <Button type="button" size="sm" className="w-full justify-center" onClick={() => void handleCreateTable()}>
-                    Créer
-                  </Button>
-                </div>
+            {selectedItems.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted">Sélectionnez un article</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedItems.map((item, index) => (
+                  <div key={`${item.nom}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base bg-surface-2 px-3 py-2 text-xs">
+                    <span className="min-w-0 flex-1 truncate text-secondary">{item.nom}</span>
+                    <div className="flex items-center gap-2">
+                      {canAdjustTicketQuantity ? (
+                        <div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1">
+                          <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="px-1 text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button>
+                          <input type="number" min="1" step="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Quantité de ${item.nom}`} />
+                          <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button>
+                        </div>
+                      ) : (
+                        <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
+                      )}
+                      <span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>
+                      {canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
-            <Select
-              label="Client (facultatif)"
-              value={client}
-              onChange={(event) => setClient(event.target.value)}
-              options={[
-                { value: '', label: isLoadingClients ? 'Chargement des clients...' : 'Client anonyme' },
-                ...clients.map((clientItem) => ({
-                  value: `${clientItem.nom}${clientItem.prenom ? ` ${clientItem.prenom}` : ''}`,
-                  label: `${clientItem.nom}${clientItem.prenom ? ` ${clientItem.prenom}` : ''}${clientItem.code_client ? ` (${clientItem.code_client})` : ''}`,
-                })),
-              ]}
-              disabled={isLoadingClients}
-              className="flex-1"
-            />
-          </div>
+            <div className="mt-3 flex items-center justify-between border-t border-base pt-3 text-sm font-bold">
+              <span>Total</span>
+              <span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span>
+            </div>
+          </section>
 
           <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">
             <div className="flex items-center justify-between border-b border-base px-3 py-2">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
               <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-40 text-xs" />
             </div>
-            <div className="grid h-[480px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)_210px]">
+            <div className="grid h-[480px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)]">
               <nav className="space-y-1 border-r border-base bg-[#171b1c] p-2 overflow-y-auto">
                 {menuCategories.map((category) => (
                   <button
@@ -686,55 +808,8 @@ export const BarCommandeView: React.FC<Props> = ({
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
                 </div>
               </div>
-              <aside className="col-span-2 border-t border-base bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0 flex flex-col h-full overflow-y-auto">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                  {selectedItems.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : selectedItems.map((item, index) => <div key={`${item.nom}-${index}`} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.nom}</span><div className="flex items-center gap-2">{canAdjustTicketQuantity && <div className="hidden items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 sm:flex"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white" aria-label={`Diminuer la quantité de ${item.nom}`}>−</button><input type="number" min="1" step="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" aria-label={`Quantité de ${item.nom}`} /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button></div>} {!canAdjustTicketQuantity && <span className="min-w-5 text-center text-primary">×{item.quantite}</span>}<span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>{canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}</div></div>)}
-                </div>
-                <div className="mt-auto pt-3 border-t border-base flex items-center justify-between text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}</span></div>
-              </aside>
             </div>
           </div>
-
-          {selectedItems.length > 0 && (
-            <div className="rounded-xl border border-base bg-surface-2 p-4 sm:hidden">
-              <p className="mb-2 text-sm font-medium text-slate-300">Résumé</p>
-              <div className="space-y-2">
-                {selectedItems.map((item, index) => (
-                  <div key={`${item.nom}-${index}`} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-sm">
-                    <span className="text-primary">{item.nom}</span>
-                    <div className="flex items-center gap-2">
-                      {canAdjustTicketQuantity ? (
-                        <div className="flex items-center gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1">
-                          <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="text-slate-400 transition hover:text-white">
-                            −
-                          </button>
-                          <span className="min-w-5 text-center text-primary">{item.quantite}</span>
-                          <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="text-slate-400 transition hover:text-white">
-                            +
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
-                      )}
-                      <span className="text-accent">{formatCurrency(item.prix * item.quantite)}</span>
-                      {canDeleteTicketItem && (
-                        <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}>
-                          <XCircle size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center justify-between border-t border-base pt-3">
-                <span className="text-sm font-medium text-slate-300">Total</span>
-                <span className="text-lg font-semibold text-accent">
-                  {formatCurrency(selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0))}
-                </span>
-              </div>
-            </div>
-          )}
 
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={handleCloseModal} className="flex-1">
