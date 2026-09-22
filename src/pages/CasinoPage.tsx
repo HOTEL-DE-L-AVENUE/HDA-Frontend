@@ -11,6 +11,7 @@ import { casinoPlayersApi, CasinoRegisteredPlayer, playerSheetApi, identityVerif
 import type { TableJeu } from '../types/casinoTablesJeu.types';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
+import { useHDA } from '../context/HDAContext';
 
 const getCurrentTime = () => {
   const now = new Date();
@@ -35,6 +36,7 @@ const setFirstPlayerTimeIfMissing = (players: PlayerLine[]) => {
 };
 
 export const CasinoPage: React.FC = () => {
+  const { addNotification } = useHDA();
   const currentUser = AuthService.getCurrentUser();
   const userRole = currentUser?.role?.toLowerCase() || '';
   const userIsAdmin = isAdmin(currentUser);
@@ -67,6 +69,29 @@ export const CasinoPage: React.FC = () => {
   const [calculationRevision, setCalculationRevision] = useState(0);
   const sheetLoadKeyRef = useRef('');
   const sheetLoadedRef = useRef(false);
+  const lastHourlyReportAlertRef = useRef('');
+
+  useEffect(() => {
+    if (!table) return undefined;
+
+    const checkHourlyReportReminder = () => {
+      const now = new Date();
+      if (now.getMinutes() !== 0) return;
+      const alertKey = `${date}|${table}|${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
+      if (lastHourlyReportAlertRef.current === alertKey) return;
+      lastHourlyReportAlertRef.current = alertKey;
+      addNotification(
+        'warning',
+        `Rappel horaire : envoyez le rapport de la table ${table} pour la fiche du ${date}.`,
+        'Casino',
+        '/casino?view=report',
+      );
+    };
+
+    checkHourlyReportReminder();
+    const interval = window.setInterval(checkHourlyReportReminder, 30 * 1000);
+    return () => window.clearInterval(interval);
+  }, [addNotification, date, table]);
 
   useEffect(() => {
     let active = true;
