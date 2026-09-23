@@ -98,11 +98,15 @@ export const getBarLatestTransaction = (productId: number) =>
 export const getBarTransactions = () =>
   get<{ id: number; order_id?: number | null; table_id?: number | null; product_id: number; quantite: number; prix_unitaire: number; montant: number; created_at: string; nom: string; categorie: string }[]>('/transactions');
 
-type BarOrderResponse = { id: number; client: string; table: number; nombre_personnes?: number; moyen_paiement?: BarPaymentMethod; observation?: string; statut: string; total: number; created_at?: string; items: Array<{ nom: string; quantite: number; prix: number }> };
+type BarOrderResponse = { id: number; client: string; table: number; nombre_personnes?: number; moyen_paiement?: BarPaymentMethod; observation?: string; statut: string; total: number; created_at?: string; cloture_at?: string; items: Array<{ nom: string; quantite: number; prix: number }> };
 export type BarOrderStatus = 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE';
 
 export const getBarOrders = async () => {
   const response = await get<BarOrderResponse[] | { data?: BarOrderResponse[] }>('/orders');
+  return Array.isArray(response) ? response : response.data ?? [];
+};
+export const getBarHistory = async () => {
+  const response = await get<BarOrderResponse[] | { data?: BarOrderResponse[] }>('/history');
   return Array.isArray(response) ? response : response.data ?? [];
 };
 export const createBarOrder = (data: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
@@ -110,7 +114,7 @@ export const createBarOrder = (data: { client: string; table: number; nombre_per
 export const updateBarOrder = (id: number, data: { client?: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
   put<BarOrderResponse>(`/orders/${id}`, data);
 export const deleteBarOrder = (id: number) => remove<{ message: string }>('/orders/' + id);
-export const closeAllBarOrders = (order_ids: number[]) => post<{ deleted_orders: number; cleared_transactions: boolean }>('/orders/close-all', { order_ids });
+export const closeAllBarOrders = (order_ids: number[]) => post<{ closed_orders: number; archived: boolean }>('/orders/close-all', { order_ids });
 export const updateBarOrderStatus = (id: number, statut: BarOrderStatus, moyen_paiement?: BarPaymentMethod) =>
   put<BarOrderResponse>('/orders/' + id + '/status', { statut, moyen_paiement });
 
@@ -119,7 +123,7 @@ const barService = {
   getBarCashiers, getBarCashierById, createBarCashier, updateBarCashier, deleteBarCashier,
   openBarSession, closeBarSession, getBarSessions, getBarSessionById, getBarOpenSessions, getBarSessionStats, getBarCashierStatus,
   getBarProducts, getBarProductById, createBarProduct, updateBarProduct, deleteBarProduct,
-  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
+  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, getBarHistory, createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
 };
 
 export default barService;
