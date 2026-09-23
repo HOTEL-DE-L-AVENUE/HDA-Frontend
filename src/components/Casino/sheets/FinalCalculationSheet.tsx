@@ -284,7 +284,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
   const creditPaidEntryTotal = hasManualCreditPaidValue ? parseCasinoAmount(values.creditPaye) : creditPaidTotal;
   const cashPaymentTotal = getCashPaymentTotal(players);
-  const hasCashPayments = hasCashPayment(players);
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -304,7 +303,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = hasCashPayments ? cashPaymentTotal : parseCasinoAmount(values.totalEspecesCaisse || '');
+  const totalEspeces = cashPaymentTotal;
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
@@ -320,7 +319,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     creditPaye: creditPaidFieldValue,
     total1: casinoCurrency.format(total1),
     total2: casinoCurrency.format(total2),
-    totalEspecesCaisse: hasCashPayments ? casinoCurrency.format(totalEspeces) : values.totalEspecesCaisse || '',
+    totalEspecesCaisse: casinoCurrency.format(totalEspeces),
     difference: casinoCurrency.format(difference),
     resultatFinal: casinoCurrency.format(resultatFinal),
   };
@@ -691,7 +690,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
           <div className="grid grid-cols-[1.35fr_.85fr_1.2fr] border-t" style={casinoBorder}>
             <div className="border-r" style={casinoBorder}>
               <BottomRow label="TOTAL 2 - TOTAL 1" value={casinoCurrency.format(difference)} readOnly />
-              <BottomRow label="TOTAL ESPECES CAISSE" value={hasCashPayments ? casinoCurrency.format(totalEspeces) : values.totalEspecesCaisse || ''} onChange={(value) => onUpdate('totalEspecesCaisse', value)} />
+              <BottomRow label="TOTAL ESPECES CAISSE" value={casinoCurrency.format(totalEspeces)} readOnly />
               <BottomRow label="RESULTAT FINAL" value={casinoCurrency.format(resultatFinal)} readOnly />
             </div>
             <div className="border-r" style={casinoBorder}>
@@ -1064,10 +1063,6 @@ const isCashPaymentOption = (option: string) => {
 
 const uniquePlayerLines = (players: PlayerLine[]) => players.filter((player, index, lines) =>
   lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index
-);
-
-const hasCashPayment = (players: PlayerLine[]) => players.some((player) =>
-  parsePaymentOptions(player.resultPaymentOptions).some((payment) => isCashPaymentOption(payment.option))
 );
 
 const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players).reduce((total, player) => {
