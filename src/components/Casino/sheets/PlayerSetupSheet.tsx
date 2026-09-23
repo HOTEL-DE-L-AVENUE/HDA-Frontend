@@ -31,6 +31,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
   const [newPlayer, setNewPlayer] = useState(emptyPlayer);
   const [amounts, setAmounts] = useState<Record<number, { deposit: string; credit: string }>>({});
   const [identityFiles, setIdentityFiles] = useState<File[]>([]);
+  const [editingIdentityFiles, setEditingIdentityFiles] = useState<File[]>([]);
   const [uploadingIdentity, setUploadingIdentity] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<CasinoRegisteredPlayer | null>(null);
   const [viewingPlayer, setViewingPlayer] = useState<CasinoRegisteredPlayer | null>(null);
@@ -96,10 +97,27 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
   const savePlayerChanges = async () => {
     if (!editingPlayer) return;
     try {
-      await onUpdateRegisteredPlayer(editingPlayer.id, editingPlayer);
+      let updatedPlayer = editingPlayer;
+      if (editingIdentityFiles.length > 0) {
+        if (editingIdentityFiles.length < 3) {
+          showToast('Sélectionnez les 3 nouveaux fichiers pour remplacer les documents.', 'error');
+          return;
+        }
+        setUploadingIdentity(true);
+        const uploadedFiles = await Promise.all(editingIdentityFiles.map((file) => uploadService.uploadFile(file)));
+        updatedPlayer = { ...editingPlayer, identite_fichiers_urls: JSON.stringify(uploadedFiles.map((file) => file.url)) };
+      }
+      if (!updatedPlayer.identite_nom_complet?.trim() || !updatedPlayer.identite_numero?.trim() || !updatedPlayer.identite_date_emission || !updatedPlayer.identite_verifiee) {
+        showToast('Les informations d’identité et la confirmation sont obligatoires.', 'error');
+        return;
+      }
+      await onUpdateRegisteredPlayer(editingPlayer.id, updatedPlayer);
+      setEditingIdentityFiles([]);
       setEditingPlayer(null);
     } catch {
       showToast('Impossible de modifier ce joueur.', 'error');
+    } finally {
+      setUploadingIdentity(false);
     }
   };
 
@@ -132,7 +150,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
           deposit: playerInGame ? playerInGame.initialDeposit : String(player.depot || ''),
           credit: playerInGame ? playerInGame.initialCredit : String(player.credit || ''),
         };
-        return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.surnom || '—'}</td><td className="border p-2" style={casinoBorder}>{player.whatsapp || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-cyan-300 hover:text-cyan-200" title="Voir les informations et l'identité" aria-label={`Voir ${player.nom}`} onClick={() => setViewingPlayer(player)}><Eye size={16} /></button><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' })}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
+        return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.surnom || '—'}</td><td className="border p-2" style={casinoBorder}>{player.whatsapp || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-cyan-300 hover:text-cyan-200" title="Voir les informations et l'identité" aria-label={`Voir ${player.nom}`} onClick={() => setViewingPlayer(player)}><Eye size={16} /></button><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => { setEditingIdentityFiles([]); setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' }); }}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
       })}</tbody></table>
     </div>
     {canManageGame && !isAdmin && registeredPlayers.some((player) => !playerList.some((line) => line.casinoPlayerId === player.id)) && <div className="mb-5 flex flex-wrap gap-2"><span className="self-center text-xs text-muted">Ajouter à la partie :</span>{registeredPlayers.filter((player) => !playerList.some((line) => line.casinoPlayerId === player.id)).map((player) => <button key={player.id} type="button" className="action secondary text-xs" onClick={() => play(player)}><Play size={14} /> {player.nom} {player.prenom || ''}</button>)}</div>}
@@ -204,12 +222,22 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
         </select>
       </div>
     </Modal>}
-    {editingPlayer && <Modal title={`Modifier ${editingPlayer.nom}`} subtitle="Mettre à jour la fiche joueur" onClose={() => setEditingPlayer(null)} footer={<><button type="button" className="action secondary" onClick={() => setEditingPlayer(null)}>Annuler</button><button type="button" className="action" onClick={savePlayerChanges}>Enregistrer les modifications</button></>}>
+    {editingPlayer && <Modal title={`Modifier ${editingPlayer.nom}`} subtitle="Mettre à jour la fiche joueur et son identité" onClose={() => { setEditingIdentityFiles([]); setEditingPlayer(null); }} footer={<><button type="button" className="action secondary" onClick={() => { setEditingIdentityFiles([]); setEditingPlayer(null); }}>Annuler</button><button type="button" className="action" disabled={uploadingIdentity} onClick={savePlayerChanges}>{uploadingIdentity ? 'Téléversement...' : 'Enregistrer les modifications'}</button></>}>
       <div className="grid gap-3 sm:grid-cols-2">
         <input className={inputClass} value={editingPlayer.nom} onChange={(event) => setEditingPlayer((current) => current ? { ...current, nom: event.target.value } : current)} placeholder="Nom" />
         <input className={inputClass} value={editingPlayer.prenom || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, prenom: event.target.value } : current)} placeholder="Prénom" />
         <input className={inputClass} value={editingPlayer.surnom || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, surnom: event.target.value } : current)} placeholder="Surnom" />
         <input className={inputClass} value={editingPlayer.whatsapp || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, whatsapp: event.target.value } : current)} placeholder="WhatsApp" />
+        <select className={inputClass} value={editingPlayer.identite_type || 'CIN'} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_type: event.target.value } : current)} aria-label="Type de pièce"><option>CIN</option><option>Passeport</option><option>Permis de conduire</option><option>Carte d'identité nationale</option></select>
+        <input className={inputClass} value={editingPlayer.identite_numero || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_numero: event.target.value } : current)} placeholder="N° de pièce *" />
+        <input className={inputClass} value={editingPlayer.identite_nom_complet || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_nom_complet: event.target.value } : current)} placeholder="Nom complet sur la pièce *" />
+        <input className={inputClass} type="date" value={editingPlayer.identite_date_emission || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_date_emission: event.target.value } : current)} />
+        <div className="col-span-full rounded-xl border p-3" style={casinoBorder}>
+          <p className="mb-3 font-semibold">Documents d’identité</p>
+          <p className="mb-3 text-xs text-muted">Les documents existants sont conservés. Pour les remplacer, choisissez les 3 nouveaux fichiers.</p>
+          <div className="grid gap-3 md:grid-cols-3">{['Pièce 1 — Recto', 'Pièce 2 — Verso', 'Pièce 3 — Justificatif'].map((label, index) => <label key={label} className={`flex min-h-24 cursor-pointer flex-col justify-between rounded-lg border p-3 ${editingIdentityFiles[index] ? 'border-green-400 bg-green-400/10' : 'border-dashed border-yellow-300/60'}`}><span className="text-xs font-semibold">{label}</span><span className="my-2 truncate text-[11px] text-muted">{editingIdentityFiles[index]?.name || (identityFileUrls(editingPlayer)[index] ? 'Document existant' : 'Cliquer pour choisir')}</span><input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setEditingIdentityFiles((current) => { const next = [...current]; const file = event.target.files?.[0]; if (file) next[index] = file; return next; })} /></label>)}</div>
+        </div>
+        <label className="col-span-full inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(editingPlayer.identite_verifiee)} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_verifiee: event.target.checked } : current)} /> Identité vérifiée *</label>
         <input className={inputClass} type="date" value={editingPlayer.date_inscription || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, date_inscription: event.target.value } : current)} />
         <input className={inputClass} inputMode="decimal" value={String(editingPlayer.depot || '')} onChange={(event) => setEditingPlayer((current) => current ? { ...current, depot: event.target.value } : current)} placeholder="Dépôt (Ar)" />
         <input className={inputClass} inputMode="decimal" value={String(editingPlayer.credit || '')} onChange={(event) => setEditingPlayer((current) => current ? { ...current, credit: event.target.value } : current)} placeholder="Crédit (Ar)" />
