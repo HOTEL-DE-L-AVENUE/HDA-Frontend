@@ -283,6 +283,8 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const mobileReturnEntryTotal = hasManualMobileReturnValue ? parseCasinoAmount(values.retourMobile) : mobileReturnTotal;
   const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
   const creditPaidEntryTotal = hasManualCreditPaidValue ? parseCasinoAmount(values.creditPaye) : creditPaidTotal;
+  const cashPaymentTotal = getCashPaymentTotal(players);
+  const hasCashPayments = hasCashPayment(players);
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -302,7 +304,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = parseCasinoAmount(values.totalEspecesCaisse || '');
+  const totalEspeces = hasCashPayments ? cashPaymentTotal : parseCasinoAmount(values.totalEspecesCaisse || '');
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
@@ -318,6 +320,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     creditPaye: creditPaidFieldValue,
     total1: casinoCurrency.format(total1),
     total2: casinoCurrency.format(total2),
+    totalEspecesCaisse: hasCashPayments ? casinoCurrency.format(totalEspeces) : values.totalEspecesCaisse || '',
     difference: casinoCurrency.format(difference),
     resultatFinal: casinoCurrency.format(resultatFinal),
   };
@@ -688,7 +691,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
           <div className="grid grid-cols-[1.35fr_.85fr_1.2fr] border-t" style={casinoBorder}>
             <div className="border-r" style={casinoBorder}>
               <BottomRow label="TOTAL 2 - TOTAL 1" value={casinoCurrency.format(difference)} readOnly />
-              <BottomRow label="TOTAL ESPECES CAISSE" value={values.totalEspecesCaisse || ''} onChange={(value) => onUpdate('totalEspecesCaisse', value)} />
+              <BottomRow label="TOTAL ESPECES CAISSE" value={hasCashPayments ? casinoCurrency.format(totalEspeces) : values.totalEspecesCaisse || ''} onChange={(value) => onUpdate('totalEspecesCaisse', value)} />
               <BottomRow label="RESULTAT FINAL" value={casinoCurrency.format(resultatFinal)} readOnly />
             </div>
             <div className="border-r" style={casinoBorder}>
@@ -1053,6 +1056,32 @@ const parsePaymentOptions = (value?: string): Array<{ option: string; amount: nu
     return [];
   }
 };
+
+const isCashPaymentOption = (option: string) => {
+  const normalized = option.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  return normalized === 'espece' || normalized === 'especes' || normalized === 'cash';
+};
+
+const uniquePlayerLines = (players: PlayerLine[]) => players.filter((player, index, lines) =>
+  lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index
+);
+
+const hasCashPayment = (players: PlayerLine[]) => players.some((player) =>
+  parsePaymentOptions(player.resultPaymentOptions).some((payment) => isCashPaymentOption(payment.option))
+);
+
+const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players).reduce((total, player) => {
+  const playerId = player.ficheId ?? player.id;
+  const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+  const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+  const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+  const result = Math.abs(cashing - totalCaves);
+  const cashPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => isCashPaymentOption(payment.option));
+  if (!cashPayments.length) return total;
+  const explicitAmount = cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
+  const amount = explicitAmount > 0 ? explicitAmount : cashPayments.length === 1 ? result : 0;
+  return total + amount;
+}, 0);
 
 const isPaidCave = (payment?: string) => {
   const normalized = String(payment || '')

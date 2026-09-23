@@ -262,7 +262,7 @@ export const CasinoPage: React.FC = () => {
     return () => { active = false; };
   }, []);
 
-  const registerCasinoPlayer = async (player: { nom: string; prenom: string; surnom: string; whatsapp: string; telephone: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => {
+  const registerCasinoPlayer = async (player: { nom: string; prenom: string; surnom: string; whatsapp: string; telephone: string; identite_type: string; identite_numero: string; identite_nom_complet: string; identite_date_emission: string; identite_verifiee: boolean; identite_fichiers_urls: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => {
     if (!canManageCasino) return;
     const created = await casinoPlayersApi.create({ ...player, depot: parseCasinoAmount(player.depot), credit: parseCasinoAmount(player.credit), statut: 'ACTIF' });
     setRegisteredPlayers((current) => [...current, created]);
