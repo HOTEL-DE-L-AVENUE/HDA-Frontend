@@ -1,422 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Select, Button } from '../../UI';
+import React, { useEffect, useState } from 'react';
+import { Modal, Button, Input, Select } from '../../UI';
 import { formatCurrency } from '../../../utils/data';
 import { Plus, Search, XCircle } from 'lucide-react';
 import type { TableRestaurant, Product, Client, Category } from '../types';
 
-const COOKING_LEVELS = [
-  'Bleu',
-  'Saignant',
-  'Saignant Plus',
-  'À point',
-  'À point Plus',
-  'Bien cuit'
-];
+const COOKING_LEVELS = ['Bleu', 'Saignant', 'Saignant Plus', 'À point', 'À point Plus', 'Bien cuit'];
+type SelectedItem = { product_id: number; nom: string; quantite: number; prix: number; cuisson?: string };
+interface OrderModalProps { isOpen: boolean; onClose: () => void; tables: TableRestaurant[]; products: Product[]; categories: Category[]; clients: Client[]; onSubmit: (data: any) => void | Promise<void>; onNewClient: () => void; orderToEdit?: any; initialTableId?: string; initialLocation?: string; }
 
-interface OrderModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  tables: TableRestaurant[];
-  products: Product[];
-  categories: Category[];
-  clients: Client[];
-  onSubmit: (data: any) => void;
-  onNewClient: () => void;
-  orderToEdit?: any;
-}
-
-export const OrderModal: React.FC<OrderModalProps> = ({
-  isOpen,
-  onClose,
-  tables,
-  products,
-  categories,
-  clients,
-  onSubmit,
-  onNewClient,
-  orderToEdit
-}) => {
-  const [form, setForm] = useState({
-    table_id: '' as string | number,
-    client_id: '' as string | number,
-    items: [] as { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[],
-    montant_total: 0,
-    notes: ''
-  });
-  const [selectedCategory, setSelectedCategory] = useState('Toutes');
+export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables, products, categories, clients, onSubmit, onNewClient, orderToEdit, initialTableId, initialLocation }) => {
+  const [table, setTable] = useState('');
+  const [client, setClient] = useState('');
+  const [nombrePersonnes, setNombrePersonnes] = useState('1');
+  const [moyenPaiement, setMoyenPaiement] = useState('ESPECES');
+  const [specialPersonName, setSpecialPersonName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [step, setStep] = useState(1); // Step 1: Selection, Step 2: Validation
+  const [menuCategory, setMenuCategory] = useState('Toutes');
+  const [feedback, setFeedback] = useState<string | null>(null);
   const [showCookingModal, setShowCookingModal] = useState(false);
   const [selectedProductForCooking, setSelectedProductForCooking] = useState<Product | null>(null);
 
   useEffect(() => {
-    if (orderToEdit) {
-      setForm({
-        table_id: orderToEdit.table_id || orderToEdit.table?.id || '',
-        client_id: orderToEdit.client_id || orderToEdit.client?.id || '',
-        items: orderToEdit.items || [],
-        montant_total: orderToEdit.montant_total || 0,
-        notes: orderToEdit.notes || ''
-      });
-    } else {
-      setForm({
-        table_id: '',
-        client_id: '',
-        items: [],
-        montant_total: 0,
-        notes: ''
-      });
-    }
-    setStep(1);
-  }, [orderToEdit, isOpen]);
+    const items = orderToEdit?.items || [];
+    setTable(String(orderToEdit?.table_id || orderToEdit?.table?.id || initialTableId || ''));
+    setClient(String(orderToEdit?.client_id || orderToEdit?.client?.id || ''));
+    setNombrePersonnes(String(orderToEdit?.nombre_personnes || 1));
+    setMoyenPaiement(orderToEdit?.moyen_paiement || 'ESPECES');
+    setSpecialPersonName(orderToEdit?.special_person_name || '');
+    setNotes(orderToEdit?.notes || '');
+    setSelectedItems(items.map((item: any) => { const product = products.find((candidate) => candidate.id === Number(item.product_id)); return { product_id: Number(item.product_id), nom: item.product_nom || item.product?.nom || product?.nom || `Produit #${item.product_id}`, quantite: Number(item.quantite) || 1, prix: Number(item.prix_unitaire ?? item.prix) || Number(product?.prix_vente) || 0, cuisson: item.cuisson }; }));
+    setSearchTerm(''); setMenuCategory('Toutes'); setFeedback(null);
+  }, [isOpen, orderToEdit, products, initialTableId, initialLocation]);
 
-  const handleAddItem = (product: Product) => {
-    // Check if product contains zebu meat
-    const isZebu = product.nom.toLowerCase().includes('zébu') || product.nom.toLowerCase().includes('zebu');
-    
-    if (isZebu) {
-      setSelectedProductForCooking(product);
-      setShowCookingModal(true);
-    } else {
-      addProductToOrder(product, undefined);
-    }
-  };
+  const resetModal = () => { setTable(''); setClient(''); setNombrePersonnes('1'); setMoyenPaiement('ESPECES'); setSpecialPersonName(''); setNotes(''); setSelectedItems([]); setSearchTerm(''); setMenuCategory('Toutes'); setFeedback(null); setShowCookingModal(false); setSelectedProductForCooking(null); };
+  const handleClose = () => { resetModal(); onClose(); };
+  const addProductToOrder = (product: Product, cuisson?: string) => setSelectedItems((previous) => { const existing = previous.find((item) => item.product_id === product.id && item.cuisson === cuisson); if (existing) return previous.map((item) => item === existing ? { ...item, quantite: item.quantite + 1 } : item); return [...previous, { product_id: product.id, nom: product.nom, quantite: 1, prix: product.prix_vente, cuisson }]; });
+  const handleAddItem = (product: Product) => { if (product.nom.toLowerCase().includes('zébu') || product.nom.toLowerCase().includes('zebu')) { setSelectedProductForCooking(product); setShowCookingModal(true); return; } addProductToOrder(product); };
+  const handleUpdateItemQuantity = (index: number, delta: number) => setSelectedItems((previous) => previous.flatMap((item, itemIndex) => { if (itemIndex !== index) return [item]; const quantity = item.quantite + delta; return quantity > 0 ? [{ ...item, quantite: quantity }] : []; }));
+  const handleSetItemQuantity = (index: number, value: number) => setSelectedItems((previous) => previous.map((item, itemIndex) => itemIndex === index ? { ...item, quantite: Number.isFinite(value) ? Math.max(1, Math.floor(value)) : 1 } : item));
+  const total = selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0);
+  const menuItems = products.filter((product) => product.type_produit === 'PRODUIT_FINI' && product.actif && (menuCategory === 'Toutes' || categories.find((category) => category.id === product.category_id)?.nom === menuCategory) && (!searchTerm.trim() || product.nom.toLowerCase().includes(searchTerm.trim().toLowerCase())));
 
-  const addProductToOrder = (product: Product, cuisson?: string) => {
-    const existingItem = form.items.find(i => i.product_id === product.id);
-    if (existingItem) {
-      setForm({
-        ...form,
-        items: form.items.map(i =>
-          i.product_id === product.id ? { ...i, quantite: i.quantite + 1 } : i
-        )
-      });
-    } else {
-      setForm({
-        ...form,
-        items: [...form.items, { product_id: product.id, quantite: 1, prix_unitaire: product.prix_vente, cuisson }]
-      });
-    }
-  };
+  const handleSubmit = async (event: React.FormEvent) => { event.preventDefault(); if (!table || selectedItems.length === 0) { setFeedback('Sélectionnez une table et au moins un article.'); return; } if (initialLocation && !specialPersonName.trim()) { setFeedback('Saisissez le nom de la personne avant de créer la commande.'); return; } try { await onSubmit({ ...(orderToEdit ? { id: orderToEdit.id } : {}), table_id: Number(table), client_id: client ? Number(client) : 0, special_person_name: specialPersonName.trim() || undefined, location_type: initialLocation, nombre_personnes: Number(nombrePersonnes) || 1, moyen_paiement: moyenPaiement, notes, montant_total: total, items: selectedItems.map((item) => ({ product_id: item.product_id, quantite: item.quantite, prix_unitaire: item.prix, cuisson: item.cuisson })) }); handleClose(); } catch (error) { console.error('Erreur modification commande restaurant:', error); setFeedback('La commande n’a pas pu être enregistrée. Vérifiez les données puis réessayez.'); } };
 
-  const handleDecreaseItem = (productId: number) => {
-    const existingItem = form.items.find(i => i.product_id === productId);
-    if (!existingItem) return;
-
-    if (existingItem.quantite > 1) {
-      setForm({
-        ...form,
-        items: form.items.map(i => 
-          i.product_id === productId ? { ...i, quantite: i.quantite - 1 } : i
-        )
-      });
-    } else {
-      // Si la quantité passe à 0, on retire l'article de la liste
-      setForm({
-        ...form,
-        items: form.items.filter(i => i.product_id !== productId)
-      });
-    }
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setForm({
-      ...form,
-      items: form.items.filter((_, i) => i !== index)
-    });
-  };
-
-  const handleSubmit = () => {
-    if (!form.table_id || form.table_id === '' || form.items.length === 0) return;
-    const total = form.items.reduce((sum, i) => sum + i.prix_unitaire * i.quantite, 0);
-
-    onSubmit({
-      ...(orderToEdit ? { id: orderToEdit.id } : {}),
-      ...form,
-      table_id: Number(form.table_id),
-      client_id: form.client_id !== '' ? Number(form.client_id) : 0,
-      montant_total: total
-    });
-
-    setForm({ table_id: '', client_id: '', items: [], montant_total: 0, notes: '' });
-    setStep(1);
-    onClose();
-  };
-
-  const handleProceedToValidation = () => {
-    if (!form.table_id || form.table_id === '' || form.items.length === 0) return;
-    setStep(2);
-  };
-
-  const handleBackToSelection = () => {
-    setStep(1);
-  };
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      size="full"
-      title={orderToEdit ? "Modifier la commande" : "Nouvelle commande · Restaurant"}
-    >
-      <div className="flex flex-col bg-background rounded-xl overflow-hidden">
-        {/* Corps du formulaire avec défilement */}
-        {step === 1 && (
-          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
-            <Select 
-              label="Table" 
-              value={form.table_id.toString()} 
-              onChange={(e_or_value) => {
-                const val = e_or_value && typeof e_or_value === 'object' && 'target' in e_or_value 
-                  ? e_or_value.target.value 
-                  : e_or_value;
-                setForm(prev => ({ ...prev, table_id: val }));
-              }}
-              options={[
-                { value: '', label: 'Sélectionner une table' },
-                ...tables.map(t => ({ 
-                  value: t.id.toString(), 
-                  label: `Table ${t.numero} (${t.capacite} pers.)` 
-                }))
-              ]}
-            />
-            
-            <Select 
-              label="Client (optionnel)" 
-              value={form.client_id.toString()} 
-              onChange={(e_or_value) => {
-                const val = e_or_value && typeof e_or_value === 'object' && 'target' in e_or_value 
-                  ? e_or_value.target.value 
-                  : e_or_value;
-                setForm(prev => ({ ...prev, client_id: val }));
-              }}
-              options={[
-                { value: '', label: 'Client anonyme' },
-                ...clients.map(c => ({ 
-                  value: c.id.toString(), 
-                  label: `${c.prenom} ${c.nom} - ${c.telephone}` 
-                }))
-              ]}
-            />
-            
-            <Button type="button" variant="secondary" onClick={onNewClient} className="w-full">
-              <Plus size={14} className="mr-2" /> Nouveau client
-            </Button>
-
-            <div>
-              <label className="block text-xs font-semibold text-secondary mb-1">Informations complémentaires (allergies, exigences particulières, à retirer...)</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Ex: Allergie aux noix, sans sauce, viande bien cuite..."
-                className="w-full h-20 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-primary resize-none"
-              />
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-border bg-[#101415]">
-              <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du restaurant</p>
-                <div className="relative w-40"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="h-8 w-full rounded-lg border border-border bg-surface-2 pl-8 pr-2 text-xs text-primary" /></div>
-              </div>
-              <div className="grid grid-cols-[100px_minmax(0,1fr)] sm:grid-cols-[130px_minmax(0,1fr)_210px]">
-                <nav className="space-y-1 border-r border-border bg-[#171b1c] p-2">
-                  {['Toutes', ...categories.map(category => category.nom)].map(category => <button key={category} type="button" onClick={() => setSelectedCategory(category)} className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold ${selectedCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}>{category}</button>)}
-                </nav>
-                <div className="min-w-0 p-2 sm:p-3">
-                  <div className="grid max-h-[330px] grid-cols-2 gap-2 overflow-y-auto xl:grid-cols-3">
-                {products.filter(p => p.type_produit === 'PRODUIT_FINI' && p.actif && (selectedCategory === 'Toutes' || categories.find(category => category.id === p.category_id)?.nom === selectedCategory) && (!searchTerm.trim() || p.nom.toLowerCase().includes(searchTerm.trim().toLowerCase()))).map((product) => {
-                  const existingItem = form.items.find(i => i.product_id === product.id);
-                  const currentQty = existingItem ? existingItem.quantite : 0;
-
-                  return (
-                    <div key={product.id} className="flex min-h-[82px] flex-col items-center justify-center rounded-md border border-emerald-950 bg-emerald-500 p-2 text-center">
-                      <span className="text-xs font-bold leading-tight text-white">{product.nom}</span>
-                      <span className="mt-1 text-[10px] font-semibold text-emerald-950">{formatCurrency(product.prix_vente)}</span>
-                      <div className="mt-1 flex items-center gap-2">
-                        
-                        {/* Affichage du bouton - et de la quantité seulement si elle est > 0 */}
-                        {currentQty > 0 && (
-                          <>
-                            <Button 
-                              type="button" 
-                              size="sm" 
-                              variant="secondary" 
-                              onClick={() => handleDecreaseItem(product.id)}
-                            >
-                              -
-                            </Button>
-                            <span className="text-secondary text-sm font-semibold w-6 text-center">
-                              {currentQty}
-                            </span>
-                          </>
-                        )}
-
-                        <Button type="button" size="sm" variant="secondary" onClick={() => handleAddItem(product)}>
-                          +
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-                  </div>
-                </div>
-                <aside className="col-span-2 border-t border-border bg-[#171b1c] p-3 sm:col-span-1 sm:border-l sm:border-t-0">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent">Ticket</p>
-                  {form.items.length === 0 ? <p className="py-8 text-center text-xs text-muted">Sélectionnez un article</p> : form.items.map((item, index) => { const product = products.find(p => p.id === item.product_id); return <div key={`${item.product_id}-${index}`} className="flex items-center justify-between gap-2 border-b border-border py-2 text-xs"><span className="min-w-0 truncate text-secondary">{item.quantite} × {product?.nom}{item.cuisson ? ` (${item.cuisson})` : ''}</span><span className="shrink-0 text-accent">{formatCurrency(item.prix_unitaire * item.quantite)}</span></div>; })}
-                  <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(form.items.reduce((sum, item) => sum + item.prix_unitaire * item.quantite, 0))}</span></div>
-                </aside>
-              </div>
-            </div>
-
-            {form.items.length > 0 && (
-              <div className="rounded-xl p-4 border border-border" style={{ backgroundColor: 'var(--color-surface-2)' }}>
-                <p className="text-secondary text-sm font-medium mb-2">Résumé</p>
-                {form.items.map((item, index) => {
-                  const product = products.find(p => p.id === item.product_id);
-                  return (
-                    <div key={index} className="flex items-center justify-between py-1 gap-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-secondary text-sm truncate">{product?.nom} x{item.quantite}</span>
-                        {item.cuisson && (
-                          <span className="text-[10px] bg-accent/10 text-accent px-1 rounded whitespace-nowrap">{item.cuisson}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-accent text-sm whitespace-nowrap">{formatCurrency(item.prix_unitaire * item.quantite)}</span>
-                        <button type="button" onClick={() => handleRemoveItem(index)} className="text-danger hover:text-danger/80">
-                          <XCircle size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="border-t border-border mt-2 pt-2 flex justify-between">
-                  <span className="text-secondary font-medium">Total</span>
-                  <span className="text-accent font-bold">
-                    {formatCurrency(form.items.reduce((sum, i) => sum + i.prix_unitaire * i.quantite, 0))}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Validation Step (Step 2) */}
-        {step === 2 && (
-          <div className="p-4 sm:p-6 space-y-4 border-t border-border bg-surface-2">
-            <h3 className="text-sm font-semibold text-primary">Récapitulatif de la commande</h3>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-secondary">Table:</span>
-                <span className="text-primary font-semibold">
-                  {tables.find(t => t.id === Number(form.table_id))?.numero || 'N/A'}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-secondary">Client:</span>
-                <span className="text-primary font-semibold">
-                  {form.client_id ? clients.find(c => c.id === Number(form.client_id))?.prenom + ' ' + clients.find(c => c.id === Number(form.client_id))?.nom : 'Client anonyme'}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-secondary">Articles commandés:</h4>
-              {form.items.map((item, idx) => {
-                const product = products.find(p => p.id === item.product_id);
-                return (
-                  <div key={idx} className="flex justify-between items-start text-xs">
-                    <div className="flex-1">
-                      <span className="text-primary font-medium">{product?.nom || `Produit #${item.product_id}`}</span>
-                      {item.cuisson && (
-                        <span className="ml-2 text-accent text-[10px] bg-accent/10 px-1 rounded">{item.cuisson}</span>
-                      )}
-                      <div className="text-subtle">Qté: {item.quantite} × {formatCurrency(item.prix_unitaire)}</div>
-                    </div>
-                    <span className="text-primary font-semibold">{formatCurrency(item.quantite * item.prix_unitaire)}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {form.notes && (
-              <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-secondary">Informations complémentaires:</h4>
-                <p className="text-xs text-primary bg-surface-3 p-2 rounded">{form.notes}</p>
-              </div>
-            )}
-
-            <div className="flex justify-between text-sm font-bold border-t border-border pt-2">
-              <span className="text-secondary">Total:</span>
-              <span className="text-accent">{formatCurrency(form.items.reduce((sum, i) => sum + i.prix_unitaire * i.quantite, 0))}</span>
-            </div>
-          </div>
-        )}
-        
-        {/* Footer avec boutons d'action */}
-        <div className="flex items-center justify-between border-t border-border bg-surface-2 px-4 py-3">
-          {step === 1 ? (
-            <>
-              <Button type="button" variant="secondary" onClick={onClose}>
-                Annuler
-              </Button>
-              <Button type="button" onClick={handleProceedToValidation} disabled={!form.table_id || form.table_id === '' || form.items.length === 0}>
-                Vérifier la commande
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button type="button" variant="secondary" onClick={handleBackToSelection}>
-                Retour / Modifier
-              </Button>
-              <Button type="button" onClick={handleSubmit}>
-                Valider et créer la commande
-              </Button>
-            </>
-          )}
-        </div>
+  return <Modal isOpen={isOpen} onClose={handleClose} title={orderToEdit ? 'Modifier la commande · Restaurant' : 'Nouvelle commande · Restaurant'} size="full">
+    <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+      {feedback && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{feedback}</div>}
+      <div className="grid grid-cols-1 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 sm:grid-cols-2">
+        <Input label="Personnes" type="number" min="1" value={nombrePersonnes} onChange={(event) => setNombrePersonnes(event.target.value)} />
+        <Select label="Paiement prévu" value={moyenPaiement} onChange={(event) => setMoyenPaiement(event.target.value)} options={[{ value: 'ESPECES', label: 'Espèces' }, { value: 'CREDIT', label: 'Crédit' }, { value: 'TPE', label: 'TPE' }, { value: 'ORANGE_MONEY', label: 'Orange Money' }, { value: 'MVOLA', label: 'MVola' }, { value: 'GRATUIT', label: 'Gratuit' }]} />
       </div>
-
-      {/* Cooking Level Modal */}
-      {showCookingModal && selectedProductForCooking && (
-        <Modal
-          isOpen={showCookingModal}
-          onClose={() => setShowCookingModal(false)}
-          size="md"
-          title="Niveau de cuisson"
-        >
-          <div className="space-y-3">
-            <p className="text-sm text-secondary">
-              Sélectionnez le niveau de cuisson pour <strong>{selectedProductForCooking.nom}</strong>:
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {COOKING_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => {
-                    addProductToOrder(selectedProductForCooking, level);
-                    setShowCookingModal(false);
-                    setSelectedProductForCooking(null);
-                  }}
-                  className="px-3 py-2 text-xs font-semibold rounded-lg border border-border bg-surface-2 text-primary hover:bg-accent hover:text-black transition-colors"
-                >
-                  {level}
-                </button>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setShowCookingModal(false)}
-              className="w-full mt-2"
-            >
-              Annuler
-            </Button>
-          </div>
-        </Modal>
-      )}
-    </Modal>
-  );
+      {initialLocation && <div className="rounded-xl border border-accent/20 bg-accent/5 p-3"><Input label="Nom de la personne" value={specialPersonName} onChange={(event) => setSpecialPersonName(event.target.value)} placeholder={initialLocation === 'Chambre' ? 'Ex. Nom du client' : 'Ex. Théophile'} /></div>}
+      <section className="rounded-xl border border-base bg-[#171b1c] p-3 shadow-inner">
+        <div className="mb-3 flex items-center justify-between border-b border-base pb-2"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Ticket</p>{orderToEdit && initialLocation && <p className="mt-1 text-lg font-semibold text-primary">{specialPersonName || 'Nom de la personne'}</p>}</div><span className="text-xs text-muted">{selectedItems.length} article{selectedItems.length > 1 ? 's' : ''}</span></div>
+        {selectedItems.length === 0 ? <p className="py-4 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.product_id}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base bg-surface-2 px-3 py-2 text-xs"><span className="min-w-0 flex-1 truncate text-secondary">{item.nom}{item.cuisson ? ` (${item.cuisson})` : ''}</span><div className="flex items-center gap-2"><div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="px-1 text-slate-400 hover:text-white">-</button><input type="number" min="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none" /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 hover:text-white">+</button></div><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span><button type="button" onClick={() => setSelectedItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} className="text-red-400"><XCircle size={14} /></button></div></div>)}</div>}
+        <div className="mt-3 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(total)}</span></div>
+      </section>
+      <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">
+        <div className="flex items-center justify-between border-b border-base px-3 py-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du restaurant</p><div className="relative w-40"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-full pl-8 text-xs" /></div></div>
+        <div className="grid h-[480px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)]"><nav className="space-y-1 overflow-y-auto border-r border-base bg-[#171b1c] p-2">{['Toutes', ...categories.map((category) => category.nom)].map((category) => <button key={category} type="button" onClick={() => setMenuCategory(category)} className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}>{category}</button>)}</nav><div className="min-w-0 p-2 sm:p-3"><div className="grid h-full grid-cols-2 content-start gap-2 overflow-y-auto pr-1 xl:grid-cols-3">{menuItems.map((product) => <button key={product.id} type="button" onClick={() => handleAddItem(product)} className="flex min-h-[84px] flex-col items-center justify-center rounded-md border border-emerald-950 bg-emerald-500 px-2 py-2 text-center text-white transition hover:bg-emerald-400"><span className="text-xs font-bold leading-tight">{product.nom}</span><span className="mt-1 text-[10px] font-semibold text-emerald-950">{formatCurrency(product.prix_vente)}</span></button>)}{menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}</div></div></div>
+      </div>
+      <div><label className="mb-1 block text-xs font-semibold text-secondary">Informations complémentaires</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex: Allergie aux noix, sans sauce..." className="h-20 w-full resize-none rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-primary" /></div>
+      <div className="flex gap-3 pt-2"><Button variant="secondary" type="button" onClick={handleClose} className="flex-1">Annuler</Button><Button type="submit" className="flex-1" disabled={selectedItems.length === 0}><Plus size={16} />{orderToEdit ? 'Modifier la commande' : 'Créer la commande'}</Button></div>
+    </form>
+    {showCookingModal && selectedProductForCooking && <Modal isOpen={showCookingModal} onClose={() => setShowCookingModal(false)} size="md" title="Niveau de cuisson"><div className="space-y-3"><p className="text-sm text-secondary">Sélectionnez le niveau de cuisson pour <strong>{selectedProductForCooking.nom}</strong>:</p><div className="grid grid-cols-2 gap-2">{COOKING_LEVELS.map((level) => <button key={level} type="button" onClick={() => { addProductToOrder(selectedProductForCooking, level); setShowCookingModal(false); setSelectedProductForCooking(null); }} className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-primary hover:bg-accent hover:text-black">{level}</button>)}</div><Button type="button" variant="secondary" onClick={() => setShowCookingModal(false)} className="mt-2 w-full">Annuler</Button></div></Modal>}
+  </Modal>;
 };

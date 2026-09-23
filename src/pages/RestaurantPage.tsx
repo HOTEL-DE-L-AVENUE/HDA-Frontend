@@ -1,21 +1,21 @@
 // src/pages/RestaurantPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
-import { ShoppingCart, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react';
 
 // Composants du module Restaurant
 import { RestaurantHeader } from '../components/Restaurant/Entete/RestaurantHeader';
 import { RestaurantTabs } from '../components/Restaurant/Tabs/RestaurantTabs';
 import { CommandesTab } from '../components/Restaurant/Tabs/CommandesTab';
 import { MenuTab } from '../components/Restaurant/Tabs/MenuTab';
-import { TablesTab } from '../components/Restaurant/Tabs/TablesTab';
 import { StockTab } from '../components/Restaurant/Tabs/StockTab';
 import { CaisseTab } from '../components/Restaurant/Tabs/CaisseTab';
+import { HistoryTab } from '../components/Restaurant/Tabs/HistoryTab';
 import { OrderModal } from '../components/Restaurant/Modals/OrderModal';
-import { TableModal } from '../components/Restaurant/Modals/TableModal';
 import { ProductModal } from '../components/Restaurant/Modals/ProductModal';
 import { ClientModal } from '../components/Restaurant/Modals/ClientModal';
+import { Button, Modal } from '../components/UI';
 
 // Services et types
 import * as restaurantService from '../services/restaurantService';
@@ -52,20 +52,26 @@ export const RestaurantPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const ordersRequestVersion = useRef(0);
 
   // Modales
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [showTableModal, setShowTableModal] = useState(false);
+  const [showOrderLocationModal, setShowOrderLocationModal] = useState(false);
+  const [selectedOrderTable, setSelectedOrderTable] = useState<string | undefined>();
+  const [selectedOrderLocation, setSelectedOrderLocation] = useState<string | undefined>();
   const [showProductModal, setShowProductModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [pendingDeleteOrder, setPendingDeleteOrder] = useState<Order | null>(null);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
 
   // ---------- Chargement initial ----------
   const fetchOrders = async () => {
+    const requestVersion = ++ordersRequestVersion.current;
     try {
       const res = await restaurantService.getOrders();
-      if (res.success && Array.isArray(res.data)) {
+      if (requestVersion === ordersRequestVersion.current && res.success && Array.isArray(res.data)) {
         setOrders(res.data as Order[]);
       }
     } catch (error) {
@@ -93,86 +99,70 @@ export const RestaurantPage: React.FC = () => {
     fetchTables();
     fetchOrders();
 
-    // Données mockées de départ
-    setCategories([
-      { id: 1, nom: 'Plats' },
-      { id: 2, nom: 'Entrées' },
-      { id: 3, nom: 'Desserts' },
-      { id: 4, nom: 'Boissons' },
-      { id: 5, nom: 'Vins' },
-      { id: 6, nom: 'Menus' },
-    ]);
-    setProducts([
-      { id: 1, category_id: 1, code: 'PROD-001', nom: 'Filet de Bœuf Rossini', unite: 'PIECE', prix_achat: 30, prix_vente: 68, actif: true, type_produit: 'PRODUIT_FINI' },
-      { id: 2, category_id: 1, code: 'PROD-002', nom: 'Homard Thermidor', unite: 'PIECE', prix_achat: 45, prix_vente: 95, actif: true, type_produit: 'PRODUIT_FINI' },
-      { id: 3, category_id: 2, code: 'PROD-003', nom: 'Soupe de Truffes', unite: 'PORTION', prix_achat: 20, prix_vente: 45, actif: false, type_produit: 'PRODUIT_FINI' },
-      { id: 4, category_id: 2, code: 'PROD-004', nom: 'Foie Gras Poêlé', unite: 'PIECE', prix_achat: 18, prix_vente: 38, actif: true, type_produit: 'PRODUIT_FINI' },
-      { id: 5, category_id: 6, code: 'PROD-005', nom: 'Menu Dégustation 7 plats', unite: 'PORTION', prix_achat: 85, prix_vente: 185, actif: true, type_produit: 'PRODUIT_FINI' },
-      { id: 101, category_id: 1, code: 'ING-001', nom: 'Bœuf', unite: 'KG', prix_achat: 12, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' },
-      { id: 102, category_id: 1, code: 'Homard', nom: 'Homard', unite: 'KG', prix_achat: 25, prix_vente: 0, actif: true, type_produit: 'MATIERE_PREMIERE' },
-    ]);
-    setClients([
-      { id: 1, code_client: 'CL001', nom: 'Rakoto', prenom: 'Jean', telephone: '+261 34 123 4567', email: 'jean@email.com' },
-      { id: 2, code_client: 'CL002', nom: 'Rabe', prenom: 'Marie', telephone: '+261 33 987 6543', email: 'marie@email.com' },
-    ]);
-
-    Promise.all([restaurantService.getProducts(), restaurantService.getCategories()])
-      .then(([productsRes, categoriesRes]) => {
-        if (productsRes.success && Array.isArray(productsRes.data) && productsRes.data.length > 0) setProducts(productsRes.data as Product[]);
-        if (categoriesRes.success && Array.isArray(categoriesRes.data) && categoriesRes.data.length > 0) setCategories(categoriesRes.data as Category[]);
+    Promise.all([
+      restaurantService.getProducts({ actif: true }),
+      restaurantService.getCategories(),
+      clientService.getClients(),
+    ])
+      .then(([productsRes, categoriesRes, clientsData]) => {
+        setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
+        setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
+        setClients(Array.isArray(clientsData) ? clientsData as Client[] : []);
       })
-      .catch(error => console.error('Erreur lors du chargement du catalogue restaurant', error));
+      .catch(error => {
+        console.error('Erreur lors du chargement des données Restaurant', error);
+        setProducts([]);
+        setCategories([]);
+        setClients([]);
+      });
   }, []);
 
   // ---------- Handlers Tables (API) ----------
-  const handleAddTable = async (formData: { numero: string; capacite: number; statut: string }) => {
-    try {
-      const res = await restaurantService.createTable({
-        numero: formData.numero,
-        capacite: formData.capacite,
-        statut: formData.statut || 'LIBRE',
-      });
-      if (res.success) {
-        setTables(prev => [...prev, res.data]);
-      } else {
-        console.warn('Erreur création table :', res.message);
-      }
-    } catch (error) {
-      console.error('Erreur création table', error);
-    }
+  const handleNewOrder = () => {
+    setShowOrderLocationModal(true);
   };
 
-  const handleDeleteTable = async (id: number) => {
-    if (!window.confirm('Supprimer cette table ?')) return;
-    try {
-      await restaurantService.deleteTable(id);
-      setTables(prev => prev.filter(t => t.id !== id));
-    } catch (error) {
-      console.error('Erreur suppression table', error);
-    }
-  };
-
-  const handleSelectTable = (_tableId: number) => {
+  const handleSelectOrderLocation = (tableId: number, locationLabel?: string) => {
+    setSelectedOrderTable(String(tableId));
+    setSelectedOrderLocation(locationLabel);
+    setShowOrderLocationModal(false);
     setShowOrderModal(true);
+  };
+
+  const getRestaurantLocationLabel = (location?: string) => {
+    const normalized = location?.trim().toUpperCase();
+    if (normalized === 'POCKER GRATUIT' || normalized === 'GRATUIT POCKER' || normalized === 'POCKER') return 'Pocker gratuit';
+    if (normalized === 'GRATUIT') return 'Gratuit';
+    if (normalized === 'CHAMBRE') return 'Chambre';
+    return undefined;
   };
 
   // ---------- Handlers Commandes ----------
   const handleAddOrder = async (formData: any) => {
-    const table = tables.find(t => t.id === formData.table_id);
-
     if (editingOrder) {
-      setOrders(prev => prev.map(order => order.id === editingOrder.id ? {
-        ...order,
-        client_id: formData.client_id || null,
-        table_id: formData.table_id || null,
-        table,
-        montant_total: formData.montant_total,
-        notes: formData.notes,
-        items: formData.items,
-      } : order));
-      setEditingOrder(null);
-      setShowOrderModal(false);
-      return;
+      try {
+        const res = await restaurantService.updateOrder(Number(editingOrder.id), {
+          client_id: formData.client_id || undefined,
+          table_id: formData.table_id || undefined,
+          items: (formData.items || []).map((item: any) => ({
+            product_id: item.product_id,
+            quantite: item.quantite,
+            prix_unitaire: item.prix_unitaire,
+            cuisson: item.cuisson,
+          })),
+          notes: formData.notes,
+          location_type: formData.location_type,
+          special_person_name: formData.special_person_name,
+        });
+        if (!res.success) throw new Error(res.message || 'Modification de la commande impossible.');
+        await fetchOrders();
+        setEditingOrder(null);
+        setShowOrderModal(false);
+        return;
+      } catch (error) {
+        console.error('Erreur modification commande restaurant', error);
+        throw error;
+      }
     }
 
     try {
@@ -186,38 +176,19 @@ export const RestaurantPage: React.FC = () => {
           cuisson: item.cuisson,
         })),
         notes: formData.notes,
+        location_type: formData.location_type,
+        special_person_name: formData.special_person_name,
       });
       if (res.success) {
         await fetchOrders();
         setShowOrderModal(false);
         return;
       }
-    } catch (err) {
-      console.warn('Création commande via API échouée, bascule vers mode local:', err);
+      throw new Error(res.message || 'Création de la commande impossible.');
+    } catch (error) {
+      console.error('Création commande restaurant échouée:', error);
+      throw error;
     }
-
-    const newOrder: Order = {
-      id: orders.length + 1,
-      client_id: formData.client_id || null,
-      table_id: formData.table_id || null,
-      source_module: 'RESTAURANT',
-      montant_total: formData.montant_total,
-      statut: 'EN_ATTENTE',
-      created_at: new Date().toISOString(),
-      table: table,
-      notes: formData.notes,
-      items: (formData.items || []).map((item: any) => ({
-        id: Date.now(),
-        order_id: orders.length + 1,
-        ...item,
-        product_nom: products.find(p => p.id === item.product_id)?.nom,
-      })),
-    };
-    setOrders(prev => [...prev, newOrder]);
-    if (table) {
-      setTables(prev => prev.map(t => t.id === table.id ? { ...t, statut: 'OCCUPEE' } : t));
-    }
-    setShowOrderModal(false);
   };
 
   const handleUpdateOrderStatus = async (orderId: number | string, status: Order['statut']) => {
@@ -237,6 +208,12 @@ export const RestaurantPage: React.FC = () => {
   const handlePayment = async (orderId: number | string, paymentMethod = 'ESPECES') => {
     const numericId = Number(orderId);
     const order = orders.find(o => Number(o.id) === numericId);
+    if (!order) {
+      throw new Error(`Commande #${numericId} introuvable.`);
+    }
+
+    // Une lecture lancée avant l'encaissement ne doit pas remplacer l'état plus récent.
+    ordersRequestVersion.current += 1;
 
     const calculatedMontant = Number(
       order?.montant_total ||
@@ -246,7 +223,7 @@ export const RestaurantPage: React.FC = () => {
         : 0)
     );
 
-    // 1. Appel API
+    // La commande ne doit passer en PAYEE qu'après confirmation de l'API.
     try {
       const res = await restaurantService.processPayment({
         order_id: numericId,
@@ -255,21 +232,30 @@ export const RestaurantPage: React.FC = () => {
         client_id: order?.client_id || undefined,
       });
       if (res && res.success) {
-        await fetchOrders();
-        const tablesRes = await restaurantService.getTables();
-        if (tablesRes.success) setTables(tablesRes.data);
+        try {
+          const tablesRes = await restaurantService.getTables();
+          if (tablesRes.success) setTables(tablesRes.data);
+        } catch (tableError) {
+          console.warn('Rafraîchissement des tables après paiement échoué:', tableError);
+        }
+      } else {
+        throw new Error(res?.message || 'Le paiement n’a pas été confirmé.');
       }
     } catch (err) {
       console.warn('API payment échoué, bascule vers mode local:', err);
+      if ((err as any)?.response?.status === 404) {
+        await fetchOrders();
+      }
+      throw err;
     }
 
-    // 2. Mise à jour de l'état local
+    // Mise à jour locale uniquement après le succès confirmé ci-dessus.
     setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE' } : o));
     if (order?.table) {
       setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
 
-    // 3. Enregistrement dans le HDAContext (Caisse)
+    // Enregistrement dans le HDAContext (Caisse)
     if (order || calculatedMontant > 0) {
       dispatch({
         type: 'ADD_TRANSACTION',
@@ -305,14 +291,22 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
-  const handleDeleteOrder = async (orderId: number | string) => {
-    if (!window.confirm('Supprimer définitivement cette commande ?')) return;
+  const handleRequestDeleteOrder = (orderId: number | string) => {
+    const order = orders.find((candidate) => Number(candidate.id) === Number(orderId));
+    if (order) setPendingDeleteOrder(order);
+  };
 
+  const handleDeleteOrder = async () => {
+    if (!pendingDeleteOrder) return;
     try {
-      await restaurantService.deleteOrder(Number(orderId));
-      setOrders(prev => prev.filter(order => order.id !== Number(orderId)));
+      setIsDeletingOrder(true);
+      await restaurantService.deleteOrder(Number(pendingDeleteOrder.id));
+      setOrders(prev => prev.filter(order => order.id !== Number(pendingDeleteOrder.id)));
+      setPendingDeleteOrder(null);
     } catch (error) {
       console.error('Erreur suppression commande', error);
+    } finally {
+      setIsDeletingOrder(false);
     }
   };
 
@@ -497,10 +491,12 @@ export const RestaurantPage: React.FC = () => {
             onUpdateStatus={handleUpdateOrderStatus}
             onPayment={handlePayment}
             onCancel={handleCancelOrder}
-            onDelete={handleDeleteOrder}
-            onNewOrder={() => setShowOrderModal(true)}
+            onDelete={handleRequestDeleteOrder}
+            onNewOrder={handleNewOrder}
             onEditOrder={(order) => {
               setEditingOrder(order);
+              setSelectedOrderTable(String(order.table_id || order.table?.id || 0));
+              setSelectedOrderLocation(getRestaurantLocationLabel(order.location_type));
               setShowOrderModal(true);
             }}
             onInvoice={handlePrintInvoice}
@@ -519,14 +515,6 @@ export const RestaurantPage: React.FC = () => {
             onDeleteProduct={handleDeleteProduct}
           />
         )}
-        {activeTab === 'tables' && (
-          <TablesTab
-            tables={tables}
-            onAddTable={() => setShowTableModal(true)}
-            onDeleteTable={handleDeleteTable}
-            onSelectTable={handleSelectTable}
-          />
-        )}
         {activeTab === 'stock' && <StockTab />}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
           <CaisseTab
@@ -538,12 +526,92 @@ export const RestaurantPage: React.FC = () => {
             onRefresh={fetchOrders}
           />
         )}
+        {activeTab === 'historique' && <HistoryTab orders={orders} />}
       </div>
 
       {/* Modales */}
+      <Modal
+        isOpen={pendingDeleteOrder !== null}
+        onClose={() => { if (!isDeletingOrder) setPendingDeleteOrder(null); }}
+        title="Supprimer la commande"
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-red-500/25 bg-red-500/10 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-400">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-primary">Supprimer définitivement cette commande ?</p>
+              <p className="mt-1 text-sm leading-relaxed text-secondary">
+                Cette action supprimera la commande et tous ses articles. Elle est irréversible.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setPendingDeleteOrder(null)}
+              disabled={isDeletingOrder}
+              className="w-full sm:w-auto"
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => void handleDeleteOrder()}
+              disabled={isDeletingOrder}
+              className="w-full sm:w-auto"
+            >
+              <Trash2 size={16} />
+              {isDeletingOrder ? 'Suppression...' : 'Supprimer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showOrderLocationModal}
+        onClose={() => setShowOrderLocationModal(false)}
+        title="Choisir l'emplacement de la commande"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">Sélectionnez une table ou un type de réservation.</p>
+          <div className="grid grid-cols-4 gap-2">
+            {[...tables].sort((firstTable, secondTable) => Number(firstTable.numero) - Number(secondTable.numero)).map((restaurantTable) => (
+              <button
+                key={restaurantTable.id}
+                type="button"
+                onClick={() => handleSelectOrderLocation(restaurantTable.id)}
+                className="flex min-h-16 items-center justify-center rounded-lg border border-base bg-surface-2 px-2 py-2 text-center text-xs font-semibold text-primary transition hover:border-accent hover:bg-accent/10"
+              >
+                {String(restaurantTable.numero).toUpperCase().startsWith('T') ? restaurantTable.numero : `T${restaurantTable.numero}`}
+              </button>
+            ))}
+            {tables.length === 0 && <p className="col-span-4 py-6 text-center text-xs text-muted">Aucune table disponible.</p>}
+            {['Gratuit', 'Pocker gratuit', 'Chambre'].map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => handleSelectOrderLocation(0, label)}
+                className="flex min-h-16 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-center text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/20"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button variant="danger" size="sm" type="button" onClick={() => setShowOrderLocationModal(false)} className="w-auto self-end rounded-md px-3 py-1.5">
+            Annuler
+          </Button>
+        </div>
+      </Modal>
       <OrderModal
         isOpen={showOrderModal}
-        onClose={() => { setShowOrderModal(false); setEditingOrder(null); }}
+        onClose={() => { setShowOrderModal(false); setEditingOrder(null); setSelectedOrderTable(undefined); setSelectedOrderLocation(undefined); }}
         tables={tables}
         products={products}
         categories={categories}
@@ -551,11 +619,8 @@ export const RestaurantPage: React.FC = () => {
         onSubmit={handleAddOrder}
         onNewClient={() => setShowClientModal(true)}
         orderToEdit={editingOrder || undefined}
-      />
-      <TableModal
-        isOpen={showTableModal}
-        onClose={() => setShowTableModal(false)}
-        onSubmit={handleAddTable}
+        initialTableId={selectedOrderTable}
+        initialLocation={selectedOrderLocation}
       />
       <ProductModal
         isOpen={showProductModal}

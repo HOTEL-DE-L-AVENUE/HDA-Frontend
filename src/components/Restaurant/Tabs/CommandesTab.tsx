@@ -41,17 +41,29 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('ESPECES');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
+  const getLocationLabel = (order: Order) => {
+    const normalized = order.location_type?.trim().toUpperCase();
+    if (normalized === 'POCKER' || normalized === 'POCKER GRATUIT' || normalized === 'GRATUIT POCKER') return 'Gratuit Pocker';
+    if (normalized === 'GRATUIT') return 'Gratuit';
+    if (normalized === 'CHAMBRE') return 'Chambre';
+    return order.table?.numero || order.table_numero || order.table_id || 'N/A';
+  };
   const columns = [
-    { key: 'table', label: 'Table', render: (order: Order) => (
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
-        <span className="text-black font-bold text-sm">
-          {order.table?.numero || order.table_numero || order.table_id || 'N/A'}
-        </span>
-      </div>
-    )},
+    { key: 'table', label: 'Table', render: (order: Order) => {
+      const locationLabel = getLocationLabel(order);
+      const isSpecialLocation = ['Gratuit', 'Gratuit Pocker', 'Chambre'].includes(locationLabel);
+      return (
+        <div className={`flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-center ${isSpecialLocation ? 'min-w-[92px]' : 'min-w-10'}`} style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
+          <span className="text-black text-sm font-bold leading-tight">
+            {locationLabel}
+          </span>
+        </div>
+      );
+    }},
     { key: 'items', label: 'Articles', render: (order: Order) => (
       <div>
         {!order.items || order.items.length === 0 ? (
@@ -99,7 +111,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
-          <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); }}>Encaisser</Button>
+          <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); setPaymentError(null); }}>Encaisser</Button>
         )}
         {/* Invoice button */}
         {onInvoice && (
@@ -125,7 +137,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   ];
 
   // Tri des commandes : les plus récentes (plus grandes dates/IDs) en premier
-  const activeOrders = orders.filter((order) => !['PAYE', 'PAYEE', 'ANNULEE'].includes(order.statut));
+  const activeOrders = orders.filter((order) => !['PAYE', 'PAYEE'].includes(order.statut));
   const sortedOrders = [...activeOrders].sort((a, b) => {
     const timeA = new Date(a.created_at || 0).getTime();
     const timeB = new Date(b.created_at || 0).getTime();
@@ -139,8 +151,11 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     if (paymentOrderId === null) return;
     try {
       setIsProcessingPayment(true);
+      setPaymentError(null);
       await onPayment(paymentOrderId, paymentMethod);
       setPaymentOrderId(null);
+    } catch (error: any) {
+      setPaymentError(error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Le paiement n’a pas pu être confirmé.');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -168,6 +183,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
       >
         <div className="space-y-4">
           <p className="text-sm text-secondary">Choisissez le mode de paiement pour confirmer cette commande.</p>
+          {paymentError && <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">{paymentError}</div>}
           <Select
             label="Mode de paiement"
             value={paymentMethod}
@@ -182,7 +198,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
             ]}
           />
           <div className="flex gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={() => setPaymentOrderId(null)} disabled={isProcessingPayment} className="flex-1">Annuler</Button>
+            <Button variant="secondary" type="button" onClick={() => { setPaymentOrderId(null); setPaymentError(null); }} disabled={isProcessingPayment} className="flex-1">Annuler</Button>
             <Button type="button" onClick={() => void handleConfirmPayment()} disabled={isProcessingPayment} className="flex-1">
               <CheckCircle2 size={16} />
               {isProcessingPayment ? 'Confirmation...' : 'Confirmer'}
