@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import type { BarCommande, BarTable, BarProduct } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
+import api from '../../lib/api';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
 import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
+import { reservationService } from '../../services/reservation.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/permissions';
 
@@ -69,6 +71,10 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const [client, setClient] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
+  const [chamberReservationOptions, setChamberReservationOptions] = useState<Array<{ value: string; label: string; reservationId: number; clientId: number | null; roomLabel: string }>>([]);
+  const [chamberReservationSearch, setChamberReservationSearch] = useState('');
+  const [selectedChamberRoomLabel, setSelectedChamberRoomLabel] = useState<string>('');
+  const [showChamberSuggestions, setShowChamberSuggestions] = useState(false);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [table, setTable] = useState('');
   const [nombrePersonnes, setNombrePersonnes] = useState('1');
@@ -125,8 +131,66 @@ export const BarCommandeView: React.FC<Props> = ({
     setIsEditingOrder(false);
     setEditingOrderId(null);
     setSelectedLocation(null);
+    setChamberReservationSearch('');
+    setSelectedChamberRoomLabel('');
+    setShowChamberSuggestions(false);
+    setChamberReservationOptions([]);
     setIsLocationSelectionOpen(false);
     setIsModalOpen(false);
+  };
+
+  const loadChamberReservationOptions = async () => {
+    try {
+      const [reservations, reservationGuestsResponse] = await Promise.all([
+        reservationService.getReservations(),
+        api.get('/api/hebergement/reservation-guests'),
+      ]);
+
+      const guestsPayload = reservationGuestsResponse?.data?.data ?? reservationGuestsResponse?.data ?? [];
+      const guestsByReservation = new Map<number, string[]>();
+
+      for (const guest of Array.isArray(guestsPayload) ? guestsPayload : []) {
+        const reservationId = Number(guest?.reservation_id ?? 0);
+        if (!reservationId) continue;
+        const fullName = [guest?.prenom, guest?.nom].filter(Boolean).join(' ').trim();
+        if (!fullName) continue;
+        const existing = guestsByReservation.get(reservationId) ?? [];
+        if (!existing.includes(fullName)) existing.push(fullName);
+        guestsByReservation.set(reservationId, existing);
+      }
+
+      const activeStatuses = ['CONFIRMEE', 'CHECKED_IN', 'EN_COURS'];
+      const options = reservations
+        .filter((reservation) => reservation && reservation.statut && activeStatuses.includes(reservation.statut))
+        .flatMap((reservation) => {
+          const roomLabel = reservation.room?.numero ? `Chambre ${reservation.room.numero}` : (reservation.room_id ? `Chambre ${reservation.room_id}` : 'Chambre');
+          const primaryClientName = [reservation.client?.prenom, reservation.client?.nom].filter(Boolean).join(' ').trim();
+          const names = new Set<string>();
+          if (primaryClientName) names.add(primaryClientName);
+          for (const guestName of guestsByReservation.get(reservation.id) ?? []) names.add(guestName);
+
+          if (!names.size) {
+            const fallbackName = `Client #${reservation.client_id ?? reservation.id}`;
+            names.add(fallbackName);
+          }
+
+          return Array.from(names).map((name) => ({
+            value: name,
+            label: `${name} — ${roomLabel}`,
+            reservationId: reservation.id,
+            clientId: reservation.client_id ?? null,
+            roomLabel,
+          }));
+        })
+        .filter((option, index, array) => array.findIndex((item) => item.value === option.value && item.reservationId === option.reservationId) === index)
+        .sort((first, second) => first.label.localeCompare(second.label, 'fr'));
+
+      setChamberReservationOptions(options);
+    } catch (error) {
+      console.error('Erreur chargement réservations hôtel pour chambre:', error);
+      setChamberReservationOptions([]);
+      setFeedback({ type: 'error', message: 'La liste des clients de réservation n’a pas pu être chargée.' });
+    }
   };
 
   const handleOpenModal = () => {
@@ -143,6 +207,9 @@ export const BarCommandeView: React.FC<Props> = ({
     setFeedback(null);
     setIsEditingOrder(false);
     setEditingOrderId(null);
+    setChamberReservationSearch('');
+    setSelectedChamberRoomLabel('');
+    setChamberReservationOptions([]);
     setIsModalOpen(false);
     setIsLocationSelectionOpen(true);
     void loadClients();
@@ -153,6 +220,12 @@ export const BarCommandeView: React.FC<Props> = ({
     setTable(String(location.tableId));
     setIsLocationSelectionOpen(false);
     setIsModalOpen(true);
+    if (location.label === 'Chambre') {
+      void loadChamberReservationOptions();
+    } else {
+      setChamberReservationOptions([]);
+      setChamberReservationSearch('');
+    }
   };
 
   const handleOpenEditModal = (commande: BarCommande) => {
@@ -164,6 +237,10 @@ export const BarCommandeView: React.FC<Props> = ({
         : specialMode === 'GRATUIT'
           ? { kind: 'special' as const, label: 'Gratuit', tableId: 0 }
           : { kind: 'table' as const, label: `T${commande.table}`, tableId: commande.table };
+    const chamberGuest = location.label === 'Chambre' ? String(commande.client || '') : '';
+    const chamberParts = chamberGuest ? chamberGuest.split(/\s*—\s*/) : ['', ''];
+    const chamberName = chamberParts[0]?.trim() || chamberGuest;
+    const chamberRoom = chamberParts[1]?.trim() || extractChamberRoomLabel(chamberGuest) || '';
     setClient(commande.client);
     setTable(String(commande.table));
     setNombrePersonnes(String(commande.nombre_personnes || 1));
@@ -171,7 +248,9 @@ export const BarCommandeView: React.FC<Props> = ({
     setSelectedItems(commande.items.map((item) => ({ ...item })));
     setSearchTerm('');
     setSelectedLocation(location);
-    setSpecialPersonName(location.kind === 'special' ? commande.client : '');
+    setSpecialPersonName(location.kind === 'special' ? chamberName : '');
+    setSelectedChamberRoomLabel(location.label === 'Chambre' ? chamberRoom : '');
+    setChamberReservationSearch(location.label === 'Chambre' ? chamberName : '');
     setPokerActivePerson(location.label === 'Pocker gratuit' ? commande.client : '');
     setPokerPeople(location.label === 'Pocker gratuit' ? [commande.client] : []);
     setPokerOrders(location.label === 'Pocker gratuit' ? { [commande.client]: commande.items.map((item) => ({ ...item })) } : {});
@@ -225,6 +304,22 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const isPokerLocation = selectedLocation?.label === 'Pocker gratuit';
   const isNamedLocation = selectedLocation?.kind === 'special';
+  const isChambreOrder = (commande: BarCommande) => commande.observation?.trim().toUpperCase() === 'CHAMBRE';
+  const filteredChamberReservationOptions = chamberReservationOptions.filter((option) => {
+    const searchValue = chamberReservationSearch.trim().toLowerCase();
+    if (!searchValue) return true;
+    return option.label.toLowerCase().includes(searchValue);
+  });
+
+  const visibleChamberSuggestions = showChamberSuggestions ? filteredChamberReservationOptions.slice(0, 6) : [];
+
+  const handleChamberPersonSelect = (name: string) => {
+    setSpecialPersonName(name);
+    setChamberReservationSearch(name);
+    const selectedOption = chamberReservationOptions.find((option) => option.value === name && option.label.startsWith(`${name} — `));
+    setSelectedChamberRoomLabel(selectedOption?.roomLabel || '');
+    setShowChamberSuggestions(false);
+  };
 
   const handleSelectPokerPerson = (name: string) => {
     const currentName = pokerActivePerson.trim();
@@ -259,9 +354,13 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handleAjouterCommande = async (event: React.FormEvent) => {
     event.preventDefault();
-    const clientNom = isNamedLocation ? specialPersonName.trim() : client.trim() || 'Client anonyme';
+    const rawPersonName = isNamedLocation ? specialPersonName.trim() : client.trim() || 'Client anonyme';
+    const clientNom = selectedLocation?.label === 'Chambre' && rawPersonName
+      ? (selectedChamberRoomLabel ? `${rawPersonName} — ${selectedChamberRoomLabel}` : rawPersonName)
+      : rawPersonName;
     const tableNumber = Number(table);
     const guestCount = Number(nombrePersonnes);
+    const effectivePaymentMethod = selectedLocation?.label === 'Chambre' ? 'CREDIT' : moyenPaiement;
 
     const invalidTable = !table || Number.isNaN(tableNumber) || (selectedLocation?.kind !== 'special' && tableNumber <= 0);
     if (invalidTable || !Number.isInteger(guestCount) || guestCount < 1 || selectedItems.length === 0 || (isNamedLocation && !clientNom)) {
@@ -292,7 +391,7 @@ export const BarCommandeView: React.FC<Props> = ({
           client: clientNom,
           table: tableNumber,
           nombre_personnes: guestCount,
-          moyen_paiement: moyenPaiement,
+          moyen_paiement: effectivePaymentMethod,
           items: selectedItems,
           observation: selectedLocation?.kind === 'special' ? selectedLocation.label === 'Pocker gratuit' ? 'POCKER' : selectedLocation.label.toUpperCase() : undefined,
         });
@@ -301,7 +400,7 @@ export const BarCommandeView: React.FC<Props> = ({
           client: clientNom,
           table: tableNumber,
           nombre_personnes: guestCount,
-          moyen_paiement: moyenPaiement,
+          moyen_paiement: effectivePaymentMethod,
           items: selectedItems,
           observation: selectedLocation?.kind === 'special' ? selectedLocation.label === 'Pocker gratuit' ? 'POCKER' : selectedLocation.label.toUpperCase() : undefined,
         });
@@ -380,13 +479,14 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const handleOpenPaymentModal = (commande: BarCommande) => {
+    if (isChambreOrder(commande)) return;
     setPaymentOrder(commande);
     setPaymentMethod(commande.moyen_paiement || 'ESPECES');
     setIsPaymentModalOpen(true);
   };
 
   const handleConfirmPayment = async () => {
-    if (!paymentOrder) return;
+    if (!paymentOrder || isChambreOrder(paymentOrder)) return;
 
     setIsPaymentModalOpen(false);
     try {
@@ -451,7 +551,16 @@ export const BarCommandeView: React.FC<Props> = ({
     return specialLabel || (commande.table === 0 && commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : undefined);
   };
 
+  const extractChamberRoomLabel = (value: string) => {
+    const match = value.match(/\s*—\s*(Chambre\s*[^—]+)$/i);
+    return match ? match[1].trim() : '';
+  };
+
   const getOrderLocationLabel = (commande: BarCommande) => {
+    if (getOrderSpecialType(commande) === 'Chambre') {
+      const roomLabel = extractChamberRoomLabel(String(commande.client || ''));
+      return roomLabel || 'Chambre';
+    }
     if (getOrderSpecialType(commande)) return getOrderSpecialType(commande);
     if (commande.table === 0) return 'Gratuit';
     return tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
@@ -567,7 +676,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 Modifier
               </Button>
             )}
-            {canEncaisser && commande.statut === 'Servie' && (
+            {canEncaisser && commande.statut === 'Servie' && !isChambreOrder(commande) && (
               <Button
                 size="sm"
                 variant="primary"
@@ -692,7 +801,38 @@ export const BarCommandeView: React.FC<Props> = ({
 
           {isNamedLocation && (
             <div className="rounded-xl border border-accent/20 bg-accent/5 p-3">
-              {isPokerLocation ? (
+              {selectedLocation?.label === 'Chambre' ? (
+                <div className="relative grid gap-2">
+                  <Input
+                    label="Nom de la personne"
+                    value={chamberReservationSearch}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setChamberReservationSearch(nextValue);
+                      setSpecialPersonName(nextValue);
+                      setSelectedChamberRoomLabel('');
+                      setShowChamberSuggestions(true);
+                    }}
+                    onFocus={() => setShowChamberSuggestions(true)}
+                    placeholder="Nom, prénom ou chambre"
+                  />
+                  {visibleChamberSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 max-h-52 overflow-y-auto rounded-xl border border-base bg-[#111827] shadow-2xl">
+                      {visibleChamberSuggestions.map((option) => (
+                        <button
+                          key={`${option.reservationId}-${option.value}`}
+                          type="button"
+                          onClick={() => handleChamberPersonSelect(option.value)}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-slate-800"
+                        >
+                          <span>{option.value}</span>
+                          <span className="text-xs text-slate-400">{option.label.split(' — ')[1] || ''}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : isPokerLocation ? (
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                   <Input
                     label="Nom de la personne"
