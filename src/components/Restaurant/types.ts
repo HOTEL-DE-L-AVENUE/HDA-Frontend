@@ -17,6 +17,8 @@ export interface Order {
   table?: TableRestaurant;
   items?: OrderItem[];
   notes?: string;
+  location_type?: string;
+  special_person_name?: string;
 }
 
 export interface OrderItem {

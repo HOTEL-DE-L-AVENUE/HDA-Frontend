@@ -57,6 +57,11 @@ export const getOrders = (params?: {
 export const getOrderById = (id: number) =>
   api.get<ApiResponse<Order>>(`/api/restaurant/orders/${id}`).then(res => res.data);
 
+export const getHistoryTotal = (dateDebut: string, dateFin: string) =>
+  api.get<ApiResponse<{ total_payments: number; total_collected: number }>>('/api/restaurant/orders/history-total', {
+    params: { date_debut: dateDebut, date_fin: dateFin },
+  }).then(res => res.data);
+
 // Fetch printable invoice HTML as text (uses api client so auth headers are included)
 export const getInvoiceHtml = (id: number) =>
   api.get<string>(`/api/restaurant/orders/${id}/invoice`, { responseType: 'text' as const }).then(res => res.data);
@@ -69,8 +74,19 @@ export const createOrder = (data: {
   table_id?: number;
   items: { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[];
   notes?: string;
+  location_type?: string;
+  special_person_name?: string;
 }) =>
   api.post<ApiResponse<Order>>('/api/restaurant/orders', data).then(res => res.data);
+
+export const updateOrder = (id: number, data: {
+  client_id?: number;
+  table_id?: number;
+  items: { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[];
+  notes?: string;
+  location_type?: string;
+  special_person_name?: string;
+}) => api.put<ApiResponse<Order>>(`/api/restaurant/orders/${id}`, data).then(res => res.data);
 
 export const updateOrderStatus = (id: number, statut: string) =>
   api.put<ApiResponse<Order>>(`/api/restaurant/orders/${id}/status`, { statut }).then(res => res.data);

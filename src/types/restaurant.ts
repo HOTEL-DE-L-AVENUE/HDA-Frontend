@@ -55,6 +55,8 @@ export interface Order {
   client_prenom?: string;
   items?: OrderItem[];
   notes?: string;
+  location_type?: string;
+  special_person_name?: string;
 }
 
 export interface RecipeIngredient {

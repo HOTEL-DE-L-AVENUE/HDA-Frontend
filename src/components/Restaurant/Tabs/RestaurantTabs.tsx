@@ -1,14 +1,14 @@
 import React from 'react';
-import { ShoppingCart, UtensilsCrossed, Table as TableIcon, Package, DollarSign } from 'lucide-react';
+import { ShoppingCart, UtensilsCrossed, Package, DollarSign, History } from 'lucide-react';
 import AuthService from '../../../services/authService';
 import { filterTabsByRole } from '../../../utils/permissions';
 
 const TABS = [
   { id: 'commandes', label: 'Commandes', icon: <ShoppingCart size={16} /> },
   { id: 'menu', label: 'Menu', icon: <UtensilsCrossed size={16} /> },
-  { id: 'tables', label: 'Tables', icon: <TableIcon size={16} /> },
   { id: 'stock', label: 'Stock', icon: <Package size={16} /> },
   { id: 'caisse', label: 'Caisse', icon: <DollarSign size={16} /> },
+  { id: 'historique', label: 'Historique', icon: <History size={16} /> },
 ];
 
 interface RestaurantTabsProps {
