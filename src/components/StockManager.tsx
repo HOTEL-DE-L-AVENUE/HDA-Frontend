@@ -881,7 +881,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
-    if (!window.confirm(`Imprimer puis effacer les ${allOrders.length} commande(s) et leurs transactions ?`)) return;
+    if (!window.confirm(`Imprimer puis clôturer les ${allOrders.length} commande(s) ? Elles resteront disponibles dans l'historique administrateur.`)) return;
 
     handlePrintClosingReport();
     await onCloseAllOrders(allOrders.map((order) => order.id));

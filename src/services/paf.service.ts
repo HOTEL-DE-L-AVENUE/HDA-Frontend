@@ -70,5 +70,8 @@ export const closePafDay = () =>
 export const getPafClosures = () =>
   api.get<ApiResponse<PafClosure[]>>('/api/paf/closures').then((response) => response.data.data);
 
+export const getPafHistory = () =>
+  api.get<ApiResponse<PafClosure[]>>('/api/paf/history').then((response) => response.data.data);
+
 export const getPafClosure = (id: number) =>
   api.get<ApiResponse<PafClosure>>(`/api/paf/closures/${id}`).then((response) => response.data.data);
