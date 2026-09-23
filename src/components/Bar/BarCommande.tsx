@@ -4,7 +4,7 @@ import { formatCurrency } from '../../utils/data';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
-import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucide-react';
+import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/permissions';
@@ -93,6 +93,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const [pokerOrders, setPokerOrders] = useState<Record<string, BarCommande['items']>>({});
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingDeleteOrder, setPendingDeleteOrder] = useState<BarCommande | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const loadTables = async () => {
@@ -330,10 +331,9 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const handleDeleteCommande = async (commande: BarCommande) => {
-    if (!window.confirm(`Supprimer définitivement la commande #${commande.id} ?`)) return;
-
     try {
       setDeletingId(commande.id);
+      setPendingDeleteOrder(null);
       await onDeleteCommande?.(commande.id);
       setFeedback({ type: 'success', message: 'Commande supprimée avec succès.' });
     } catch (error) {
@@ -342,6 +342,10 @@ export const BarCommandeView: React.FC<Props> = ({
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleRequestDeleteCommande = (commande: BarCommande) => {
+    setPendingDeleteOrder(commande);
   };
 
   const handleStatusChange = async (commandeId: number, nouveauStatut: BarCommande['statut']) => {
@@ -576,7 +580,7 @@ export const BarCommandeView: React.FC<Props> = ({
             )}
             <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
             {canDeleteCommande && (
-              <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
+              <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => handleRequestDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
                 {deletingId === commande.id ? '...' : 'Supprimer'}
               </Button>
             )}
@@ -849,6 +853,28 @@ export const BarCommandeView: React.FC<Props> = ({
             <Button type="button" onClick={() => void handleConfirmPayment()} disabled={updatingId === paymentOrder?.id} className="flex-1">
               <CheckCircle2 size={16} />
               {updatingId === paymentOrder?.id ? 'Confirmation...' : 'Confirmer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={pendingDeleteOrder !== null} onClose={() => setPendingDeleteOrder(null)} title="Confirmer la suppression" size="sm">
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+            <AlertTriangle className="mt-0.5 shrink-0 text-red-400" size={20} />
+            <div>
+              <p className="font-semibold text-primary">Supprimer cette commande ?</p>
+              <p className="mt-1 text-sm leading-relaxed text-secondary">
+                Cette action supprimera définitivement la commande de {pendingDeleteOrder?.client || 'ce client'} et ses articles.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={() => setPendingDeleteOrder(null)} className="rounded-lg px-4">
+              Annuler
+            </Button>
+            <Button variant="danger" type="button" onClick={() => pendingDeleteOrder && void handleDeleteCommande(pendingDeleteOrder)} disabled={pendingDeleteOrder !== null && deletingId === pendingDeleteOrder.id} className="rounded-lg px-4">
+              {pendingDeleteOrder !== null && deletingId === pendingDeleteOrder.id ? 'Suppression...' : 'Supprimer'}
             </Button>
           </div>
         </div>

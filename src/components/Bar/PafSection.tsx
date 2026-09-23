@@ -207,7 +207,7 @@ export const PafSection: React.FC = () => {
     try {
       const detail = closure.operations ? closure : await getPafClosure(closure.id);
       setSelectedClosure(detail);
-      printHtml(`Clôture PAF ${detail.reference}`, `<div class="header"><div><h1>Clôture PAF HDA</h1><div class="muted">Référence : ${escapeHtml(detail.reference)}<br>Journée : ${escapeHtml(detail.date)}<br>Clôturée le : ${escapeHtml(formatDate(detail.dateCloture))}</div></div></div><div class="box">${summaryMarkup(detail.summary)}<p><strong>Total initial :</strong> ${escapeHtml(formatCurrency(detail.summary.totalInitial || 0))} &nbsp; <strong>Total final :</strong> ${escapeHtml(formatCurrency(detail.summary.totalFinal ?? detail.summary.totalAmount))}</p><h2>Opérations clôturées</h2>${operationsMarkup(detail.operations || [])}</div>`, 'a4');
+      printHtml(`Clôture PAF ${detail.reference}`, `<div class="header"><h1>Clôture PAF HDA</h1><div class="muted">Référence : ${escapeHtml(detail.reference)}<br>Journée : ${escapeHtml(detail.date)}<br>Clôturée le : ${escapeHtml(formatDate(detail.dateCloture))}</div></div><div class="box"><h2>Total général de la clôture</h2><div class="grand-total">${escapeHtml(formatCurrency(detail.summary.totalFinal ?? detail.summary.totalAmount))}</div><div class="totals"><div class="total"><span>Tickets</span><strong>${detail.summary.totalTickets}</strong></div><div class="total"><span>Homme</span><strong>${detail.summary.homme}</strong></div><div class="total"><span>Femme</span><strong>${detail.summary.femme}</strong></div></div></div>`, 'receipt');
     } catch (printError) {
       console.error('Erreur chargement clôture PAF:', printError);
       setError('Le récapitulatif de clôture n’a pas pu être chargé.');
@@ -254,6 +254,7 @@ export const PafSection: React.FC = () => {
       const result = await closePafDay();
       handleClearTicket();
       setSelectedClosure(result.closure);
+      await handlePrintClosure(result.closure);
       await loadData();
     } catch (closeError) {
       console.error('Erreur clôture PAF:', closeError);
