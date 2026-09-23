@@ -71,6 +71,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [showAllClients, setShowAllClients] = useState(false);
   const [roomAvailabilityError, setRoomAvailabilityError] = useState<string | null>(null);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<string>('');
 
   // États pour le formulaire de création rapide de client
   // Réutilise les mêmes champs que la page "Clients" (voir ClientCoreFormFields)
@@ -139,11 +140,13 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         laundry_included: false,
         laundry_price: 0,
         manual_price: 0,
+        exchange_rate: 0,
       });
       setDiscountPercent(0);
       setDiscountMode('none');
       setSelectedRoom(null);
       setSelectedClient(null);
+      setExchangeRate('');
     }
     setErrors({});
     setApiError(null);
@@ -192,8 +195,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         let total = days * (room.prix_nuit || 0);
         
         // For Booking.com, use manual price if set, otherwise use calculated
-        if (formData.type_reservation === 'BOOKING' && formData.manual_price > 0) {
-          total = formData.manual_price;
+        if (formData.type_reservation === 'BOOKING' && (formData.manual_price || 0) > 0) {
+          // Convert EUR to Ariary using exchange rate
+          const rate = parseFloat(exchangeRate) || 39.76;
+          total = (formData.manual_price || 0) * rate;
         }
         
         // Add laundry price if included
@@ -389,6 +394,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         laundry_included: Boolean(formData.laundry_included),
         laundry_price: formData.laundry_price || 0,
         manual_price: formData.manual_price || 0,
+        exchange_rate: parseFloat(exchangeRate) || 39.76,
       };
 
       if (initialData) {
@@ -707,24 +713,46 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
 
             {/* Manual pricing for Booking */}
             {formData.type_reservation === 'BOOKING' && (
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-primary">
-                  <DollarSign size={14} className="inline mr-1.5" />
-                  Prix manuel (optionnel)
-                </label>
-                <input
-                  type="number"
-                  value={formData.manual_price || ''}
-                  onChange={(e) => {
-                    const newPrice = Number(e.target.value) || 0;
-                    setFormData(prev => ({ ...prev, manual_price: newPrice }));
-                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
-                  }}
-                  className="input-field w-full text-sm py-2.5 rounded-lg"
-                  min="0"
-                  placeholder="Laisser vide pour calcul automatique"
-                  disabled={isSubmitting}
-                />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-primary">
+                    <DollarSign size={14} className="inline mr-1.5" />
+                    Prix en euros (optionnel)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.manual_price || ''}
+                    onChange={(e) => {
+                      const newPrice = parseFloat(e.target.value) || 0;
+                      setFormData(prev => ({ ...prev, manual_price: newPrice }));
+                      calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                    }}
+                    className="input-field w-full text-sm py-2.5 rounded-lg"
+                    min="0"
+                    placeholder="Laisser vide pour calcul automatique"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-primary">
+                    <DollarSign size={14} className="inline mr-1.5" />
+                    Taux de change (EUR → Ariary)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={exchangeRate}
+                    onChange={(e) => {
+                      setExchangeRate(e.target.value);
+                      calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                    }}
+                    className="input-field w-full text-sm py-2.5 rounded-lg"
+                    min="0"
+                    placeholder="Taux de change"
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
             )}
 
@@ -833,7 +861,11 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 <div className="flex justify-between"><span>Durée</span><strong>{nights} nuit{nights > 1 ? 's' : ''}</strong></div>
                 <div className="flex justify-between"><span>Type</span><strong>{formData.type_reservation === 'BOOKING' ? 'Booking.com' : 'Sur place'}</strong></div>
                 {formData.type_reservation === 'BOOKING' && formData.manual_price > 0 && (
-                  <div className="flex justify-between"><span>Prix Booking.com</span><strong>{formatCurrency(formData.manual_price)}</strong></div>
+                  <>
+                    <div className="flex justify-between"><span>Prix Booking.com (€)</span><strong>{formData.manual_price.toFixed(2)} €</strong></div>
+                    <div className="flex justify-between"><span>Taux de change</span><strong>{exchangeRate} Ar/€</strong></div>
+                    <div className="flex justify-between"><span>Prix converti (Ar)</span><strong>{formatCurrency(formData.manual_price * parseFloat(exchangeRate))}</strong></div>
+                  </>
                 )}
                 {formData.laundry_included && (
                   <div className="flex justify-between"><span>Blanchisserie</span><strong>{formatCurrency(formData.laundry_price || 0)}</strong></div>
@@ -841,7 +873,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 {discountMode === 'discount' && discountPercent > 0 && (
                   <div className="flex justify-between"><span>Remise</span><strong>{discountPercent}%</strong></div>
                 )}
-                <div className="flex justify-between text-accent pt-2 border-t border-base"><span>Total</span><strong>{formatCurrency(formData.montant_total || 0)}</strong></div>
+                <div className="flex justify-between text-accent pt-2 border-t border-base"><span>Total (Ar)</span><strong>{formatCurrency(formData.montant_total || 0)}</strong></div>
               </div>
               {selectedRoom && nights > 0 && formData.type_reservation !== 'BOOKING' && (
                 <p className="text-xs text-muted">

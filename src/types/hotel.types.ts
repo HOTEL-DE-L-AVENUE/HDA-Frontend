@@ -59,11 +59,12 @@ export interface Reservation {
   montant_remise?: number | null;
   remise_validee_par?: number | null;
   remise_validee_at?: string | null;
-  statut: 'EN_ATTENTE' | 'CONFIRMEE' | 'ANNULEE' | 'TERMINEE' | 'NO_SHOW';
+  statut: 'EN_ATTENTE' | 'CONFIRMEE' | 'CHECKED_IN' | 'EN_COURS' | 'ANNULEE' | 'TERMINEE' | 'NO_SHOW';
   type_reservation?: 'BOOKING' | 'ON_SITE';
   laundry_included?: boolean;
   laundry_price?: number;
   manual_price?: number;
+  exchange_rate?: number;
   client?: Client;
   room?: Room;
   created_at?: string;

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   User,
+  UserCheck,
   DoorOpen,
   CreditCard
 } from 'lucide-react';
@@ -28,12 +29,13 @@ interface ReservationListProps {
   reservations?: Reservation[];
   onEdit?: (reservation: Reservation) => void;
   onEncaisser?: (reservation: Reservation) => void;
+  onCheckIn?: (reservation: Reservation) => void;
   onCancel?: (reservationId: number) => void;
   onDelete?: (reservationId: number) => void;
   refreshTrigger?: number;
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, refreshTrigger }) => {
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger }) => {
   const {
     reservations,
     loading: reservationsLoading,
@@ -276,6 +278,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
         >
           <option value="TOUS">Tous</option>
           <option value="CONFIRMEE">Confirmées</option>
+          <option value="CHECKED_IN">Check-in</option>
           <option value="EN_COURS">En cours</option>
           <option value="TERMINEE">Terminées</option>
           <option value="ANNULEE">Annulées</option>
@@ -378,8 +381,20 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                         Valider remise
                       </button>
                     )}
-                    {/* Bouton Encaisser dynamique */}
-                    {onEncaisser && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
+                    {/* Bouton Check-in - Only show for confirmed reservations */}
+                    {onCheckIn && res.statut === 'CONFIRMEE' && (
+                      <button
+                        type="button"
+                        onClick={() => onCheckIn(res)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs rounded-lg transition-colors font-medium mr-1"
+                        title="Check-in du client"
+                      >
+                        <UserCheck size={12} />
+                        <span className="hidden sm:inline">Check-in</span>
+                      </button>
+                    )}
+                    {/* Bouton Encaisser dynamique - Only show after check-in */}
+                    {onEncaisser && (res.statut === 'CHECKED_IN' || res.statut === 'EN_COURS') && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
                       <button
                         type="button" // AJOUTÉ : Empêche le rechargement
                         onClick={() => {

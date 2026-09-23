@@ -197,6 +197,21 @@ const HotelPage: React.FC = () => {
     setPaymentMethod(res.moyen_paiement || 'ESPECES');
   };
 
+  // Check-in logic: Change status from CONFIRMEE to CHECKED_IN
+  const handleCheckIn = async (res: Reservation) => {
+    try {
+      setIsLoading(true);
+      await reservationService.updateReservationStatus(res.id, 'CHECKED_IN');
+      await Promise.all([refreshRooms(), loadReservations()]);
+      setDataRefreshKey((prev) => prev + 1);
+    } catch (error: any) {
+      console.error("Erreur lors du check-in", error);
+      alert(error?.response?.data?.message || "Erreur lors du check-in de la réservation.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const confirmEncaissement = async () => {
     if (!paymentReservation) return;
     try {
@@ -378,6 +393,7 @@ const HotelPage: React.FC = () => {
                 setIsReservationModalOpen(true);
               }}
               onEncaisser={handleEncaisser}
+              onCheckIn={handleCheckIn}
               refreshTrigger={dataRefreshKey}
             />
           </div>
