@@ -31,7 +31,6 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [categorySearchTerm, setCategorySearchTerm] = useState('');
-  const [showAllCategories, setShowAllCategories] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -54,6 +53,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
         quantite: 1,
         is_consumable: false,
       });
+      setCategorySearchTerm('');
     }
     setErrors({});
   }, [initialData, isOpen]);
@@ -153,40 +153,30 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Catégorie</label>
             <div className="relative">
-              <input
-                type="text"
+              <select
                 value={formData.categorie}
-                onChange={(e) => {
-                  setFormData({ ...formData, categorie: e.target.value });
-                  setCategorySearchTerm(e.target.value);
-                  setShowAllCategories(true);
-                }}
-                onFocus={() => setShowAllCategories(true)}
+                onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
                 className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-                placeholder="Catégorie (ex: Électronique, Mobilier...)"
                 disabled={isSubmitting}
-              />
-              {showAllCategories && categories.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg max-h-40 overflow-y-auto">
-                  {categories
-                    .filter(cat => 
-                      categorySearchTerm === '' || 
-                      cat.toLowerCase().includes(categorySearchTerm.toLowerCase())
-                    )
-                    .map(cat => (
-                      <div
-                        key={cat}
-                        onClick={() => {
-                          setFormData({ ...formData, categorie: cat });
-                          setCategorySearchTerm(cat);
-                          setShowAllCategories(false);
-                        }}
-                        className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-sm text-white"
-                      >
-                        {cat}
-                      </div>
-                    ))}
-                </div>
+              >
+                <option value="">Sélectionner une catégorie</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+                <option value="new">-- Nouvelle catégorie --</option>
+              </select>
+              {formData.categorie === 'new' && (
+                <input
+                  type="text"
+                  value={categorySearchTerm}
+                  onChange={(e) => {
+                    setCategorySearchTerm(e.target.value);
+                    setFormData({ ...formData, categorie: e.target.value });
+                  }}
+                  className="w-full mt-2 px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
+                  placeholder="Nom de la nouvelle catégorie"
+                  disabled={isSubmitting}
+                />
               )}
             </div>
           </div>
