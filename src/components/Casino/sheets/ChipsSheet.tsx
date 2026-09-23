@@ -84,7 +84,7 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ date, chips, players, ra
     <section><SheetTitle title="Fiche Poker Night — jetons" subtitle="Comptage de départ et de fermeture." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['previous', 'opening', 'closing']} headers={['Valeur des jetons', 'Total de la veille', 'Valeur départ', 'Total fermeture']} /><div className="grid gap-2 mt-3 sm:grid-cols-2"><Stat label="VALEUR DÉPART" value={openingTotal} />
     <Stat label="VALEUR FERMETURE" value={closingTotal} /></div></section>
     <section><SheetTitle title="Total des prélèvements" subtitle="Nombre de jetons prélevés pour chaque valeur." /><ChipTable chips={chips} onUpdate={onUpdate} fields={['withdrawn']} headers={['Valeur des jetons', 'Nombre de jetons', 'Valeur totale']} /></section>
-    <RackCheckSection date={date} checks={rackChecks} players={players} openingTotal={openingTotal} onChange={onRackChecksChange} />
+    <RackCheckSection date={date} checks={rackChecks} players={players} openingTotal={openingTotal} cashExpected={getCashExpected(players)} onChange={onRackChecksChange} />
     <section>
       <SheetTitle title="Horaires de la session" subtitle="L'heure du premier joueur est automatique; l'heure de fin de jeu est à saisir." />
       <SessionTimeTable firstArrival={firstArrival} endGameTime={endGameTime} withdrawnTotal={withdrawnTotal} onEndGameTimeChange={onEndGameTimeChange} />
@@ -112,7 +112,33 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ date, chips, players, ra
   );
 };
 
-const RackCheckSection: React.FC<{ date: string; checks: RackCheck[]; players: PlayerLine[]; openingTotal: number; onChange: (checks: RackCheck[]) => void }> = ({ date, checks, players, openingTotal, onChange }) => {
+const normalizePaymentOption = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const parsePlayerPayments = (value: string): Array<{ option: string; amount: number }> => {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (typeof entry === 'string') return [{ option: entry, amount: 0 }];
+      return entry && typeof entry.option === 'string' ? [{ option: entry.option, amount: Number(entry.amount) || 0 }] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+const getCashExpected = (players: PlayerLine[]) => players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index).reduce((total, player) => {
+  const playerId = player.ficheId ?? player.id;
+  const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
+  const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+  const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
+  const result = Math.abs(cashing - totalCaves);
+  const cashPayments = parsePlayerPayments(player.resultPaymentOptions).filter((payment) => ['espece', 'especes', 'cash'].includes(normalizePaymentOption(payment.option)));
+  if (!cashPayments.length) return total;
+  const explicitAmount = cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
+  return total + (explicitAmount > 0 ? explicitAmount : cashPayments.length === 1 ? result : 0);
+}, 0);
+
+const RackCheckSection: React.FC<{ date: string; checks: RackCheck[]; players: PlayerLine[]; openingTotal: number; cashExpected: number; onChange: (checks: RackCheck[]) => void }> = ({ date, checks, players, openingTotal, cashExpected, onChange }) => {
   const caveTotal = players.reduce((total, player) => total + parseCasinoAmount(player.caves) * parseCasinoAmount(player.amount), 0);
   const movementAmount = (check: RackCheck) => {
     if (check.type === 'Retour croupier' || check.type === 'Rack check entrée') return 220000;
@@ -121,7 +147,11 @@ const RackCheckSection: React.FC<{ date: string; checks: RackCheck[]; players: P
     return 0;
   };
   const isRackCheck = (check: RackCheck) => check.type === 'Rack check entrée' || check.type === 'Rack check sortie' || check.type === 'Rack check périodique' || check.type === 'Retour croupier' || check.type === 'Sortie croupier';
-  const expectedForCheck = (check: RackCheck, index: number) => isRackCheck(check) ? 220000 : expectedByCheck(index);
+  const expectedForCheck = (check: RackCheck, index: number) => check.type === 'Cash check' ? cashExpected : isRackCheck(check) ? 220000 : expectedByCheck(index);
+  useEffect(() => {
+    const nextChecks = checks.map((check) => check.type === 'Cash check' && !check.verified && check.expected !== cashExpected ? { ...check, expected: cashExpected } : check);
+    if (nextChecks.some((check, index) => check !== checks[index])) onChange(nextChecks);
+  }, [cashExpected, checks, onChange]);
   const expectedByCheck = (index: number) => Math.max(0, openingTotal - caveTotal + checks.slice(0, index + 1).reduce((total, check) => total + movementAmount(check), 0));
   const addCheck = (type: RackCheck['type']) => onChange([...checks, { id: Date.now(), date, time: new Date().toTimeString().slice(0, 5), type, expected: isRackCheck({ type } as RackCheck) ? 220000 : 0, actual: '', missing: '', verified: false, amount: type === 'Rajout bureau' ? '' : undefined, variance: '', croupierEntrant: '', croupierSortant: '', validatedBy: '', validatedAt: '' }]);
   const updateCheck = (id: number, changes: Partial<RackCheck>) => onChange(checks.map((check) => {

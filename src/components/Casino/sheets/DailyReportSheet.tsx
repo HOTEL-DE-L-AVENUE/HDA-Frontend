@@ -18,6 +18,8 @@ const uniquePlayers = (players: PlayerLine[]) => players.filter((player, index, 
   lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index
 );
 
+const playerDisplayName = (player: PlayerLine) => player.surnom?.trim() || player.name.trim() || `Joueur ${player.ficheId ?? player.id}`;
+
 const formatAmount = (value: number) => {
   const absoluteValue = Math.abs(value);
   if (absoluteValue >= 1_000_000) {
@@ -126,12 +128,12 @@ const readFinalCategoryValue = (finals: Record<string, Record<string, string>>, 
 };
 
 export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
-  const reportPlayers = uniquePlayers(players).filter((player) => player.name.trim() || playerAmount(player, players) > 0);
+  const reportPlayers = uniquePlayers(players).filter((player) => player.surnom?.trim() || player.name.trim() || playerAmount(player, players) > 0);
   const listedPlayers = reportPlayers.filter((player) => !playerHasFinalSignature(player, players));
   const totalCaves = listedPlayers.reduce((total, player) => total + playerAmount(player, players), 0);
   const playersOut = reportPlayers
     .filter((player) => playerHasFinalSignature(player, players) && playerResult(player, players) < 0)
-    .map((player) => `${formatAmount(Math.abs(playerResult(player, players)))} (${player.name.trim() || `Joueur ${player.ficheId ?? player.id}`})`);
+    .map((player) => `${formatAmount(Math.abs(playerResult(player, players)))} (${playerDisplayName(player)})`);
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
   const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
   const rackChecksReport = rackChecks.filter((check) => check.type.startsWith('Rack check') || check.type === 'Retour croupier' || check.type === 'Sortie croupier');
@@ -145,7 +147,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
       const amount = payment.amount > 0 ? payment.amount : Math.abs(result);
       if (!amount) return;
       const signedAmount = result < 0 ? -amount : amount;
-      const playerName = player.name.trim() || `Joueur ${player.ficheId ?? player.id}`;
+      const playerName = playerDisplayName(player);
       const entries = paymentDetails.get(category) || [];
       entries.push(`${playerName} : ${formatAmount(signedAmount)}`);
       paymentDetails.set(category, entries);
@@ -216,7 +218,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     ...listedPlayers.map((player) => {
       const amount = playerAmount(player, players);
       const status = player.payment === 'Non payé' || player.paymentMethod.toLowerCase() === 'np' ? ' np' : '';
-      return `${player.name.trim() || `Joueur ${player.ficheId ?? player.id}`} : ${formatAmount(amount)}${status}`;
+      return `${playerDisplayName(player)} : ${formatAmount(amount)}${status}`;
     }),
     '',
     '# Sit out :',
@@ -232,7 +234,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     ...(observationEntries.length ? observationEntries : ['Aucune observation.']),
     '',
     '# Cash checks horaires :',
-    ...(cashChecks.length ? cashChecks.map((check) => `${check.date || date} ${check.time} — attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · écart ${formatAmount(parseCasinoAmount(check.variance))} · ${check.verified ? 'validé par le caissier' : 'en attente de validation'}`) : ['Aucun cash check enregistré.']),
+    ...(cashChecks.length ? cashChecks.map((check) => `${check.date || date} ${check.time} — croupier entrant : ${check.croupierEntrant || 'non renseigné'} · croupier sortant : ${check.croupierSortant || 'non renseigné'} · responsable : ${check.validatedBy || 'non renseigné'} · attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · écart ${formatAmount(parseCasinoAmount(check.variance))} · ${check.verified ? 'validé' : 'en attente de validation'}`) : ['Aucun cash check enregistré.']),
     '',
     '# Rack checks :',
     ...(rackChecksReport.length ? rackChecksReport.map((check) => `${check.date || date} ${check.time} — ${check.type} · entrant : ${check.croupierEntrant || 'non renseigné'} · sortant : ${check.croupierSortant || 'non renseigné'} · attendu ${formatAmount(check.expected)} · constaté ${check.actual ? formatAmount(parseCasinoAmount(check.actual)) : 'non renseigné'} · manque ${formatAmount(parseCasinoAmount(check.missing))} · ${check.verified ? `validé par ${check.validatedBy || 'le responsable'}` : 'en attente de validation'}`) : ['Aucun rack check enregistré.']),
