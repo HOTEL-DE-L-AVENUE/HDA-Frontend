@@ -4,7 +4,7 @@ import { formatCurrency } from '../../utils/data';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
-import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign } from 'lucide-react';
+import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/permissions';
@@ -93,6 +93,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const [pokerOrders, setPokerOrders] = useState<Record<string, BarCommande['items']>>({});
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingDeleteOrder, setPendingDeleteOrder] = useState<BarCommande | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const loadTables = async () => {
@@ -155,7 +156,7 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const handleOpenEditModal = (commande: BarCommande) => {
-    const specialMode = commande.observation?.toUpperCase();
+    const specialMode = commande.observation?.trim().toUpperCase();
     const location = specialMode === 'POCKER'
       ? { kind: 'special' as const, label: 'Pocker gratuit', tableId: 0 }
       : specialMode === 'CHAMBRE'
@@ -330,10 +331,9 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const handleDeleteCommande = async (commande: BarCommande) => {
-    if (!window.confirm(`Supprimer définitivement la commande #${commande.id} ?`)) return;
-
     try {
       setDeletingId(commande.id);
+      setPendingDeleteOrder(null);
       await onDeleteCommande?.(commande.id);
       setFeedback({ type: 'success', message: 'Commande supprimée avec succès.' });
     } catch (error) {
@@ -342,6 +342,10 @@ export const BarCommandeView: React.FC<Props> = ({
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleRequestDeleteCommande = (commande: BarCommande) => {
+    setPendingDeleteOrder(commande);
   };
 
   const handleStatusChange = async (commandeId: number, nouveauStatut: BarCommande['statut']) => {
@@ -448,7 +452,8 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const getOrderLocationLabel = (commande: BarCommande) => {
-    if (getOrderSpecialType(commande) || commande.table === 0) return 'Emplacement spécial';
+    if (getOrderSpecialType(commande)) return getOrderSpecialType(commande);
+    if (commande.table === 0) return 'Gratuit';
     return tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
   };
 
@@ -456,18 +461,22 @@ export const BarCommandeView: React.FC<Props> = ({
     {
       key: 'table',
       label: 'Table',
-      render: (commande: BarCommande) => (
-        <div className="flex items-center gap-3">
-          <div className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-accent px-2 text-center text-xs font-bold text-black shadow-[0_0_20px_rgba(234,179,8,0.25)]">
-            {getOrderLocationLabel(commande)}
+      render: (commande: BarCommande) => {
+        const specialType = getOrderSpecialType(commande);
+        const locationLabel = getOrderLocationLabel(commande);
+        return (
+          <div className="flex items-center gap-3">
+            <div className={`flex min-h-10 items-center justify-center rounded-xl px-2 text-center text-xs font-bold shadow-[0_0_20px_rgba(234,179,8,0.25)] ${specialType ? 'min-w-[88px] bg-accent text-black' : 'min-w-10 bg-accent text-black'}`}>
+              <span className="leading-tight">{locationLabel}</span>
+            </div>
+            <div>
+              <p className="font-semibold text-primary">{commande.client}</p>
+              <p className="text-xs text-slate-500">{commande.nombre_personnes || 1} pers.</p>
+              <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-primary">{commande.client}</p>
-            <p className="text-xs text-slate-500">{getOrderSpecialType(commande) || getOrderLocationLabel(commande)} · {commande.nombre_personnes || 1} pers.</p>
-            <p className="text-[11px] text-accent">{commande.moyen_paiement === 'TPE' ? 'TPE' : commande.moyen_paiement === 'CREDIT' ? 'Crédit' : commande.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : commande.moyen_paiement === 'MVOLA' ? 'MVola' : commande.moyen_paiement === 'GRATUIT' ? 'Gratuit' : 'Espèces'}</p>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: 'items',
@@ -571,7 +580,7 @@ export const BarCommandeView: React.FC<Props> = ({
             )}
             <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
             {canDeleteCommande && (
-              <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => void handleDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
+              <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => handleRequestDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
                 {deletingId === commande.id ? '...' : 'Supprimer'}
               </Button>
             )}
@@ -844,6 +853,28 @@ export const BarCommandeView: React.FC<Props> = ({
             <Button type="button" onClick={() => void handleConfirmPayment()} disabled={updatingId === paymentOrder?.id} className="flex-1">
               <CheckCircle2 size={16} />
               {updatingId === paymentOrder?.id ? 'Confirmation...' : 'Confirmer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={pendingDeleteOrder !== null} onClose={() => setPendingDeleteOrder(null)} title="Confirmer la suppression" size="sm">
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+            <AlertTriangle className="mt-0.5 shrink-0 text-red-400" size={20} />
+            <div>
+              <p className="font-semibold text-primary">Supprimer cette commande ?</p>
+              <p className="mt-1 text-sm leading-relaxed text-secondary">
+                Cette action supprimera définitivement la commande de {pendingDeleteOrder?.client || 'ce client'} et ses articles.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={() => setPendingDeleteOrder(null)} className="rounded-lg px-4">
+              Annuler
+            </Button>
+            <Button variant="danger" type="button" onClick={() => pendingDeleteOrder && void handleDeleteCommande(pendingDeleteOrder)} disabled={pendingDeleteOrder !== null && deletingId === pendingDeleteOrder.id} className="rounded-lg px-4">
+              {pendingDeleteOrder !== null && deletingId === pendingDeleteOrder.id ? 'Suppression...' : 'Supprimer'}
             </Button>
           </div>
         </div>
