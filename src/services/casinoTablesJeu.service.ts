@@ -104,6 +104,13 @@ export interface CasinoRegisteredPlayer {
   prenom?: string | null;
   surnom?: string | null;
   whatsapp?: string | null;
+  identite_type?: string | null;
+  identite_numero?: string | null;
+  identite_nom_complet?: string | null;
+  identite_date_emission?: string | null;
+  identite_verifiee?: boolean | number;
+  identite_fichier_url?: string | null;
+  identite_fichiers_urls?: string | null;
   telephone?: string | null;
   date_inscription?: string | null;
   depot: number | string;
