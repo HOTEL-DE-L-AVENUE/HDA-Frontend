@@ -38,7 +38,40 @@ const formatDate = (value?: string) => {
   });
 };
 
-const dateSearchValue = (value?: string) => value ? new Date(value).toLocaleDateString('fr-FR') : '';
+const parseFrenchDate = (value?: string) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const direct = new Date(trimmed);
+  return Number.isNaN(direct.getTime()) ? null : direct;
+};
+
+const dateSearchValue = (value?: string) => {
+  const parsed = parseFrenchDate(value);
+  return parsed ? parsed.toLocaleDateString('fr-FR') : '';
+};
+
+const dateMatchesQuery = (value: string | undefined, query: string) => {
+  if (!query) return true;
+  const safeQuery = query.trim().toLowerCase();
+  if (!safeQuery) return true;
+
+  const candidateValues = [
+    value,
+    dateSearchValue(value),
+    value ? new Date(value).toLocaleDateString('fr-FR') : '',
+  ].filter(Boolean) as string[];
+
+  return candidateValues.some((candidate) => candidate.toLowerCase().includes(safeQuery));
+};
 
 const cashLocation = (order: CashHistoryOrder) => {
   const kind = order.observation?.trim().toUpperCase();
@@ -172,15 +205,15 @@ export const BarHistory: React.FC = () => {
   const normalizedQuery = query.trim().toLocaleLowerCase('fr-FR');
   const filteredPaf = useMemo(() => pafClosures.filter((closure) => {
     const haystack = [closure.reference, closure.date, formatDate(closure.dateCloture), dateSearchValue(closure.dateCloture)].join(' ').toLocaleLowerCase('fr-FR');
-    return haystack.includes(normalizedQuery);
+    return haystack.includes(normalizedQuery) || dateMatchesQuery(closure.dateCloture, normalizedQuery);
   }), [pafClosures, normalizedQuery]);
   const filteredCash = useMemo(() => cashOrders.filter((order) => {
     const haystack = [cashLocation(order), order.client, formatDate(order.cloture_at || order.created_at), dateSearchValue(order.cloture_at || order.created_at), order.moyen_paiement].join(' ').toLocaleLowerCase('fr-FR');
-    return haystack.includes(normalizedQuery);
+    return haystack.includes(normalizedQuery) || dateMatchesQuery(order.cloture_at || order.created_at, normalizedQuery);
   }), [cashOrders, normalizedQuery]);
   const filteredRoomCharges = useMemo(() => roomCharges.filter((entry) => {
     const haystack = [entry.roomLabel, entry.client, entry.status, formatDate(entry.date), String(entry.total)].join(' ').toLocaleLowerCase('fr-FR');
-    return haystack.includes(normalizedQuery);
+    return haystack.includes(normalizedQuery) || dateMatchesQuery(entry.date, normalizedQuery);
   }), [roomCharges, normalizedQuery]);
 
   return (
@@ -191,7 +224,11 @@ export const BarHistory: React.FC = () => {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"><History size={22} /></div>
             <div><h2 className="font-semibold text-primary">Historique</h2><p className="mt-1 text-sm text-muted">Archives conservées après la clôture des PAF et de la caisse.</p></div>
           </div>
-          <div className="relative w-full sm:w-80"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="Rechercher par date, client ou table" className="w-full rounded-xl border border-base bg-surface-2 py-2.5 pl-9 pr-3 text-sm text-primary outline-none focus:border-accent" /></div>
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="Rechercher par date , client ou table" className="w-full rounded-xl border border-base bg-surface-2 py-2.5 pl-10 pr-3 text-sm text-primary outline-none focus:border-accent" />
+            <p className="mt-2 text-right text-[11px] text-muted">Format accepté : 29/09/2026</p>
+          </div>
         </div>
         <div className="mt-5 flex w-fit rounded-xl border border-base bg-surface-2 p-1">
           <button type="button" onClick={() => setTab('paf')} className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'paf' ? 'bg-accent text-black' : 'text-muted hover:text-primary'}`}>Historique PAF</button>
