@@ -12,6 +12,7 @@ import { MenuTab } from '../components/Restaurant/Tabs/MenuTab';
 import { StockTab } from '../components/Restaurant/Tabs/StockTab';
 import { CaisseTab } from '../components/Restaurant/Tabs/CaisseTab';
 import { HistoryTab } from '../components/Restaurant/Tabs/HistoryTab';
+import { RestaurantReports } from '../components/Restaurant/RestaurantReports';
 import { OrderModal } from '../components/Restaurant/Modals/OrderModal';
 import { ProductModal } from '../components/Restaurant/Modals/ProductModal';
 import { ClientModal } from '../components/Restaurant/Modals/ClientModal';
@@ -72,6 +73,7 @@ export const RestaurantPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [restaurantStock, setRestaurantStock] = useState<Array<{ quantite: number; unite?: string }>>([]);
   const ordersRequestVersion = useRef(0);
 
   // Modales
@@ -92,7 +94,7 @@ export const RestaurantPage: React.FC = () => {
   const fetchOrders = async () => {
     const requestVersion = ++ordersRequestVersion.current;
     try {
-      const res = await restaurantService.getOrders();
+      const res = await restaurantService.getOrders({ source_module: 'RESTAURANT' });
       if (requestVersion === ordersRequestVersion.current && res.success && Array.isArray(res.data)) {
         setOrders(res.data as Order[]);
       }
@@ -125,17 +127,21 @@ export const RestaurantPage: React.FC = () => {
       restaurantService.getProducts({ actif: true }),
       restaurantService.getCategories(),
       clientService.getClients(),
+      restaurantService.getStocks(),
     ])
-      .then(([productsRes, categoriesRes, clientsData]) => {
+      .then(([productsRes, categoriesRes, clientsData, stockRes]) => {
         setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
         setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
         setClients(Array.isArray(clientsData) ? clientsData as Client[] : []);
+        const stockData = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: Array<{ quantite: number; unite?: string }> }).data;
+        setRestaurantStock(Array.isArray(stockData) ? stockData : []);
       })
       .catch(error => {
         console.error('Erreur lors du chargement des données Restaurant', error);
         setProducts([]);
         setCategories([]);
         setClients([]);
+        setRestaurantStock([]);
       });
   }, []);
 
@@ -558,6 +564,7 @@ export const RestaurantPage: React.FC = () => {
           />
         )}
         {activeTab === 'historique' && <HistoryTab orders={orders} />}
+        {activeTab === 'rapports' && <RestaurantReports orders={orders} stock={restaurantStock} />}
       </div>
 
       {/* Modales */}
