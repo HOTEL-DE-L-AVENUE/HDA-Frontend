@@ -9,19 +9,27 @@ interface Props {
   stock: BarStockItem[];
 }
 
+const defaultPersonnel = {
+  gerante: 'Mme Malala',
+  hotesse: '',
+  cuisine: '',
+  accueil: '',
+  securite: '',
+};
+
+const defaultManual = { gratuit: '', depense: '', bouteille: '', pourboire: '' };
+
 export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
-  const ventes = commandes.filter((commande) => commande.statut === 'Encaissée');
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const commandesDuJour = useMemo(() => commandes.filter((commande) => {
+    const commandeDate = String(commande.created_at || '').slice(0, 10);
+    return commandeDate === reportDate;
+  }), [commandes, reportDate]);
+  const ventes = commandesDuJour.filter((commande) => commande.statut === 'Encaissée');
   const chiffreAffaires = ventes.reduce((total, commande) => total + commande.total, 0);
   const articlesVendus = ventes.reduce((total, commande) => total + commande.items.reduce((sum, item) => sum + item.quantite, 0), 0);
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
-  const [personnel, setPersonnel] = useState({
-    gerante: 'Mme Malala',
-    hotesse: '',
-    cuisine: '',
-    accueil: '',
-    securite: '',
-  });
-  const [manual, setManual] = useState({ gratuit: '', depense: '', bouteille: '', pourboire: '' });
+  const [personnel, setPersonnel] = useState(defaultPersonnel);
+  const [manual, setManual] = useState(defaultManual);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -30,6 +38,10 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
 
   useEffect(() => {
     let active = true;
+    setPersonnel(defaultPersonnel);
+    setManual(defaultManual);
+    setSavedReportText('');
+    setCopied(false);
     setIsLoadingReport(true);
     setSaveMessage(null);
     void barService.getBarDailyReport(reportDate)
@@ -49,8 +61,8 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
     const amountByPayment = (method: string) => ventes
       .filter((order) => String(order.moyen_paiement || 'ESPECES').toUpperCase() === method)
       .reduce((sum, order) => sum + order.total, 0);
-    const freeOrders = commandes.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
-    const unpaidOrders = commandes.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
+    const freeOrders = commandesDuJour.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
+    const unpaidOrders = commandesDuJour.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
     return {
       c1: amountByPayment('ESPECES'),
       mvola: amountByPayment('MVOLA'),
@@ -65,7 +77,7 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
       credit: amountByPayment('CREDIT'),
       bouteilles: stock.filter((item) => /bouteille/i.test(item.unite || '')).reduce((sum, item) => sum + item.quantite, 0),
     };
-  }, [commandes, stock, ventes]);
+  }, [commandesDuJour, stock, ventes]);
 
   const saveReport = async () => {
     setIsSaving(true);
