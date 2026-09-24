@@ -478,17 +478,20 @@ export const BarCommandeView: React.FC<Props> = ({
       return;
     }
 
-    const unavailableItem = selectedItems.find((item) => {
+    const stockIssue = selectedItems.map((item) => {
       const productId = Number(item.product_id ?? 0);
-      if (!Number.isFinite(productId) || productId <= 0) {
-        return false;
+      const stock = productId > 0 ? stockMap[productId] : undefined;
+      const available = stock ? Number(stock.quantite) : 0;
+      if (!productId || !stock) {
+        return `${item.nom} n'a pas de stock configuré. Ajoutez ce produit au stock du bar.`;
       }
-      const available = stockMap[productId]?.quantite;
-      return !Number.isFinite(available) || Number(item.quantite) > available;
-    });
-    if (unavailableItem) {
-      const available = stockMap[unavailableItem.product_id || 0]?.quantite || 0;
-      setFeedback({ type: 'error', message: 'Stock insuffisant pour ' + unavailableItem.nom + '. Disponible : ' + available + '.' });
+      if (!Number.isFinite(available) || Number(item.quantite) > available) {
+        return `Stock insuffisant pour ${item.nom}. Disponible : ${Number.isFinite(available) ? available : 0}.`;
+      }
+      return null;
+    }).find(Boolean);
+    if (stockIssue) {
+      setFeedback({ type: 'error', message: stockIssue });
       return;
     }
 
@@ -524,7 +527,11 @@ export const BarCommandeView: React.FC<Props> = ({
       resetModal();
     } catch (error) {
       console.error('Erreur commande bar:', error);
-      setFeedback({ type: 'error', message: isEditingOrder ? "La commande n'a pas pu être modifiée. Vérifiez les données puis réessayez." : "La commande n'a pas pu être créée. Vérifiez les données puis réessayez." });
+      const apiError = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
+      const fallbackMessage = isEditingOrder
+        ? "La commande n'a pas pu être modifiée. Vérifiez les données puis réessayez."
+        : "La commande n'a pas pu être créée. Vérifiez les données puis réessayez.";
+      setFeedback({ type: 'error', message: apiError.response?.data?.error?.message || apiError.message || fallbackMessage });
     }
   };
 

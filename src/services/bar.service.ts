@@ -109,6 +109,24 @@ export const getBarHistory = async () => {
   const response = await get<BarOrderResponse[] | { data?: BarOrderResponse[] }>('/history');
   return Array.isArray(response) ? response : response.data ?? [];
 };
+export type BarDailyReport = {
+  id: number;
+  reportDate: string;
+  personnel: Record<string, string>;
+  manual: Record<string, string>;
+  metrics: Record<string, number>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+export const getBarDailyReport = async (date: string): Promise<BarDailyReport | null> => {
+  const response = await get<BarDailyReport | null | { data?: BarDailyReport | null }>(`/reports/${date}`);
+  if (response && typeof response === 'object' && 'data' in response) return response.data ?? null;
+  return response as BarDailyReport | null;
+};
+export const saveBarDailyReport = async (data: Omit<BarDailyReport, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const response = await post<BarDailyReport | { data?: BarDailyReport }>('/reports', data);
+  return response && typeof response === 'object' && 'data' in response ? response.data : response;
+};
 export const createBarOrder = (data: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }>; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) =>
   post<{ id: number; client: string; table: number; statut: string; total: number; items: Array<{ nom: string; quantite: number; prix: number }> }>('/orders', data);
 export const updateBarOrder = (id: number, data: { client?: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }>; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) =>
@@ -123,7 +141,7 @@ const barService = {
   getBarCashiers, getBarCashierById, createBarCashier, updateBarCashier, deleteBarCashier,
   openBarSession, closeBarSession, getBarSessions, getBarSessionById, getBarOpenSessions, getBarSessionStats, getBarCashierStatus,
   getBarProducts, getBarProductById, createBarProduct, updateBarProduct, deleteBarProduct,
-  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, getBarHistory, createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
+  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, getBarHistory, getBarDailyReport, saveBarDailyReport, createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
 };
 
 export default barService;

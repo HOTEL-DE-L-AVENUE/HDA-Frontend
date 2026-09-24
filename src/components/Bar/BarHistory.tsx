@@ -276,8 +276,7 @@ export const BarHistory: React.FC = () => {
           </div>
           <div className="relative w-full sm:w-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="Rechercher par date , client ou table" className="w-full rounded-xl border border-base bg-surface-2 py-2.5 pl-10 pr-3 text-sm text-primary outline-none focus:border-accent" />
-            <p className="mt-2 text-right text-[11px] text-muted">Format accepté : 29/09/2026</p>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} type="date" aria-label="Rechercher par date" className="w-full rounded-xl border border-base bg-surface-2 px-3 py-2.5 text-sm text-primary outline-none focus:border-accent" />
           </div>
         </div>
         <div className="mt-5 flex w-fit rounded-xl border border-base bg-surface-2 p-1">
