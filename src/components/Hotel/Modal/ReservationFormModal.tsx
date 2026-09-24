@@ -192,13 +192,18 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         (1000 * 60 * 60 * 24)
       );
       if (days > 0) {
-        let total = days * (room.prix_nuit || 0);
+        let total = 0;
         
-        // For Booking.com, use manual price if set, otherwise use calculated
+        // For Booking.com, use manual price per night, multiply by nights, then convert to Ariary
         if (formData.type_reservation === 'BOOKING' && (formData.manual_price || 0) > 0) {
-          // Convert EUR to Ariary using exchange rate
+          // Price per night × number of nights = total EUR
           const rate = parseFloat(exchangeRate) || 39.76;
-          total = (formData.manual_price || 0) * rate;
+          const totalEur = (formData.manual_price || 0) * days;
+          // Convert total EUR to Ariary
+          total = totalEur * rate;
+        } else {
+          // For On-site, use room's normal price
+          total = days * (room.prix_nuit || 0);
         }
         
         // Add laundry price if included
@@ -521,6 +526,38 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Type de réservation - moved to top */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-primary">
+                <Calendar size={14} className="inline mr-1.5" />
+                Type de réservation *
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type_reservation: 'BOOKING' }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${formData.type_reservation === 'BOOKING' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Booking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type_reservation: 'ON_SITE' }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${formData.type_reservation === 'ON_SITE' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Sur place
+                </button>
+              </div>
+            </div>
+
             {/* Client avec bouton Ajouter et recherche */}
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -611,9 +648,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 <option value="">Sélectionner une chambre</option>
                 {rooms.map(room => (
                   <option key={room.id} value={room.id}>
-                    Chambre {room.numero} - {room.room_type?.nom || 'Standard'} - {formatCurrency(room.prix_nuit || 0)}/nuit
-                    {room.statut === 'OCCUPEE' && ' (Occupée)'}
-                    {room.statut === 'RESERVEE' && ' (Réservée)'}
+                    Chambre {room.numero} - {room.room_type?.nom || 'Standard'}{formData.type_reservation === 'ON_SITE' ? ` - ${formatCurrency(room.prix_nuit || 0)}/nuit` : ''}{room.statut === 'OCCUPEE' && ' (Occupée)'}{room.statut === 'RESERVEE' && ' (Réservée)'}
                   </option>
                 ))}
               </select>
@@ -679,38 +714,6 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
               </div>
             </div>
 
-            {/* Type de réservation */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-primary">
-                <Calendar size={14} className="inline mr-1.5" />
-                Type de réservation
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormData(prev => ({ ...prev, type_reservation: 'BOOKING' }));
-                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
-                  }}
-                  className={`p-2 rounded-lg border ${formData.type_reservation === 'BOOKING' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
-                  disabled={isSubmitting}
-                >
-                  Booking
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormData(prev => ({ ...prev, type_reservation: 'ON_SITE' }));
-                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
-                  }}
-                  className={`p-2 rounded-lg border ${formData.type_reservation === 'ON_SITE' ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
-                  disabled={isSubmitting}
-                >
-                  Sur place
-                </button>
-              </div>
-            </div>
-
             {/* Manual pricing for Booking */}
             {formData.type_reservation === 'BOOKING' && (
               <div className="space-y-3">
@@ -726,7 +729,22 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                     onChange={(e) => {
                       const newPrice = parseFloat(e.target.value) || 0;
                       setFormData(prev => ({ ...prev, manual_price: newPrice }));
-                      calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                      // Force calculation with current exchange rate
+                      const currentRate = parseFloat(exchangeRate) || 39.76;
+                      const currentNights = formData.date_arrivee && formData.date_depart ? 
+                        Math.ceil((new Date(formData.date_depart).getTime() - new Date(formData.date_arrivee).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                      if (currentNights > 0 && newPrice > 0) {
+                        const totalEur = newPrice * currentNights;
+                        const totalAr = totalEur * currentRate;
+                        let finalTotal = totalAr;
+                        if (formData.laundry_included) {
+                          finalTotal += formData.laundry_price || 0;
+                        }
+                        if (discountMode === 'discount' && discountPercent > 0) {
+                          finalTotal = finalTotal * (1 - discountPercent / 100);
+                        }
+                        setFormData(prev => ({ ...prev, montant_total: finalTotal }));
+                      }
                     }}
                     className="input-field w-full text-sm py-2.5 rounded-lg"
                     min="0"
@@ -745,7 +763,22 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                     value={exchangeRate}
                     onChange={(e) => {
                       setExchangeRate(e.target.value);
-                      calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                      // Force recalculation with new exchange rate
+                      const newRate = parseFloat(e.target.value) || 39.76;
+                      const currentNights = formData.date_arrivee && formData.date_depart ? 
+                        Math.ceil((new Date(formData.date_depart).getTime() - new Date(formData.date_arrivee).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                      if (currentNights > 0 && (formData.manual_price || 0) > 0) {
+                        const totalEur = (formData.manual_price || 0) * currentNights;
+                        const totalAr = totalEur * newRate;
+                        let finalTotal = totalAr;
+                        if (formData.laundry_included) {
+                          finalTotal += formData.laundry_price || 0;
+                        }
+                        if (discountMode === 'discount' && discountPercent > 0) {
+                          finalTotal = finalTotal * (1 - discountPercent / 100);
+                        }
+                        setFormData(prev => ({ ...prev, montant_total: finalTotal }));
+                      }
                     }}
                     className="input-field w-full text-sm py-2.5 rounded-lg"
                     min="0"
@@ -862,10 +895,14 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 <div className="flex justify-between"><span>Type</span><strong>{formData.type_reservation === 'BOOKING' ? 'Booking.com' : 'Sur place'}</strong></div>
                 {formData.type_reservation === 'BOOKING' && formData.manual_price > 0 && (
                   <>
-                    <div className="flex justify-between"><span>Prix Booking.com (€)</span><strong>{formData.manual_price.toFixed(2)} €</strong></div>
+                    <div className="flex justify-between"><span>Prix/nuit Booking.com (€)</span><strong>{formData.manual_price.toFixed(2)} €</strong></div>
+                    <div className="flex justify-between"><span>Total Booking.com (€)</span><strong>{(formData.manual_price * nights).toFixed(2)} €</strong></div>
                     <div className="flex justify-between"><span>Taux de change</span><strong>{exchangeRate} Ar/€</strong></div>
-                    <div className="flex justify-between"><span>Prix converti (Ar)</span><strong>{formatCurrency(formData.manual_price * parseFloat(exchangeRate))}</strong></div>
+                    <div className="flex justify-between"><span>Total converti (Ar)</span><strong>{formatCurrency(formData.manual_price * nights * parseFloat(exchangeRate))}</strong></div>
                   </>
+                )}
+                {formData.type_reservation !== 'BOOKING' && selectedRoom && nights > 0 && (
+                  <div className="flex justify-between"><span>Prix normal</span><strong>{formatCurrency(selectedRoom.prix_nuit || 0)}/nuit</strong></div>
                 )}
                 {formData.laundry_included && (
                   <div className="flex justify-between"><span>Blanchisserie</span><strong>{formatCurrency(formData.laundry_price || 0)}</strong></div>
