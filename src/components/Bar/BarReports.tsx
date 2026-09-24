@@ -58,26 +58,24 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
   }, [reportDate]);
 
   const metrics = useMemo(() => {
-    const amountByPayment = (method: string) => ventes
+    const ordersForDate = commandes.filter((order) => String(order.created_at || '').slice(0, 10) === reportDate);
+    const ventesForDate = ordersForDate.filter((order) => order.statut === 'Encaissée');
+    const amountByPayment = (method: string) => ventesForDate
       .filter((order) => String(order.moyen_paiement || 'ESPECES').toUpperCase() === method)
       .reduce((sum, order) => sum + order.total, 0);
-    const freeOrders = commandesDuJour.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
-    const unpaidOrders = commandesDuJour.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
+    const freeOrders = ordersForDate.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
+    const unpaidOrders = ordersForDate.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
     return {
       c1: amountByPayment('ESPECES'),
       mvola: amountByPayment('MVOLA'),
       tpe: amountByPayment('TPE'),
       gratuit: freeOrders.reduce((sum, order) => sum + order.total, 0),
-      gratuitDetails: freeOrders.map((order) => ({
-        name: order.client?.trim() || 'Client anonyme',
-        total: Number(order.total || 0),
-      })),
-      tableOccupee: new Set(ventes.map((order) => order.table).filter((table) => Number(table) > 0)).size,
+      tableOccupee: new Set(ventesForDate.map((order) => order.table).filter((table) => Number(table) > 0)).size,
       np: unpaidOrders.reduce((sum, order) => sum + order.total, 0),
       credit: amountByPayment('CREDIT'),
-      bouteilles: stock.filter((item) => /bouteille/i.test(item.unite || '')).reduce((sum, item) => sum + item.quantite, 0),
+      bouteilles: ordersForDate.length === 0 ? 0 : stock.filter((item) => /bouteille/i.test(item.unite || '')).reduce((sum, item) => sum + item.quantite, 0),
     };
-  }, [commandesDuJour, stock, ventes]);
+  }, [commandes, reportDate, stock]);
 
   const saveReport = async () => {
     setIsSaving(true);

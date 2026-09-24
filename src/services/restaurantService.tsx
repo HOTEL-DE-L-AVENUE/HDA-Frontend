@@ -51,6 +51,7 @@ export const getOrders = (params?: {
   client_id?: number;
   date_debut?: string;
   date_fin?: string;
+  source_module?: 'RESTAURANT';
 }) =>
   api.get<ApiResponse<Order[]>>('/api/restaurant/orders', { params }).then(res => res.data);
 
@@ -122,6 +123,22 @@ export const getCashierStatus = () =>
   api.get<ApiResponse<Cashier[]>>('/api/restaurant/cashier/status').then(res => res.data);
 
 // ==================== REPORTING ====================
+
+export type RestaurantDailyReport = {
+  id: number;
+  reportDate: string;
+  personnel: Record<string, string>;
+  manual: Record<string, string>;
+  metrics: Record<string, number>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export const getRestaurantDailyReport = (date: string) =>
+  api.get<ApiResponse<RestaurantDailyReport | null>>(`/api/restaurant/reports/${date}`).then(res => res.data.data ?? null);
+
+export const saveRestaurantDailyReport = (data: Omit<RestaurantDailyReport, 'id' | 'createdAt' | 'updatedAt'>) =>
+  api.post<ApiResponse<RestaurantDailyReport>>('/api/restaurant/reports', data).then(res => res.data.data);
 
 export const getStats = (params: { date_debut: string; date_fin: string }) =>
   api.get<ApiResponse<RestaurantStats>>('/api/restaurant/stats', { params }).then(res => res.data);
