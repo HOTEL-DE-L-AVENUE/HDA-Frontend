@@ -114,7 +114,7 @@ export type BarDailyReport = {
   reportDate: string;
   personnel: Record<string, string>;
   manual: Record<string, string>;
-  metrics: Record<string, number>;
+  metrics: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 };

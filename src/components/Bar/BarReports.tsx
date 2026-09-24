@@ -9,19 +9,27 @@ interface Props {
   stock: BarStockItem[];
 }
 
+const defaultPersonnel = {
+  gerante: 'Mme Malala',
+  hotesse: '',
+  cuisine: '',
+  accueil: '',
+  securite: '',
+};
+
+const defaultManual = { gratuit: '', depense: '', bouteille: '', pourboire: '' };
+
 export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
-  const ventes = commandes.filter((commande) => commande.statut === 'Encaissée');
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const commandesDuJour = useMemo(() => commandes.filter((commande) => {
+    const commandeDate = String(commande.created_at || '').slice(0, 10);
+    return commandeDate === reportDate;
+  }), [commandes, reportDate]);
+  const ventes = commandesDuJour.filter((commande) => commande.statut === 'Encaissée');
   const chiffreAffaires = ventes.reduce((total, commande) => total + commande.total, 0);
   const articlesVendus = ventes.reduce((total, commande) => total + commande.items.reduce((sum, item) => sum + item.quantite, 0), 0);
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
-  const [personnel, setPersonnel] = useState({
-    gerante: 'Mme Malala',
-    hotesse: '',
-    cuisine: '',
-    accueil: '',
-    securite: '',
-  });
-  const [manual, setManual] = useState({ gratuit: '', depense: '', bouteille: '', pourboire: '' });
+  const [personnel, setPersonnel] = useState(defaultPersonnel);
+  const [manual, setManual] = useState(defaultManual);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -30,6 +38,10 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
 
   useEffect(() => {
     let active = true;
+    setPersonnel(defaultPersonnel);
+    setManual(defaultManual);
+    setSavedReportText('');
+    setCopied(false);
     setIsLoadingReport(true);
     setSaveMessage(null);
     void barService.getBarDailyReport(reportDate)
@@ -49,19 +61,23 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
     const amountByPayment = (method: string) => ventes
       .filter((order) => String(order.moyen_paiement || 'ESPECES').toUpperCase() === method)
       .reduce((sum, order) => sum + order.total, 0);
-    const freeOrders = commandes.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
-    const unpaidOrders = commandes.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
+    const freeOrders = commandesDuJour.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
+    const unpaidOrders = commandesDuJour.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
     return {
       c1: amountByPayment('ESPECES'),
       mvola: amountByPayment('MVOLA'),
       tpe: amountByPayment('TPE'),
       gratuit: freeOrders.reduce((sum, order) => sum + order.total, 0),
+      gratuitDetails: freeOrders.map((order) => ({
+        name: order.client?.trim() || 'Client anonyme',
+        total: Number(order.total || 0),
+      })),
       tableOccupee: new Set(ventes.map((order) => order.table).filter((table) => Number(table) > 0)).size,
       np: unpaidOrders.reduce((sum, order) => sum + order.total, 0),
       credit: amountByPayment('CREDIT'),
       bouteilles: stock.filter((item) => /bouteille/i.test(item.unite || '')).reduce((sum, item) => sum + item.quantite, 0),
     };
-  }, [commandes, stock, ventes]);
+  }, [commandesDuJour, stock, ventes]);
 
   const saveReport = async () => {
     setIsSaving(true);
@@ -95,6 +111,11 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
     `Mvola : ${formatCurrency(metrics.mvola)}`,
     `TPE : ${formatCurrency(metrics.tpe)}`,
     `Gratuit : ${manual.gratuit || formatCurrency(metrics.gratuit)}`,
+    '',
+    'DETAIL DES COMMANDES GRATUITES',
+    ...(metrics.gratuitDetails.length
+      ? metrics.gratuitDetails.map((order, index) => `${index + 1} - ${order.name}  : ${formatCurrency(order.total)}`)
+      : ['Aucune commande gratuite']),
     `Tables occupees : ${metrics.tableOccupee}`,
     `NP : ${formatCurrency(metrics.np)}`,
     `Credit : ${formatCurrency(metrics.credit)}`,
@@ -138,10 +159,14 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
           {([['C1', metrics.c1], ['Mvola', metrics.mvola], ['TPE', metrics.tpe], ['Gratuit', metrics.gratuit], ['Tables occupées', metrics.tableOccupee], ['NP', metrics.np], ['Crédit', metrics.credit], ['Bouteilles', metrics.bouteilles]] as const).map(([label, value]) => <div key={label} className="rounded-lg border border-base bg-surface-2 p-3"><p className="text-xs text-muted">{label}</p><p className="mt-1 text-lg font-semibold text-accent">{typeof value === 'number' && label !== 'Tables occupées' && label !== 'Bouteilles' ? formatCurrency(value) : value}</p></div>)}
           {([['Dépense', 'depense'], ['Bouteille ajoutée', 'bouteille'], ['Pourboire', 'pourboire'], ['Gratuit détaillé', 'gratuit']] as const).map(([label, key]) => <label key={key} className="text-xs text-secondary"><span className="mb-1 block font-semibold">{label}</span><input value={manual[key]} onChange={(event) => updateManual(key, event.target.value)} placeholder="Montant ou détail" className="w-full rounded-lg border border-base bg-surface-2 px-3 py-2 text-sm text-primary outline-none focus:border-accent" /></label>)}
         </div></div>
+        <div className="rounded-lg border border-base bg-surface-2 p-4">
+          <h4 className="mb-3 font-semibold text-primary">Détail des commandes gratuites</h4>
+          {metrics.gratuitDetails.length ? <div className="space-y-2">{metrics.gratuitDetails.map((order, index) => <div key={`${order.name}-${index}`} className="flex items-center justify-between gap-3 border-b border-base/60 pb-2 text-sm"><span className="text-secondary">{order.name}</span><strong className="text-accent">{formatCurrency(order.total)}</strong></div>)}</div> : <p className="text-sm text-muted">Aucune commande gratuite.</p>}
+        </div>
         {saveMessage && <p className={`text-sm ${saveMessage.startsWith('Rapport') ? 'text-emerald-400' : 'text-red-400'}`}>{saveMessage}</p>}
         <div className="flex justify-end gap-2 print:hidden"><button type="button" onClick={() => void saveReport()} disabled={isSaving || isLoadingReport} className="action secondary"><Save size={15} /> {isSaving ? 'Enregistrement...' : 'Enregistrer le rapport'}</button><button type="button" onClick={printReport} className="action"><Printer size={15} /> Imprimer</button></div>
         {savedReportText && <div className="space-y-2 print:hidden"><div className="flex items-center justify-between gap-2"><h4 className="font-semibold text-primary">Rapport texte copiable</h4><button type="button" className="action secondary" onClick={() => void copyReport}><Clipboard size={15} /> {copied ? 'Copié' : 'Copier'}</button></div><textarea readOnly value={savedReportText} aria-label="Rapport Bar généré" className="min-h-[420px] w-full resize-y rounded-xl border border-base bg-surface-2 p-4 text-sm leading-6 text-primary outline-none" /></div>}
-        <div className="hidden print:block text-sm text-black"><h3 className="text-xl font-bold">Le point d’exclamation bar — {new Date(reportDate).toLocaleDateString('fr-FR')}</h3><p className="mt-3"><strong>Gérante :</strong> {personnel.gerante || '—'}</p><p><strong>Hôtesse :</strong> {personnel.hotesse || '—'}</p><p><strong>Cuisine :</strong> {personnel.cuisine || '—'}</p><p><strong>Accueil :</strong> {personnel.accueil || '—'}</p><p><strong>Sécurité :</strong> {personnel.securite || '—'}</p><hr className="my-3" /><p>C1 : {formatCurrency(metrics.c1)}</p><p>Mvola : {formatCurrency(metrics.mvola)}</p><p>TPE : {formatCurrency(metrics.tpe)}</p><p>Gratuit : {manual.gratuit || formatCurrency(metrics.gratuit)}</p><p>Table occupée : {metrics.tableOccupee}</p><p>NP : {formatCurrency(metrics.np)}</p><p>Crédit : {formatCurrency(metrics.credit)}</p><p>Dépense : {manual.depense || '0'}</p><p>Bouteille : {manual.bouteille || metrics.bouteilles}</p><p>Pourboire : {manual.pourboire || '0'}</p></div>
+        <div className="hidden print:block text-sm text-black"><h3 className="text-xl font-bold">Le point d’exclamation bar — {new Date(reportDate).toLocaleDateString('fr-FR')}</h3><p className="mt-3"><strong>Gérante :</strong> {personnel.gerante || '—'}</p><p><strong>Hôtesse :</strong> {personnel.hotesse || '—'}</p><p><strong>Cuisine :</strong> {personnel.cuisine || '—'}</p><p><strong>Accueil :</strong> {personnel.accueil || '—'}</p><p><strong>Sécurité :</strong> {personnel.securite || '—'}</p><hr className="my-3" /><p>C1 : {formatCurrency(metrics.c1)}</p><p>Mvola : {formatCurrency(metrics.mvola)}</p><p>TPE : {formatCurrency(metrics.tpe)}</p><p>Gratuit : {manual.gratuit || formatCurrency(metrics.gratuit)}</p><p><strong>Détail gratuit :</strong></p>{metrics.gratuitDetails.map((order, index) => <p key={`${order.name}-print-${index}`}>{order.name} : {formatCurrency(order.total)}</p>)}<p>Table occupée : {metrics.tableOccupee}</p><p>NP : {formatCurrency(metrics.np)}</p><p>Crédit : {formatCurrency(metrics.credit)}</p><p>Dépense : {manual.depense || '0'}</p><p>Bouteille : {manual.bouteille || metrics.bouteilles}</p><p>Pourboire : {manual.pourboire || '0'}</p></div>
       </div>
     </section>
   );
