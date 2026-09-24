@@ -82,6 +82,8 @@ export const RestaurantPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [pendingDeleteProduct, setPendingDeleteProduct] = useState<Product | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<Order | null>(null);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
@@ -406,14 +408,23 @@ export const RestaurantPage: React.FC = () => {
   };
 
   const handleDeleteProduct = async (id: number) => {
-    if (window.confirm('Supprimer ce produit ?')) {
-      try {
-        await restaurantService.deleteProduct(id);
-        setProducts(prev => prev.filter(p => p.id !== id));
-      } catch (error) {
-        console.error('Erreur suppression produit', error);
-        alert('Impossible de supprimer ce plat car il est peut-être déjà utilisé.');
-      }
+    const product = products.find((item) => item.id === id);
+    if (product) setPendingDeleteProduct(product);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!pendingDeleteProduct || isDeletingProduct) return;
+
+    setIsDeletingProduct(true);
+    try {
+      await restaurantService.deleteProduct(pendingDeleteProduct.id);
+      setProducts(prev => prev.filter(p => p.id !== pendingDeleteProduct.id));
+      setPendingDeleteProduct(null);
+    } catch (error) {
+      console.error('Erreur suppression produit', error);
+      alert('Impossible de supprimer ce plat car il est peut-être déjà utilisé.');
+    } finally {
+      setIsDeletingProduct(false);
     }
   };
 
@@ -588,6 +599,49 @@ export const RestaurantPage: React.FC = () => {
             >
               <Trash2 size={16} />
               {isDeletingOrder ? 'Suppression...' : 'Supprimer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={pendingDeleteProduct !== null}
+        onClose={() => { if (!isDeletingProduct) setPendingDeleteProduct(null); }}
+        title="Supprimer le produit"
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
+              <Trash2 size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-primary">Supprimer ce produit ?</p>
+              <p className="mt-1 break-words text-sm leading-relaxed text-secondary">
+                Le produit « {pendingDeleteProduct?.nom} » sera retiré du menu.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-muted">Cette action est irréversible.</p>
+            </div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setPendingDeleteProduct(null)}
+              disabled={isDeletingProduct}
+              className="w-full sm:w-auto"
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => void confirmDeleteProduct()}
+              disabled={isDeletingProduct}
+              className="w-full sm:w-auto"
+            >
+              <Trash2 size={16} />
+              {isDeletingProduct ? 'Suppression...' : 'Supprimer'}
             </Button>
           </div>
         </div>

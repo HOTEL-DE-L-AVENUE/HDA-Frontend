@@ -101,12 +101,13 @@ export function DataTable<T extends { id: string | number }>({ data, columns, ti
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title: React.ReactNode;
+  headerExtra?: React.ReactNode;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, headerExtra, children, size = 'md' }) => {
   useEffect(() => {
     if (!isOpen) return;
 
@@ -138,7 +139,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/50">
-          <h3 className="text-white font-semibold text-lg">{title}</h3>
+          <h3 className="flex-1 text-white font-semibold text-lg">{title}</h3>
+          {headerExtra}
           <button
             type="button"
             onClick={onClose}

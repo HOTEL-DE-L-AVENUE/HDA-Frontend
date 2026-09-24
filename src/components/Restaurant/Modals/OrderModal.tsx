@@ -42,10 +42,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables,
   const handleSetItemQuantity = (index: number, value: number) => setSelectedItems((previous) => previous.map((item, itemIndex) => itemIndex === index ? { ...item, quantite: Number.isFinite(value) ? Math.max(1, Math.floor(value)) : 1 } : item));
   const total = selectedItems.reduce((sum, item) => sum + item.prix * item.quantite, 0);
   const menuItems = products.filter((product) => product.type_produit === 'PRODUIT_FINI' && product.actif && (menuCategory === 'Toutes' || categories.find((category) => category.id === product.category_id)?.nom === menuCategory) && (!searchTerm.trim() || product.nom.toLowerCase().includes(searchTerm.trim().toLowerCase())));
+  const locationLabel = initialLocation?.trim().toUpperCase() === 'POCKER GRATUIT' || initialLocation?.trim().toUpperCase() === 'GRATUIT POCKER'
+    ? 'Gratuit Pocker'
+    : initialLocation;
 
   const handleSubmit = async (event: React.FormEvent) => { event.preventDefault(); if (!table || selectedItems.length === 0) { setFeedback('Sélectionnez une table et au moins un article.'); return; } if (initialLocation && !specialPersonName.trim()) { setFeedback('Saisissez le nom de la personne avant de créer la commande.'); return; } try { await onSubmit({ ...(orderToEdit ? { id: orderToEdit.id } : {}), table_id: Number(table), client_id: client ? Number(client) : 0, special_person_name: specialPersonName.trim() || undefined, location_type: initialLocation, nombre_personnes: Number(nombrePersonnes) || 1, moyen_paiement: moyenPaiement, notes, montant_total: total, items: selectedItems.map((item) => ({ product_id: item.product_id, quantite: item.quantite, prix_unitaire: item.prix, cuisson: item.cuisson })) }); handleClose(); } catch (error) { console.error('Erreur modification commande restaurant:', error); setFeedback('La commande n’a pas pu être enregistrée. Vérifiez les données puis réessayez.'); } };
 
-  return <Modal isOpen={isOpen} onClose={handleClose} title={orderToEdit ? 'Modifier la commande · Restaurant' : 'Nouvelle commande · Restaurant'} size="full">
+  return <Modal isOpen={isOpen} onClose={handleClose} title={<span style={{ fontFamily: '"Comic Sans MS", cursive', fontSize: '20px', fontWeight: 700 }}>{orderToEdit ? 'Modifier la commande · Restaurant' : 'Nouvelle commande · Restaurant'}</span>} headerExtra={locationLabel && <span className="restaurant-location-led mr-6">{locationLabel}</span>} size="full">
     <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
       {feedback && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{feedback}</div>}
       <div className="grid grid-cols-1 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 sm:grid-cols-2">
