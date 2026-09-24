@@ -106,40 +106,62 @@ export const BarPage: React.FC = () => {
 
   const handleCreateCommande = async ({ client, table, nombre_personnes, moyen_paiement, observation, items, hotel_reservation_id, room_id, room_guest_name, room_account_paid }: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => {
     try {
-      const normalizedItems = items.map((item) => ({
-        product_id: item.product_id,
-        nom: item.nom,
-        quantite: Number(item.quantite) || 1,
-        prix: Number(item.prix) || 0,
-        prix_unitaire: Number(item.prix) || 0,
-      }));
+      const normalizedItems = items
+        .map((item) => ({
+          product_id: Number(item.product_id ?? 0),
+          nom: String(item.nom || '').trim(),
+          quantite: Number(item.quantite) || 1,
+          prix: Number(item.prix) || 0,
+          prix_unitaire: Number(item.prix) || 0,
+        }))
+        .filter((item) => item.product_id > 0 && item.nom && item.quantite > 0);
 
-      const createdOrder = await barService.createBarOrder({ client, table, nombre_personnes, moyen_paiement, observation, items: normalizedItems, hotel_reservation_id, room_id, room_guest_name, room_account_paid });
+      if (!normalizedItems.length) {
+        throw new Error('La commande doit contenir au moins un article valide.');
+      }
+
+      const safeTable = Number(table) || 0;
+      const safeGuestCount = Number(nombre_personnes) || 1;
+      const safePayment = String(moyen_paiement || 'ESPECES').trim().toUpperCase() as BarPaymentMethod;
+
+      const createdOrder = await barService.createBarOrder({ client, table: safeTable, nombre_personnes: safeGuestCount, moyen_paiement: safePayment, observation, items: normalizedItems, hotel_reservation_id, room_id, room_guest_name, room_account_paid });
       if (createdOrder) {
         await Promise.all([loadOrders(), fetchData()]);
       }
     } catch (error) {
       console.error('Erreur création commande bar:', error);
-      setError("La commande bar n'a pas pu être créée.");
+      const apiError = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
+      const message = apiError.response?.data?.error?.message || apiError.message || "La commande bar n'a pas pu être créée.";
+      setError(message);
       throw error;
     }
   };
 
   const handleUpdateCommande = async ({ id, client, table, nombre_personnes, moyen_paiement, observation, items, hotel_reservation_id, room_id, room_guest_name, room_account_paid }: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => {
     try {
-      const normalizedItems = items.map((item) => ({
-        product_id: item.product_id,
-        nom: item.nom,
-        quantite: Number(item.quantite) || 1,
-        prix: Number(item.prix) || 0,
-        prix_unitaire: Number(item.prix) || 0,
-      }));
+      const normalizedItems = items
+        .map((item) => ({
+          product_id: Number(item.product_id ?? 0),
+          nom: String(item.nom || '').trim(),
+          quantite: Number(item.quantite) || 1,
+          prix: Number(item.prix) || 0,
+          prix_unitaire: Number(item.prix) || 0,
+        }))
+        .filter((item) => item.product_id > 0 && item.nom && item.quantite > 0);
+
+      if (!normalizedItems.length) {
+        throw new Error('La commande doit contenir au moins un article valide.');
+      }
+
+      const safeTable = Number(table) || 0;
+      const safeGuestCount = Number(nombre_personnes) || 1;
+      const safePayment = String(moyen_paiement || 'ESPECES').trim().toUpperCase() as BarPaymentMethod;
 
       await barService.updateBarOrder(id, {
         client,
-        table,
-        nombre_personnes,
-        moyen_paiement,
+        table: safeTable,
+        nombre_personnes: safeGuestCount,
+        moyen_paiement: safePayment,
         observation,
         items: normalizedItems,
         hotel_reservation_id,

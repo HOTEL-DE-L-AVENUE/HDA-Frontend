@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { BarCommande, BarStockItem } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
+import { Clipboard, Printer, Save } from 'lucide-react';
+import barService from '../../services/bar.service';
 
 interface Props {
   commandes: BarCommande[];
@@ -11,6 +13,105 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
   const ventes = commandes.filter((commande) => commande.statut === 'Encaissée');
   const chiffreAffaires = ventes.reduce((total, commande) => total + commande.total, 0);
   const articlesVendus = ventes.reduce((total, commande) => total + commande.items.reduce((sum, item) => sum + item.quantite, 0), 0);
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [personnel, setPersonnel] = useState({
+    gerante: 'Mme Malala',
+    hotesse: '',
+    cuisine: '',
+    accueil: '',
+    securite: '',
+  });
+  const [manual, setManual] = useState({ gratuit: '', depense: '', bouteille: '', pourboire: '' });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [savedReportText, setSavedReportText] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setIsLoadingReport(true);
+    setSaveMessage(null);
+    void barService.getBarDailyReport(reportDate)
+      .then((saved) => {
+        if (!active || !saved || !('personnel' in saved)) return;
+        setPersonnel((current) => ({ ...current, ...(saved.personnel || {}) }));
+        setManual((current) => ({ ...current, ...(saved.manual || {}) }));
+      })
+      .catch((error) => console.error('Erreur chargement rapport bar:', error))
+      .finally(() => {
+        if (active) setIsLoadingReport(false);
+      });
+    return () => { active = false; };
+  }, [reportDate]);
+
+  const metrics = useMemo(() => {
+    const amountByPayment = (method: string) => ventes
+      .filter((order) => String(order.moyen_paiement || 'ESPECES').toUpperCase() === method)
+      .reduce((sum, order) => sum + order.total, 0);
+    const freeOrders = commandes.filter((order) => String(order.moyen_paiement || '').toUpperCase() === 'GRATUIT');
+    const unpaidOrders = commandes.filter((order) => String(order.statut).toLowerCase() !== 'encaissée');
+    return {
+      c1: amountByPayment('ESPECES'),
+      mvola: amountByPayment('MVOLA'),
+      tpe: amountByPayment('TPE'),
+      gratuit: freeOrders.reduce((sum, order) => sum + order.total, 0),
+      tableOccupee: new Set(ventes.map((order) => order.table).filter((table) => Number(table) > 0)).size,
+      np: unpaidOrders.reduce((sum, order) => sum + order.total, 0),
+      credit: amountByPayment('CREDIT'),
+      bouteilles: stock.filter((item) => /bouteille/i.test(item.unite || '')).reduce((sum, item) => sum + item.quantite, 0),
+    };
+  }, [commandes, stock, ventes]);
+
+  const saveReport = async () => {
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await barService.saveBarDailyReport({ reportDate, personnel, manual, metrics });
+      setSavedReportText(buildReportText());
+      setCopied(false);
+      setSaveMessage('Rapport enregistré dans la base de données.');
+    } catch (error) {
+      console.error('Erreur enregistrement rapport bar:', error);
+      setSaveMessage('Impossible d’enregistrer le rapport.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const buildReportText = () => [
+    'RAPPORT JOURNALIER - LE POINT D\'EXCLAMATION BAR',
+    `Date : ${new Date(`${reportDate}T00:00:00`).toLocaleDateString('fr-FR')}`,
+    '',
+    'PERSONNEL PRESENT',
+    `Gerante : ${personnel.gerante || '-'}`,
+    `Hotesse : ${personnel.hotesse || '-'}`,
+    `Cuisine : ${personnel.cuisine || '-'}`,
+    `Accueil : ${personnel.accueil || '-'}`,
+    `Securite : ${personnel.securite || '-'}`,
+    '',
+    'INDICATEURS DE LA JOURNEE',
+    `C1 : ${formatCurrency(metrics.c1)}`,
+    `Mvola : ${formatCurrency(metrics.mvola)}`,
+    `TPE : ${formatCurrency(metrics.tpe)}`,
+    `Gratuit : ${manual.gratuit || formatCurrency(metrics.gratuit)}`,
+    `Tables occupees : ${metrics.tableOccupee}`,
+    `NP : ${formatCurrency(metrics.np)}`,
+    `Credit : ${formatCurrency(metrics.credit)}`,
+    `Bouteilles : ${manual.bouteille || metrics.bouteilles}`,
+    `Depense : ${manual.depense || '0'}`,
+    `Pourboire : ${manual.pourboire || '0'}`,
+  ].join('\n');
+
+  const copyReport = async () => {
+    if (!savedReportText) return;
+    await navigator.clipboard.writeText(savedReportText);
+    setCopied(true);
+  };
+
+  const printReport = () => window.print();
+  const updatePersonnel = (key: keyof typeof personnel, value: string) => setPersonnel((current) => ({ ...current, [key]: value }));
+  const updateManual = (key: keyof typeof manual, value: string) => setManual((current) => ({ ...current, [key]: value }));
   const statuses: Array<{ label: string; value: BarCommande['statut'] }> = [
     { label: 'En attente', value: 'En attente' },
     { label: 'En cours', value: 'En préparation' },
@@ -21,24 +122,26 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
 
   return (
     <section className="space-y-4">
-      <div>
+      <div className="print:hidden">
         <p className="text-[11px] uppercase tracking-[0.2em] text-accent font-semibold">Bar & Lounge</p>
         <h2 className="text-2xl font-bold text-primary">Rapports</h2>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-base bg-surface p-4"><p className="text-xs text-muted">Ventes encaissées</p><p className="mt-2 text-2xl font-bold text-accent">{formatCurrency(chiffreAffaires)}</p></div>
-        <div className="rounded-xl border border-base bg-surface p-4"><p className="text-xs text-muted">Articles vendus</p><p className="mt-2 text-2xl font-bold text-primary">{articlesVendus}</p></div>
-        <div className="rounded-xl border border-base bg-surface p-4"><p className="text-xs text-muted">Produits en stock</p><p className="mt-2 text-2xl font-bold text-emerald-400">{stock.length}</p></div>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-base bg-surface p-4">
-          <h3 className="mb-3 font-semibold text-primary">Commandes par étape</h3>
-          <div className="space-y-2">{statuses.map((status) => <div key={status.value} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm"><span className="text-secondary">{status.label}</span><strong className="text-accent">{commandes.filter((commande) => commande.statut === status.value).length}</strong></div>)}</div>
+      <div className="space-y-5 rounded-xl border border-base bg-surface p-5">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div><h3 className="text-lg font-semibold text-primary">Rapport journalier — Le point d’exclamation bar</h3><p className="text-xs text-muted">Personnel, caisse et activités de la journée.</p></div>
+          <input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="rounded-lg border border-base bg-surface-2 px-3 py-2 text-sm text-primary" />
         </div>
-        <div className="rounded-xl border border-base bg-surface p-4">
-          <h3 className="mb-3 font-semibold text-primary">État du stock</h3>
-          <div className="space-y-2">{stock.slice(0, 8).map((item) => <div key={item.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm"><span className="truncate text-secondary">{item.product_nom}</span><strong className={item.quantite <= 5 ? 'text-amber-400' : 'text-emerald-400'}>{item.quantite} {item.unite}</strong></div>)}</div>
-        </div>
+        <div><h4 className="mb-3 font-semibold text-primary">Personnel présent</h4><div className="grid gap-3 md:grid-cols-2">
+          {([['gerante', 'Gérante'], ['hotesse', 'Hôtesses'], ['cuisine', 'Cuisine'], ['accueil', 'Accueil'], ['securite', 'Sécurité']] as const).map(([key, label]) => <label key={key} className="text-xs text-secondary"><span className="mb-1 block font-semibold">{label}</span><input value={personnel[key]} onChange={(event) => updatePersonnel(key, event.target.value)} placeholder="Noms séparés par des virgules" className="w-full rounded-lg border border-base bg-surface-2 px-3 py-2 text-sm text-primary outline-none focus:border-accent" /></label>)}
+        </div></div>
+        <div><h4 className="mb-3 font-semibold text-primary">Indicateurs de la journée</h4><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {([['C1', metrics.c1], ['Mvola', metrics.mvola], ['TPE', metrics.tpe], ['Gratuit', metrics.gratuit], ['Tables occupées', metrics.tableOccupee], ['NP', metrics.np], ['Crédit', metrics.credit], ['Bouteilles', metrics.bouteilles]] as const).map(([label, value]) => <div key={label} className="rounded-lg border border-base bg-surface-2 p-3"><p className="text-xs text-muted">{label}</p><p className="mt-1 text-lg font-semibold text-accent">{typeof value === 'number' && label !== 'Tables occupées' && label !== 'Bouteilles' ? formatCurrency(value) : value}</p></div>)}
+          {([['Dépense', 'depense'], ['Bouteille ajoutée', 'bouteille'], ['Pourboire', 'pourboire'], ['Gratuit détaillé', 'gratuit']] as const).map(([label, key]) => <label key={key} className="text-xs text-secondary"><span className="mb-1 block font-semibold">{label}</span><input value={manual[key]} onChange={(event) => updateManual(key, event.target.value)} placeholder="Montant ou détail" className="w-full rounded-lg border border-base bg-surface-2 px-3 py-2 text-sm text-primary outline-none focus:border-accent" /></label>)}
+        </div></div>
+        {saveMessage && <p className={`text-sm ${saveMessage.startsWith('Rapport') ? 'text-emerald-400' : 'text-red-400'}`}>{saveMessage}</p>}
+        <div className="flex justify-end gap-2 print:hidden"><button type="button" onClick={() => void saveReport()} disabled={isSaving || isLoadingReport} className="action secondary"><Save size={15} /> {isSaving ? 'Enregistrement...' : 'Enregistrer le rapport'}</button><button type="button" onClick={printReport} className="action"><Printer size={15} /> Imprimer</button></div>
+        {savedReportText && <div className="space-y-2 print:hidden"><div className="flex items-center justify-between gap-2"><h4 className="font-semibold text-primary">Rapport texte copiable</h4><button type="button" className="action secondary" onClick={() => void copyReport}><Clipboard size={15} /> {copied ? 'Copié' : 'Copier'}</button></div><textarea readOnly value={savedReportText} aria-label="Rapport Bar généré" className="min-h-[420px] w-full resize-y rounded-xl border border-base bg-surface-2 p-4 text-sm leading-6 text-primary outline-none" /></div>}
+        <div className="hidden print:block text-sm text-black"><h3 className="text-xl font-bold">Le point d’exclamation bar — {new Date(reportDate).toLocaleDateString('fr-FR')}</h3><p className="mt-3"><strong>Gérante :</strong> {personnel.gerante || '—'}</p><p><strong>Hôtesse :</strong> {personnel.hotesse || '—'}</p><p><strong>Cuisine :</strong> {personnel.cuisine || '—'}</p><p><strong>Accueil :</strong> {personnel.accueil || '—'}</p><p><strong>Sécurité :</strong> {personnel.securite || '—'}</p><hr className="my-3" /><p>C1 : {formatCurrency(metrics.c1)}</p><p>Mvola : {formatCurrency(metrics.mvola)}</p><p>TPE : {formatCurrency(metrics.tpe)}</p><p>Gratuit : {manual.gratuit || formatCurrency(metrics.gratuit)}</p><p>Table occupée : {metrics.tableOccupee}</p><p>NP : {formatCurrency(metrics.np)}</p><p>Crédit : {formatCurrency(metrics.credit)}</p><p>Dépense : {manual.depense || '0'}</p><p>Bouteille : {manual.bouteille || metrics.bouteilles}</p><p>Pourboire : {manual.pourboire || '0'}</p></div>
       </div>
     </section>
   );
