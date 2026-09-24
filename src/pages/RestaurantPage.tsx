@@ -31,6 +31,26 @@ import AuthService from '../services/authService';
 import { clientService } from '../services/client.service';
 import { getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 
+const RESTAURANT_TABLE_COUNT = 16;
+
+const normalizeTableNumber = (value: string | number) => String(value).trim().toUpperCase().replace(/^T/, '');
+
+const buildRestaurantTables = (apiTables: TableRestaurant[] = []): TableRestaurant[] => (
+  Array.from({ length: RESTAURANT_TABLE_COUNT }, (_, index) => {
+    const tableNumber = index + 1;
+    const apiTable = apiTables.find((table) => (
+      Number(table.id) === tableNumber || normalizeTableNumber(table.numero) === String(tableNumber)
+    ));
+
+    return {
+      id: apiTable?.id ?? tableNumber,
+      numero: String(tableNumber),
+      capacite: apiTable?.capacite ?? 4,
+      statut: apiTable?.statut ?? 'LIBRE',
+    };
+  })
+);
+
 export const RestaurantPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const currentUser = AuthService.getCurrentUser();
@@ -86,7 +106,7 @@ export const RestaurantPage: React.FC = () => {
       try {
         const res = await restaurantService.getTables();
         if (res.success) {
-          setTables(res.data);
+          setTables(buildRestaurantTables(Array.isArray(res.data) ? res.data : []));
         } else {
           console.warn('Échec du chargement des tables :', res.message);
         }
@@ -234,7 +254,7 @@ export const RestaurantPage: React.FC = () => {
       if (res && res.success) {
         try {
           const tablesRes = await restaurantService.getTables();
-          if (tablesRes.success) setTables(tablesRes.data);
+          if (tablesRes.success) setTables(buildRestaurantTables(Array.isArray(tablesRes.data) ? tablesRes.data : []));
         } catch (tableError) {
           console.warn('Rafraîchissement des tables après paiement échoué:', tableError);
         }
