@@ -121,9 +121,15 @@ export const Header: React.FC = () => {
     setShowUserMenu(false);
   };
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const timeStr = today.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const [clock, setClock] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const dateStr = clock.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const timeStr = clock.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const currentPage = ROUTE_LABELS[location.pathname] || 'Tableau de Bord';
 
   // Si pas d'utilisateur connecté (par exemple, après logout ou refresh), on ne rend pas le header
@@ -140,6 +146,12 @@ export const Header: React.FC = () => {
         boxShadow: 'var(--shadow-sm)',
       }}
     >
+      {/* Date et heure centrées dans la Top Bar */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-2 whitespace-nowrap lg:flex">
+        <span className="text-xs font-semibold lowercase tracking-wide text-secondary">{dateStr}</span>
+        <span className="text-xs font-medium tabular-nums text-subtle">{timeStr}</span>
+      </div>
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 flex-1 min-w-0">
         <div
@@ -170,12 +182,6 @@ export const Header: React.FC = () => {
 
       {/* Actions */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        {/* Date - Desktop */}
-        <div className="hidden lg:block text-right mr-1">
-          <p className="text-secondary text-xs font-medium capitalize leading-tight">{dateStr}</p>
-          <p className="text-subtle text-[10px]">{timeStr}</p>
-        </div>
-
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
           <button
