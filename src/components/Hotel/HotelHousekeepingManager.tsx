@@ -271,15 +271,6 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
-        <button
-          onClick={() => {
-            setFilterStatus('TOUS');
-            setFilterType('TOUS');
-          }}
-          className="px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-gray-400 hover:text-white transition text-sm"
-        >
-          Réinitialiser
-        </button>
       </div>
 
       {/* Liste des tâches */}
