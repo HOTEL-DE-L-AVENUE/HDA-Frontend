@@ -24,6 +24,7 @@ import { useRooms } from '../../hooks/useRooms';
 import { toast } from 'react-hot-toast';
 import AuthService from '../../services/authService';
 import { reservationService } from '../../services/reservation.service';
+import api from '../../lib/api';
 
 interface ReservationListProps {
   reservations?: Reservation[];
@@ -56,6 +57,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
+  const [barSpendByReservation, setBarSpendByReservation] = useState<Record<number, number>>({});
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [historyFromDate, setHistoryFromDate] = useState('');
   const [historyToDate, setHistoryToDate] = useState('');
@@ -77,6 +79,51 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       loadReservations();
     }
   }, [loadReservations, refreshTrigger]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBarSpendByReservation = async () => {
+      try {
+        const response = await api.get('/api/bar/orders');
+        const orders = Array.isArray(response?.data?.data)
+          ? response.data.data
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+
+        const totals: Record<number, number> = {};
+
+        for (const order of orders) {
+          const amount = Number(order?.total ?? 0);
+          if (!Number.isFinite(amount) || amount <= 0) continue;
+
+          const reservationId = Number(order?.hotel_reservation_id ?? 0);
+          const roomId = Number(order?.room_id ?? 0);
+
+          if (reservationId > 0) {
+            totals[reservationId] = (totals[reservationId] || 0) + amount;
+          } else if (roomId > 0) {
+            totals[roomId] = (totals[roomId] || 0) + amount;
+          }
+        }
+
+        if (isMounted) {
+          setBarSpendByReservation(totals);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setBarSpendByReservation({});
+        }
+      }
+    };
+
+    void loadBarSpendByReservation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [reservations]);
 
   // Enrichir les réservations
   useEffect(() => {
@@ -358,9 +405,15 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                         {res.laundry_included && (
                           <span className="text-purple-400">Blanchisserie {formatCurrency(res.laundry_price || 0)}</span>
                         )}
-                        <span className={res.pdj_inclus ? 'text-emerald-400' : 'text-gray-500'}>
+                                        <span className={res.pdj_inclus ? 'text-emerald-400' : 'text-gray-500'}>
                           {res.pdj_inclus ? 'PDJ inclus' : 'PDJ non inclus'}
                         </span>
+                        {(() => {
+                          const barSpend = Number(barSpendByReservation[res.id] ?? barSpendByReservation[res.room_id] ?? 0);
+                          return barSpend > 0 ? (
+                            <span className="text-amber-300">Bar {formatCurrency(barSpend)}</span>
+                          ) : null;
+                        })()}
                         {res.moyen_paiement && res.statut === 'TERMINEE' && (
                           <span className="text-sky-300">Paiement : {res.moyen_paiement.replace('_', ' ')}</span>
                         )}

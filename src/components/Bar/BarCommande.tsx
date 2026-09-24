@@ -14,8 +14,8 @@ import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/
 
 interface Props {
   commandes: BarCommande[];
-  onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items'] }) => Promise<void> | void;
-  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items'] }) => Promise<void> | void;
+  onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
+  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
   onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
@@ -102,6 +102,22 @@ export const BarCommandeView: React.FC<Props> = ({
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<BarCommande | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
+  const resolveReservationClientLabel = (reservation: any) => {
+    const firstName = String(reservation?.client?.prenom ?? reservation?.client_prenom ?? reservation?.prenom ?? '').trim();
+    const lastName = String(reservation?.client?.nom ?? reservation?.client_nom ?? reservation?.nom ?? '').trim();
+
+    if (firstName || lastName) {
+      return [firstName, lastName].filter(Boolean).join(' ');
+    }
+
+    const reservationId = Number(reservation?.id ?? reservation?.client_id ?? 0);
+    if (reservationId > 0) {
+      return `Client #${reservationId}`;
+    }
+
+    return 'Client chambre';
+  };
+
   const loadTables = async () => {
     try {
       const data = await barService.getBarTables();
@@ -164,9 +180,9 @@ export const BarCommandeView: React.FC<Props> = ({
         .filter((reservation) => reservation && reservation.statut && activeStatuses.includes(reservation.statut))
         .flatMap((reservation) => {
           const roomLabel = reservation.room?.numero ? `Chambre ${reservation.room.numero}` : (reservation.room_id ? `Chambre ${reservation.room_id}` : 'Chambre');
-          const primaryClientName = [reservation.client?.prenom, reservation.client?.nom].filter(Boolean).join(' ').trim();
+          const primaryClientName = resolveReservationClientLabel(reservation);
           const names = new Set<string>();
-          if (primaryClientName) names.add(primaryClientName);
+          if (primaryClientName && primaryClientName !== 'Client chambre') names.add(primaryClientName);
           for (const guestName of guestsByReservation.get(reservation.id) ?? []) names.add(guestName);
 
           if (!names.size) {
@@ -358,6 +374,9 @@ export const BarCommandeView: React.FC<Props> = ({
     const clientNom = selectedLocation?.label === 'Chambre' && rawPersonName
       ? (selectedChamberRoomLabel ? `${rawPersonName} — ${selectedChamberRoomLabel}` : rawPersonName)
       : rawPersonName;
+    const linkedReservation = selectedLocation?.label === 'Chambre'
+      ? chamberReservationOptions.find((option) => option.value === rawPersonName || option.label.startsWith(`${rawPersonName} — `)) ?? null
+      : null;
     const tableNumber = Number(table);
     const guestCount = Number(nombrePersonnes);
     const effectivePaymentMethod = selectedLocation?.label === 'Chambre' ? 'CREDIT' : moyenPaiement;
@@ -394,6 +413,10 @@ export const BarCommandeView: React.FC<Props> = ({
           moyen_paiement: effectivePaymentMethod,
           items: selectedItems,
           observation: selectedLocation?.kind === 'special' ? selectedLocation.label === 'Pocker gratuit' ? 'POCKER' : selectedLocation.label.toUpperCase() : undefined,
+          hotel_reservation_id: linkedReservation?.reservationId ?? null,
+          room_id: linkedReservation ? Number(linkedReservation.roomLabel.replace(/\D/g, '')) || null : null,
+          room_guest_name: selectedLocation?.label === 'Chambre' ? rawPersonName : null,
+          room_account_paid: false,
         });
       } else {
         await onCreateCommande?.({
@@ -403,6 +426,10 @@ export const BarCommandeView: React.FC<Props> = ({
           moyen_paiement: effectivePaymentMethod,
           items: selectedItems,
           observation: selectedLocation?.kind === 'special' ? selectedLocation.label === 'Pocker gratuit' ? 'POCKER' : selectedLocation.label.toUpperCase() : undefined,
+          hotel_reservation_id: linkedReservation?.reservationId ?? null,
+          room_id: linkedReservation ? Number(linkedReservation.roomLabel.replace(/\D/g, '')) || null : null,
+          room_guest_name: selectedLocation?.label === 'Chambre' ? rawPersonName : null,
+          room_account_paid: false,
         });
       }
       resetModal();

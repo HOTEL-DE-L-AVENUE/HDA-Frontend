@@ -91,9 +91,10 @@ export const BarHistory: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const loadRoomCharges = async (): Promise<RoomChargeHistory[]> => {
-    const [reservationsResponse, consumptionsResponse] = await Promise.all([
+    const [reservationsResponse, consumptionsResponse, barOrdersResponse] = await Promise.all([
       api.get('/api/hebergement/reservations'),
       api.get('/api/hebergement/minibar-consumptions'),
+      api.get('/api/bar/orders'),
     ]);
 
     const reservations = Array.isArray(reservationsResponse.data?.data)
@@ -108,9 +109,21 @@ export const BarHistory: React.FC = () => {
         ? consumptionsResponse.data
         : [];
 
+    const barOrders = Array.isArray(barOrdersResponse.data?.data)
+      ? barOrdersResponse.data.data
+      : Array.isArray(barOrdersResponse.data)
+        ? barOrdersResponse.data
+        : [];
+
     const roomMap = new Map<number, RoomChargeHistory>();
+    const reservationsById = new Map<number, any>();
 
     for (const reservation of reservations) {
+      const reservationId = Number(reservation?.id ?? 0);
+      if (reservationId > 0) {
+        reservationsById.set(reservationId, reservation);
+      }
+
       const roomId = Number(reservation?.room_id ?? 0);
       if (!roomId) continue;
 
@@ -119,18 +132,23 @@ export const BarHistory: React.FC = () => {
 
       const roomNumber = reservation?.room?.numero ?? reservation?.room_numero ?? `Chambre ${roomId}`;
       const roomAmount = Number(reservation?.montant_total ?? reservation?.montant_brut ?? 0);
-      roomMap.set(roomId, {
+      const entry = roomMap.get(roomId) ?? {
         id: Number(reservation?.id ?? roomId),
         roomId,
         roomLabel: `Chambre ${roomNumber}`,
         client: [reservation?.client?.prenom, reservation?.client?.nom].filter(Boolean).join(' ') || 'Client chambre',
-        reservationId: Number(reservation?.id ?? 0) || undefined,
+        reservationId: reservationId || undefined,
         status,
-        roomAmount,
+        roomAmount: 0,
         barAmount: 0,
-        total: roomAmount,
+        total: 0,
         date: reservation?.updated_at || reservation?.date_depart || reservation?.created_at || new Date().toISOString(),
-      });
+      };
+
+      entry.roomAmount = Math.max(entry.roomAmount, roomAmount);
+      entry.total = entry.roomAmount + entry.barAmount;
+      entry.date = reservation?.updated_at || reservation?.date_depart || reservation?.created_at || entry.date;
+      roomMap.set(roomId, entry);
     }
 
     for (const item of consumptions) {
@@ -153,6 +171,38 @@ export const BarHistory: React.FC = () => {
       row.total = row.roomAmount + row.barAmount;
       row.date = item?.consumed_at || row.date;
       roomMap.set(roomId, row);
+    }
+
+    for (const order of barOrders) {
+      const roomId = Number(order?.room_id ?? 0);
+      const reservationId = Number(order?.hotel_reservation_id ?? 0);
+      const linkedReservation = reservationId > 0 ? reservationsById.get(reservationId) : null;
+      const resolvedRoomId = roomId || (linkedReservation ? Number(linkedReservation?.room_id ?? 0) : 0);
+      if (!resolvedRoomId) continue;
+
+      const roomEntry = roomMap.get(resolvedRoomId) ?? {
+        id: resolvedRoomId,
+        roomId: resolvedRoomId,
+        roomLabel: `Chambre ${resolvedRoomId}`,
+        client: order?.room_guest_name || order?.client || 'Client chambre',
+        roomAmount: 0,
+        barAmount: 0,
+        total: 0,
+        date: order?.created_at || new Date().toISOString(),
+      };
+
+      if (linkedReservation) {
+        const linkedRoomAmount = Number(linkedReservation?.montant_total ?? linkedReservation?.montant_brut ?? 0);
+        if (linkedRoomAmount > 0) {
+          roomEntry.roomAmount = Math.max(roomEntry.roomAmount, linkedRoomAmount);
+        }
+      }
+
+      roomEntry.barAmount += Number(order?.total || 0);
+      roomEntry.total = roomEntry.roomAmount + roomEntry.barAmount;
+      roomEntry.date = order?.created_at || roomEntry.date;
+      roomEntry.client = order?.room_guest_name || roomEntry.client || 'Client chambre';
+      roomMap.set(resolvedRoomId, roomEntry);
     }
 
     return Array.from(roomMap.values())

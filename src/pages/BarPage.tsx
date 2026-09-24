@@ -104,7 +104,7 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  const handleCreateCommande = async ({ client, table, nombre_personnes, moyen_paiement, observation, items }: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items'] }) => {
+  const handleCreateCommande = async ({ client, table, nombre_personnes, moyen_paiement, observation, items, hotel_reservation_id, room_id, room_guest_name, room_account_paid }: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => {
     try {
       const normalizedItems = items.map((item) => ({
         product_id: item.product_id,
@@ -114,7 +114,7 @@ export const BarPage: React.FC = () => {
         prix_unitaire: Number(item.prix) || 0,
       }));
 
-      const createdOrder = await barService.createBarOrder({ client, table, nombre_personnes, moyen_paiement, observation, items: normalizedItems });
+      const createdOrder = await barService.createBarOrder({ client, table, nombre_personnes, moyen_paiement, observation, items: normalizedItems, hotel_reservation_id, room_id, room_guest_name, room_account_paid });
       if (createdOrder) {
         await Promise.all([loadOrders(), fetchData()]);
       }
@@ -125,7 +125,7 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  const handleUpdateCommande = async ({ id, client, table, nombre_personnes, moyen_paiement, observation, items }: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items'] }) => {
+  const handleUpdateCommande = async ({ id, client, table, nombre_personnes, moyen_paiement, observation, items, hotel_reservation_id, room_id, room_guest_name, room_account_paid }: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => {
     try {
       const normalizedItems = items.map((item) => ({
         product_id: item.product_id,
@@ -142,6 +142,10 @@ export const BarPage: React.FC = () => {
         moyen_paiement,
         observation,
         items: normalizedItems,
+        hotel_reservation_id,
+        room_id,
+        room_guest_name,
+        room_account_paid,
       });
       await Promise.all([loadOrders(), fetchData()]);
     } catch (error) {
