@@ -98,7 +98,7 @@ export const getBarLatestTransaction = (productId: number) =>
 export const getBarTransactions = () =>
   get<{ id: number; order_id?: number | null; table_id?: number | null; product_id: number; quantite: number; prix_unitaire: number; montant: number; created_at: string; nom: string; categorie: string }[]>('/transactions');
 
-type BarOrderResponse = { id: number; client: string; table: number; nombre_personnes?: number; moyen_paiement?: BarPaymentMethod; observation?: string; statut: string; total: number; created_at?: string; cloture_at?: string; items: Array<{ nom: string; quantite: number; prix: number }> };
+type BarOrderResponse = { id: number; client: string; table: number; nombre_personnes?: number; moyen_paiement?: BarPaymentMethod; observation?: string; statut: string; total: number; created_at?: string; cloture_at?: string; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean; items: Array<{ nom: string; quantite: number; prix: number }> };
 export type BarOrderStatus = 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE';
 
 export const getBarOrders = async () => {
@@ -109,9 +109,9 @@ export const getBarHistory = async () => {
   const response = await get<BarOrderResponse[] | { data?: BarOrderResponse[] }>('/history');
   return Array.isArray(response) ? response : response.data ?? [];
 };
-export const createBarOrder = (data: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
+export const createBarOrder = (data: { client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }>; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) =>
   post<{ id: number; client: string; table: number; statut: string; total: number; items: Array<{ nom: string; quantite: number; prix: number }> }>('/orders', data);
-export const updateBarOrder = (id: number, data: { client?: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }> }) =>
+export const updateBarOrder = (id: number, data: { client?: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: Array<{ product_id?: number; nom: string; quantite: number; prix: number; prix_unitaire?: number }>; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) =>
   put<BarOrderResponse>(`/orders/${id}`, data);
 export const deleteBarOrder = (id: number) => remove<{ message: string }>('/orders/' + id);
 export const closeAllBarOrders = (order_ids: number[]) => post<{ closed_orders: number; archived: boolean }>('/orders/close-all', { order_ids });
