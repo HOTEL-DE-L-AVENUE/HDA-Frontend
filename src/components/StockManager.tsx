@@ -35,6 +35,7 @@ interface BackendStockItem {
 export const StockManager: React.FC<StockManagerProps> = ({ module, categories }) => {
   const { state, dispatch, getModuleStock, addNotification } = useHDA();
   const [showModal, setShowModal] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<StockItem | null>(null);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -76,6 +77,36 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
       return response?.data?.message || response?.data?.error?.message || 'Erreur réseau';
     }
     return err instanceof Error ? err.message : 'Erreur de connexion';
+  };
+
+  const handleDeleteItem = async () => {
+    if (!pendingDeleteItem) return;
+
+    const item = pendingDeleteItem;
+    setLoading(true);
+    setError(null);
+    try {
+      if (useBackend) {
+        if (isHotel) {
+          const backendItem = backendStock.find((entry) => String(entry.id) === String(item.id));
+          if (backendItem) await api.delete(`/api/stock/stocks/${backendItem.id}`);
+        } else {
+          await api.delete(`${apiBase}/${item.id}`);
+        }
+        await refetchStock();
+        if (editItem?.id === item.id) {
+          setShowModal(false);
+          setEditItem(null);
+        }
+      } else {
+        dispatch({ type: 'DELETE_STOCK_ITEM', payload: item.id });
+      }
+      setPendingDeleteItem(null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const refetchStock = async () => {
@@ -311,32 +342,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
           <Edit2 size={14} />
         </button>
         <button onClick={async () => {
-          if (!window.confirm(`Supprimer ${item.nom} ?`)) return;
-          if (useBackend) {
-            setLoading(true);
-            setError(null);
-            try {
-              if (isHotel) {
-                const backendItem = backendStock.find((entry) => String(entry.id) === String(item.id));
-                if (backendItem) {
-                  await api.delete(`/api/stock/stocks/${backendItem.id}`);
-                }
-              } else {
-                await api.delete(`${apiBase}/${item.id}`);
-              }
-              await refetchStock();
-              if (editItem?.id === item.id) {
-                setShowModal(false);
-                setEditItem(null);
-              }
-            } catch (err) {
-              setError(getErrorMessage(err));
-            } finally {
-              setLoading(false);
-            }
-          } else {
-            dispatch({ type: 'DELETE_STOCK_ITEM', payload: item.id });
-          }
+          setPendingDeleteItem(item);
         }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all" title="Supprimer l'article">
           <Trash2 size={14} />
         </button>
@@ -346,6 +352,36 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
 
   return (
     <div className="space-y-6">
+      <Modal
+        isOpen={pendingDeleteItem !== null}
+        onClose={() => { if (!loading) setPendingDeleteItem(null); }}
+        title="Supprimer l’article"
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-red-400/30 bg-red-500/10 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
+              <Trash2 size={20} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-primary">Supprimer cet article ?</p>
+              <p className="mt-1 break-words text-sm leading-relaxed text-secondary">
+                « {pendingDeleteItem?.nom} » sera définitivement retiré du menu et du stock.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-muted">Cette action est irréversible.</p>
+            </div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="secondary" onClick={() => setPendingDeleteItem(null)} disabled={loading} className="w-full sm:w-auto">
+              Annuler
+            </Button>
+            <Button type="button" variant="danger" onClick={() => void handleDeleteItem()} disabled={loading} className="w-full sm:w-auto">
+              <Trash2 size={16} />
+              {loading ? 'Suppression...' : 'Supprimer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
       {loading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
@@ -480,6 +516,8 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [backendError, setBackendError] = useState<string | null>(null);
   const [currentBarSession, setCurrentBarSession] = useState<BarSession | null>(null);
   const [isClosingBarSession, setIsClosingBarSession] = useState(false);
+  const [showCloseOrdersModal, setShowCloseOrdersModal] = useState(false);
+  const [isClosingOrders, setIsClosingOrders] = useState(false);
   const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
 
   const isBar = module === 'bar';
@@ -881,17 +919,73 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
-    if (!window.confirm(`Imprimer puis clôturer les ${allOrders.length} commande(s) ? Elles resteront disponibles dans l'historique administrateur.`)) return;
 
-    handlePrintClosingReport();
-    await onCloseAllOrders(allOrders.map((order) => order.id));
-    setBackendTransactions([]);
-    setTransactionsRefreshTrigger((value) => value + 1);
-    await onRefresh?.();
+    setShowCloseOrdersModal(true);
+  };
+
+  const confirmCloseAllOrders = async () => {
+    if (!onCloseAllOrders || allOrders.length === 0) return;
+
+    setIsClosingOrders(true);
+    try {
+      handlePrintClosingReport();
+      await onCloseAllOrders(allOrders.map((order) => order.id));
+      setBackendTransactions([]);
+      setTransactionsRefreshTrigger((value) => value + 1);
+      await onRefresh?.();
+      setShowCloseOrdersModal(false);
+    } catch (error) {
+      setBackendError(error instanceof Error ? error.message : 'Impossible de clôturer les commandes.');
+    } finally {
+      setIsClosingOrders(false);
+    }
   };
 
   return (
     <div className="space-y-6">
+      <Modal
+        isOpen={showCloseOrdersModal}
+        onClose={() => { if (!isClosingOrders) setShowCloseOrdersModal(false); }}
+        title="Clôturer les commandes"
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">
+              <AlertCircle size={21} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
+              <p className="mt-1 text-sm leading-relaxed text-secondary">
+                Les <strong>{allOrders.length} commande{allOrders.length > 1 ? 's' : ''}</strong> seront clôturées de la caisse.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Elles resteront disponibles dans l’historique administrateur.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowCloseOrdersModal(false)}
+              disabled={isClosingOrders}
+              className="w-full sm:w-auto"
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmCloseAllOrders()}
+              disabled={isClosingOrders}
+              className="w-full sm:w-auto"
+            >
+              <Printer size={16} />
+              {isClosingOrders ? 'Clôture...' : 'Imprimer et clôturer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
       <div className="flex justify-end">
         <div className="flex flex-wrap justify-end gap-2">
           {!isBar && (
