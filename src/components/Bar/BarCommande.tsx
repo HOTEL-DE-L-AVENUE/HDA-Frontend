@@ -5,7 +5,7 @@ import api from '../../lib/api';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
-import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle } from 'lucide-react';
+import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle, Gift, Dices, Hotel, MapPin } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
 import { reservationService } from '../../services/reservation.service';
 import AuthService from '../../services/authService';
@@ -238,7 +238,13 @@ export const BarCommandeView: React.FC<Props> = ({
     setIsModalOpen(true);
     if (location.label === 'Chambre') {
       void loadChamberReservationOptions();
+      setMoyenPaiement('CREDIT');
+    } else if (location.label === 'Gratuit' || location.label === 'Pocker gratuit') {
+      setMoyenPaiement('GRATUIT');
+      setChamberReservationOptions([]);
+      setChamberReservationSearch('');
     } else {
+      setMoyenPaiement('ESPECES');
       setChamberReservationOptions([]);
       setChamberReservationSearch('');
     }
@@ -246,11 +252,15 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handleOpenEditModal = (commande: BarCommande) => {
     const specialMode = commande.observation?.trim().toUpperCase();
-    const location = specialMode === 'POCKER'
+    const isPoker = specialMode === 'POCKER' || specialMode === 'POKER' || specialMode === 'POCKER GRATUIT' || specialMode === 'POKER GRATUIT';
+    const isChambre = specialMode === 'CHAMBRE' || Boolean(commande.hotel_reservation_id) || Boolean(commande.room_id) || (commande.table === 0 && commande.moyen_paiement === 'CREDIT');
+    const isGratuit = specialMode === 'GRATUIT' || (commande.table === 0 && commande.moyen_paiement === 'GRATUIT');
+
+    const location: OrderLocationOption = isPoker
       ? { kind: 'special' as const, label: 'Pocker gratuit', tableId: 0 }
-      : specialMode === 'CHAMBRE'
+      : isChambre
         ? { kind: 'special' as const, label: 'Chambre', tableId: 0 }
-        : specialMode === 'GRATUIT'
+        : isGratuit
           ? { kind: 'special' as const, label: 'Gratuit', tableId: 0 }
           : { kind: 'table' as const, label: `T${commande.table}`, tableId: commande.table };
     const chamberGuest = location.label === 'Chambre' ? String(commande.client || '') : '';
@@ -260,7 +270,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setClient(commande.client);
     setTable(String(commande.table));
     setNombrePersonnes(String(commande.nombre_personnes || 1));
-    setMoyenPaiement(commande.moyen_paiement || 'ESPECES');
+    setMoyenPaiement(commande.moyen_paiement || (isGratuit || isPoker ? 'GRATUIT' : isChambre ? 'CREDIT' : 'ESPECES'));
     setSelectedItems(commande.items.map((item) => ({ ...item })));
     setSearchTerm('');
     setSelectedLocation(location);
@@ -280,6 +290,15 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handleCloseModal = () => {
     resetModal();
+  };
+
+  const handleCancelLocationSelection = () => {
+    setIsLocationSelectionOpen(false);
+    if (selectedLocation || isEditingOrder || selectedItems.length > 0) {
+      setIsModalOpen(true);
+    } else {
+      resetModal();
+    }
   };
 
   const handleAddItem = (cocktail: BarProduct) => {
@@ -318,8 +337,78 @@ export const BarCommandeView: React.FC<Props> = ({
     setSelectedItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const isPokerLocation = selectedLocation?.label === 'Pocker gratuit';
+  const isPokerLocation = selectedLocation?.label === 'Pocker gratuit' || selectedLocation?.label?.toUpperCase().includes('POKER') || selectedLocation?.label?.toUpperCase().includes('POCKER');
   const isNamedLocation = selectedLocation?.kind === 'special';
+  const isGratuitLocation = selectedLocation?.label === 'Gratuit' || (selectedLocation?.kind === 'special' && selectedLocation?.label?.toUpperCase().includes('GRATUIT') && !isPokerLocation);
+  const isChambreLocation = selectedLocation?.label === 'Chambre' || (selectedLocation?.kind === 'special' && selectedLocation?.label?.toUpperCase().includes('CHAMBRE'));
+
+  const getSelectedLocationInfo = () => {
+    const rawLabel = selectedLocation?.label?.trim() || '';
+    const upperLabel = rawLabel.toUpperCase();
+
+    const isChambre = isChambreLocation || upperLabel === 'CHAMBRE' || (selectedLocation?.kind === 'special' && upperLabel.includes('CHAMBRE'));
+    const isPoker = isPokerLocation || upperLabel === 'POCKER GRATUIT' || upperLabel === 'POKER GRATUIT' || upperLabel === 'POKER' || upperLabel === 'POCKER';
+    const isGratuit = isGratuitLocation || upperLabel === 'GRATUIT' || (selectedLocation?.kind === 'special' && upperLabel.includes('GRATUIT') && !isPoker);
+
+    if (isGratuit) {
+      return {
+        type: 'GRATUIT' as const,
+        badgeLabel: 'GRATUIT',
+        title: 'GRATUIT',
+        subtitle: 'Consommation offerte · Mode Gratuit au Bar (aucun encaissement)',
+        badgeBg: 'bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.35)]',
+        badgeBorder: 'border-emerald-400',
+        cardBorder: 'border-emerald-500/40 bg-emerald-500/10',
+        textColor: 'text-emerald-400',
+        icon: Gift,
+      };
+    }
+
+    if (isPoker) {
+      return {
+        type: 'POKER' as const,
+        badgeLabel: 'POKER GRATUIT',
+        title: 'POKER GRATUIT',
+        subtitle: 'Table Poker · Boissons et consommations offertes aux joueurs',
+        badgeBg: 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]',
+        badgeBorder: 'border-purple-400',
+        cardBorder: 'border-purple-500/40 bg-purple-500/10',
+        textColor: 'text-purple-300',
+        icon: Dices,
+      };
+    }
+
+    if (isChambre) {
+      const roomSuffix = selectedChamberRoomLabel ? ` — ${selectedChamberRoomLabel}` : '';
+      return {
+        type: 'CHAMBRE' as const,
+        badgeLabel: selectedChamberRoomLabel ? selectedChamberRoomLabel.toUpperCase() : 'CHAMBRE',
+        title: `CHAMBRE${roomSuffix}`,
+        subtitle: selectedChamberRoomLabel
+          ? `Facturation portée au compte de la ${selectedChamberRoomLabel}`
+          : 'Commande rattachée à un client hôtel · Ajout sur note de chambre',
+        badgeBg: 'bg-sky-500 text-black shadow-[0_0_15px_rgba(14,165,233,0.35)]',
+        badgeBorder: 'border-sky-400',
+        cardBorder: 'border-sky-500/40 bg-sky-500/10',
+        textColor: 'text-sky-300',
+        icon: Hotel,
+      };
+    }
+
+    const tableNumero = selectedLocation?.kind === 'table' ? selectedLocation.label : (table ? `T${table}` : 'T?');
+    return {
+      type: 'TABLE' as const,
+      badgeLabel: tableNumero,
+      title: `Emplacement : Table ${tableNumero}`,
+      subtitle: 'Commande standard bar servie en salle',
+      badgeBg: 'bg-accent text-black shadow-[0_0_15px_rgba(234,179,8,0.3)]',
+      badgeBorder: 'border-accent/40',
+      cardBorder: 'border-accent/30 bg-accent/5',
+      textColor: 'text-accent',
+      icon: MapPin,
+    };
+  };
+
   const isChambreOrder = (commande: BarCommande) => commande.observation?.trim().toUpperCase() === 'CHAMBRE';
   const filteredChamberReservationOptions = chamberReservationOptions.filter((option) => {
     const searchValue = chamberReservationSearch.trim().toLowerCase();
@@ -761,6 +850,8 @@ export const BarCommandeView: React.FC<Props> = ({
     return (menuCategory === 'Toutes' || parts.category === menuCategory) && (menuSubcategory === 'Toutes' || parts.subcategory === menuSubcategory);
   });
 
+  const selectedLocationInfo = getSelectedLocationInfo();
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-base bg-surface p-4 shadow-sm">
@@ -795,7 +886,7 @@ export const BarCommandeView: React.FC<Props> = ({
         </div>
       </div>
 
-      <Modal isOpen={isLocationSelectionOpen} onClose={handleCloseModal} title="Choisir l'emplacement de la commande" size="sm">
+      <Modal isOpen={isLocationSelectionOpen} onClose={handleCancelLocationSelection} title="Choisir l'emplacement de la commande" size="sm">
         <div className="space-y-4">
           <p className="text-sm text-secondary">Sélectionnez une table ou un type de réservation.</p>
           <div className="grid grid-cols-4 gap-2">
@@ -810,14 +901,51 @@ export const BarCommandeView: React.FC<Props> = ({
               </button>
             ))}
           </div>
-          <Button variant="danger" size="sm" type="button" onClick={handleCloseModal} className="w-auto self-end rounded-md px-3 py-1.5">
+          <Button variant="danger" size="sm" type="button" onClick={handleCancelLocationSelection} className="w-auto self-end rounded-md px-3 py-1.5">
             Annuler
           </Button>
         </div>
       </Modal>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={isEditingOrder ? 'Modifier la commande · Bar' : 'Nouvelle commande · Bar'} size="full">
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title={`${isEditingOrder ? 'Modifier la commande · Bar' : 'Nouvelle commande · Bar'} — ${selectedLocationInfo.badgeLabel}`}
+        size="full"
+      >
         <form onSubmit={handleAjouterCommande} className="space-y-3 sm:space-y-4">
+
+          {/* Libellé explicite et immédiatement visible en haut du modal selon la table / emplacement sélectionné */}
+          <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-3.5 sm:p-4 shadow-sm transition-all ${selectedLocationInfo.cardBorder}`}>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className={`flex min-h-12 min-w-[95px] sm:min-w-[120px] items-center justify-center gap-2 rounded-xl border px-3 py-1.5 text-center text-xs sm:text-sm font-black tracking-wider uppercase ${selectedLocationInfo.badgeBg} ${selectedLocationInfo.badgeBorder}`}>
+                <selectedLocationInfo.icon size={16} />
+                <span className="leading-tight">{selectedLocationInfo.badgeLabel}</span>
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Emplacement sélectionné :</span>
+                  <span className={`text-sm sm:text-base font-extrabold ${selectedLocationInfo.textColor}`}>
+                    {selectedLocationInfo.title}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-300/80">{selectedLocationInfo.subtitle}</p>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setIsModalOpen(false);
+                setIsLocationSelectionOpen(true);
+              }}
+              className="text-xs"
+            >
+              Changer d'emplacement
+            </Button>
+          </div>
 
           {feedback && (
             <div className={`rounded-xl p-3 text-sm flex items-center justify-between border ${feedback.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
@@ -831,7 +959,7 @@ export const BarCommandeView: React.FC<Props> = ({
               {selectedLocation?.label === 'Chambre' ? (
                 <div className="relative grid gap-2">
                   <Input
-                    label="Nom de la personne"
+                    label="Nom de la personne (Client hôtel)"
                     value={chamberReservationSearch}
                     onChange={(event) => {
                       const nextValue = event.target.value;
@@ -843,6 +971,19 @@ export const BarCommandeView: React.FC<Props> = ({
                     onFocus={() => setShowChamberSuggestions(true)}
                     placeholder="Nom, prénom ou chambre"
                   />
+                  {selectedChamberRoomLabel && (
+                    <div className="flex items-center justify-between rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs text-sky-300">
+                      <span>Chambre liée : <strong className="font-bold text-white">{selectedChamberRoomLabel}</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChamberRoomLabel('')}
+                        className="text-xs text-slate-400 hover:text-white"
+                        title="Détacher la chambre"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                   {visibleChamberSuggestions.length > 0 && (
                     <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 max-h-52 overflow-y-auto rounded-xl border border-base bg-[#111827] shadow-2xl">
                       {visibleChamberSuggestions.map((option) => (
@@ -862,7 +1003,7 @@ export const BarCommandeView: React.FC<Props> = ({
               ) : isPokerLocation ? (
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                   <Input
-                    label="Nom de la personne"
+                    label="Nom de la personne (Joueur Poker)"
                     value={specialPersonName}
                     onChange={(event) => setSpecialPersonName(event.target.value)}
                     placeholder="Ex. Théophile"
@@ -882,10 +1023,10 @@ export const BarCommandeView: React.FC<Props> = ({
                 </div>
               ) : (
                 <Input
-                  label="Nom de la personne"
+                  label="Nom du bénéficiaire (Consommation offerte)"
                   value={specialPersonName}
                   onChange={(event) => setSpecialPersonName(event.target.value)}
-                  placeholder={selectedLocation?.label === 'Chambre' ? 'Ex. Nom du client' : 'Ex. Théophile'}
+                  placeholder="Ex. Théophile / Nom de l'invité"
                 />
               )}
             </div>
