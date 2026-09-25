@@ -78,6 +78,22 @@ const parseModules = (mod: any): ModuleType[] => {
   return [];
 };
 
+interface UserPresence {
+  online: boolean;
+  lastSeen: string | null;
+  lastLogin: string | null;
+}
+
+const formatRelative = (iso: string | null) => {
+  if (!iso) return null;
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return 'à l’instant';
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  return formatDate(iso);
+};
+
 export const UtilisateursPage: React.FC = () => {
   const { state, dispatch } = useHDA();
   const [showModal, setShowModal] = useState(false);
@@ -88,6 +104,8 @@ export const UtilisateursPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [presence, setPresence] = useState<Record<string, UserPresence>>({});
+  const [onlineOnly, setOnlineOnly] = useState(false);
   // const [casinoPlayers, setCasinoPlayers] = useState<Client[]>([]);
   // const [showPlayerModal, setShowPlayerModal] = useState(false);
   // const [playerForm, setPlayerForm] = useState({ nom: '', prenom: '', telephone: '' });
@@ -137,6 +155,27 @@ export const UtilisateursPage: React.FC = () => {
     // fetchCasinoPlayers();
   }, [fetchRealUsers]);
 
+  // Statut en ligne : rafraîchi toutes les 30 secondes
+  const fetchPresence = useCallback(async () => {
+    try {
+      const response = await api.get('/api/admin/users-presence');
+      const rows = Array.isArray(response.data?.data) ? response.data.data : [];
+      setPresence(Object.fromEntries(rows.map((row: any) => [String(row.id_admin), {
+        online: Boolean(row.online),
+        lastSeen: row.last_seen || null,
+        lastLogin: row.last_login || null,
+      }])));
+    } catch {
+      // Statut en ligne indisponible : la liste des utilisateurs reste utilisable.
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPresence();
+    const interval = window.setInterval(fetchPresence, 30000);
+    return () => window.clearInterval(interval);
+  }, [fetchPresence]);
+
   // const createCasinoPlayer = async () => {
   //   if (!playerForm.nom.trim()) {
   //     setErrorMessage('Le nom du joueur est requis.');
@@ -162,9 +201,11 @@ export const UtilisateursPage: React.FC = () => {
   //   }
   // };
 
-  const filtered = state.users.filter(u =>
-    `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const isOnline = (user: User) => Boolean(presence[String(user.id)]?.online);
+  const filtered = state.users
+    .filter(u => `${u.nom} ${u.prenom} ${u.email}`.toLowerCase().includes(search.toLowerCase()))
+    .filter(u => !onlineOnly || isOnline(u))
+    .sort((a, b) => Number(isOnline(b)) - Number(isOnline(a)));
 
   const openEdit = (user: User) => {
     setEditUser(user);
@@ -300,6 +341,7 @@ export const UtilisateursPage: React.FC = () => {
 
   const activeCount = state.users.filter(u => u.actif).length;
   const managerCount = state.users.filter(u => u.role === 'manager').length;
+  const onlineCount = state.users.filter(isOnline).length;
 
   return (
     <div className="space-y-6">
@@ -323,9 +365,10 @@ export const UtilisateursPage: React.FC = () => {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: 'Total Utilisateurs', value: state.users.length, color: 'text-primary' },
+          { label: 'En ligne', value: onlineCount, color: 'text-success' },
           { label: 'Actifs', value: activeCount, color: 'text-success' },
           { label: 'Inactifs', value: state.users.length - activeCount, color: 'text-muted' },
           { label: 'Managers', value: managerCount, color: 'text-accent' },
@@ -353,6 +396,15 @@ export const UtilisateursPage: React.FC = () => {
                 className="w-full sm:w-48 h-9 pl-9 pr-3 bg-surface-2 border border-base rounded-xl text-primary placeholder-muted text-sm focus:outline-none focus:border-accent/50"
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setOnlineOnly(v => !v)}
+              className={`h-9 px-3 rounded-xl border text-sm flex items-center gap-2 whitespace-nowrap transition-all ${onlineOnly ? 'bg-success-bg text-success border-success/40' : 'bg-surface-2 text-muted border-base hover:text-primary'}`}
+              title="Afficher uniquement les utilisateurs connectés"
+            >
+              <span className="w-2 h-2 rounded-full bg-success" />
+              En ligne ({onlineCount})
+            </button>
             <Button icon={<Plus size={16} />} onClick={() => { setEditUser(null); setErrorMessage(''); setShowModal(true); }}>
               Ajouter
             </Button>
@@ -369,13 +421,20 @@ export const UtilisateursPage: React.FC = () => {
           ) : (
             filtered.map(user => {
               const userModulesList = parseModules(user.module);
+              const userPresence = presence[String(user.id)];
+              const online = Boolean(userPresence?.online);
+              const lastActivity = userPresence?.lastSeen || userPresence?.lastLogin || user.lastLogin || null;
               return (
                 <div key={user.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-2 transition-colors">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
+                  <div className={`relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${user.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' :
                     user.role === 'caisse' ? 'bg-gradient-to-br from-amber-500 to-orange-600' :
                       'bg-gradient-to-br from-slate-600 to-slate-700'
                     }`}>
                     <span className="text-black font-bold text-sm">{user.prenom?.[0] || ''}{user.nom?.[0] || ''}</span>
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[var(--color-surface)] ${online ? 'bg-success' : 'bg-surface-3'}`}
+                      title={online ? 'En ligne' : 'Hors ligne'}
+                    />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -409,10 +468,19 @@ export const UtilisateursPage: React.FC = () => {
                     </Badge>
                   </div>
 
-                  <div className="hidden xl:block text-right">
-                    <p className="text-muted text-xs">
-                      {user.lastLogin ? formatDate(user.lastLogin) : 'Jamais'}
-                    </p>
+                  <div className="hidden sm:block text-right min-w-24">
+                    {online ? (
+                      <p className="text-success text-xs font-medium flex items-center justify-end gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-success animate-pulse" /> En ligne
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-muted text-xs">Hors ligne</p>
+                        <p className="text-muted text-[11px]">
+                          {lastActivity ? `Vu ${formatRelative(lastActivity)}` : 'Jamais connecté'}
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   <div className="flex gap-2">

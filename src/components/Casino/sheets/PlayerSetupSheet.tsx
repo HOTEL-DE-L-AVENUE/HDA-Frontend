@@ -74,13 +74,14 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
 
   const register = async () => {
     if (!newPlayer.nom.trim()) { showToast('Le nom du joueur est obligatoire.', 'error'); return; }
-    if (!newPlayer.identite_nom_complet.trim() || !newPlayer.identite_numero.trim() || !newPlayer.identite_date_emission || !newPlayer.identite_verifiee || identityFiles.length < 3) {
-      showToast('L’identité complète, la confirmation et au moins 3 fichiers sont obligatoires.', 'error');
+    const selectedFiles = identityFiles.filter(Boolean);
+    if (!newPlayer.identite_nom_complet.trim() || !newPlayer.identite_numero.trim() || !newPlayer.identite_date_emission || !newPlayer.identite_verifiee || selectedFiles.length < 1) {
+      showToast('L’identité complète, la confirmation et au moins 1 fichier sont obligatoires.', 'error');
       return;
     }
     try {
       setUploadingIdentity(true);
-      const uploadedFiles = await Promise.all(identityFiles.map((file) => uploadService.uploadFile(file)));
+      const uploadedFiles = await Promise.all(selectedFiles.map((file) => uploadService.uploadFile(file)));
       await onRegister({ ...newPlayer, identite_fichiers_urls: JSON.stringify(uploadedFiles.map((file) => file.url)) });
       setIdentityFiles([]);
       setNewPlayer(emptyPlayer);
@@ -98,14 +99,14 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
     if (!editingPlayer) return;
     try {
       let updatedPlayer = editingPlayer;
-      if (editingIdentityFiles.length > 0) {
-        if (editingIdentityFiles.length < 3) {
-          showToast('Sélectionnez les 3 nouveaux fichiers pour remplacer les documents.', 'error');
-          return;
-        }
+      if (editingIdentityFiles.some(Boolean)) {
         setUploadingIdentity(true);
-        const uploadedFiles = await Promise.all(editingIdentityFiles.map((file) => uploadService.uploadFile(file)));
-        updatedPlayer = { ...editingPlayer, identite_fichiers_urls: JSON.stringify(uploadedFiles.map((file) => file.url)) };
+        const existingUrls = identityFileUrls(editingPlayer);
+        const mergedUrls = await Promise.all([0, 1, 2].map(async (index) => {
+          const file = editingIdentityFiles[index];
+          return file ? (await uploadService.uploadFile(file)).url : existingUrls[index];
+        }));
+        updatedPlayer = { ...editingPlayer, identite_fichiers_urls: JSON.stringify(mergedUrls.filter(Boolean)) };
       }
       if (!updatedPlayer.identite_nom_complet?.trim() || !updatedPlayer.identite_numero?.trim() || !updatedPlayer.identite_date_emission || !updatedPlayer.identite_verifiee) {
         showToast('Les informations d’identité et la confirmation sont obligatoires.', 'error');
@@ -200,17 +201,17 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
         <input className={inputClass} value={newPlayer.identite_nom_complet} onChange={(event) => setNewPlayer((current: any) => ({ ...current, identite_nom_complet: event.target.value }))} placeholder="Nom complet sur la pièce *" />
         <input className={inputClass} type="date" value={newPlayer.identite_date_emission} onChange={(event) => setNewPlayer((current: any) => ({ ...current, identite_date_emission: event.target.value }))} aria-label="Date d'émission de la pièce" />
         <div className="col-span-full rounded-xl border p-3" style={casinoBorder}>
-          <div className="mb-3"><p className="font-semibold">Pièces d’identité à téléverser</p><p className="text-xs text-muted">Ajoutez 3 fichiers obligatoires : recto, verso et justificatif complémentaire. PDF, JPG ou PNG.</p></div>
+          <div className="mb-3"><p className="font-semibold">Pièces d’identité à téléverser</p><p className="text-xs text-muted">Ajoutez au moins 1 fichier (jusqu’à 3) : recto, verso et/ou justificatif complémentaire. PDF, JPG ou PNG.</p></div>
           <div className="grid gap-3 md:grid-cols-3">
             {['Pièce 1 — Recto', 'Pièce 2 — Verso', 'Pièce 3 — Justificatif'].map((label, index) => (
               <label key={label} className={`flex min-h-28 cursor-pointer flex-col justify-between rounded-lg border p-3 transition ${identityFiles[index] ? 'border-green-400 bg-green-400/10' : 'border-dashed border-yellow-300/60 hover:bg-yellow-300/10'}`} style={casinoBorder}>
-                <span className="text-xs font-semibold">{label} *</span>
+                <span className="text-xs font-semibold">{label}</span>
                 <span className="my-2 truncate text-[11px] text-muted">{identityFiles[index]?.name || 'Cliquer pour choisir un fichier'}</span>
                 <input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setIdentityFiles((current) => { const next = [...current]; const file = event.target.files?.[0]; if (file) next[index] = file; return next; })} />
               </label>
             ))}
           </div>
-          <p className={`mt-2 text-xs ${identityFiles.filter(Boolean).length >= 3 ? 'text-green-400' : 'text-yellow-300'}`}>{identityFiles.filter(Boolean).length}/3 fichier(s) requis</p>
+          <p className={`mt-2 text-xs ${identityFiles.filter(Boolean).length >= 1 ? 'text-green-400' : 'text-yellow-300'}`}>{identityFiles.filter(Boolean).length}/3 fichier(s) — au moins 1 requis</p>
         </div>
         <label className="col-span-full inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={newPlayer.identite_verifiee} onChange={(event) => setNewPlayer((current) => ({ ...current, identite_verifiee: event.target.checked }))} /> J’ai vérifié la pièce originale et confirmé l’identité du joueur *</label>
         <input className={inputClass} type="date" value={newPlayer.date_inscription} onChange={(event) => setNewPlayer((current: any) => ({ ...current, date_inscription: event.target.value }))} aria-label="Date d'inscription" />
@@ -234,7 +235,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
         <input className={inputClass} type="date" value={editingPlayer.identite_date_emission || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_date_emission: event.target.value } : current)} />
         <div className="col-span-full rounded-xl border p-3" style={casinoBorder}>
           <p className="mb-3 font-semibold">Documents d’identité</p>
-          <p className="mb-3 text-xs text-muted">Les documents existants sont conservés. Pour les remplacer, choisissez les 3 nouveaux fichiers.</p>
+          <p className="mb-3 text-xs text-muted">Les documents existants sont conservés. Choisissez uniquement le ou les fichiers à remplacer ou à ajouter.</p>
           <div className="grid gap-3 md:grid-cols-3">{['Pièce 1 — Recto', 'Pièce 2 — Verso', 'Pièce 3 — Justificatif'].map((label, index) => <label key={label} className={`flex min-h-24 cursor-pointer flex-col justify-between rounded-lg border p-3 ${editingIdentityFiles[index] ? 'border-green-400 bg-green-400/10' : 'border-dashed border-yellow-300/60'}`}><span className="text-xs font-semibold">{label}</span><span className="my-2 truncate text-[11px] text-muted">{editingIdentityFiles[index]?.name || (identityFileUrls(editingPlayer)[index] ? 'Document existant' : 'Cliquer pour choisir')}</span><input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setEditingIdentityFiles((current) => { const next = [...current]; const file = event.target.files?.[0]; if (file) next[index] = file; return next; })} /></label>)}</div>
         </div>
         <label className="col-span-full inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(editingPlayer.identite_verifiee)} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_verifiee: event.target.checked } : current)} /> Identité vérifiée *</label>

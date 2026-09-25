@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, ChevronRight, X, LogOut, User, Settings, ChevronDown, RefreshCw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthService from '../services/authService'; // ← Import du service
+import api from '../lib/api';
 import { useHDA } from '../context/HDAContext'; // Gardé uniquement pour les notifications
 import { generateNotifications } from '../services/notificationService';
 import logo from '../assets/logo_s.png';
@@ -68,6 +69,16 @@ export const Header: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Présence en ligne : signale au serveur que l'utilisateur est toujours connecté,
+  // même s'il reste sur une page sans faire de requête.
+  useEffect(() => {
+    if (!currentUser) return;
+    const sendHeartbeat = () => { api.post('/api/auth/heartbeat').catch(() => { }); };
+    sendHeartbeat();
+    const interval = window.setInterval(sendHeartbeat, 60000);
+    return () => window.clearInterval(interval);
+  }, [currentUser]);
 
   // Load notifications on mount and periodically refresh
   useEffect(() => {
