@@ -34,9 +34,10 @@ interface ReservationListProps {
   onCancel?: (reservationId: number) => void;
   onDelete?: (reservationId: number) => void;
   refreshTrigger?: number;
+  paymentCancelledTrigger?: number;
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger }) => {
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger, paymentCancelledTrigger }) => {
   const {
     reservations,
     loading: reservationsLoading,
@@ -79,6 +80,13 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       loadReservations();
     }
   }, [loadReservations, refreshTrigger]);
+
+  // Clear encaissedIds when payment is cancelled
+  useEffect(() => {
+    if (paymentCancelledTrigger !== undefined) {
+      setEncaissedIds([]);
+    }
+  }, [paymentCancelledTrigger]);
 
   useEffect(() => {
     let isMounted = true;
@@ -449,11 +457,8 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                     {/* Bouton Encaisser dynamique - Only show after check-in */}
                     {onEncaisser && (res.statut === 'CHECKED_IN' || res.statut === 'EN_COURS') && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
                       <button
-                        type="button" // AJOUTÉ : Empêche le rechargement
-                        onClick={() => {
-                          setEncaissedIds(prev => [...prev, res.id]); // Masque le bouton instantanément
-                          onEncaisser(res);
-                        }}
+                        type="button"
+                        onClick={() => onEncaisser(res)}
                         className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs rounded-lg transition-colors font-medium mr-1"
                         title="Encaisser cette réservation"
                       >

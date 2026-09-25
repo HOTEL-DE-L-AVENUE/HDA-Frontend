@@ -170,6 +170,7 @@ const HotelPage: React.FC = () => {
   const [maintenanceRoomId, setMaintenanceRoomId] = useState<number | null>(null);
   const [paymentReservation, setPaymentReservation] = useState<Reservation | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<HotelPaymentMethod>('ESPECES');
+  const [paymentCancelledTrigger, setPaymentCancelledTrigger] = useState(0);
 
   const roomsData = Array.isArray(rooms) ? rooms : [];
   const reservationsData = Array.isArray(reservations) ? reservations : [];
@@ -195,6 +196,12 @@ const HotelPage: React.FC = () => {
   const handleEncaisser = (res: Reservation) => {
     setPaymentReservation(res);
     setPaymentMethod(res.moyen_paiement || 'ESPECES');
+  };
+
+  // Annulation de l'encaissement
+  const handleCancelEncaissement = () => {
+    setPaymentReservation(null);
+    setPaymentCancelledTrigger(prev => prev + 1);
   };
 
   // Check-in logic: Change status from CONFIRMEE to CHECKED_IN
@@ -395,6 +402,7 @@ const HotelPage: React.FC = () => {
               onEncaisser={handleEncaisser}
               onCheckIn={handleCheckIn}
               refreshTrigger={dataRefreshKey}
+              paymentCancelledTrigger={paymentCancelledTrigger}
             />
           </div>
         )}
@@ -493,7 +501,7 @@ const HotelPage: React.FC = () => {
                 <h2 className="text-lg font-bold text-primary">Encaisser la réservation</h2>
                 <p className="mt-1 text-sm text-muted">Choisissez le mode d’encaissement.</p>
               </div>
-              <button type="button" onClick={() => setPaymentReservation(null)} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-primary" disabled={isLoading}>
+              <button type="button" onClick={handleCancelEncaissement} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-primary" disabled={isLoading}>
                 <X size={18} />
               </button>
             </div>
@@ -513,7 +521,7 @@ const HotelPage: React.FC = () => {
               <option value="GRATUIT">Gratuit</option>
             </select>
             <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => setPaymentReservation(null)} className="flex-1 rounded-lg border border-base px-4 py-2.5 text-sm text-primary hover:bg-surface-2" disabled={isLoading}>
+              <button type="button" onClick={handleCancelEncaissement} className="flex-1 rounded-lg border border-base px-4 py-2.5 text-sm text-primary hover:bg-surface-2" disabled={isLoading}>
                 Annuler
               </button>
               <button type="button" onClick={() => void confirmEncaissement()} className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-black hover:bg-accent-2 disabled:opacity-50" disabled={isLoading}>
