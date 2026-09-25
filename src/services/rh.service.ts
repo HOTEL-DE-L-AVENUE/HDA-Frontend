@@ -30,6 +30,7 @@ const rhService = {
   async generatePayroll(period: string) { return page<RHPayroll>(await api.post(`/api/rh/payroll/${period}/generate`)); },
   async updatePayroll(id: number, payload: Record<string, unknown>) { return (await api.patch(`/api/rh/payroll/${id}`, payload)).data.data as RHPayroll; },
   async updatePayrollStatus(id: number, status: 'VALIDE' | 'PAYE') { return (await api.patch(`/api/rh/payroll/${id}/status`, { status })).data.data as RHPayroll; },
+  async deleteEmployee(id: number) { await api.delete(`/api/rh/employees/${id}`); },
   async deletePayroll(id: number) { await api.delete(`/api/rh/payroll/${id}`); },
   async downloadPayslip(period: string, employeeId: number) { return api.get(`/api/rh/payroll/${period}/payslip/${employeeId}`, { responseType: 'blob' }); },
   async listEvaluations(params?: Record<string, unknown>) { return page<RHEvaluation>(await api.get('/api/rh/evaluations', { params })); },
