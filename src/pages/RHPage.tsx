@@ -19,13 +19,24 @@ const statusLabels: Record<string, string> = { ACTIF: 'Actif', EN_CONGE: 'En con
 const filterStatuses = ['ACTIF', 'SUSPENDU', 'EN_CONGE', 'RETRAITE', 'RENVOYE', 'DEMISSIONNE'];
 const documentTypes: Array<[RHDocumentType, string]> = [['CIN', 'CIN'], ['RESIDENCE', 'Justificatif de résidence'], ['CV', 'CV'], ['CONTRAT', 'Contrat de travail']];
 const documentLabel = (type: string) => documentTypes.find(([id]) => id === type)?.[1] || type;
-const emptyEmployee = { first_name: '', last_name: '', department: 'Administration', position: '', contract_type: 'CDI', status: 'ACTIF', joined_at: new Date().toISOString().slice(0, 10), salary: '', prime: '', pourboire: '', irsa: '', phone: '', address: '', email: '', birth_date: '', identification_number: '', contract_end_date: '', departure_reason: '' };
+const emptyEmployee = { first_name: '', last_name: '', department: 'Administration', position: '', contract_type: 'CDI', status: 'ACTIF', joined_at: new Date().toISOString().slice(0, 10), salary: '', prime: '', pourboire: '', irsa: '', phone: '', address: '', email: '', birth_date: '', identification_number: '', contract_end_date: '', departure_reason: '', qualification: '', cnaps_number: '', dependents: '0' };
 const formatMoney = (value: number) => `${new Intl.NumberFormat('fr-FR').format(Number(value || 0))} Ar`;
 // Nombre de semaines d'un mois = nombre de lundis (même règle que le serveur, utils/hr.js).
 const weeksInMonth = (period: string) => { const [y, m] = period.slice(0, 7).split('-').map(Number); let weeks = 0; for (let d = 1; d <= new Date(Date.UTC(y, m, 0)).getUTCDate(); d += 1) if (new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1) weeks += 1; return weeks; };
 const onePercent = (salary: string | number) => Math.round(Number(salary || 0) * 0.01 * 100) / 100;
 const labelStatus = (status: string) => statusLabels[status] || status;
 const colour = (status: string) => departureStatuses.includes(status) ? '#b64f4d' : status === 'SUSPENDU' ? '#9c6b2e' : status === 'EN_CONGE' ? '#a76625' : '#28796e';
+// La page défile dans le <main> de MainLayout, pas dans le body : on le bloque tant
+// qu'une fenêtre est ouverte, sinon la molette fait défiler la page derrière la fenêtre.
+const useLockPageScroll = (locked: boolean) => {
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!locked || !main) return;
+    const previous = main.style.overflowY;
+    main.style.overflowY = 'hidden';
+    return () => { main.style.overflowY = previous; };
+  }, [locked]);
+};
 const monthStart = () => `${new Date().toISOString().slice(0, 7)}-01`;
 const monthEnd = () => { const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 0)).toISOString().slice(0, 10); };
 const initials = (e: { first_name: string; last_name: string }) => `${e.first_name[0] || ''}${e.last_name[0] || ''}`.toUpperCase();
@@ -207,6 +218,7 @@ const RHManagerView: React.FC = () => {
   useEffect(() => { rhService.listPayroll({ period, limit: 100 }).then((r) => applyPayroll(r.rows)).catch(() => setError('Impossible de charger la paie.')); }, [period]);
   useEffect(() => { loadEmployees(); }, [statusFilter, contractFilter]);
   useEffect(() => { loadEvaluationData(); }, [evalFrom, evalTo]);
+  useLockPageScroll(!!(payrollAdjustment || payrollToDelete || employeeModal || viewedEmployee || leaveForm));
   useEffect(() => { if (!payrollToDelete) return; const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !deletingPayroll) setPayrollToDelete(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [payrollToDelete, deletingPayroll]);
   const pendingLeaves = leaves.filter((l) => l.status === 'EN_ATTENTE'); const totals = useMemo(() => payroll.reduce((a, p) => ({ base: a.base + Number(p.base_salary), extras: a.extras + Number(p.overtime_amount) + Number(p.bonuses) + Number(p.pourboire || 0) + Number(p.allowances), deductions: a.deductions + Number(p.advances) + Number(p.deductions), contributions: a.contributions + Number(p.cnaps || 0) + Number(p.ostie || 0) + Number(p.irsa || 0), net: a.net + Number(p.net_amount) }), { base: 0, extras: 0, deductions: 0, contributions: 0, net: 0 }), [payroll]);
   const refreshAfterAction = () => load();
@@ -257,6 +269,15 @@ const RHManagerView: React.FC = () => {
   const confirmRemovePayroll = async () => { const line = payrollToDelete; if (!line || deletingPayroll) return; setDeletingPayroll(true); try { await rhService.deletePayroll(line.id); setPayroll((rows) => rows.filter((row) => row.id !== line.id)); if (selectedPayroll?.id === line.id) setSelectedPayroll(null); setPayrollToDelete(null); showToast('Ligne de paie supprimée.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Suppression impossible.', 'error'); } finally { setDeletingPayroll(false); } };
   const confirmRemoveEmployee = async () => { const employee = employeeToDelete; if (!employee || deletingEmployee) return; setDeletingEmployee(true); try { await rhService.deleteEmployee(employee.id); setEmployees((rows) => rows.filter((row) => row.id !== employee.id)); if (viewedEmployee?.id === employee.id) setViewedEmployee(null); setEmployeeToDelete(null); showToast('Employé supprimé.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Suppression impossible.', 'error'); } finally { setDeletingEmployee(false); } };
   const downloadPayslip = async (line: RHPayroll) => { try { const response = await rhService.downloadPayslip(period, line.employee_id); const url = URL.createObjectURL(response.data); const a = document.createElement('a'); a.href = url; a.download = `bulletin-${line.matricule}-${period}.pdf`; a.click(); URL.revokeObjectURL(url); } catch { showToast('Téléchargement du bulletin impossible.', 'error'); } };
+  // Net recalculé en direct dans « Ajuster la paie », avec la même formule que le serveur.
+  const adjustmentNet = (() => {
+    if (!payrollAdjustment) return 0;
+    const n = (key: string) => Number(adjustmentForm[key] || 0);
+    const weeks = adjustmentForm.deduction_frequency === 'HEBDOMADAIRE' ? weeksInMonth(payrollAdjustment.period_month || `${period}-01`) : 1;
+    const gains = Number(payrollAdjustment.base_salary || 0) + n('overtime_amount') + n('bonuses') + n('pourboire') + n('allowances');
+    const withheld = n('advances') + n('deduction_amount') * weeks + Number(payrollAdjustment.absence_deductions || 0) + Number(payrollAdjustment.cnaps || 0) + Number(payrollAdjustment.ostie || 0) + Number(payrollAdjustment.irsa || 0);
+    return Math.round((gains - withheld) * 100) / 100;
+  })();
   const nav: Array<[RHView, string, React.ReactNode]> = [['overview', 'Vue d’ensemble', <BarChart3 size={17} />], ['employees', 'Employés', <UsersRound size={17} />], ['attendance', 'Présences & congés', <CalendarDays size={17} />], ['payroll', 'Paie', <WalletCards size={17} />], ['evaluations', 'Évaluations', <FileText size={17} />]];
   return <div className="min-h-[calc(100vh-120px)] space-y-6 pb-8"><header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"><div><div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#2b7a78]"><ShieldCheck size={16} /> Administration du personnel</div><h1 className="text-3xl font-bold text-primary">Ressources humaines</h1><p className="mt-1 text-sm text-secondary">Données RH sécurisées et actions traçables.</p></div><button onClick={() => setEmployeeModal({ employee: null })} className="flex h-10 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><UserPlus size={16} /> Nouvel employé</button></header>
     {!myNotLinked && <section className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-base bg-surface p-4 sm:flex-row sm:items-center"><div className="flex items-center gap-2 text-sm text-secondary"><Clock3 size={16} className="text-[#2b7a78]" /><span>Ma présence aujourd’hui : {todayMine?.check_in ? `Entrée ${todayMine.check_in}` : 'Pas encore pointé'}{todayMine?.check_out ? ` · Sortie ${todayMine.check_out}` : ''}</span></div>{!todayMine?.check_in && <button onClick={handleMyCheckIn} className="flex h-9 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Clock3 size={15} /> Entrée</button>}{todayMine?.check_in && !todayMine?.check_out && <button onClick={handleMyCheckOut} className="flex h-9 items-center gap-2 rounded-xl bg-[#2b7a78] px-4 text-sm font-semibold text-white"><Clock3 size={15} /> Sortie</button>}{todayMine?.check_out && <span className="flex h-9 items-center gap-2 rounded-xl bg-surface-2 px-4 text-sm text-secondary"><Check size={15} /> Journée terminée</span>}</section>}
@@ -296,7 +317,7 @@ const RHManagerView: React.FC = () => {
     {employeeToDelete && <div onClick={() => !deletingEmployee && setEmployeeToDelete(null)} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} className="w-full max-w-sm overflow-hidden rounded-2xl border border-base bg-surface shadow-2xl"><div className="p-6 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 text-red-500"><Trash2 size={26}/></div><h2 className="mt-4 text-lg font-bold text-primary">Supprimer cet employé ?</h2><p className="mt-2 text-sm text-secondary">Le dossier de <strong className="text-primary">{employeeToDelete.first_name} {employeeToDelete.last_name}</strong> sera définitivement supprimé, avec ses présences, congés, paies, évaluations et pièces jointes. Cette action est irréversible.</p><div className="mt-4 space-y-1 rounded-xl bg-surface-2 p-3 text-left text-xs text-secondary"><p className="flex justify-between"><span>Matricule</span><strong className="text-primary">{employeeToDelete.matricule}</strong></p><p className="flex justify-between"><span>Poste</span><strong className="text-primary">{employeeToDelete.department} · {employeeToDelete.position}</strong></p><p className="flex justify-between"><span>Statut</span><strong className="text-primary">{labelStatus(employeeToDelete.status)}</strong></p></div><p className="mt-3 text-xs text-secondary">Pour garder l’historique, préférez le statut Démissionné, Renvoyé ou Retraité via « Modifier ».</p></div><div className="flex gap-2 border-t border-base bg-surface-2 p-4"><button type="button" disabled={deletingEmployee} onClick={() => setEmployeeToDelete(null)} className="flex-1 rounded-xl border border-base px-4 py-2 text-sm font-medium text-primary transition hover:bg-surface disabled:opacity-40">Annuler</button><button type="button" autoFocus disabled={deletingEmployee} onClick={confirmRemoveEmployee} className="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60">{deletingEmployee ? 'Suppression…' : 'Supprimer'}</button></div></div></div>}
     {employeeModal && <EmployeeFormModal key={employeeModal.employee?.id ?? 'new'} employee={employeeModal.employee} close={() => setEmployeeModal(null)} saved={refreshAfterAction} toast={showToast} />}
     {viewedEmployee && <EmployeeDetailModal employee={viewedEmployee} close={() => setViewedEmployee(null)} edit={() => { setEmployeeModal({ employee: viewedEmployee }); setViewedEmployee(null); }} toast={showToast} />}
-    {payrollAdjustment && <div className="fixed inset-0 z-[70] bg-black/40 p-4"><div className="mx-auto mt-20 max-w-lg rounded-2xl bg-surface p-6"><div className="flex items-center justify-between"><h2 className="text-xl font-bold text-primary">Ajuster la paie</h2><button type="button" onClick={() => setPayrollAdjustment(null)} className="rounded border p-2"><X size={16} /></button></div><div className="mt-4 space-y-4"><p className="text-sm text-secondary">Employé : <strong className="text-primary">{payrollAdjustment.first_name} {payrollAdjustment.last_name}</strong></p>{(() => {
+    {payrollAdjustment && <div className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-black/40 p-4"><div className="mx-auto my-8 max-w-lg rounded-2xl bg-surface p-6 sm:my-16"><div className="flex items-center justify-between"><h2 className="text-xl font-bold text-primary">Ajuster la paie</h2><button type="button" onClick={() => setPayrollAdjustment(null)} className="rounded border p-2"><X size={16} /></button></div><div className="mt-4 space-y-4"><p className="text-sm text-secondary">Employé : <strong className="text-primary">{payrollAdjustment.first_name} {payrollAdjustment.last_name}</strong></p>{(() => {
       const amountInput = (key: string, label: string) => <label key={key} className="block text-sm"><span className="mb-1 block text-secondary">{label}</span><input type="number" min="0" step="0.01" value={adjustmentForm[key]} onChange={(e) => setAdjustmentForm((current) => ({ ...current, [key]: e.target.value }))} className="h-10 w-full rounded border p-2" /></label>;
       const weekly = adjustmentForm.deduction_frequency === 'HEBDOMADAIRE';
       const weeks = weeksInMonth(payrollAdjustment.period_month || `${period}-01`);
@@ -313,8 +334,14 @@ const RHManagerView: React.FC = () => {
           <label className="block text-sm"><span className="mb-1 block text-secondary">Motif{Number(adjustmentForm.deduction_amount) > 0 ? ' *' : ''}</span><input value={adjustmentForm.deduction_reason} maxLength={255} onChange={(e) => setAdjustmentForm((current) => ({ ...current, deduction_reason: e.target.value }))} placeholder="Ex. casse, remboursement de prêt…" className="h-10 w-full rounded border p-2" /></label>
           <p className="text-xs text-secondary">Retenue déduite ce mois : <strong className="text-primary">{weekly ? `${formatMoney(Number(adjustmentForm.deduction_amount || 0))} × ${weeks} semaines = ` : ''}{formatMoney(deductionMonth)}</strong>{Number(payrollAdjustment.absence_deductions || 0) > 0 && <> · absences calculées en plus : {formatMoney(Number(payrollAdjustment.absence_deductions))}</>}</p>
         </fieldset>
+        {Number(payrollAdjustment.base_salary || 0) === 0 && <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">Salaire de base à 0 : complétez le salaire sur la fiche employé, puis relancez « Préparer la paie ».</p>}
+        <div className={`flex items-center justify-between rounded-xl p-3 text-sm ${adjustmentNet < 0 ? 'border border-red-300 bg-red-50 text-red-700' : 'bg-surface-2'}`}>
+          <span className="font-semibold">Net à payer</span>
+          <strong className="text-lg">{formatMoney(adjustmentNet)}</strong>
+        </div>
+        {adjustmentNet < 0 && <p className="text-xs text-red-700">Les avances et retenues dépassent la rémunération de {formatMoney(-adjustmentNet)}. Réduisez l’avance ou la retenue pour pouvoir enregistrer.</p>}
       </>;
-    })()}<div className="flex justify-end gap-2"><button type="button" onClick={() => setPayrollAdjustment(null)} className="rounded border px-3 py-2 text-sm">Annuler</button><button type="button" onClick={savePayrollAdjustment} className="rounded bg-[#2b7a78] px-3 py-2 text-sm text-white">Enregistrer</button></div></div></div></div>}
+    })()}<div className="flex justify-end gap-2"><button type="button" onClick={() => setPayrollAdjustment(null)} className="rounded border px-3 py-2 text-sm">Annuler</button><button type="button" disabled={adjustmentNet < 0} onClick={savePayrollAdjustment} className="rounded bg-[#2b7a78] px-3 py-2 text-sm text-white disabled:opacity-40">Enregistrer</button></div></div></div></div>}
     {leaveForm && <LeaveModal employees={employees} close={() => setLeaveForm(false)} done={refreshAfterAction} toast={showToast}/>}</div>;
 };
 const LeaveModal = ({ employees, close, done, toast }: { employees: RHEmployee[]; close: () => void; done: () => void; toast: (message: string, type: 'success' | 'error') => void }) => { const [f,setF]=useState({employee_id:'',leave_type:'ANNUEL',start_date:'',end_date:'',reason:''}); return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async e=>{e.preventDefault();try{await rhService.createLeaveRequest({...f,employee_id:Number(f.employee_id)});toast('Demande créée.','success');close();done()}catch(err:any){toast(err?.response?.data?.message||'Création impossible.','error')}}} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6"><h2 className="font-bold">Nouvelle demande de congé</h2><div className="mt-4 space-y-3"><select required value={f.employee_id} onChange={e=>setF({...f,employee_id:e.target.value})} className="w-full rounded border p-2"><option value="">Employé</option>{employees.filter(e=>!departureStatuses.includes(e.status)).map(e=><option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}</select><select value={f.leave_type} onChange={e=>setF({...f,leave_type:e.target.value})} className="w-full rounded border p-2"><option value="ANNUEL">Annuel</option><option value="MALADIE">Maladie</option><option value="MATERNITE_PATERNITE">Maternité/paternité</option><option value="SANS_SOLDE">Sans solde</option></select><input required type="date" value={f.start_date} onChange={e=>setF({...f,start_date:e.target.value})} className="w-full rounded border p-2"/><input required type="date" value={f.end_date} onChange={e=>setF({...f,end_date:e.target.value})} className="w-full rounded border p-2"/><input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} placeholder="Motif" className="w-full rounded border p-2"/></div><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={close}>Annuler</button><button className="rounded bg-[#2b7a78] px-3 py-2 text-white">Envoyer</button></div></form></div> };
@@ -390,6 +417,7 @@ const EmployeeFormModal = ({ employee, close, saved, toast }: { employee: RHEmpl
       joined_at: f.joined_at, contract_end_date: f.contract_end_date || null,
       salary: Number(f.salary), prime: Number(f.prime || 0), pourboire: Number(f.pourboire || 0), irsa: isSalaried ? Number(f.irsa || 0) : 0,
       phone: f.phone || null, address: f.address || null, email: f.email || null, birth_date: f.birth_date || null, identification_number: f.identification_number || null,
+      qualification: f.qualification.trim() || null, cnaps_number: f.cnaps_number.trim() || null, dependents: Number(f.dependents || 0),
     };
     if (employee && !(f.status === employee.status && ['EN_CONGE', 'SORTI'].includes(employee.status))) payload.status = f.status;
     if (payload.status && isDeparture) payload.departure_reason = f.departure_reason.trim();
@@ -416,13 +444,16 @@ const EmployeeFormModal = ({ employee, close, saved, toast }: { employee: RHEmpl
       {input('first_name', 'Prénom', 'text', true)}{input('last_name', 'Nom', 'text', true)}
       {input('birth_date', 'Date de naissance', 'date')}{input('identification_number', 'N° identité')}
       {input('phone', 'Téléphone')}{input('email', 'E-mail', 'email')}
-      <div className="sm:col-span-2">{input('address', 'Adresse')}</div>
+      {input('address', 'Adresse')}
+      <label className="text-sm">Personnes à charge<input type="number" min="0" max="255" step="1" value={f.dependents || '0'} onChange={e => set('dependents', e.target.value)} className="mt-1 h-10 w-full rounded border p-2" /></label>
     </fieldset>
 
     <fieldset className="grid gap-3 sm:grid-cols-2"><legend className="mb-2 text-sm font-semibold text-[#2b7a78]">Poste et contrat</legend>
       <label className="text-sm">Département<select value={f.department} onChange={e => set('department', e.target.value)} className="mt-1 h-10 w-full rounded border p-2">{departments.map(d => <option key={d}>{d}</option>)}</select></label>
       {input('position', 'Poste', 'text', true)}
       <label className="text-sm">Type de contrat<select value={f.contract_type} onChange={e => set('contract_type', e.target.value)} className="mt-1 h-10 w-full rounded border p-2">{contractTypes.map(c => <option key={c}>{c}</option>)}</select></label>
+      {input('qualification', 'Qualification (ex. OP1)')}
+      {input('cnaps_number', 'N° CNaPS (affiliation)')}
       <div />
       {input('joined_at', 'Date d’embauche', 'date', true)}{input('contract_end_date', 'Date de débauche (fin de contrat)', 'date')}
     </fieldset>
@@ -471,7 +502,7 @@ const EmployeeDetailModal = ({ employee: e, close, edit, toast }: { employee: RH
       <button type="button" onClick={close}><X /></button>
     </div>
     <div className="mt-5 grid gap-x-6 sm:grid-cols-2">
-      <div>{row('Département', e.department)}{row('Poste', e.position)}{row('Type de contrat', e.contract_type)}{row('Date d’embauche', e.joined_at)}{row('Date de débauche', e.contract_end_date)}{row('Date de naissance', e.birth_date)}{row('N° identité', e.identification_number)}</div>
+      <div>{row('Département', e.department)}{row('Poste', e.position)}{row('Qualification', e.qualification)}{row('Type de contrat', e.contract_type)}{row('N° CNaPS', e.cnaps_number)}{row('Personnes à charge', String(e.dependents ?? 0))}{row('Date d’embauche', e.joined_at)}{row('Date de débauche', e.contract_end_date)}{row('Date de naissance', e.birth_date)}{row('N° identité', e.identification_number)}</div>
       <div>{row('Téléphone', e.phone)}{row('E-mail', e.email)}{row('Adresse', e.address)}{row(isDailyRate ? 'Taux journalier' : 'Salaire', formatMoney(e.salary))}{row('Prime', formatMoney(e.prime || 0))}{row('Pourboire', formatMoney(e.pourboire || 0))}
         {isDailyRate && row('Jours de présence (mois en cours)', `${e.presence_days || 0} j · ${formatMoney((e.presence_days || 0) * e.salary)}`)}
         {salariedContracts.includes(e.contract_type) && <>{row('CNAPS (1 %)', formatMoney(e.cnaps || 0))}{row('OSTIE (1 %)', formatMoney(e.ostie || 0))}{row('IRSA', formatMoney(e.irsa || 0))}</>}
