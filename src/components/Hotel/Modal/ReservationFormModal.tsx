@@ -1,6 +1,7 @@
 // hotel/modals/ReservationFormModal.tsx
-import React, { useState, useEffect } from 'react';
-import { Reservation, Room, Client } from '../../../types/hotel.types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Reservation, Room, Client, ReservationExtraService, ReservationPayment } from '../../../types/hotel.types';
+import { reservationService } from '../../../services/reservation.service';
 import api from '../../../lib/api';
 import { 
   X, 
@@ -16,8 +17,13 @@ import {
   UserCheck,
   Loader,
   Plus,
-  UserPlus
+  UserPlus,
+  Car,
+  MapPin,
+  Trash2,
+  Printer
 } from 'lucide-react';
+import { HotelReceiptData, printPaymentHistoryTicket, printReservationTicket } from '../../../utils/hotelReceipt';
 import { formatCurrency, formatDate } from '../../../utils/data';
 import { Modal } from '../../Modal';
 import { useRooms } from '../../../hooks/useRooms';
@@ -27,6 +33,36 @@ import { clientService, ClientFormData } from '../../../services/client.service'
 import { signatureService } from '../../../services/signature.service';
 import { toast } from 'react-hot-toast';
 import { ClientCoreFormFields } from '../../Clients/ClientCoreFormFields';
+
+const parseExtraServices = (raw: Reservation['services_extras']): ReservationExtraService[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const newExtraService = (type: ReservationExtraService['type'], date = ''): ReservationExtraService => ({
+  type,
+  description: '',
+  date,
+  heure: '',
+  personnes: 1,
+  prix: 0,
+});
+
+// Clé de comparaison d'un transfert/excursion entre l'état payé et l'état actuel.
+const extraServiceKey = (item: ReservationExtraService) =>
+  `${item.type}|${String(item.description || '').trim().toLowerCase()}|${item.date || ''}|${Number(item.prix) || 0}`;
+const extraServiceLabel = (item: ReservationExtraService) =>
+  `${item.type === 'TRANSFERT' ? 'Transfert' : 'Excursion'}${item.description ? ` : ${item.description}` : ''}`;
+const paymentMethodLabels: Record<string, string> = {
+  ESPECES: 'Espèces', TPE: 'TPE', MVOLA: 'MVola', ORANGE_MONEY: 'Orange Money',
+  CARTE: 'Carte bancaire', VIREMENT: 'Virement', CREDIT: 'Crédit', GRATUIT: 'Gratuit',
+};
 
 interface ReservationFormModalProps {
   isOpen: boolean;
@@ -72,6 +108,98 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [roomAvailabilityError, setRoomAvailabilityError] = useState<string | null>(null);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<string>('');
+  // Transferts & excursions saisis manuellement (hors remise, ajoutés au total)
+  const [extraServices, setExtraServices] = useState<ReservationExtraService[]>([]);
+  const extrasTotal = extraServices.reduce((sum, item) => sum + (Number(item.prix) || 0), 0);
+  const updateExtraService = (index: number, patch: Partial<ReservationExtraService>) => {
+    setExtraServices(prev => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  // Paiements déjà encaissés : seule la rectification (reste à payer) compte dans le total.
+  const [payments, setPayments] = useState<ReservationPayment[]>([]);
+  const montantPaye = Number(initialData?.montant_paye || 0);
+  const grandTotal = (formData.montant_total || 0) + extrasTotal;
+  const resteAPayer = Math.round((grandTotal - montantPaye) * 100) / 100;
+
+  useEffect(() => {
+    if (!isOpen || !initialData?.id || montantPaye <= 0) {
+      setPayments([]);
+      return;
+    }
+    let cancelled = false;
+    reservationService.getReservationPayments(initialData.id)
+      .then(rows => { if (!cancelled) setPayments(rows); })
+      .catch(() => { if (!cancelled) setPayments([]); });
+    return () => { cancelled = true; };
+  }, [isOpen, initialData?.id, montantPaye]);
+
+  // Détail de la rectification = différence entre l'état actuel et ce qui a été payé
+  // lors du dernier encaissement (blanchisserie, transferts/excursions ajoutés ou retirés).
+  const rectification = useMemo(() => {
+    if (montantPaye <= 0) return null;
+    const lines: Array<{ label: string; montant: number }> = [];
+    const paidIndexes = new Set<number>();
+    const snapshot = payments.length ? payments[payments.length - 1].details : null;
+    if (snapshot) {
+      const currentLaundry = formData.laundry_included ? Number(formData.laundry_price || 0) : 0;
+      const laundryDiff = currentLaundry - Number(snapshot.laundry_price || 0);
+      if (laundryDiff !== 0) lines.push({ label: laundryDiff > 0 ? 'Blanchisserie' : 'Blanchisserie retirée', montant: laundryDiff });
+
+      const remaining = [...(snapshot.services_extras || [])];
+      extraServices.forEach((item, index) => {
+        const matchIndex = remaining.findIndex(paid => extraServiceKey(paid) === extraServiceKey(item));
+        if (matchIndex >= 0) {
+          remaining.splice(matchIndex, 1);
+          paidIndexes.add(index);
+        } else {
+          lines.push({ label: extraServiceLabel(item), montant: Number(item.prix) || 0 });
+        }
+      });
+      remaining.forEach(paid => lines.push({ label: `${extraServiceLabel(paid)} (retiré)`, montant: -(Number(paid.prix) || 0) }));
+    }
+    const explained = lines.reduce((sum, line) => sum + line.montant, 0);
+    const other = Math.round((resteAPayer - explained) * 100) / 100;
+    if (Math.abs(other) >= 1) lines.push({ label: snapshot ? 'Ajustement hébergement' : 'Rectification', montant: other });
+    return { lines, paidIndexes };
+  }, [montantPaye, payments, formData.laundry_included, formData.laundry_price, extraServices, resteAPayer]);
+
+  // Données du ticket 80 mm, construites depuis l'état actuel du formulaire.
+  const buildReceiptData = (): HotelReceiptData => {
+    const laundry = formData.laundry_included ? Number(formData.laundry_price || 0) : 0;
+    return {
+      reservationId: initialData?.id,
+      clientName: selectedClient ? `${selectedClient.prenom || ''} ${selectedClient.nom || ''}`.trim() : '',
+      roomNumber: selectedRoom ? String(selectedRoom.numero) : '',
+      dateArrivee: formData.date_arrivee,
+      dateDepart: formData.date_depart,
+      typeReservation: formData.type_reservation,
+      pdjInclus: Boolean(formData.pdj_inclus),
+      hebergement: Math.max(0, (formData.montant_total || 0) - laundry),
+      laundry,
+      remisePourcentage: discountMode === 'discount' ? discountPercent : 0,
+      extras: extraServices,
+      total: grandTotal,
+      montantPaye,
+      payments,
+      rectificationLines: rectification?.lines,
+    };
+  };
+
+  // Blanchisserie : ajuste le total par différence, sans recalculer l'hébergement
+  // (une réservation déjà payée garde son prix de chambre / taux Booking d'origine).
+  const applyLaundry = (included: boolean, price: number) => {
+    setFormData(prev => {
+      const factor = discountMode === 'discount' && discountPercent > 0 ? 1 - discountPercent / 100 : 1;
+      const oldPart = prev.laundry_included ? Number(prev.laundry_price || 0) : 0;
+      const newPart = included ? price : 0;
+      return {
+        ...prev,
+        laundry_included: included,
+        laundry_price: price,
+        montant_total: Math.max(0, (prev.montant_total || 0) + (newPart - oldPart) * factor),
+      };
+    });
+  };
 
   // États pour le formulaire de création rapide de client
   // Réutilise les mêmes champs que la page "Clients" (voir ClientCoreFormFields)
@@ -106,13 +234,18 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   // Initialiser le formulaire avec les données de la réservation
   useEffect(() => {
     if (isOpen && initialData) {
+      const initialExtras = parseExtraServices(initialData.services_extras);
+      const initialExtrasTotal = Number(initialData.services_extras_total)
+        || initialExtras.reduce((sum, item) => sum + (Number(item.prix) || 0), 0);
+      setExtraServices(initialExtras);
       setFormData({
         client_id: initialData.client_id,
         room_id: initialData.room_id,
         date_arrivee: initialData.date_arrivee?.split('T')[0] || '',
         date_depart: initialData.date_depart?.split('T')[0] || '',
         pdj_inclus: Boolean(initialData.pdj_inclus),
-        montant_total: initialData.montant_total || 0,
+        // montant_total du formulaire = partie hébergement ; les extras sont ajoutés à l'envoi
+        montant_total: Math.max(0, Number(initialData.montant_total || 0) - initialExtrasTotal),
         statut: initialData.statut || 'CONFIRMEE',
         type_reservation: initialData.type_reservation || 'BOOKING',
         laundry_included: Boolean(initialData.laundry_included),
@@ -147,6 +280,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
       setSelectedRoom(null);
       setSelectedClient(null);
       setExchangeRate('');
+      setExtraServices([]);
     }
     setErrors({});
     setApiError(null);
@@ -353,6 +487,13 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     if (formData.montant_total !== undefined && formData.montant_total !== null && Number(formData.montant_total) < 0) {
       newErrors.montant_total = 'Le montant ne peut pas être négatif';
     }
+    extraServices.forEach((item, index) => {
+      if (!item.description.trim()) {
+        newErrors[`extra_${index}`] = `${item.type === 'TRANSFERT' ? 'Transfert' : 'Excursion'} n°${index + 1} : description obligatoire`;
+      } else if (Number(item.prix) < 0) {
+        newErrors[`extra_${index}`] = `${item.type === 'TRANSFERT' ? 'Transfert' : 'Excursion'} n°${index + 1} : prix invalide`;
+      }
+    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -392,7 +533,13 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         date_arrivee: formData.date_arrivee!,
         date_depart: formData.date_depart!,
         pdj_inclus: Boolean(formData.pdj_inclus),
-        montant_total: formData.montant_total || 0,
+        montant_total: (formData.montant_total || 0) + extrasTotal,
+        services_extras: extraServices.map(item => ({
+          ...item,
+          description: item.description.trim(),
+          personnes: Number(item.personnes) || 0,
+          prix: Number(item.prix) || 0,
+        })),
         statut: formData.statut || 'CONFIRMEE',
         remise_pourcentage: discountMode === 'discount' ? discountPercent : 0,
         type_reservation: formData.type_reservation || 'BOOKING',
@@ -798,10 +945,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setFormData(prev => ({ ...prev, laundry_included: true }));
-                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
-                  }}
+                  onClick={() => { if (!formData.laundry_included) applyLaundry(true, Number(formData.laundry_price || 0)); }}
                   className={`p-2 rounded-lg border ${formData.laundry_included ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
                   disabled={isSubmitting}
                 >
@@ -809,10 +953,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setFormData(prev => ({ ...prev, laundry_included: false }));
-                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
-                  }}
+                  onClick={() => { if (formData.laundry_included) applyLaundry(false, Number(formData.laundry_price || 0)); }}
                   className={`p-2 rounded-lg border ${!formData.laundry_included ? 'border-accent bg-accent/10 text-accent' : 'border-base text-muted'}`}
                   disabled={isSubmitting}
                 >
@@ -824,10 +965,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                   <input
                     type="number"
                     value={formData.laundry_price || ''}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, laundry_price: Number(e.target.value) || 0 }));
-                      calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
-                    }}
+                    onChange={(e) => applyLaundry(true, Math.max(0, Number(e.target.value) || 0))}
                     className="input-field w-full text-sm py-2.5 rounded-lg"
                     min="0"
                     placeholder="Prix de la blanchisserie"
@@ -861,6 +999,189 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Transferts & excursions */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-sm font-medium text-primary">
+                  <Car size={14} className="inline mr-1.5" />
+                  Transferts & excursions
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExtraServices(prev => [...prev, newExtraService('TRANSFERT', formData.date_arrivee || '')])}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-base text-xs font-medium text-primary hover:bg-surface-2 transition-all"
+                    disabled={isSubmitting}
+                  >
+                    <Plus size={13} /> <Car size={13} /> Transfert
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExtraServices(prev => [...prev, newExtraService('EXCURSION')])}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-base text-xs font-medium text-primary hover:bg-surface-2 transition-all"
+                    disabled={isSubmitting}
+                  >
+                    <Plus size={13} /> <MapPin size={13} /> Excursion
+                  </button>
+                </div>
+              </div>
+
+              {extraServices.length === 0 ? (
+                <p className="text-xs text-muted">Aucun transfert ni excursion. Utilisez les boutons ci-dessus pour en ajouter.</p>
+              ) : (
+                <div className="space-y-2">
+                  {extraServices.map((item, index) => (
+                    <div key={index} className="rounded-lg border border-base bg-surface-2 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={item.type}
+                          onChange={(e) => updateExtraService(index, { type: e.target.value as ReservationExtraService['type'] })}
+                          className="input-field text-sm py-2 px-2.5 rounded-lg"
+                          disabled={isSubmitting}
+                        >
+                          <option value="TRANSFERT">🚗 Transfert</option>
+                          <option value="EXCURSION">🗺️ Excursion</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => updateExtraService(index, { description: e.target.value })}
+                          placeholder={item.type === 'TRANSFERT' ? 'Ex. Aéroport → Hôtel' : 'Ex. Visite de Nosy Komba'}
+                          className={`input-field flex-1 min-w-0 text-sm py-2 px-3 rounded-lg ${errors[`extra_${index}`] ? 'border-red-500' : ''}`}
+                          disabled={isSubmitting}
+                        />
+                        {rectification?.paidIndexes.has(index) ? (
+                          <span className="px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold whitespace-nowrap">✓ Payé</span>
+                        ) : montantPaye > 0 ? (
+                          <span className="px-2 py-1 rounded-md bg-orange-500/15 text-orange-300 text-[11px] font-semibold whitespace-nowrap">À payer</span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setExtraServices(prev => prev.filter((_, i) => i !== index))}
+                          className="p-2 rounded-lg text-muted hover:text-danger hover:bg-red-500/10 transition-colors"
+                          title="Retirer"
+                          disabled={isSubmitting}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <label className="text-xs text-muted">
+                          Date
+                          <input
+                            type="date"
+                            value={item.date}
+                            onChange={(e) => updateExtraService(index, { date: e.target.value })}
+                            className="input-field w-full text-sm py-2 px-2.5 rounded-lg mt-1"
+                            disabled={isSubmitting}
+                          />
+                        </label>
+                        <label className="text-xs text-muted">
+                          Heure
+                          <input
+                            type="time"
+                            value={item.heure}
+                            onChange={(e) => updateExtraService(index, { heure: e.target.value })}
+                            className="input-field w-full text-sm py-2 px-2.5 rounded-lg mt-1"
+                            disabled={isSubmitting}
+                          />
+                        </label>
+                        <label className="text-xs text-muted">
+                          Personnes
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.personnes || ''}
+                            onChange={(e) => updateExtraService(index, { personnes: Math.max(0, Number(e.target.value) || 0) })}
+                            className="input-field w-full text-sm py-2 px-2.5 rounded-lg mt-1"
+                            disabled={isSubmitting}
+                          />
+                        </label>
+                        <label className="text-xs text-muted">
+                          Prix (Ar)
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.prix || ''}
+                            onChange={(e) => updateExtraService(index, { prix: Math.max(0, Number(e.target.value) || 0) })}
+                            placeholder="0"
+                            className="input-field w-full text-sm py-2 px-2.5 rounded-lg mt-1"
+                            disabled={isSubmitting}
+                          />
+                        </label>
+                      </div>
+                      {errors[`extra_${index}`] && (
+                        <p className="text-red-400 text-xs flex items-center gap-1">
+                          <AlertCircle size={11} /> {errors[`extra_${index}`]}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted text-right">
+                    Total transferts & excursions : <strong className="text-primary">{formatCurrency(extrasTotal)}</strong> (hors remise)
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Historique des paiements + rectification (réservation déjà encaissée) */}
+            {montantPaye > 0 && (
+              <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-primary flex items-center gap-1.5">
+                    <CreditCard size={14} /> Historique des paiements
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => printPaymentHistoryTicket(buildReceiptData())}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-base text-xs font-medium text-primary hover:bg-surface-2 transition-all"
+                    title="Imprimer l'historique (ticket 80 mm)"
+                  >
+                    <Printer size={13} /> Imprimer l'historique
+                  </button>
+                </div>
+                {payments.length === 0 ? (
+                  <p className="text-xs text-muted">Déjà payé : {formatCurrency(montantPaye)}</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {payments.map((payment, index) => (
+                      <div key={payment.id} className="flex items-start justify-between gap-3 rounded-md bg-surface-2 px-3 py-2 text-xs">
+                        <div className="min-w-0">
+                          <p className="text-primary font-medium">
+                            {index === 0 ? 'Paiement initial' : `Rectification n°${index}`}
+                            <span className="ml-2 text-emerald-400">✓ Payé</span>
+                          </p>
+                          <p className="text-muted">
+                            <Clock size={11} className="inline mr-1" />
+                            {new Date(payment.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                            {' · '}{paymentMethodLabels[payment.moyen_paiement || ''] || payment.moyen_paiement || '—'}
+                            {payment.created_by_nom ? ` · par ${payment.created_by_prenom || ''} ${payment.created_by_nom}` : ''}
+                          </p>
+                        </div>
+                        <strong className="text-emerald-400 whitespace-nowrap">{formatCurrency(payment.montant)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-base space-y-1 text-xs">
+                  <p className="text-sm font-medium text-primary">Rectification à payer</p>
+                  {rectification && rectification.lines.length > 0 ? (
+                    rectification.lines.map((line, index) => (
+                      <div key={index} className="flex justify-between gap-3">
+                        <span className="text-muted">{line.label}</span>
+                        <strong className={line.montant < 0 ? 'text-emerald-400' : 'text-orange-300'}>
+                          {line.montant > 0 ? '+' : ''}{formatCurrency(line.montant)}
+                        </strong>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted">Aucune rectification : la réservation est entièrement payée.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Remise */}
             <div className="space-y-1.5">
@@ -910,8 +1231,35 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 {discountMode === 'discount' && discountPercent > 0 && (
                   <div className="flex justify-between"><span>Remise</span><strong>{discountPercent}%</strong></div>
                 )}
-                <div className="flex justify-between text-accent pt-2 border-t border-base"><span>Total (Ar)</span><strong>{formatCurrency(formData.montant_total || 0)}</strong></div>
+                {extraServices.length > 0 && (
+                  <>
+                    <div className="flex justify-between"><span>Hébergement</span><strong>{formatCurrency(formData.montant_total || 0)}</strong></div>
+                    <div className="flex justify-between"><span>Transferts & excursions ({extraServices.length})</span><strong>{formatCurrency(extrasTotal)}</strong></div>
+                  </>
+                )}
+                {montantPaye > 0 ? (
+                  <>
+                    <div className="flex justify-between text-muted pt-2 border-t border-base"><span>Total de la réservation</span><span>{formatCurrency(grandTotal)}</span></div>
+                    <div className="flex justify-between text-emerald-400"><span>Déjà payé</span><span>− {formatCurrency(montantPaye)}</span></div>
+                    <div className="flex justify-between text-accent pt-2 border-t border-base">
+                      <span>{resteAPayer > 0 ? 'Total à payer (rectification)' : resteAPayer < 0 ? 'Trop-perçu à rendre' : 'Total à payer'}</span>
+                      <strong>{formatCurrency(Math.abs(resteAPayer))}</strong>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-accent pt-2 border-t border-base"><span>Total (Ar)</span><strong>{formatCurrency(grandTotal)}</strong></div>
+                )}
               </div>
+              {initialData && (
+                <button
+                  type="button"
+                  onClick={() => printReservationTicket(buildReceiptData())}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-base text-sm font-medium text-primary hover:bg-surface-2 transition-all"
+                  title="Imprimer le ticket de la réservation (80 mm)"
+                >
+                  <Printer size={15} /> Imprimer le ticket (80 mm)
+                </button>
+              )}
               {selectedRoom && nights > 0 && formData.type_reservation !== 'BOOKING' && (
                 <p className="text-xs text-muted">
                   💡 Calculé automatiquement : {nights} nuit{nights > 1 ? 's' : ''} × {formatCurrency(selectedRoom.prix_nuit || 0)} = {formatCurrency((selectedRoom.prix_nuit || 0) * nights)}

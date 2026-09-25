@@ -16,8 +16,10 @@ import {
   User,
   UserCheck,
   DoorOpen,
-  CreditCard
+  CreditCard,
+  Printer
 } from 'lucide-react';
+import { printReservationTicket, receiptDataFromReservation } from '../../utils/hotelReceipt';
 import { useReservations } from '../../hooks/useReservations';
 import { useClients } from '../../hooks/useClients';
 import { useRooms } from '../../hooks/useRooms';
@@ -195,6 +197,16 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   });
 
   const isLoading = reservationsLoading || clientsLoading || roomsLoading;
+
+  // Ticket 80 mm de la réservation (prestations + historique des paiements)
+  const handlePrintTicket = async (res: Reservation) => {
+    try {
+      const payments = Number(res.montant_paye || 0) > 0 ? await reservationService.getReservationPayments(res.id) : [];
+      printReservationTicket(receiptDataFromReservation(res, payments));
+    } catch {
+      toast.error("Impossible de préparer le ticket d'impression");
+    }
+  };
 
   const getStatusBadge = (statut: string) => {
     const colors: Record<string, string> = {
@@ -472,6 +484,16 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                           <span className="text-sky-300">Paiement : {res.moyen_paiement.replace('_', ' ')}</span>
                         )}
                         <span className="text-accent font-medium">{formatCurrency(res.montant_total || 0)}</span>
+                        {(() => {
+                          const paid = Number(res.montant_paye || 0);
+                          const due = Number(res.montant_total || 0) - paid;
+                          if (paid <= 0) return null;
+                          return due > 0 ? (
+                            <span className="text-orange-300 font-medium">Payé {formatCurrency(paid)} · Rectification à payer {formatCurrency(due)}</span>
+                          ) : (
+                            <span className="text-emerald-400">✓ Payé {formatCurrency(paid)}</span>
+                          );
+                        })()}
                         {Number(res.remise_pourcentage || 0) > 0 && (
                           <span className={res.remise_validee_par ? 'text-emerald-400' : 'text-orange-400'}>
                             Remise {res.remise_pourcentage}% {res.remise_validee_par ? 'validée' : 'à valider'}
@@ -532,7 +554,27 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                         <span className="hidden sm:inline">Encaisser</span>
                       </button>
                     )}
+                    {/* Réservation déjà payée avec rectification (blanchisserie, transfert...) */}
+                    {onEncaisser && res.statut === 'TERMINEE' && Number(res.montant_paye || 0) > 0 && Number(res.montant_total || 0) - Number(res.montant_paye || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onEncaisser(res)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-600/20 hover:bg-orange-600/30 text-orange-300 border border-orange-500/30 text-xs rounded-lg transition-colors font-medium mr-1"
+                        title="Encaisser la rectification"
+                      >
+                        <CreditCard size={12} />
+                        <span className="hidden sm:inline">Encaisser rectification</span>
+                      </button>
+                    )}
 
+                    <button
+                      type="button"
+                      onClick={() => void handlePrintTicket(res)}
+                      className="p-1.5 hover:bg-gray-800 rounded"
+                      title="Imprimer le ticket (80 mm)"
+                    >
+                      <Printer size={14} className="text-gray-400" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setExpandedId(expandedId === res.id ? null : res.id)}
