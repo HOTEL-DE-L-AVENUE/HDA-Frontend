@@ -17,6 +17,7 @@ import { ToastProvider } from "./context/ToastContext";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import { RHPage } from "./pages/RHPage";
+import PlanningPage from "./pages/PlanningPage";
 
 function App() {
   return (
@@ -118,6 +119,10 @@ function App() {
                 }
               >
                 <Route path="/finances" element={<FinancesPage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute moduleId="planning" allowedRoles={['admin', 'manager']} />}>
+                <Route path="/planning" element={<PlanningPage />} />
               </Route>
 
               {/* RH : ouvert à tout utilisateur connecté. admin/manager voient la gestion

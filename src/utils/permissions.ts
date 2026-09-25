@@ -11,7 +11,7 @@ import { ModuleType, UserRole } from '../types';
  * - stock_manager : uniquement les fonctions de gestion de stock (onglets stock)
  */
 export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
-  admin: ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'alcool', 'casino', 'finances', 'clients', 'utilisateurs', 'rh'],
+  admin: ['dashboard', 'hebergement', 'hotel', 'restaurant', 'bar', 'alcool', 'casino', 'finances', 'clients', 'utilisateurs', 'rh', 'planning'],
   manager: ['dashboard', 'rh'],
   caissier: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
   caisse: ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'],
@@ -278,5 +278,3 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
       return '/dashboard';
   }
 }
-
-
