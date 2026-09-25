@@ -42,53 +42,41 @@ const normalizeAssignments = (assignments: PlanningAssignment[]) => {
   return [...rows.values()].sort((left, right) => left.slot - right.slot);
 };
 
-const TimeValueControl = ({ value, max, label, disabled, onChange, increment = 1 }: { value: number; max: number; label: string; disabled: boolean; onChange: (value: number) => void; increment?: number }) => {
-  const formattedValue = String(value).padStart(2, '0');
-  const [draft, setDraft] = useState(formattedValue);
+const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const pad = (value: number) => String(value).padStart(2, '0');
 
-  useEffect(() => setDraft(formattedValue), [formattedValue]);
-
-  const commit = (raw: string) => {
-    if (!raw) {
-      setDraft(formattedValue);
-      return;
-    }
-    const nextValue = Math.max(0, Math.min(max, Number(raw)));
-    onChange(nextValue);
-    setDraft(String(nextValue).padStart(2, '0'));
+// Horaire au format simple « HH:MM → HH:MM » avec le sélecteur d'heure natif.
+// La valeur enregistrée reste « HH:MM – HH:MM » (utilisée aussi par l'export PDF).
+const SchedulePicker = ({ value, disabled, onChange, label }: { value: string; disabled: boolean; onChange: (value: string) => void; label: string }) => {
+  const [startH, startM, endH, endM] = parseSchedule(value);
+  const start = `${pad(startH)}:${pad(startM)}`;
+  const end = `${pad(endH)}:${pad(endM)}`;
+  const update = (nextStart: string, nextEnd: string) => {
+    const [sh, sm] = (nextStart || '00:00').split(':').map(Number);
+    const [eh, em] = (nextEnd || '00:00').split(':').map(Number);
+    onChange(formatSchedule([sh || 0, sm || 0, eh || 0, em || 0]));
   };
-
-  const changeBy = (amount: number) => {
-    const nextValue = (value + amount + max + 1) % (max + 1);
-    onChange(nextValue);
-    setDraft(String(nextValue).padStart(2, '0'));
-  };
-
-  return <div className="flex items-center gap-0">
-    <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={draft} disabled={disabled} aria-label={label} onChange={(event) => {
-      const raw = event.target.value.replace(/\D/g, '').slice(0, 2);
-      setDraft(raw);
-      if (raw.length === 2) commit(raw);
-    }} onBlur={() => { if (draft !== formattedValue) commit(draft); }} className="h-6 w-6 rounded border border-base bg-surface px-0 text-center text-[10px] font-semibold tabular-nums text-primary outline-none focus:border-accent/60 disabled:opacity-60" />
-    <span className="flex flex-col">
-      <button type="button" disabled={disabled} aria-label={`${label} suivant`} title={`${label} suivant`} onClick={() => changeBy(increment)} className="flex h-3 w-2.5 items-center justify-center rounded-t border border-base bg-surface-2 text-[8px] leading-none text-secondary hover:text-primary disabled:opacity-50">↑</button>
-      <button type="button" disabled={disabled} aria-label={`${label} précédent`} title={`${label} précédent`} onClick={() => changeBy(-increment)} className="flex h-3 w-2.5 items-center justify-center rounded-b border-x border-b border-base bg-surface-2 text-[8px] leading-none text-secondary hover:text-primary disabled:opacity-50">↓</button>
-    </span>
+  const inputClass = 'h-8 w-full min-w-0 rounded-md border border-base bg-surface px-1 text-center text-xs tabular-nums text-primary outline-none focus:border-accent/60 disabled:opacity-60';
+  return <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+    <input type="time" step={300} value={start} disabled={disabled} aria-label={`Début ${label}`} onChange={(event) => update(event.target.value, end)} className={inputClass} />
+    <span className="text-xs text-muted">→</span>
+    <input type="time" step={300} value={end} disabled={disabled} aria-label={`Fin ${label}`} onChange={(event) => update(start, event.target.value)} className={inputClass} />
   </div>;
 };
 
-const SchedulePicker = ({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (value: string) => void }) => {
-  const values = parseSchedule(value);
-  const update = (index: number, nextValue: number) => {
-    const nextValues = [...values] as [number, number, number, number];
-    nextValues[index] = nextValue;
-    onChange(formatSchedule(nextValues));
-  };
-  return <div className="space-y-1 rounded-lg border border-base bg-surface-2 p-0.5">
-    <div className="flex items-center justify-between gap-0"><span className="w-5 shrink-0 text-[9px] text-muted">Début</span><div className="flex items-center gap-0"><TimeValueControl value={values[0]} max={23} label="Heure de début" disabled={disabled} onChange={(next) => update(0, next)} /><span className="text-[10px] font-semibold text-muted">:</span><TimeValueControl value={values[1]} max={59} label="Minute de début" disabled={disabled} increment={5} onChange={(next) => update(1, next)} /></div></div>
-    <div className="flex items-center justify-between gap-0"><span className="w-5 shrink-0 text-[9px] text-muted">Fin</span><div className="flex items-center gap-0"><TimeValueControl value={values[2]} max={23} label="Heure de fin" disabled={disabled} onChange={(next) => update(2, next)} /><span className="text-[10px] font-semibold text-muted">:</span><TimeValueControl value={values[3]} max={59} label="Minute de fin" disabled={disabled} increment={5} onChange={(next) => update(3, next)} /></div></div>
-  </div>;
-};
+// Cellule d'une affectation : employé (avec modification) + horaire.
+const AssignmentCell = ({ assignment, label, prefix, isEditing, saving, onEdit, onStopEdit, onEmployeeChange, onScheduleChange }: {
+  assignment: PlanningAssignment; label: string; prefix: string; isEditing: boolean; saving: boolean;
+  onEdit: () => void; onStopEdit: () => void; onEmployeeChange: (name: string) => void; onScheduleChange: (schedule: string) => void;
+}) => <div className="min-w-0 space-y-1.5">
+  {isEditing
+    ? <input autoFocus list="planning-employees" value={assignment.employeeName} onChange={(event) => onEmployeeChange(event.target.value)} onBlur={onStopEdit} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} disabled={saving} placeholder="Employé" aria-label={`Employé ${prefix}, ${label}`} className="h-9 w-full min-w-0 rounded-lg border border-base bg-surface-2 px-2 text-sm text-primary outline-none transition focus:border-accent/60 disabled:opacity-60" />
+    : <button type="button" onClick={onEdit} disabled={saving} title="Modifier l'employé" aria-label={`Modifier ${prefix} ${label}`} className="flex min-h-9 w-full min-w-0 items-center justify-between gap-1 rounded-lg border border-base bg-surface-2 px-2 py-1 text-left hover:border-accent/50 disabled:opacity-50">
+      <span className="min-w-0 truncate text-xs text-primary">{assignment.employeeName || <span className="text-muted">Employé</span>}</span>
+      <Pencil size={12} className="shrink-0 text-accent" />
+    </button>}
+  <SchedulePicker value={assignment.schedule} disabled={saving} label={`${prefix} ${label}`} onChange={onScheduleChange} />
+</div>;
 
 export default function PlanningPage() {
   const { showToast } = useToast();
@@ -111,6 +99,12 @@ export default function PlanningPage() {
     weekDates.forEach((date) => (weekAssignments[date] || []).forEach((item) => allSlots.add(item.slot)));
     return [...allSlots].sort((left, right) => left - right);
   }, [weekAssignments, weekDates]);
+  // Jour affiché sur mobile/tablette : le jour sélectionné s'il est dans la semaine.
+  const [mobileDayIndex, setMobileDayIndex] = useState(0);
+  useEffect(() => { setMobileDayIndex(Math.max(0, weekDates.indexOf(selectedDate))); }, [weekDates, selectedDate]);
+  const mobileDate = weekDates[mobileDayIndex] || weekDates[0];
+  const getAssignment = (date: string, slot: number): PlanningAssignment =>
+    (weekAssignments[date] || []).find((item) => item.slot === slot) || { slot, employeeId: null, employeeName: '', schedule: defaultSchedule };
   const assignedCount = weekDates.reduce((total, date) => total + (weekAssignments[date] || []).filter((item) => item.employeeName.trim()).length, 0);
 
   useEffect(() => {
@@ -234,7 +228,7 @@ export default function PlanningPage() {
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-accent"><CalendarDays size={16} /> Organisation des équipes</div>
-          <h1 className="text-3xl font-bold text-primary">Planning</h1>
+          <h1 className="text-2xl font-bold text-primary sm:text-3xl">Planning</h1>
           <p className="mt-1 text-sm text-secondary">Organisez les équipes du lundi au samedi, jour par jour.</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-base bg-surface px-4 py-3 text-sm text-secondary">
@@ -259,16 +253,16 @@ export default function PlanningPage() {
         </aside>
 
         <section className="min-w-0 space-y-4">
-          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-base bg-surface p-5 sm:flex-row sm:items-center">
+          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-base bg-surface p-4 sm:p-5 md:flex-row md:items-center">
             <div className="flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ color: activeCategory.color, backgroundColor: `${activeCategory.color}18`, boxShadow: `0 0 14px ${activeCategory.color}33` }}><CategoryIcon size={23} /></span>
               <div><h2 className="text-xl font-semibold text-primary">{category} <span className="font-normal text-secondary">– Personnel</span></h2><p className="mt-1 text-sm capitalize text-muted">{weekLabel}</p></div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => shiftWeek(-1)} disabled={saving} aria-label="Semaine précédente" className="flex h-10 w-10 items-center justify-center rounded-lg border border-base bg-surface-2 text-secondary hover:text-primary disabled:opacity-50"><ChevronLeft size={18} /></button>
-              <label className="relative flex h-10 items-center gap-2 rounded-lg border border-base bg-surface-2 px-3 text-secondary">
-                <CalendarDays size={16} />
-                <input aria-label="Date de la semaine" type="date" value={selectedDate} onChange={(event) => event.target.value && selectDate(event.target.value)} disabled={saving} className="w-[135px] bg-transparent text-sm text-primary outline-none" />
+              <label className="relative flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-base bg-surface-2 px-3 text-secondary sm:flex-none">
+                <CalendarDays size={16} className="shrink-0" />
+                <input aria-label="Date de la semaine" type="date" value={selectedDate} onChange={(event) => event.target.value && selectDate(event.target.value)} disabled={saving} className="w-full min-w-0 bg-transparent text-sm text-primary outline-none sm:w-[135px]" />
               </label>
               <button type="button" onClick={() => shiftWeek(1)} disabled={saving} aria-label="Semaine suivante" className="flex h-10 w-10 items-center justify-center rounded-lg border border-base bg-surface-2 text-secondary hover:text-primary disabled:opacity-50"><ChevronRight size={18} /></button>
               <button type="button" onClick={() => selectDate(today())} disabled={saving} className="h-10 rounded-lg border border-base px-3 text-sm font-medium text-secondary hover:bg-surface-2 hover:text-primary disabled:opacity-50">Cette semaine</button>
@@ -276,9 +270,9 @@ export default function PlanningPage() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-base bg-surface">
-            <div className="flex flex-col justify-between gap-3 border-b border-base px-5 py-4 sm:flex-row sm:items-center">
+            <div className="flex flex-col justify-between gap-3 border-b border-base px-4 py-4 sm:px-5 md:flex-row md:items-center">
               <div><h3 className="font-semibold text-primary">Personnel prévu</h3><p className="mt-1 text-xs text-muted">Lundi à samedi · chaque journée est enregistrée séparément.</p></div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center [&>button]:justify-center">
                 <button type="button" onClick={addAssignment} disabled={loading || saving || exporting} className="flex h-10 items-center gap-2 rounded-lg border border-base px-3 text-sm font-medium text-secondary hover:bg-surface-2 hover:text-primary disabled:opacity-50"><Plus size={16} /> Ajouter une ligne</button>
                 <button type="button" onClick={exportPdf} disabled={loading || saving || exporting} className="flex h-10 items-center gap-2 rounded-lg border border-accent/40 bg-accent-4 px-3 text-sm font-medium text-accent hover:bg-accent/15 disabled:opacity-50"><Download size={16} />{exporting ? 'Création…' : 'Exporter PDF'}</button>
                 <button type="button" onClick={save} disabled={loading || saving || exporting || !dirty} className="flex h-10 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save size={16} />{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
@@ -288,34 +282,58 @@ export default function PlanningPage() {
             {error && <div role="alert" className="mx-5 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>}
             {loading ? <div className="px-5 py-12 text-center text-sm text-muted">Chargement du planning…</div> : <>
               <datalist id="planning-employees">{employees.map((employee) => <option key={employee.id} value={fullName(employee)} />)}</datalist>
-              <div>
+              {/* Grand écran : tableau de la semaine */}
+              <div className="hidden xl:block">
                 <table className="w-full table-fixed text-left">
                   <thead>
-                    <tr className="bg-surface-2/60 text-[9px] uppercase tracking-wide text-muted sm:text-[11px]">
-                      <th className="w-10 px-1 py-3 font-medium sm:w-14">Poste</th>
-                      {weekDates.map((date, index) => <th key={date} className="px-1 py-3 font-medium sm:px-2"><span className="block text-primary">{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][index]}</span><span className="mt-0.5 block font-normal normal-case">{new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span></th>)}
+                    <tr className="bg-surface-2/60 text-[11px] uppercase tracking-wide text-muted">
+                      <th className="w-16 px-3 py-3 font-medium">Poste</th>
+                      {weekDates.map((date, index) => <th key={date} className="px-2 py-3 font-medium"><span className="block text-primary">{dayNames[index]}</span><span className="mt-0.5 block font-normal normal-case">{new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span></th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {slots.map((slot) => <tr key={slot} className="border-t border-base/70">
-                      <th scope="row" className="px-1 py-3 text-left sm:px-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-4 text-xs font-semibold sm:h-9 sm:w-10 sm:text-sm" style={{ color: activeCategory.color, backgroundColor: `${activeCategory.color}18` }}>{activeCategory.prefix}{slot}</span></th>
+                      <th scope="row" className="px-3 py-3 text-left align-top"><span className="flex h-9 w-10 items-center justify-center rounded-lg text-sm font-semibold" style={{ color: activeCategory.color, backgroundColor: `${activeCategory.color}18` }}>{activeCategory.prefix}{slot}</span></th>
                       {weekDates.map((date) => {
-                        const assignment = (weekAssignments[date] || []).find((item) => item.slot === slot) || { slot, employeeId: null, employeeName: '', schedule: defaultSchedule };
                         const editingKey = `${date}-${slot}`;
-                        const isEditing = editingAssignment === editingKey;
-                        return <td key={`${date}-${slot}`} className="min-w-0 px-1 py-2 align-top sm:px-2 sm:py-3">
-                          <div className="min-w-0 space-y-1.5">
-                            {isEditing ? <input autoFocus list="planning-employees" value={assignment.employeeName} onChange={(event) => updateEmployee(date, slot, event.target.value)} onBlur={() => setEditingAssignment((current) => current === editingKey ? null : current)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} disabled={saving} placeholder="Employé" aria-label={`Employé ${activeCategory.prefix}${slot}, ${displayDate(date)}`} className="h-8 w-full min-w-0 rounded-lg border border-base bg-surface-2 px-1.5 text-xs text-primary outline-none transition focus:border-accent/60 disabled:opacity-60 sm:text-sm" /> : <div className="flex min-h-8 min-w-0 items-center justify-between gap-0.5 rounded-lg border border-base bg-surface-2 px-1.5 py-1">
-                              <span title={assignment.employeeName || 'Aucun employé'} className="min-w-0 break-words text-[10px] leading-tight text-primary sm:text-xs">{assignment.employeeName || <span className="text-muted">Employé</span>}</span>
-                              <button type="button" onClick={() => setEditingAssignment(editingKey)} disabled={saving} className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-0.5 text-[9px] font-semibold text-accent hover:bg-accent-4 disabled:opacity-50 sm:gap-1 sm:px-1.5 sm:text-[10px]" aria-label={`Modifier ${activeCategory.prefix}${slot} ${displayDate(date)}`} title="Modifier"><Pencil size={12} />Modifier</button>
-                            </div>}
-                            <SchedulePicker value={assignment.schedule} disabled={saving} onChange={(schedule) => updateAssignment(date, slot, { schedule })} />
-                          </div>
+                        return <td key={editingKey} className="min-w-0 px-2 py-3 align-top">
+                          <AssignmentCell assignment={getAssignment(date, slot)} label={displayDate(date)} prefix={`${activeCategory.prefix}${slot}`} isEditing={editingAssignment === editingKey} saving={saving}
+                            onEdit={() => setEditingAssignment(editingKey)} onStopEdit={() => setEditingAssignment((current) => current === editingKey ? null : current)}
+                            onEmployeeChange={(name) => updateEmployee(date, slot, name)} onScheduleChange={(schedule) => updateAssignment(date, slot, { schedule })} />
                         </td>;
                       })}
                     </tr>)}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile / tablette : un jour à la fois */}
+              <div className="xl:hidden">
+                <div className="flex gap-2 overflow-x-auto border-b border-base px-4 py-3">
+                  {weekDates.map((date, index) => {
+                    const active = index === mobileDayIndex;
+                    const count = (weekAssignments[date] || []).filter((item) => item.employeeName.trim()).length;
+                    return <button key={date} type="button" onClick={() => setMobileDayIndex(index)} className={`flex shrink-0 flex-col items-center rounded-lg border px-3 py-1.5 text-xs transition-colors ${active ? 'border-accent bg-accent-4 text-accent' : 'border-base bg-surface-2 text-secondary'}`}>
+                      <span className="font-semibold">{dayNames[index].slice(0, 3)}</span>
+                      <span>{new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                      {count > 0 && <span className="mt-0.5 text-[10px] text-muted">{count} pers.</span>}
+                    </button>;
+                  })}
+                </div>
+                <p className="px-4 pt-3 text-sm font-semibold capitalize text-primary">{displayDate(mobileDate)}</p>
+                <div className="grid gap-3 p-4 sm:grid-cols-2">
+                  {slots.map((slot) => {
+                    const editingKey = `${mobileDate}-${slot}`;
+                    return <div key={slot} className="flex items-start gap-3 rounded-xl border border-base bg-surface-2/40 p-3">
+                      <span className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold" style={{ color: activeCategory.color, backgroundColor: `${activeCategory.color}18` }}>{activeCategory.prefix}{slot}</span>
+                      <div className="min-w-0 flex-1">
+                        <AssignmentCell assignment={getAssignment(mobileDate, slot)} label={displayDate(mobileDate)} prefix={`${activeCategory.prefix}${slot}`} isEditing={editingAssignment === editingKey} saving={saving}
+                          onEdit={() => setEditingAssignment(editingKey)} onStopEdit={() => setEditingAssignment((current) => current === editingKey ? null : current)}
+                          onEmployeeChange={(name) => updateEmployee(mobileDate, slot, name)} onScheduleChange={(schedule) => updateAssignment(mobileDate, slot, { schedule })} />
+                      </div>
+                    </div>;
+                  })}
+                </div>
               </div>
               <div className="flex flex-col justify-between gap-2 border-t border-base px-5 py-3 text-xs text-muted sm:flex-row sm:items-center"><span>{assignedCount} affectation{assignedCount > 1 ? 's' : ''} sur la période affichée</span><span>{dirty ? 'Modifications non enregistrées' : 'Planning synchronisé'}</span></div>
             </>}
