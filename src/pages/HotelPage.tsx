@@ -498,12 +498,26 @@ const HotelPage: React.FC = () => {
           <div className="w-full max-w-md rounded-2xl border border-base bg-surface p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-primary">Encaisser la réservation</h2>
+                <h2 className="text-lg font-bold text-primary">
+                  {Number(paymentReservation.montant_paye || 0) > 0 ? 'Encaisser la rectification' : 'Encaisser la réservation'}
+                </h2>
                 <p className="mt-1 text-sm text-muted">Choisissez le mode d’encaissement.</p>
               </div>
               <button type="button" onClick={handleCancelEncaissement} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-primary" disabled={isLoading}>
                 <X size={18} />
               </button>
+            </div>
+            <div className="mb-4 space-y-1 rounded-lg bg-surface-2 p-3 text-sm">
+              {Number(paymentReservation.montant_paye || 0) > 0 && (
+                <>
+                  <div className="flex justify-between text-muted"><span>Total de la réservation</span><span>{Number(paymentReservation.montant_total || 0).toLocaleString('fr-FR')} Ar</span></div>
+                  <div className="flex justify-between text-emerald-400"><span>Déjà payé</span><span>− {Number(paymentReservation.montant_paye || 0).toLocaleString('fr-FR')} Ar</span></div>
+                </>
+              )}
+              <div className="flex justify-between font-semibold text-accent">
+                <span>Montant à encaisser</span>
+                <span>{Math.max(0, Number(paymentReservation.montant_total || 0) - Number(paymentReservation.montant_paye || 0)).toLocaleString('fr-FR')} Ar</span>
+              </div>
             </div>
             <select
               value={paymentMethod}

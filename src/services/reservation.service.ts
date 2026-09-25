@@ -1,5 +1,5 @@
 import api from '../lib/api';
-import { Reservation } from '../types/hotel.types';
+import { Reservation, ReservationPayment } from '../types/hotel.types';
 
 export type HotelPaymentMethod = 'ESPECES' | 'TPE' | 'MVOLA' | 'ORANGE_MONEY' | 'CARTE' | 'VIREMENT' | 'CREDIT' | 'GRATUIT';
 
@@ -82,6 +82,12 @@ export const reservationService = {
       console.error('❌ Erreur createReservation:', error);
       throw error;
     }
+  },
+
+  // Historique des encaissements (paiement initial + rectifications)
+  getReservationPayments: async (id: number): Promise<ReservationPayment[]> => {
+    const response = await api.get<ApiResponse<ReservationPayment[]>>(`${BASE_URL}/${id}/payments`);
+    return Array.isArray(response.data.data) ? response.data.data : [];
   },
 
   updateReservation: async (id: number, data: Partial<ReservationFormData>): Promise<Reservation> => {

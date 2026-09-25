@@ -45,6 +45,32 @@ export interface Client {
   updated_at?: string;
 }
 
+export interface ReservationExtraService {
+  type: 'TRANSFERT' | 'EXCURSION';
+  description: string;
+  date: string;
+  heure: string;
+  personnes: number;
+  prix: number;
+}
+
+// Un encaissement d'une réservation : le paiement initial ou une rectification.
+export interface ReservationPayment {
+  id: number;
+  reservation_id: number;
+  montant: number;
+  moyen_paiement: string | null;
+  // Ce qui était facturé au moment du paiement (sert à calculer les rectifications)
+  details: {
+    montant_total: number;
+    laundry_price: number;
+    services_extras: ReservationExtraService[];
+  } | null;
+  created_by_nom?: string | null;
+  created_by_prenom?: string | null;
+  created_at: string;
+}
+
 export interface Reservation {
   id: number;
   client_id: number;
@@ -65,6 +91,12 @@ export interface Reservation {
   laundry_price?: number;
   manual_price?: number;
   exchange_rate?: number;
+  // Transferts / excursions : JSON (chaîne côté API) de ReservationExtraService[]
+  services_extras?: string | ReservationExtraService[] | null;
+  services_extras_total?: number | null;
+  // Somme déjà encaissée ; reste à payer = montant_total - montant_paye
+  montant_paye?: number | null;
+  est_payee?: boolean | number;
   client?: Client;
   room?: Room;
   created_by?: number | null;
