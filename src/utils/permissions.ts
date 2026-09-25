@@ -210,7 +210,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   }
 
   if (role === 'caisse' || role === 'caissier') {
-    return visibleTabs.filter(t => t.id === 'caisse' || t.id.includes('caisse') || t.id === 'commandes');
+    return visibleTabs.filter(t => t.id === 'caisse' || t.id.includes('caisse') || t.id === 'commandes' || t.id === 'rapports');
   }
 
   // 3. Si non-admin : exclure systématiquement les onglets de caisse
