@@ -67,6 +67,12 @@ export interface Reservation {
   exchange_rate?: number;
   client?: Client;
   room?: Room;
+  created_by?: number | null;
+  modified_by?: number | null;
+  created_by_nom?: string;
+  created_by_prenom?: string;
+  modified_by_nom?: string;
+  modified_by_prenom?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -271,7 +277,8 @@ export interface RoomNote {
 // ============================================
 
 export interface User {
-  id: number;
+  id?: number;
+  id_admin: number; // Primary ID field for users
   email: string;
   nom: string;
   prenom: string;
