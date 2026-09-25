@@ -44,6 +44,7 @@ const roleIcons: Record<string, string> = {
 // Note: 'hebergement' module removed as it's disabled in the main application
 const moduleLabels: Record<string, string> = {
   hotel: 'Hôtel',
+  planning: 'Planning',
   restaurant: 'Restaurant',
   bar: 'Bar',
   casino: 'Casino',
@@ -51,7 +52,7 @@ const moduleLabels: Record<string, string> = {
 
 // Available modules for user role assignments
 // Note: 'hebergement' removed as the accommodation feature is currently disabled
-const allModules: ModuleType[] = ['hotel', 'restaurant', 'bar', 'casino'];
+const allModules: ModuleType[] = ['hotel', 'restaurant', 'bar', 'casino', 'planning'];
 // Cashiers are currently only assigned to bar module (can be extended)
 const cashierModules: ModuleType[] = ['bar'];
 

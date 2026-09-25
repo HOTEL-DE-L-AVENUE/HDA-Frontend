@@ -6,8 +6,8 @@ import { ModuleType } from '../types';
 import { canAccessModule } from '../utils/permissions';
 import {
   LayoutDashboard, BedDouble, Hotel, UtensilsCrossed,
-  Wine, Dices, DollarSign, TrendingUp, X, MoreHorizontal,
-  UserCog, UserRoundPlus, Martini, UsersRound
+  Wine, Dices, DollarSign, X, MoreHorizontal,
+  UserCog, UserRoundPlus, Martini, UsersRound, CalendarDays
 } from 'lucide-react';
 import logo from '../assets/logo_s.png';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -16,6 +16,7 @@ interface NavItem {
   id: ModuleType;
   label: string;
   icon: React.ReactNode;
+  iconColor: string;
   gradient: string;
   path: string;
   badge?: number;
@@ -23,18 +24,19 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, gradient: 'from-accent to-accent-2', path: "/dashboard", roles: ['admin', 'manager'] },
+  { id: 'dashboard', label: 'Tableau de Bord', icon: <LayoutDashboard size={20} />, iconColor: '#ff6b00', gradient: 'from-accent to-accent-2', path: "/dashboard", roles: ['admin', 'manager'] },
   // Hébergement module temporarily disabled - commented out from navigation
   // { id: 'hebergement', label: 'Hébergement', icon: <BedDouble size={20} />, gradient: 'from-accent to-accent-2', path: "/hebergement", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caissier', 'caisse', 'stock_manager'] },
-  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, gradient: 'from-accent to-accent-2', path: "/hotel", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'stock_manager'] },
-  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager'] },
-  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'barman', 'hotesse', 'receptioniste', 'caissier', 'caisse', 'stock_manager'] },
+  { id: 'hotel', label: 'Hôtel', icon: <Hotel size={20} />, iconColor: '#ff9f1c', gradient: 'from-accent to-accent-2', path: "/hotel", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'stock_manager'] },
+  { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed size={20} />, iconColor: '#ff355e', gradient: 'from-accent to-accent-2', path: "/restaurant", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager'] },
+  { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, iconColor: '#39ff14', gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'barman', 'hotesse', 'receptioniste', 'caissier', 'caisse', 'stock_manager'] },
   // { id: 'alcool', label: 'Alcool', icon: <Martini size={20} />, gradient: 'from-amber-500 to-orange-500', path: "/alcool", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
-  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier', 'croupier'] },
-  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
-  { id: 'rh', label: 'Ressources humaines', icon: <UsersRound size={20} />, gradient: 'from-accent to-accent-2', path: "/rh", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'water', 'barman', 'croupier'] },
-  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier'] },
-  { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, gradient: 'from-accent to-accent-2', path: "/utilisateurs", roles: ['admin'] },
+  { id: 'casino', label: 'Casino', icon: <Dices size={20} />, iconColor: '#00e5ff', gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier', 'croupier'] },
+  { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, iconColor: '#faff00', gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
+  { id: 'rh', label: 'Ressources humaines', icon: <UsersRound size={20} />, iconColor: '#ff35d1', gradient: 'from-accent to-accent-2', path: "/rh", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'water', 'barman', 'croupier'] },
+  { id: 'planning', label: 'Planning', icon: <CalendarDays size={20} />, iconColor: '#4d7dff', gradient: 'from-accent to-accent-2', path: "/planning", roles: ['admin', 'manager'] },
+  { id: 'clients', label: 'Clients', icon: <UserRoundPlus size={20} />, iconColor: '#b6ff00', gradient: 'from-accent to-accent-2', path: "/clients", roles: ['admin', 'manager', 'receptioniste', 'caisse', 'caissier'] },
+  { id: 'utilisateurs', label: 'Utilisateurs', icon: <UserCog size={20} />, iconColor: '#bf5bff', gradient: 'from-accent to-accent-2', path: "/utilisateurs", roles: ['admin'] },
 ];
 
 /* ─── ONDULATION COMME BORDURE ─── */
@@ -206,14 +208,8 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
           cursor: 'pointer',
           transition: 'all 0.15s ease',
           outline: 'none',
-          background: isActive
-            ? 'var(--color-accent)'
-            : hovered
-              ? 'var(--color-surface-2)'
-              : 'transparent',
-          boxShadow: isActive
-            ? 'var(--shadow-accent)'
-            : 'none',
+          background: isActive ? `${item.iconColor}1a` : hovered ? `${item.iconColor}12` : 'transparent',
+          boxShadow: isActive ? `0 0 16px ${item.iconColor}55` : 'none',
           transform: hovered && !isActive ? 'scale(1.05)' : 'scale(1)',
         }}
       >
@@ -227,18 +223,15 @@ const NavButton: React.FC<NavButtonProps> = ({ item, isActive, onClick }) => {
               width: '3px',
               height: '22px',
               borderRadius: '0 3px 3px 0',
-              background: 'var(--color-accent)',
+              background: item.iconColor,
+              boxShadow: `0 0 10px ${item.iconColor}88`,
             }}
           />
         )}
 
         <span
           style={{
-            color: isActive
-              ? '#000000'
-              : hovered
-                ? 'var(--color-primary)'
-                : 'var(--color-muted)',
+            color: item.iconColor,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -391,31 +384,11 @@ export const Sidebar: React.FC = () => {
             <NavButton
               key={item.id}
               item={item}
-              isActive={location.pathname === item.path}
+              isActive={location.pathname === item.path || (item.id === 'planning' && location.pathname.startsWith('/planning'))}
               onClick={() => navigate(item.path)}
             />
           ))}
         </nav>
-
-        <div
-          style={{
-            margin: '8px',
-            padding: '8px 6px',
-            borderRadius: '12px',
-            backgroundColor: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border)',
-            textAlign: 'center',
-            width: '50px',
-          }}
-        >
-          <TrendingUp
-            size={14}
-            style={{ color: 'var(--color-accent)', margin: '0 auto 3px', display: 'block' }}
-          />
-          <div style={{ color: 'var(--color-primary)', fontWeight: 700, fontSize: '11px' }}>
-            +18%
-          </div>
-        </div>
 
         {/* Avatar et nom utilisateur */}
         <Tooltip label={userFullName}>
@@ -566,7 +539,7 @@ const MobileBottomNav: React.FC = () => {
               </div>
               <div style={{ padding: '8px' }}>
                 {moreNavItems.map(item => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = location.pathname === item.path || (item.id === 'planning' && location.pathname.startsWith('/planning'));
                   return (
                     <button
                       key={item.id}
@@ -580,8 +553,8 @@ const MobileBottomNav: React.FC = () => {
                         borderRadius: '10px',
                         border: 'none',
                         cursor: 'pointer',
-                        backgroundColor: isActive ? 'var(--color-accent-4)' : 'transparent',
-                        color: isActive ? 'var(--color-accent)' : 'var(--color-muted)',
+                        backgroundColor: isActive ? `${item.iconColor}1a` : 'transparent',
+                        color: isActive ? item.iconColor : 'var(--color-muted)',
                         transition: 'all 0.15s',
                       }}
                     >
@@ -593,13 +566,13 @@ const MobileBottomNav: React.FC = () => {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          backgroundColor: isActive ? 'var(--color-accent)' : 'var(--color-surface-2)',
-                          color: isActive ? '#000000' : 'var(--color-muted)',
+                          backgroundColor: isActive ? `${item.iconColor}24` : 'var(--color-surface-2)',
+                          color: item.iconColor,
                         }}
                       >
                         {item.icon}
                       </span>
-                      <span style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--color-primary)' : 'var(--color-secondary)' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: isActive ? item.iconColor : 'var(--color-secondary)' }}>
                         {item.label}
                       </span>
                     </button>
@@ -624,7 +597,7 @@ const MobileBottomNav: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '8px' }}>
           {bottomNavItems.map(item => {
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || (item.id === 'planning' && location.pathname.startsWith('/planning'));
             return (
               <button
                 key={item.id}
@@ -650,9 +623,9 @@ const MobileBottomNav: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: isActive ? 'var(--color-accent)' : 'var(--color-surface-2)',
-                    color: isActive ? '#000000' : 'var(--color-muted)',
-                    boxShadow: isActive ? 'var(--shadow-accent)' : 'none',
+                    backgroundColor: isActive ? `${item.iconColor}24` : 'var(--color-surface-2)',
+                    color: item.iconColor,
+                    boxShadow: isActive ? `0 0 14px ${item.iconColor}55` : 'none',
                     transform: isActive ? 'scale(1.06)' : 'scale(1)',
                     transition: 'all 0.15s',
                   }}
@@ -663,7 +636,7 @@ const MobileBottomNav: React.FC = () => {
                   style={{
                     fontSize: '10px',
                     fontWeight: 500,
-                    color: isActive ? 'var(--color-primary)' : 'var(--color-subtle)',
+                    color: isActive ? item.iconColor : 'var(--color-subtle)',
                   }}
                 >
                   {item.label.split(' ')[0]}
@@ -696,9 +669,9 @@ const MobileBottomNav: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isMoreActive || showMore ? 'var(--color-accent)' : 'var(--color-surface-2)',
-                  color: isMoreActive || showMore ? '#000000' : 'var(--color-muted)',
-                  boxShadow: isMoreActive || showMore ? 'var(--shadow-accent)' : 'none',
+                  backgroundColor: isMoreActive || showMore ? '#4d7dff24' : 'var(--color-surface-2)',
+                  color: '#4d7dff',
+                  boxShadow: isMoreActive || showMore ? '0 0 14px #4d7dff55' : 'none',
                   transition: 'all 0.15s',
                 }}
               >
@@ -708,7 +681,7 @@ const MobileBottomNav: React.FC = () => {
                 style={{
                   fontSize: '10px',
                   fontWeight: 500,
-                  color: isMoreActive || showMore ? 'var(--color-primary)' : 'var(--color-subtle)',
+                  color: isMoreActive || showMore ? '#4d7dff' : 'var(--color-subtle)',
                 }}
               >
                 Plus
