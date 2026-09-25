@@ -1,7 +1,7 @@
 // components/Hotel/ReservationList.tsx
 import React, { useState, useEffect } from 'react';
 import { Reservation } from '../../types/hotel.types';
-import { formatCurrency, formatDate } from '../../utils/data';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/data';
 import {
   Calendar,
   Edit,
@@ -34,9 +34,10 @@ interface ReservationListProps {
   onCancel?: (reservationId: number) => void;
   onDelete?: (reservationId: number) => void;
   refreshTrigger?: number;
+  paymentCancelledTrigger?: number;
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger }) => {
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger, paymentCancelledTrigger }) => {
   const {
     reservations,
     loading: reservationsLoading,
@@ -49,6 +50,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
   const { clients, loading: clientsLoading, loadClients } = useClients();
   const { rooms, loading: roomsLoading, loadRooms } = useRooms();
+  const [users, setUsers] = useState<any[]>([]);
 
   const [selectedStatus, setSelectedStatus] = useState<string>('TOUS');
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,6 +63,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [historyFromDate, setHistoryFromDate] = useState('');
   const [historyToDate, setHistoryToDate] = useState('');
+  const [userSearchTerm, setUserSearchTerm] = useState('');
   const isDirection = ['admin', 'manager'].includes(String(AuthService.getCurrentUser()?.role || '').toLowerCase());
 
   // 🟢 État local pour stocker les IDs des réservations déjà encaissées
@@ -70,6 +73,14 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   useEffect(() => {
     const loadAllData = async () => {
       await Promise.all([loadReservations(), loadClients(), loadRooms()]);
+      // Load users for history filtering
+      try {
+        const response = await api.get('/api/hebergement/users');
+        setUsers(response.data.data || []);
+      } catch (err) {
+        console.warn('Failed to load users:', err);
+        setUsers([]);
+      }
     };
     loadAllData();
   }, [loadReservations, loadClients, loadRooms]);
@@ -79,6 +90,13 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       loadReservations();
     }
   }, [loadReservations, refreshTrigger]);
+
+  // Clear encaissedIds when payment is cancelled
+  useEffect(() => {
+    if (paymentCancelledTrigger !== undefined) {
+      setEncaissedIds([]);
+    }
+  }, [paymentCancelledTrigger]);
 
   useEffect(() => {
     let isMounted = true;
@@ -147,19 +165,33 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       res.client?.nom?.toLowerCase().includes(searchLower) ||
       res.client?.prenom?.toLowerCase().includes(searchLower) ||
       res.room?.numero?.includes(searchTerm);
-    
-    // Filter by history dates
-    const matchesHistoryDate = activeTab === 'history' 
-      ? (!historyFromDate || new Date(res.date_arrivee) >= new Date(historyFromDate)) &&
-        (!historyToDate || new Date(res.date_depart) <= new Date(historyToDate))
-      : true;
-    
+
     // Filter by tab (active vs history)
-    const matchesTab = activeTab === 'active' 
+    const matchesTab = activeTab === 'active'
       ? !['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut)
       : ['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut);
-    
-    return matchesStatus && matchesSearch && matchesHistoryDate && matchesTab;
+
+    // Filter by date range in history tab
+    let matchesDateRange = true;
+    if (activeTab === 'history') {
+      if (historyFromDate) {
+        matchesDateRange = matchesDateRange && new Date(res.date_arrivee) >= new Date(historyFromDate);
+      }
+      if (historyToDate) {
+        matchesDateRange = matchesDateRange && new Date(res.date_depart) <= new Date(historyToDate);
+      }
+    }
+
+    // Filter by user name in history tab
+    let matchesUser = true;
+    if (activeTab === 'history' && userSearchTerm) {
+      const userSearchLower = userSearchTerm.toLowerCase();
+      const creatorName = `${res.created_by_prenom || ''} ${res.created_by_nom || ''}`.toLowerCase();
+      const modifierName = `${res.modified_by_prenom || ''} ${res.modified_by_nom || ''}`.toLowerCase();
+      matchesUser = creatorName.includes(userSearchLower) || modifierName.includes(userSearchLower);
+    }
+
+    return matchesStatus && matchesSearch && matchesTab && matchesDateRange && matchesUser;
   });
 
   const isLoading = reservationsLoading || clientsLoading || roomsLoading;
@@ -324,12 +356,19 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
         >
           <option value="TOUS">Tous</option>
-          <option value="CONFIRMEE">Confirmées</option>
-          <option value="CHECKED_IN">Check-in</option>
-          <option value="EN_COURS">En cours</option>
-          <option value="TERMINEE">Terminées</option>
-          <option value="ANNULEE">Annulées</option>
-          <option value="NO_SHOW">No Show</option>
+          {activeTab === 'active' ? (
+            <>
+              <option value="CONFIRMEE">Confirmées</option>
+              <option value="CHECKED_IN">Check-in</option>
+              <option value="EN_COURS">En cours</option>
+            </>
+          ) : (
+            <>
+              <option value="TERMINEE">Terminées</option>
+              <option value="ANNULEE">Annulées</option>
+              <option value="NO_SHOW">No Show</option>
+            </>
+          )}
         </select>
         <button
           type="button"
@@ -342,7 +381,22 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
       {/* History date filters */}
       {activeTab === 'history' && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <input
+            type="text"
+            list="users-list"
+            placeholder="Rechercher par utilisateur..."
+            value={userSearchTerm}
+            onChange={(e) => setUserSearchTerm(e.target.value)}
+            className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
+          />
+          <datalist id="users-list">
+            {users.map(user => (
+              <option key={user.id_admin} value={`${user.prenom} ${user.nom}`}>
+                {user.prenom} {user.nom} ({user.role})
+              </option>
+            ))}
+          </datalist>
           <input
             type="date"
             value={historyFromDate}
@@ -423,6 +477,26 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                             Remise {res.remise_pourcentage}% {res.remise_validee_par ? 'validée' : 'à valider'}
                           </span>
                         )}
+                        {/* User tracking information */}
+                        {activeTab === 'history' && (
+                          <>
+                            {res.created_by_nom && (
+                              <span className="text-green-400">
+                                Créé par: {res.created_by_prenom} {res.created_by_nom}
+                              </span>
+                            )}
+                            {res.modified_by_nom && res.modified_by_nom !== res.created_by_nom && (
+                              <span className="text-yellow-400">
+                                Modifié par: {res.modified_by_prenom} {res.modified_by_nom}
+                              </span>
+                            )}
+                            {res.created_at && (
+                              <span className="text-gray-500">
+                                {formatDateTime(res.created_at)}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -447,13 +521,10 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                       </button>
                     )}
                     {/* Bouton Encaisser dynamique - Only show after check-in */}
-                    {onEncaisser && (res.statut === 'CHECKED_IN' || res.statut === 'EN_COURS') && res.statut !== 'TERMINEE' && res.statut !== 'ANNULEE' && !encaissedIds.includes(res.id) && (
+                    {onEncaisser && (res.statut === 'CHECKED_IN' || res.statut === 'EN_COURS') && !encaissedIds.includes(res.id) && (
                       <button
-                        type="button" // AJOUTÉ : Empêche le rechargement
-                        onClick={() => {
-                          setEncaissedIds(prev => [...prev, res.id]); // Masque le bouton instantanément
-                          onEncaisser(res);
-                        }}
+                        type="button"
+                        onClick={() => onEncaisser(res)}
                         className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs rounded-lg transition-colors font-medium mr-1"
                         title="Encaisser cette réservation"
                       >
