@@ -26,6 +26,7 @@ import {
 import { useClients } from '../hooks/useClients';
 import { Client, ClientFormData, ClientKyc, ClientKycFormData } from '../services/client.service';
 import { ClientCoreFormFields } from '../components/Clients/ClientCoreFormFields';
+import { IdentityDocumentsCapture, identityDocumentUrl } from '../components/Clients/IdentityDocumentsCapture';
 import { signatureService } from '../services/signature.service';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
@@ -77,6 +78,7 @@ const ClientsPage: React.FC = () => {
     doc_justificatif_domicile: false,
     doc_photo_client: false,
     doc_autre: '',
+    documents_identite_urls: [],
     niveau_risque: undefined,
     commentaires_risque: '',
     declaration_client: false,
@@ -228,6 +230,7 @@ const ClientsPage: React.FC = () => {
       doc_justificatif_domicile: Boolean(data.doc_justificatif_domicile),
       doc_photo_client: Boolean(data.doc_photo_client),
       doc_autre: data.doc_autre?.trim() || undefined,
+      documents_identite_urls: data.documents_identite_urls || [],
       niveau_risque: (data.niveau_risque && ['FAIBLE', 'MOYEN', 'ELEVE'].includes(data.niveau_risque))
         ? data.niveau_risque
         : undefined,
@@ -273,6 +276,7 @@ const ClientsPage: React.FC = () => {
           doc_justificatif_domicile: kyc.doc_justificatif_domicile || false,
           doc_photo_client: kyc.doc_photo_client || false,
           doc_autre: kyc.doc_autre || '',
+          documents_identite_urls: kyc.documents_identite_urls || [],
           niveau_risque: kyc.niveau_risque || undefined,
           commentaires_risque: kyc.commentaires_risque || '',
           declaration_client: kyc.declaration_client || false,
@@ -298,6 +302,7 @@ const ClientsPage: React.FC = () => {
           doc_justificatif_domicile: false,
           doc_photo_client: false,
           doc_autre: '',
+          documents_identite_urls: [],
           niveau_risque: undefined,
           commentaires_risque: '',
           declaration_client: false,
@@ -422,6 +427,7 @@ const ClientsPage: React.FC = () => {
       doc_justificatif_domicile: false,
       doc_photo_client: false,
       doc_autre: '',
+      documents_identite_urls: [],
       niveau_risque: undefined,
       commentaires_risque: '',
       declaration_client: false,
@@ -1215,6 +1221,15 @@ const ClientsPage: React.FC = () => {
                             disabled={isSubmittingKyc}
                           />
                         </div>
+                        <IdentityDocumentsCapture
+                          urls={kycData.documents_identite_urls || []}
+                          onChange={(urls) => setKycData(prev => ({
+                            ...prev,
+                            documents_identite_urls: urls,
+                            doc_piece_identite: urls.length > 0 ? true : prev.doc_piece_identite,
+                          }))}
+                          disabled={isSubmittingKyc}
+                        />
                       </div>
                     </div>
 
@@ -1588,6 +1603,19 @@ const ClientsPage: React.FC = () => {
                           </p>
                         )}
                       </div>
+                      {(viewKycData.documents_identite_urls?.length ?? 0) > 0 && (
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {viewKycData.documents_identite_urls!.map((url, index) => (
+                            <a key={`${url}-${index}`} href={identityDocumentUrl(url)} target="_blank" rel="noreferrer" className="block rounded-lg border border-base overflow-hidden hover:opacity-80 transition">
+                              {url.toLowerCase().endsWith('.pdf') ? (
+                                <div className="h-20 flex items-center justify-center text-xs text-accent">Voir le PDF {index + 1}</div>
+                              ) : (
+                                <img src={identityDocumentUrl(url)} alt={`Pièce d'identité ${index + 1}`} className="h-20 w-full object-cover" />
+                              )}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Informations financières */}

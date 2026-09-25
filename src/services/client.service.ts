@@ -56,6 +56,7 @@ export interface ClientKyc {
   doc_justificatif_domicile?: boolean;
   doc_photo_client?: boolean;
   doc_autre?: string | null;
+  documents_identite_urls?: string[];
   niveau_risque?: 'FAIBLE' | 'MOYEN' | 'ELEVE' | null;
   commentaires_risque?: string | null;
   declaration_client?: boolean;
@@ -80,6 +81,7 @@ export interface ClientKycFormData {
   doc_justificatif_domicile?: boolean;
   doc_photo_client?: boolean;
   doc_autre?: string;
+  documents_identite_urls?: string[];
   niveau_risque?: 'FAIBLE' | 'MOYEN' | 'ELEVE';
   commentaires_risque?: string;
   declaration_client?: boolean;
