@@ -1,6 +1,6 @@
 import type { PlanningAssignment } from '../services/planning.service';
 
-const weekdays = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI'];
+const weekdays = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI', 'SAMEDI', 'DIMANCHE'];
 const pdfText = (value: string) => value.replace(/[’‘]/g, "'").replace(/[–—]/g, '-').replace(/…/g, '...');
 const dateLabel = (date: string, options: Intl.DateTimeFormatOptions) => new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', options);
 
@@ -21,7 +21,7 @@ export async function exportWeeklyPlanningPdf({
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 10;
   const postWidth = 20;
-  const dayWidth = (pageWidth - margin * 2 - postWidth) / 6;
+  const dayWidth = (pageWidth - margin * 2 - postWidth) / weekDates.length;
   const rowBottom = pageHeight - 15;
   let y = 0;
 
@@ -60,7 +60,7 @@ export async function exportWeeklyPlanningPdf({
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(95, 108, 124);
     pdf.setFontSize(9);
-    pdf.text(`${dateLabel(weekDates[0], { day: '2-digit', month: 'long', year: 'numeric' })} - ${dateLabel(weekDates[5], { day: '2-digit', month: 'long', year: 'numeric' })}`, margin, 30);
+    pdf.text(`${dateLabel(weekDates[0], { day: '2-digit', month: 'long', year: 'numeric' })} - ${dateLabel(weekDates[weekDates.length - 1], { day: '2-digit', month: 'long', year: 'numeric' })}`, margin, 30);
   };
 
   drawPageTitle();
@@ -101,10 +101,13 @@ export async function exportWeeklyPlanningPdf({
       pdf.setFontSize(8);
       pdf.setTextColor(43, 54, 68);
       pdf.text(lines, x + 3, y + 5.5);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.setTextColor(93, 107, 122);
-      pdf.text(pdfText(assignment?.schedule.trim() || '-'), x + 3, y + rowHeight - 3.5);
+      const schedule = assignment?.schedule.trim();
+      if (schedule) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(93, 107, 122);
+        pdf.text(pdfText(schedule), x + 3, y + rowHeight - 3.5);
+      }
     });
     y += rowHeight;
   });
@@ -120,11 +123,11 @@ export async function exportWeeklyPlanningPdf({
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7);
     pdf.setTextColor(135, 145, 157);
-    pdf.text(`HDA Platform  |  ${dateLabel(weekDates[0], { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${dateLabel(weekDates[5], { day: '2-digit', month: '2-digit', year: 'numeric' })}`, margin, pageHeight - 7);
+    pdf.text(`HDA Platform  |  ${dateLabel(weekDates[0], { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${dateLabel(weekDates[weekDates.length - 1], { day: '2-digit', month: '2-digit', year: 'numeric' })}`, margin, pageHeight - 7);
     pdf.text(`${page} / ${pdf.getNumberOfPages()}`, pageWidth - margin, pageHeight - 7, { align: 'right' });
   }
 
   pdf.setProperties({ title: pdfText(`Planning ${category}`), subject: 'Planning hebdomadaire du personnel', creator: 'HDA Platform' });
   const slug = category.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  pdf.save(`planning-${slug}-${weekDates[0]}-${weekDates[5]}.pdf`);
+  pdf.save(`planning-${slug}-${weekDates[0]}-${weekDates[weekDates.length - 1]}.pdf`);
 }
