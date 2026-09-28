@@ -89,16 +89,16 @@ const SchedulePicker = ({ value, disabled, onChange, label }: { value: string; d
   const [start, end] = (normalizedValue && !isOff ? normalizedValue : defaultSchedule).split(' – ');
   const displaySchedule = isOff ? 'OFF' : normalizedValue.replace(/:/g, 'h').replace(' – ', ' - ');
   const update = (nextStart: string, nextEnd: string) => onChange(`${nextStart || '00:00'} – ${nextEnd || '00:00'}`);
-  const pickerClass = 'h-8 w-full min-w-0 rounded-md border border-base bg-surface px-2 text-sm tabular-nums text-primary outline-none focus:border-accent/60 disabled:opacity-60';
+  const pickerClass = 'h-9 w-full min-w-0 rounded-md border border-base bg-surface px-2 text-sm tabular-nums text-primary outline-none focus:border-accent/60 disabled:opacity-60';
   return <div className="min-w-0 space-y-1">
-    <button type="button" disabled={disabled} aria-label={`Modifier l’horaire ${label}`} aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className="flex h-9 w-full min-w-[160px] items-center justify-between gap-1 rounded-md border border-base bg-surface px-2 text-left font-mono text-sm tabular-nums text-primary hover:border-accent/60 disabled:opacity-60">
+    <button type="button" disabled={disabled} aria-label={`Modifier l’horaire ${label}`} aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className="flex h-9 w-full min-w-[168px] items-center justify-between gap-1 rounded-md border border-base bg-surface px-2 text-left font-mono text-sm tabular-nums text-primary hover:border-accent/60 disabled:opacity-60">
       <span className="whitespace-nowrap">{displaySchedule || '\u00a0'}</span>
       <ChevronDown size={14} className={`shrink-0 text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
     </button>
-    {isOpen && <div className="space-y-2 rounded-md border border-base bg-surface-2 p-2">
-      <button type="button" disabled={disabled} aria-pressed={isOff} onClick={() => onChange(isOff ? defaultSchedule : 'OFF')} className={`h-8 w-full rounded-md border px-2 text-left text-sm font-semibold ${isOff ? 'border-accent bg-accent-4 text-accent' : 'border-base bg-surface text-secondary hover:border-accent/60'}`}>OFF · Aucun service</button>
-      <label className="flex items-center justify-between gap-2 text-xs text-secondary">Début<input type="time" step={60} value={start} disabled={disabled} aria-label={`Heure de début ${label}`} onChange={(event) => update(event.target.value, end)} className={pickerClass} /></label>
-      <label className="flex items-center justify-between gap-2 text-xs text-secondary">Fin<input type="time" step={60} value={end} disabled={disabled} aria-label={`Heure de fin ${label}`} onChange={(event) => update(start, event.target.value)} className={pickerClass} /></label>
+    {isOpen && <div className="w-full min-w-[168px] space-y-3 rounded-md border border-base bg-surface-2 p-3">
+      <button type="button" disabled={disabled} aria-pressed={isOff} onClick={() => onChange(isOff ? defaultSchedule : 'OFF')} className={`h-9 w-full rounded-md border px-2 text-left text-sm font-semibold ${isOff ? 'border-accent bg-accent-4 text-accent' : 'border-base bg-surface text-secondary hover:border-accent/60'}`}>OFF</button>
+      <label className="block space-y-1 text-xs text-secondary">Début<input type="time" step={60} value={start} disabled={disabled} aria-label={`Heure de début ${label}`} onChange={(event) => update(event.target.value, end)} className={pickerClass} /></label>
+      <label className="block space-y-1 text-xs text-secondary">Fin<input type="time" step={60} value={end} disabled={disabled} aria-label={`Heure de fin ${label}`} onChange={(event) => update(start, event.target.value)} className={pickerClass} /></label>
     </div>}
   </div>;
 };
@@ -336,7 +336,7 @@ export default function PlanningPage() {
               <datalist id="planning-employees">{employees.map((employee) => <option key={employee.id} value={fullName(employee)} />)}</datalist>
               {/* Grand écran : tableau de la semaine */}
               <div className="hidden overflow-x-auto xl:block">
-                <table className="w-full min-w-[1296px] table-fixed text-left">
+                <table className="w-full min-w-[1352px] table-fixed text-left">
                   <thead>
                     <tr className="bg-surface-2/60 text-[11px] uppercase tracking-wide text-muted">
                       <th className="w-16 px-3 py-3 font-medium">Poste</th>
