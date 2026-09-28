@@ -1070,12 +1070,19 @@ const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players
   const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
   const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
   const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-  const result = Math.abs(cashing - totalCaves);
-  const cashPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => isCashPaymentOption(payment.option));
+  const result = cashing - totalCaves;
+  if (result === 0) return total;
+  const payments = parsePaymentOptions(player.resultPaymentOptions);
+  const cashPayments = payments.filter((payment) => isCashPaymentOption(payment.option));
   if (!cashPayments.length) return total;
-  const explicitAmount = cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
-  const amount = explicitAmount > 0 ? explicitAmount : cashPayments.length === 1 ? result : 0;
-  return total + amount;
+  // Espèce seule : tout le résultat passe en caisse.
+  // Plusieurs règlements (ex. Espèce + TPE) : seul le montant saisi en Espèce compte.
+  const amount = payments.length === 1
+    ? Math.abs(result)
+    : cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
+  // Résultat négatif : le joueur paie, la caisse augmente.
+  // Résultat positif : le casino paie le joueur, la caisse diminue.
+  return result < 0 ? total + amount : total - amount;
 }, 0);
 
 const isPaidCave = (payment?: string) => {
