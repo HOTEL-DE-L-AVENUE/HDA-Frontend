@@ -67,6 +67,15 @@ export interface MonthlyDepartmentReport {
   solde: number;
 }
 
+export interface PeriodDepartmentReport {
+  department: string;
+  start_date: string;
+  end_date: string;
+  ca: number;
+  charges: number;
+  solde: number;
+}
+
 export interface FinancialStats {
   totalEntrees: number;
   totalSorties: number;
@@ -277,6 +286,21 @@ export const financeService = {
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Erreur getMonthlyDepartmentReport:', error);
+      return [];
+    }
+  },
+
+  async getPeriodDepartmentReport(params: {
+    period: 'daily' | 'weekly';
+    department?: string;
+    startDate: string;
+    endDate: string;
+  }): Promise<PeriodDepartmentReport[]> {
+    try {
+      const response = await api.get('/api/finance/reports/period', { params });
+      return response.data.data || [];
+    } catch (error) {
+      console.error('❌ Erreur getPeriodDepartmentReport:', error);
       return [];
     }
   },

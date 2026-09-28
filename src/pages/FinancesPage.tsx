@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { formatCurrency, formatDate } from '../utils/data';
 import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Download, Filter, Plus, CreditCard, CalendarRange } from 'lucide-react';
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats, MonthlyDepartmentReport, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
+import financeService, { FinancialTransaction, ModuleCaisseSolde, FinancialStats, MonthlyDepartmentReport, PeriodDepartmentReport, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import { CreateInvoiceModal } from '../components/Finance/modals/CreateInvoiceModal';
 import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentModal';
 import { Modal } from '../components/ui/Modal';
@@ -27,6 +27,13 @@ const MONTH_LABELS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
+
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 // Normalizes module names to consistent keys for financial data processing
 // Handles various naming conventions and historical data references
@@ -68,6 +75,10 @@ export const FinancesPage: React.FC = () => {
   const [monthlyMonthFilter, setMonthlyMonthFilter] = useState<number>(0); // 0 = tous les mois
   const [monthlyRows, setMonthlyRows] = useState<MonthlyDepartmentReport[]>([]);
   const [monthlyLoading, setMonthlyLoading] = useState<boolean>(false);
+  const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [periodDate, setPeriodDate] = useState(() => toDateInputValue(new Date()));
+  const [periodRows, setPeriodRows] = useState<PeriodDepartmentReport[]>([]);
+  const [periodLoading, setPeriodLoading] = useState<boolean>(false);
 
   // Modal states
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
@@ -116,6 +127,58 @@ export const FinancesPage: React.FC = () => {
     fetchMonthlyReport();
     return () => { cancelled = true; };
   }, [monthlyYear]);
+
+  useEffect(() => {
+    if (reportPeriod === 'monthly') return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate)) {
+      setPeriodRows([]);
+      setPeriodLoading(false);
+      return;
+    }
+
+    const selectedDate = new Date(`${periodDate}T12:00:00`);
+    const startDate = new Date(selectedDate);
+    if (reportPeriod === 'weekly') {
+      startDate.setDate(startDate.getDate() - ((startDate.getDay() + 6) % 7));
+    }
+    const endDate = new Date(startDate);
+    if (reportPeriod === 'weekly') endDate.setDate(endDate.getDate() + 6);
+    const startDateValue = toDateInputValue(startDate);
+    const endDateValue = toDateInputValue(endDate);
+
+    let cancelled = false;
+    const fetchPeriodReport = async () => {
+      setPeriodLoading(true);
+      setPeriodRows([]);
+      try {
+        const rows = await financeService.getPeriodDepartmentReport({
+          period: reportPeriod,
+          startDate: startDateValue,
+          endDate: endDateValue,
+        });
+        if (cancelled) return;
+
+        const merged = new Map<string, PeriodDepartmentReport>();
+        rows.forEach((row) => {
+          const department = normalizeModuleKey(row.department);
+          const key = `${department}|${row.start_date}|${row.end_date}`;
+          const existing = merged.get(key);
+          if (existing) {
+            existing.ca += row.ca;
+            existing.charges += row.charges;
+            existing.solde += row.solde;
+          } else {
+            merged.set(key, { ...row, department });
+          }
+        });
+        setPeriodRows([...merged.values()].filter((row) => row.department === monthlyDepartment));
+      } finally {
+        if (!cancelled) setPeriodLoading(false);
+      }
+    };
+    fetchPeriodReport();
+    return () => { cancelled = true; };
+  }, [reportPeriod, periodDate, monthlyDepartment]);
 
   const fetchFinancialData = async () => {
     try {
@@ -327,6 +390,124 @@ export const FinancesPage: React.FC = () => {
     ? monthlyTableRows
     : monthlyTableRows.filter(row => row.month === monthlyMonthFilter);
   const selectedMonthRow = monthlyMonthFilter === 0 ? null : monthlyTableRows[monthlyMonthFilter - 1];
+  const periodTotals = periodRows.reduce((totals, row) => ({
+    ca: totals.ca + row.ca,
+    charges: totals.charges + row.charges,
+    solde: totals.solde + row.solde,
+  }), { ca: 0, charges: 0, solde: 0 });
+  const monthlyTotals = visibleMonthlyRows.reduce((totals, row) => ({
+    ca: totals.ca + row.ca,
+    charges: totals.charges + row.charges,
+    solde: totals.solde + row.solde,
+  }), { ca: 0, charges: 0, solde: 0 });
+
+  const handleExportReportPdf = async () => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const departmentName = moduleConfig[monthlyDepartment]?.label || monthlyDepartment;
+      const reportTitle = reportPeriod === 'daily' ? 'Rapport journalier'
+        : reportPeriod === 'weekly' ? 'Rapport hebdomadaire' : 'Rapport mensuel';
+      let periodLabel: string;
+      let rows: Array<{ label: string; ca: number; charges: number; solde: number }>;
+      let totals: { ca: number; charges: number; solde: number };
+
+      if (reportPeriod === 'monthly') {
+        periodLabel = monthlyMonthFilter === 0
+          ? `Année ${monthlyYear}`
+          : `${MONTH_LABELS[monthlyMonthFilter - 1]} ${monthlyYear}`;
+        rows = visibleMonthlyRows.map((row) => ({
+          label: MONTH_LABELS[row.month - 1],
+          ca: row.ca,
+          charges: row.charges,
+          solde: row.solde,
+        }));
+        totals = monthlyTotals;
+      } else {
+        const startDate = new Date(`${periodDate}T12:00:00`);
+        if (reportPeriod === 'weekly') {
+          startDate.setDate(startDate.getDate() - ((startDate.getDay() + 6) % 7));
+        }
+        const endDate = new Date(startDate);
+        if (reportPeriod === 'weekly') endDate.setDate(endDate.getDate() + 6);
+        const startLabel = startDate.toLocaleDateString('fr-FR');
+        const endLabel = endDate.toLocaleDateString('fr-FR');
+        periodLabel = reportPeriod === 'daily' ? startLabel : `Du ${startLabel} au ${endLabel}`;
+        rows = periodRows.map((row) => ({
+          label: reportPeriod === 'daily'
+            ? new Date(`${row.start_date}T12:00:00`).toLocaleDateString('fr-FR')
+            : `Du ${new Date(`${row.start_date}T12:00:00`).toLocaleDateString('fr-FR')} au ${new Date(`${row.end_date}T12:00:00`).toLocaleDateString('fr-FR')}`,
+          ca: row.ca,
+          charges: row.charges,
+          solde: row.solde,
+        }));
+        totals = periodTotals;
+      }
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.text('HDA - Rapport financier', 14, 18);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.text(`${reportTitle} | ${departmentName} | ${periodLabel}`, 14, 26);
+      pdf.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, 14, 32);
+
+      const summaryTop = 40;
+      const summaryWidth = (pageWidth - 36) / 3;
+      [
+        { label: "Chiffre d'affaires", amount: totals.ca },
+        { label: 'Charges', amount: totals.charges },
+        { label: 'Solde', amount: totals.solde },
+      ].forEach((item, index) => {
+        const x = 14 + index * (summaryWidth + 4);
+        pdf.setFillColor(245, 246, 248);
+        pdf.roundedRect(x, summaryTop, summaryWidth, 19, 2, 2, 'F');
+        pdf.setFontSize(9);
+        pdf.setTextColor(90, 96, 105);
+        pdf.text(item.label, x + 5, summaryTop + 7);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(12);
+        pdf.setTextColor(35, 39, 46);
+        pdf.text(formatCurrency(item.amount), x + 5, summaryTop + 14);
+        pdf.setFont('helvetica', 'normal');
+      });
+
+      let y = 68;
+      pdf.setFillColor(35, 39, 46);
+      pdf.rect(14, y, pageWidth - 28, 10, 'F');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(reportPeriod === 'monthly' ? 'Mois' : 'Période', 19, y + 6.5);
+      pdf.text('CA', 155, y + 6.5, { align: 'right' });
+      pdf.text('Charges', 215, y + 6.5, { align: 'right' });
+      pdf.text('Solde', pageWidth - 19, y + 6.5, { align: 'right' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(35, 39, 46);
+      y += 10;
+
+      const tableRows = rows.length ? rows : [{ label: 'Aucune donnée pour cette période', ca: 0, charges: 0, solde: 0 }];
+      tableRows.forEach((row) => {
+        pdf.setDrawColor(225, 228, 232);
+        pdf.line(14, y + 9, pageWidth - 14, y + 9);
+        pdf.setFontSize(9);
+        pdf.text(row.label, 19, y + 6);
+        pdf.text(formatCurrency(row.ca), 155, y + 6, { align: 'right' });
+        pdf.text(formatCurrency(row.charges), 215, y + 6, { align: 'right' });
+        pdf.text(formatCurrency(row.solde), pageWidth - 19, y + 6, { align: 'right' });
+        y += 10;
+      });
+
+      const periodSlug = reportPeriod === 'monthly'
+        ? `${monthlyYear}-${monthlyMonthFilter ? String(monthlyMonthFilter).padStart(2, '0') : 'annee'}`
+        : periodDate;
+      pdf.save(`rapport-financier-${reportPeriod}-${monthlyDepartment}-${periodSlug}.pdf`);
+    } catch (error) {
+      console.error('Erreur lors de la génération du rapport PDF:', error);
+      toast.error('Impossible de générer le rapport PDF.');
+    }
+  };
 
   const handleCreateOperation = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -483,7 +664,39 @@ export const FinancesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Ventilation mensuelle par département */}
+      {/* Rapports financiers */}
+      <div className="bg-surface border border-base rounded-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
+          <div className="flex items-center gap-2">
+            <CalendarRange size={18} className="text-accent" />
+            <h3 className="text-primary font-semibold">Rapports financiers</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'daily', label: 'Journalier' },
+              { value: 'weekly', label: 'Hebdomadaire' },
+              { value: 'monthly', label: 'Mensuel' },
+            ].map((period) => (
+              <button
+                key={period.value}
+                onClick={() => setReportPeriod(period.value as 'daily' | 'weekly' | 'monthly')}
+                className={`tab px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${reportPeriod === period.value ? 'active' : ''}`}
+              >
+                {period.label}
+              </button>
+            ))}
+            <button
+              onClick={handleExportReportPdf}
+              disabled={reportPeriod === 'monthly' ? monthlyLoading : periodLoading || !periodDate}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-base text-muted hover:text-primary text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={14} />
+              Exporter PDF
+            </button>
+          </div>
+        </div>
+
+        {reportPeriod === 'monthly' ? (
       <div className="bg-surface border border-base rounded-2xl overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b border-base">
           <div className="flex items-center gap-2">
@@ -567,6 +780,79 @@ export const FinancesPage: React.FC = () => {
             </table>
           )}
         </div>
+      </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-base">
+              <select
+                value={monthlyDepartment}
+                onChange={(event) => setMonthlyDepartment(event.target.value)}
+                className="bg-surface-2 border border-base rounded-lg px-3 py-1.5 text-sm text-primary"
+              >
+                {financeModules.map((module) => (
+                  <option key={module} value={module}>{moduleConfig[module].label}</option>
+                ))}
+              </select>
+              <label className="flex items-center gap-2 text-sm text-muted">
+                {reportPeriod === 'daily' ? 'Date' : 'Semaine du'}
+                <input
+                  type="date"
+                  value={periodDate}
+                  onChange={(event) => setPeriodDate(event.target.value)}
+                  className="bg-surface-2 border border-base rounded-lg px-3 py-1.5 text-sm text-primary"
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-4 border-b border-base bg-surface-2/40">
+              <div>
+                <p className="text-muted text-xs mb-1">Chiffre d’affaires</p>
+                <p className="text-success font-bold text-xl">{formatCurrency(periodTotals.ca)}</p>
+              </div>
+              <div>
+                <p className="text-muted text-xs mb-1">Charges</p>
+                <p className="text-danger font-bold text-xl">{formatCurrency(periodTotals.charges)}</p>
+              </div>
+              <div>
+                <p className="text-muted text-xs mb-1">Solde</p>
+                <p className="text-primary font-bold text-xl">{formatCurrency(periodTotals.solde)}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              {periodLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <div className="text-muted text-sm">Chargement…</div>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-muted text-xs uppercase tracking-wide border-b border-base">
+                      <th className="px-6 py-3 font-medium">{reportPeriod === 'daily' ? 'Jour' : 'Semaine'}</th>
+                      <th className="px-6 py-3 font-medium text-right">CA</th>
+                      <th className="px-6 py-3 font-medium text-right">Charges</th>
+                      <th className="px-6 py-3 font-medium text-right">Solde</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-base">
+                    {periodRows.length === 0 ? (
+                      <tr><td colSpan={4} className="px-6 py-8 text-center text-muted">Aucune donnée pour cette période</td></tr>
+                    ) : periodRows.map((row) => (
+                      <tr key={`${row.department}|${row.start_date}`} className="hover:bg-surface-2">
+                        <td className="px-6 py-3 text-primary">
+                          {reportPeriod === 'daily'
+                            ? new Date(`${row.start_date}T12:00:00`).toLocaleDateString('fr-FR')
+                            : `${new Date(`${row.start_date}T12:00:00`).toLocaleDateString('fr-FR')} – ${new Date(`${row.end_date}T12:00:00`).toLocaleDateString('fr-FR')}`}
+                        </td>
+                        <td className="px-6 py-3 text-right text-success">{formatCurrency(row.ca)}</td>
+                        <td className="px-6 py-3 text-right text-danger">{formatCurrency(row.charges)}</td>
+                        <td className={`px-6 py-3 text-right font-semibold ${row.solde >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(row.solde)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Charts */}
