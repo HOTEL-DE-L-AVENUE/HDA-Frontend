@@ -2,9 +2,10 @@
 // - FaceKioskModal : borne de pointage plein écran (entrée puis sortie).
 // - FaceEnrollModal : enregistrement du visage d'un employé, avec son accord.
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Check, Loader2, ScanFace, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Camera, Check, Loader2, ScanFace, Trash2, X } from 'lucide-react';
 import rhService, { RHEmployee, RHFacePunch } from '../../services/rh.service';
-import { descriptorDistance, detectFaces, loadFaceModels, snapshot, startCamera, trackFaces } from '../../lib/face';
+import { apiMessage } from '../../lib/api';
+import { checkFaceQuality, descriptorDistance, detectFaces, FACE_ISSUE_MESSAGES, faceServerError, loadFaceModels, snapshot, startCamera, trackFaces } from '../../lib/face';
 
 type Toast = (message: string, type: 'success' | 'error') => void;
 
@@ -119,19 +120,24 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
         // Signature calculée une seule fois, sur une image de face.
         setHint('Vérification…');
         let accepted: Awaited<ReturnType<typeof detectFaces>>[number] | null = null;
+        let lastIssue: keyof typeof FACE_ISSUE_MESSAGES | null = null;
         for (let attempt = 0; attempt < 5 && running && !accepted; attempt += 1) {
           const found = await detectFaces(video);
-          if (found.length === 1 && found[0].width >= MIN_FACE_WIDTH) accepted = found[0];
+          // Même contrôle qu'à l'enregistrement : une image floue ou sombre donne une
+          // signature peu fiable, mieux vaut le dire que de risquer « non reconnu ».
+          lastIssue = checkFaceQuality(video, found, { minWidth: MIN_FACE_WIDTH, maxYaw: 0.2 });
+          if (!lastIssue) accepted = found[0];
         }
         if (!running) break;
-        if (!accepted) { setTone('error'); setHint('Visage perdu : restez face à la caméra et recommencez'); await wait(1500); continue; }
+        if (!accepted) { setTone('error'); setHint(lastIssue ? FACE_ISSUE_MESSAGES[lastIssue] : 'Visage perdu : restez face à la caméra et recommencez.'); await wait(2500); continue; }
         let shown: KioskResult;
         try {
           const response = await rhService.facePunch(accepted.descriptor, snapshot(video));
           shown = punchMessage(response);
           if (response.action === 'CHECK_IN' || response.action === 'CHECK_OUT') onPunch();
         } catch (err: any) {
-          shown = { tone: 'error', title: 'Pointage impossible', detail: err?.response?.data?.message || 'Erreur de connexion au serveur.' };
+          const problem = faceServerError(err, 'Pointage impossible.');
+          shown = { tone: 'error', title: problem.title, detail: problem.detail };
         }
         if (!running) break;
         setResult(shown); setTone(shown.tone === 'idle' ? 'active' : shown.tone);
@@ -182,6 +188,9 @@ export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: {
   const [samples, setSamples] = useState<number[][]>([]);
   const [capturing, setCapturing] = useState(false);
   const [hint, setHint] = useState('');
+  // Problème de qualité en cours (encadré orange) et erreur du serveur (encadré rouge).
+  const [issue, setIssue] = useState('');
+  const [saveError, setSaveError] = useState<{ title: string; detail: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const enrolled = Number(employee.face_samples || 0) > 0;
   const stopRef = useRef(false);
@@ -195,16 +204,20 @@ export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: {
     if (!ready) { setHint(status || 'Patientez, chargement en cours…'); return; }
     const video = videoRef.current!;
     const collected: number[][] = [];
-    setSamples([]); setCapturing(true); stopRef.current = false;
+    setSamples([]); setSaveError(null); setIssue(''); setCapturing(true); stopRef.current = false;
+    const deadline = Date.now() + 45000;
     try {
       while (collected.length < ENROLL_SAMPLES && !stopRef.current) {
+        if (Date.now() > deadline) { setHint('Capture interrompue : corrigez le problème indiqué puis cliquez sur « Recommencer ».'); break; }
         const faces = await detectFaces(video);
-        if (faces.length !== 1) { setHint(faces.length ? 'Une seule personne devant la caméra' : 'Visage non détecté'); await wait(200); continue; }
+        // Chaque image est contrôlée : flou, éclairage, distance, angle, nombre de visages.
+        const problem = checkFaceQuality(video, faces);
+        if (problem) { setIssue(FACE_ISSUE_MESSAGES[problem]); await wait(250); continue; }
         const [face] = faces;
-        if (face.width < 140 || face.score < 0.7) { setHint('Approchez-vous, bien de face et bien éclairé'); await wait(200); continue; }
-        if (collected.length && descriptorDistance(face.descriptor, collected[0]) > SAME_PERSON_DISTANCE) { setHint('Personne différente détectée : recommencez'); collected.length = 0; setSamples([]); await wait(800); continue; }
+        if (collected.length && descriptorDistance(face.descriptor, collected[0]) > SAME_PERSON_DISTANCE) { setIssue('Personne différente détectée pendant la capture : la capture recommence.'); collected.length = 0; setSamples([]); await wait(1200); continue; }
+        setIssue('');
         collected.push(face.descriptor); setSamples([...collected]);
-        setHint(collected.length < ENROLL_SAMPLES ? 'Tournez très légèrement la tête…' : 'Capture terminée');
+        setHint(collected.length < ENROLL_SAMPLES ? 'Bien. Tournez très légèrement la tête…' : 'Capture terminée : cliquez sur « Enregistrer ».');
         await wait(600);
       }
     } finally { setCapturing(false); }
@@ -212,15 +225,18 @@ export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: {
 
   const save = async () => {
     if (onCaptured || !employee.id) { onCaptured?.(samples); close(); return; }
-    setSaving(true);
+    setSaving(true); setSaveError(null);
     try { const r = await rhService.enrollFace(employee.id, samples); toast('Visage enregistré.', 'success'); saved?.(r.face_samples); close(); }
-    catch (err: any) { toast(err?.response?.data?.message || 'Enregistrement du visage impossible.', 'error'); }
+    catch (err: any) {
+      const problem = faceServerError(err, 'Enregistrement du visage impossible.');
+      setSaveError(problem); toast(`${problem.title} : ${problem.detail}`, 'error');
+    }
     finally { setSaving(false); }
   };
   const remove = async () => {
     if (!employee.id || !window.confirm(`Supprimer le visage enregistré de ${employee.first_name} ${employee.last_name} ?`)) return;
     try { await rhService.deleteFace(employee.id); toast('Visage supprimé.', 'success'); saved?.(0); close(); }
-    catch (err: any) { toast(err?.response?.data?.message || 'Suppression impossible.', 'error'); }
+    catch (err: any) { toast(apiMessage(err) || 'Suppression impossible.', 'error'); }
   };
 
   return <div className="fixed inset-0 z-[80] overflow-y-auto overscroll-contain bg-black/50 p-4"><div className="mx-auto my-8 max-w-xl rounded-2xl bg-surface p-6">
@@ -230,7 +246,9 @@ export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: {
     {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     {status && <p className="mt-3 flex items-center gap-2 text-sm text-secondary"><Loader2 size={14} className="animate-spin" /> {status}</p>}
     <div className="mt-3 flex items-center gap-2">{Array.from({ length: ENROLL_SAMPLES }, (_, i) => <span key={i} className={`h-2 flex-1 rounded ${i < samples.length ? 'bg-[#2b7a78]' : 'bg-surface-2'}`} />)}</div>
-    {hint && <p className="mt-2 text-center text-sm font-medium text-primary">{hint}</p>}
+    {issue && <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{issue}</p>}
+    {hint && !issue && <p className="mt-2 text-center text-sm font-medium text-primary">{hint}</p>}
+    {saveError && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><strong className="block">{saveError.title}</strong>{saveError.detail}{saveError.title === 'Visage déjà enregistré' && <span className="mt-1 block text-xs">Si c’est une erreur de personne, faites poser le bon employé. Sinon, supprimez d’abord le visage de l’autre employé (Employés → Voir → Gérer).</span>}</div>}
     <label className={`mt-4 flex items-start gap-2 rounded-xl border p-3 text-sm ${consentMissing && !consent ? 'border-red-500 bg-red-50 text-red-800' : 'border-base'}`}><input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); if (e.target.checked) { setConsentMissing(false); setHint(''); } }} className="mt-1 h-4 w-4" /><span>L’employé a été informé et <strong>donne son accord</strong> pour l’utilisation de son visage pour le pointage. Seule une signature numérique est conservée, pas les photos d’enregistrement. Il peut demander sa suppression à tout moment.</span></label>
     <div className="mt-5 flex flex-wrap justify-between gap-2">
       <div>{enrolled && <button type="button" onClick={remove} className="flex items-center gap-1 rounded border border-red-600 px-3 py-2 text-sm text-red-600"><Trash2 size={15} /> Supprimer le visage</button>}</div>

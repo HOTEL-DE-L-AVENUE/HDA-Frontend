@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, CalendarDays, Camera, Check, ChevronRight, Clock3, Download, Eye, FileText, Paperclip, Pencil, Plus, Save, ScanFace, Search, ShieldCheck, Trash2, UserPlus, UsersRound, WalletCards, X } from 'lucide-react';
 import { FaceEnrollModal, FaceKioskModal } from '../components/RH/FaceAttendance';
+import { apiMessage } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import AuthService from '../services/authService';
 import rhService, { RHAttendance, RHDashboard, RHDepartmentBudget, RHDocument, RHDocumentType, RHEmployee, RHEmployeeMeta, RHEvaluation, RHLeave, RHPayroll } from '../services/rh.service';
@@ -126,7 +127,7 @@ const MyRHSpace: React.FC = () => {
 
 const MyLeaveModal = ({ close, done, toast }: { close: () => void; done: () => void; toast: (message: string, type: 'success' | 'error') => void }) => {
   const [f, setF] = useState({ leave_type: 'ANNUEL', start_date: '', end_date: '', reason: '' });
-  return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async (e) => { e.preventDefault(); try { await rhService.createMyLeaveRequest(f); toast('Demande envoyée.', 'success'); close(); done(); } catch (err: any) { toast(err?.response?.data?.message || 'Envoi impossible.', 'error'); } }} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6">
+  return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async (e) => { e.preventDefault(); try { await rhService.createMyLeaveRequest(f); toast('Demande envoyée.', 'success'); close(); done(); } catch (err: any) { toast(apiMessage(err) || 'Envoi impossible.', 'error'); } }} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6">
     <h2 className="font-bold">Demander un congé</h2>
     <div className="mt-4 space-y-3">
       <select value={f.leave_type} onChange={(e) => setF({ ...f, leave_type: e.target.value })} className="w-full rounded border p-2"><option value="ANNUEL">Annuel</option><option value="MALADIE">Maladie</option><option value="MATERNITE_PATERNITE">Maternité/paternité</option><option value="SANS_SOLDE">Sans solde</option></select>
@@ -192,11 +193,11 @@ const RHManagerView: React.FC = () => {
   useEffect(() => { if (!payrollToDelete) return; const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !deletingPayroll) setPayrollToDelete(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [payrollToDelete, deletingPayroll]);
   const pendingLeaves = leaves.filter((l) => l.status === 'EN_ATTENTE'); const totals = useMemo(() => payroll.reduce((a, p) => ({ base: a.base + Number(p.base_salary), extras: a.extras + Number(p.overtime_amount) + Number(p.bonuses) + Number(p.pourboire || 0) + Number(p.allowances), deductions: a.deductions + Number(p.advances) + Number(p.deductions), contributions: a.contributions + Number(p.cnaps || 0) + Number(p.ostie || 0) + Number(p.irsa || 0), net: a.net + Number(p.net_amount) }), { base: 0, extras: 0, deductions: 0, contributions: 0, net: 0 }), [payroll]);
   const refreshAfterAction = () => load();
-  const saveBudget = async (department: string, value: string) => { const amount = Number(value); if (value === '' || !Number.isFinite(amount) || amount < 0) { showToast('Saisissez un budget valide.', 'error'); return; } try { await rhService.updateBudget(department, amount); showToast(`Budget ${department} enregistré.`, 'success'); loadEvaluationData(); } catch (e: any) { showToast(e?.response?.data?.message || 'Enregistrement du budget impossible.', 'error'); } };
-  const handleLeave = async (id: number, status: 'APPROUVE' | 'REFUSE') => { try { await rhService.updateLeaveStatus(id, status); showToast(status === 'APPROUVE' ? 'Congé approuvé.' : 'Congé refusé.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Mise à jour impossible.', 'error'); } };
-  const generate = async () => { try { const r = await rhService.generatePayroll(period); applyPayroll(r.rows); showToast('Paie préparée : les absences et congés sans solde ont été calculés.', 'success'); } catch (e: any) { showToast(e?.response?.data?.message || 'Préparation impossible.', 'error'); } };
-  const point = async (employeeId: number, action: 'in' | 'out') => { try { action === 'in' ? await rhService.checkIn(employeeId) : await rhService.checkOut(employeeId); showToast(action === 'in' ? 'Arrivée enregistrée.' : 'Départ enregistré.', 'success'); const r = await rhService.listAttendance({ date: attendanceDate, limit: 100 }); setAttendance(r.rows); } catch (e: any) { showToast(e?.response?.data?.message || 'Pointage impossible.', 'error'); } };
-  const validatePayroll = async (line: RHPayroll) => { try { await rhService.updatePayrollStatus(line.id, 'VALIDE'); showToast('Paie validée.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Action impossible.', 'error'); } };
+  const saveBudget = async (department: string, value: string) => { const amount = Number(value); if (value === '' || !Number.isFinite(amount) || amount < 0) { showToast('Saisissez un budget valide.', 'error'); return; } try { await rhService.updateBudget(department, amount); showToast(`Budget ${department} enregistré.`, 'success'); loadEvaluationData(); } catch (e: any) { showToast(apiMessage(e) || 'Enregistrement du budget impossible.', 'error'); } };
+  const handleLeave = async (id: number, status: 'APPROUVE' | 'REFUSE') => { try { await rhService.updateLeaveStatus(id, status); showToast(status === 'APPROUVE' ? 'Congé approuvé.' : 'Congé refusé.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(apiMessage(e) || 'Mise à jour impossible.', 'error'); } };
+  const generate = async () => { try { const r = await rhService.generatePayroll(period); applyPayroll(r.rows); showToast('Paie préparée : les absences et congés sans solde ont été calculés.', 'success'); } catch (e: any) { showToast(apiMessage(e) || 'Préparation impossible.', 'error'); } };
+  const point = async (employeeId: number, action: 'in' | 'out') => { try { action === 'in' ? await rhService.checkIn(employeeId) : await rhService.checkOut(employeeId); showToast(action === 'in' ? 'Arrivée enregistrée.' : 'Départ enregistré.', 'success'); const r = await rhService.listAttendance({ date: attendanceDate, limit: 100 }); setAttendance(r.rows); } catch (e: any) { showToast(apiMessage(e) || 'Pointage impossible.', 'error'); } };
+  const validatePayroll = async (line: RHPayroll) => { try { await rhService.updatePayrollStatus(line.id, 'VALIDE'); showToast('Paie validée.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(apiMessage(e) || 'Action impossible.', 'error'); } };
   const openPayrollAdjustment = (line: RHPayroll) => {
     setSelectedPayroll(line);
     setPayrollAdjustment(line);
@@ -233,11 +234,11 @@ const RHManagerView: React.FC = () => {
       setPayrollAdjustment(null);
       refreshAfterAction();
     } catch (e: any) {
-      showToast(e?.response?.data?.message || 'Mise à jour impossible.', 'error');
+      showToast(apiMessage(e) || 'Mise à jour impossible.', 'error');
     }
   };
-  const confirmRemovePayroll = async () => { const line = payrollToDelete; if (!line || deletingPayroll) return; setDeletingPayroll(true); try { await rhService.deletePayroll(line.id); setPayroll((rows) => rows.filter((row) => row.id !== line.id)); if (selectedPayroll?.id === line.id) setSelectedPayroll(null); setPayrollToDelete(null); showToast('Ligne de paie supprimée.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Suppression impossible.', 'error'); } finally { setDeletingPayroll(false); } };
-  const confirmRemoveEmployee = async () => { const employee = employeeToDelete; if (!employee || deletingEmployee) return; setDeletingEmployee(true); try { await rhService.deleteEmployee(employee.id); setEmployees((rows) => rows.filter((row) => row.id !== employee.id)); if (viewedEmployee?.id === employee.id) setViewedEmployee(null); setEmployeeToDelete(null); showToast('Employé supprimé.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(e?.response?.data?.message || 'Suppression impossible.', 'error'); } finally { setDeletingEmployee(false); } };
+  const confirmRemovePayroll = async () => { const line = payrollToDelete; if (!line || deletingPayroll) return; setDeletingPayroll(true); try { await rhService.deletePayroll(line.id); setPayroll((rows) => rows.filter((row) => row.id !== line.id)); if (selectedPayroll?.id === line.id) setSelectedPayroll(null); setPayrollToDelete(null); showToast('Ligne de paie supprimée.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(apiMessage(e) || 'Suppression impossible.', 'error'); } finally { setDeletingPayroll(false); } };
+  const confirmRemoveEmployee = async () => { const employee = employeeToDelete; if (!employee || deletingEmployee) return; setDeletingEmployee(true); try { await rhService.deleteEmployee(employee.id); setEmployees((rows) => rows.filter((row) => row.id !== employee.id)); if (viewedEmployee?.id === employee.id) setViewedEmployee(null); setEmployeeToDelete(null); showToast('Employé supprimé.', 'success'); refreshAfterAction(); } catch (e: any) { showToast(apiMessage(e) || 'Suppression impossible.', 'error'); } finally { setDeletingEmployee(false); } };
   const downloadPayslip = async (line: RHPayroll) => { try { const response = await rhService.downloadPayslip(period, line.employee_id); const url = URL.createObjectURL(response.data); const a = document.createElement('a'); a.href = url; a.download = `bulletin-${line.matricule}-${period}.pdf`; a.click(); URL.revokeObjectURL(url); } catch { showToast('Téléchargement du bulletin impossible.', 'error'); } };
   // Net recalculé en direct dans « Ajuster la paie », avec la même formule que le serveur.
   const adjustmentNet = (() => {
@@ -315,7 +316,7 @@ const RHManagerView: React.FC = () => {
     })()}<div className="flex justify-end gap-2"><button type="button" onClick={() => setPayrollAdjustment(null)} className="rounded border px-3 py-2 text-sm">Annuler</button><button type="button" disabled={adjustmentNet < 0} onClick={savePayrollAdjustment} className="rounded bg-[#2b7a78] px-3 py-2 text-sm text-white disabled:opacity-40">Enregistrer</button></div></div></div></div>}
     {leaveForm && <LeaveModal employees={employees} close={() => setLeaveForm(false)} done={refreshAfterAction} toast={showToast}/>}</div>;
 };
-const LeaveModal = ({ employees, close, done, toast }: { employees: RHEmployee[]; close: () => void; done: () => void; toast: (message: string, type: 'success' | 'error') => void }) => { const [f,setF]=useState({employee_id:'',leave_type:'ANNUEL',start_date:'',end_date:'',reason:''}); return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async e=>{e.preventDefault();try{await rhService.createLeaveRequest({...f,employee_id:Number(f.employee_id)});toast('Demande créée.','success');close();done()}catch(err:any){toast(err?.response?.data?.message||'Création impossible.','error')}}} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6"><h2 className="font-bold">Nouvelle demande de congé</h2><div className="mt-4 space-y-3"><select required value={f.employee_id} onChange={e=>setF({...f,employee_id:e.target.value})} className="w-full rounded border p-2"><option value="">Employé</option>{employees.filter(e=>!departureStatuses.includes(e.status)).map(e=><option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}</select><select value={f.leave_type} onChange={e=>setF({...f,leave_type:e.target.value})} className="w-full rounded border p-2"><option value="ANNUEL">Annuel</option><option value="MALADIE">Maladie</option><option value="MATERNITE_PATERNITE">Maternité/paternité</option><option value="SANS_SOLDE">Sans solde</option></select><input required type="date" value={f.start_date} onChange={e=>setF({...f,start_date:e.target.value})} className="w-full rounded border p-2"/><input required type="date" value={f.end_date} onChange={e=>setF({...f,end_date:e.target.value})} className="w-full rounded border p-2"/><input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} placeholder="Motif" className="w-full rounded border p-2"/></div><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={close}>Annuler</button><button className="rounded bg-[#2b7a78] px-3 py-2 text-white">Envoyer</button></div></form></div> };
+const LeaveModal = ({ employees, close, done, toast }: { employees: RHEmployee[]; close: () => void; done: () => void; toast: (message: string, type: 'success' | 'error') => void }) => { const [f,setF]=useState({employee_id:'',leave_type:'ANNUEL',start_date:'',end_date:'',reason:''}); return <div className="fixed inset-0 z-[60] bg-black/30 p-4"><form onSubmit={async e=>{e.preventDefault();try{await rhService.createLeaveRequest({...f,employee_id:Number(f.employee_id)});toast('Demande créée.','success');close();done()}catch(err:any){toast(apiMessage(err)||'Création impossible.','error')}}} className="mx-auto mt-20 max-w-md rounded-2xl bg-surface p-6"><h2 className="font-bold">Nouvelle demande de congé</h2><div className="mt-4 space-y-3"><select required value={f.employee_id} onChange={e=>setF({...f,employee_id:e.target.value})} className="w-full rounded border p-2"><option value="">Employé</option>{employees.filter(e=>!departureStatuses.includes(e.status)).map(e=><option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}</select><select value={f.leave_type} onChange={e=>setF({...f,leave_type:e.target.value})} className="w-full rounded border p-2"><option value="ANNUEL">Annuel</option><option value="MALADIE">Maladie</option><option value="MATERNITE_PATERNITE">Maternité/paternité</option><option value="SANS_SOLDE">Sans solde</option></select><input required type="date" value={f.start_date} onChange={e=>setF({...f,start_date:e.target.value})} className="w-full rounded border p-2"/><input required type="date" value={f.end_date} onChange={e=>setF({...f,end_date:e.target.value})} className="w-full rounded border p-2"/><input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} placeholder="Motif" className="w-full rounded border p-2"/></div><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={close}>Annuler</button><button className="rounded bg-[#2b7a78] px-3 py-2 text-white">Envoyer</button></div></form></div> };
 
 // ─────────────────────────────────────────────
 // Pièces jointes du dossier (CIN, justificatif de résidence, CV, contrat).
@@ -388,12 +389,16 @@ const EmployeeFormModal = ({ employee, close, saved, toast }: { employee: RHEmpl
   const presenceDays = Number(employee?.presence_days || 0);
 
   const addFiles = (docType: RHDocumentType, files: FileList | null) => {
-    if (!files?.length) return;
-    setPending((current) => [...current, ...Array.from(files).map((file, i) => ({ key: `${docType}-${Date.now()}-${i}`, doc_type: docType, file }))]);
+    // Copie immédiate : la FileList est vidée juste après (input.value = '' pour pouvoir
+    // rechoisir le même fichier). Lue plus tard dans setPending, elle serait déjà vide.
+    const selected = Array.from(files || []);
+    if (!selected.length) return;
+    const stamp = Date.now();
+    setPending((current) => [...current, ...selected.map((file, i) => ({ key: `${docType}-${stamp}-${i}`, doc_type: docType, file }))]);
   };
   const removeDocument = async (doc: RHDocument) => {
     if (!employee || !window.confirm(`Supprimer « ${doc.original_name} » ?`)) return;
-    try { await rhService.deleteDocument(employee.id, doc.id); toast('Pièce jointe supprimée.', 'success'); reloadDocuments(); } catch (e: any) { toast(e?.response?.data?.message || 'Suppression impossible.', 'error'); }
+    try { await rhService.deleteDocument(employee.id, doc.id); toast('Pièce jointe supprimée.', 'success'); reloadDocuments(); } catch (e: any) { toast(apiMessage(e) || 'Suppression impossible.', 'error'); }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -416,13 +421,13 @@ const EmployeeFormModal = ({ employee, close, saved, toast }: { employee: RHEmpl
       let failed = 0;
       for (const doc of pending) { try { await rhService.uploadDocument(row.id, doc.doc_type, doc.file); } catch { failed += 1; } }
       let faceError = '';
-      if (pendingFace) { try { await rhService.enrollFace(row.id, pendingFace); } catch (e: any) { faceError = e?.response?.data?.message || 'enregistrement du visage impossible'; } }
+      if (pendingFace) { try { await rhService.enrollFace(row.id, pendingFace); } catch (e: any) { faceError = apiMessage(e) || 'enregistrement du visage impossible'; } }
       if (failed) toast(`Dossier enregistré, mais ${failed} pièce(s) jointe(s) n’ont pas pu être envoyées (images ou PDF uniquement).`, 'error');
       else if (faceError) toast(`Dossier enregistré, mais visage non enregistré : ${faceError} Réessayez depuis « Modifier ».`, 'error');
       else toast('Dossier employé enregistré.', 'success');
       close(); saved();
     } catch (e: any) {
-      toast(e?.response?.data?.message || 'Enregistrement impossible.', 'error');
+      toast(apiMessage(e) || 'Enregistrement impossible.', 'error');
     } finally { setSaving(false); }
   };
 

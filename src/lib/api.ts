@@ -67,4 +67,8 @@ api.interceptors.response.use(
 
 );
 
+// Message d'erreur renvoyé par l'API. Le serveur répond { success: false, error: { message } }
+// (utils/apiResponse.js) ; data.message est gardé pour les anciennes routes.
+export const apiMessage = (err: any): string | undefined => err?.response?.data?.error?.message || err?.response?.data?.message;
+
 export default api;
