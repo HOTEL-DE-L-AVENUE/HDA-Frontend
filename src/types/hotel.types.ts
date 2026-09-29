@@ -540,6 +540,94 @@ export interface MinibarReport {
   consumed_at: string;
 }
 
+// --- Rapport journalier : « Situation du chambre durant la Nuité » ---
+
+/** Codes du bas de page du rapport manuscrit (CP, CN, NP, BK...). */
+export type HotelDailyReportRoomState =
+  | 'LIBRE'
+  | 'OCCUPEE'
+  | 'BK'
+  | 'CP'
+  | 'CN'
+  | 'NP'
+  | 'GRATUIT'
+  | 'MAINTENANCE';
+
+/**
+ * Une ligne du rapport, pour une chambre. Les montants et dates restent des
+ * chaînes libres : la réception saisit aussi bien « 69,30€ », « 210.000ar » que
+ * « ND » (non défini), comme sur le modèle papier.
+ */
+export interface HotelDailyReportRoomLine {
+  room_id: number | null;
+  numero: string;
+  etat: HotelDailyReportRoomState;
+  /** Nom de l'occupant, ou « libre » / « CP » quand la chambre n'est pas occupée. */
+  occupant: string;
+  /** Mention accolée au nom : « Booking », « (Chambre gratuit) »... */
+  note: string;
+  /** DA — date d'arrivée */
+  da: string;
+  /** DD — date de départ */
+  dd: string;
+  /** MT — montant */
+  mt: string;
+  /** P — paiement (moyen, encaisseur, date) */
+  p: string;
+  /** CN — crédit non payé */
+  cn: string;
+  /** E — emprunté */
+  e: string;
+  /** AC — autre crédit */
+  ac: string;
+}
+
+export interface HotelDailyReportMetrics {
+  chambres_total: number;
+  chambres_occupees: number;
+  chambres_libres: number;
+  total_paye: number;
+  total_credit: number;
+  /** TE — total emprunté (somme des lignes E). */
+  total_emprunte: number;
+}
+
+/**
+ * Ce que la génération automatique ne peut pas redéduire des chambres et des
+ * réservations, et qu'il faut donc conserver pour ne pas écraser le travail de la
+ * réception à la régénération suivante.
+ */
+export interface HotelDailyReportAutoState {
+  /** false = la réception a repris la main sur l'ensemble du rapport. */
+  auto: boolean;
+  /** Corrections manuelles, par numéro de chambre puis par champ. */
+  overrides: Record<string, Partial<HotelDailyReportRoomLine>>;
+  /** Chambres retirées du rapport malgré leur présence en base. */
+  removed: string[];
+  /** Chambres ajoutées à la main (hors référentiel des chambres). */
+  extra: HotelDailyReportRoomLine[];
+  /** Heures saisies par la réception : elles ne sont plus rafraîchies. */
+  heureDebutManuelle: boolean;
+  heureFinManuelle: boolean;
+}
+
+export interface HotelDailyReport {
+  id?: number;
+  reportDate: string;
+  /** Heure de début de la nuitée, ex. « 17h08 ». */
+  heureDebut: string;
+  /** Heure de fin de la nuitée, ex. « 5h51 ». */
+  heureFin: string;
+  receptionniste: string;
+  rooms: HotelDailyReportRoomLine[];
+  observations: string;
+  metrics?: Partial<HotelDailyReportMetrics>;
+  autoState?: HotelDailyReportAutoState | null;
+  createdBy?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ============================================
 // Types pour les autorisations
 // ============================================
