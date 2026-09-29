@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, ContactRound, Download, Dices, Pencil, Plus, Save, ShieldCheck, Sparkles, Trash2, UtensilsCrossed, Wine } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ContactRound, Download, Dices, Pencil, Plus, Save, ShieldCheck, Sparkles, Trash2, UtensilsCrossed, Wine } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import planningService, { PlanningAssignment } from '../services/planning.service';
 import rhService, { RHEmployee } from '../services/rh.service';
 import { exportWeeklyPlanningPdf } from '../utils/planningPdf';
+import { exportWeeklyPlanningJpg } from '../utils/planningJpg';
 
 const categories: Array<{ name: string; icon: LucideIcon; description: string; prefix: string; color: string }> = [
   { name: 'Videur', icon: ShieldCheck, description: 'Équipe de sécurité', prefix: 'V', color: '#ff6b00' },
@@ -20,47 +21,85 @@ const today = () => localDate(new Date());
 const getWeekDates = (dateValue: string) => {
   const monday = new Date(`${dateValue}T12:00:00`);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  return Array.from({ length: 6 }, (_, index) => {
+  return Array.from({ length: 7 }, (_, index) => {
     const day = new Date(monday);
     day.setDate(monday.getDate() + index);
     return localDate(day);
   });
 };
 const defaultSchedule = '00:00 – 00:00';
-const emptyAssignments = (): PlanningAssignment[] => Array.from({ length: 6 }, (_, index) => ({ slot: index + 1, employeeId: null, employeeName: '', schedule: defaultSchedule }));
+const videurSchedules: Record<number, Record<number, string>> = {
+  1: { 1: '19:00 – 05:00', 4: '19:00 – 05:00', 5: '19:00 – 05:00', 6: '19:00 – 05:00' },
+  2: { 2: '19:00 – 05:00', 3: '19:00 – 05:00', 5: '19:00 – 05:00', 6: '19:00 – 05:00' },
+  3: { 2: '19:00 – 05:00', 3: '19:00 – 05:00', 5: '19:00 – 05:00', 6: '19:00 – 05:00' },
+  4: { 4: '19:00 – 05:00', 5: '19:00 – 05:00', 6: '19:00 – 05:00' },
+  5: { 5: '19:00 – 05:00', 6: '19:00 – 05:00', 0: '19:00 – 05:00' },
+  6: { 5: '19:00 – 05:00', 6: '19:00 – 05:00', 0: '07:00 – 17:00' },
+};
+const cleaningSchedules: Record<number, Record<number, string>> = {
+  1: { 1: '07:00 – 15:00', 2: '07:00 – 15:00', 3: '07:00 – 15:00', 4: '07:00 – 15:00', 5: '07:00 – 15:00', 6: 'OFF', 0: '07:00 – 15:00' },
+  2: { 1: '08:00 – 16:00', 2: '08:00 – 16:00', 3: 'OFF', 4: '08:00 – 16:00', 5: '08:00 – 16:00', 6: '08:00 – 16:00', 0: '08:00 – 16:00' },
+  3: { 1: '09:00 – 17:00', 2: 'OFF', 3: '09:00 – 17:00', 4: '09:00 – 17:00', 5: '09:00 – 17:00', 6: '09:00 – 17:00', 0: '09:00 – 17:00' },
+  4: { 1: '09:00 – 17:00', 2: '09:00 – 17:00', 3: '09:00 – 17:00', 4: '09:00 – 17:00', 5: '10:00 – 17:00', 6: '07:00 – 15:00', 0: 'OFF' },
+  5: { 1: '17:00 – 23:00', 2: '17:00 – 01:00', 3: 'OFF', 4: '18:00 – 02:00', 5: '20:00 – 04:00', 6: '20:00 – 04:00', 0: '17:00 – 02:00' },
+  6: { 3: '18:00 – 02:00', 5: '18:00 – 02:00', 6: '18:00 – 02:00' },
+};
+const accueilSchedules: Record<number, Record<number, string>> = {
+  1: { 2: '17:00 – 07:00', 3: '17:00 – 07:00', 5: '17:00 – 07:00', 6: '17:00 – 07:00' },
+  2: { 1: '17:00 – 07:00', 3: '07:00 – 17:00', 4: '07:00 – 17:00', 5: '07:00 – 17:00', 0: '07:00 – 17:00' },
+  3: { 1: '07:00 – 17:00', 2: '07:00 – 17:00', 4: '17:00 – 07:00', 6: '07:00 – 17:00', 0: '07:00 – 17:00' },
+};
+const pokerSchedules: Record<number, Record<number, string>> = {
+  1: { 2: '20:00 – 04:00', 3: '20:00 – 04:00', 4: '20:00 – 04:00', 5: '20:00 – 04:00', 6: '20:00 – 04:00' },
+  2: { 2: '20:00 – 04:00', 3: '20:00 – 04:00', 4: '20:00 – 04:00', 5: '20:00 – 04:00', 6: '20:00 – 04:00' },
+  3: { 2: '20:00 – 04:00', 3: '20:00 – 04:00', 4: '20:00 – 04:00', 5: '20:00 – 04:00', 6: '20:00 – 04:00' },
+  4: { 3: '20:00 – 04:00', 4: '20:00 – 04:00', 5: '20:00 – 04:00', 6: '20:00 – 04:00' },
+};
+const scheduleForDate = (date: string, category: string, slot: number) => {
+  const weekday = new Date(`${date}T12:00:00`).getDay();
+  if (category === 'Videur') return videurSchedules[slot]?.[weekday] || '';
+  if (category === 'Femme de ménage') return cleaningSchedules[slot]?.[weekday] || '';
+  if (category === 'Agents d’accueil') return accueilSchedules[slot]?.[weekday] || '';
+  if (category === 'Poker') return pokerSchedules[slot]?.[weekday] || '';
+  return defaultSchedule;
+};
+const emptyAssignments = (date: string, category: string): PlanningAssignment[] => Array.from({ length: 6 }, (_, index) => ({ slot: index + 1, employeeId: null, employeeName: '', schedule: scheduleForDate(date, category, index + 1) }));
 const fullName = (employee: RHEmployee) => `${employee.first_name} ${employee.last_name}`.trim();
 const displayDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-const parseSchedule = (schedule: string): [number, number, number, number] => {
-  const match = /^(\d{1,2})(?::(\d{1,2}))?\s*[–-]\s*(\d{1,2})(?::(\d{1,2}))?$/.exec(schedule.trim());
-  if (!match) return [0, 0, 0, 0];
-  return match.slice(1).map((value, index) => Math.min(index % 2 === 0 ? 23 : 59, Number(value || 0))) as [number, number, number, number];
+const normalizeSchedule = (schedule: string) => {
+  if (!schedule.trim()) return '';
+  if (schedule.trim().toUpperCase() === 'OFF') return 'OFF';
+  const match = /^((?:[01]\d|2[0-3]):[0-5]\d)(?:\s*[–-]\s*((?:[01]\d|2[0-3]):[0-5]\d))?$/.exec(schedule.trim());
+  return match ? `${match[1]} – ${match[2] || '00:00'}` : defaultSchedule;
 };
-const formatSchedule = (values: [number, number, number, number]) => `${String(values[0]).padStart(2, '0')}:${String(values[1]).padStart(2, '0')} – ${String(values[2]).padStart(2, '0')}:${String(values[3]).padStart(2, '0')}`;
-const normalizeAssignments = (assignments: PlanningAssignment[]) => {
-  const rows = new Map(emptyAssignments().map((item) => [item.slot, item]));
-  assignments.forEach((item) => rows.set(item.slot, { ...item, schedule: formatSchedule(parseSchedule(item.schedule || defaultSchedule)) }));
+const normalizeAssignments = (assignments: PlanningAssignment[], date: string, category: string) => {
+  const rows = new Map(emptyAssignments(date, category).map((item) => [item.slot, item]));
+  assignments.forEach((item) => {
+    const schedule = normalizeSchedule(item.schedule ?? scheduleForDate(date, category, item.slot));
+    rows.set(item.slot, { ...item, schedule: category === 'Videur' && schedule === defaultSchedule ? '' : schedule });
+  });
   return [...rows.values()].sort((left, right) => left.slot - right.slot);
 };
 
-const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-const pad = (value: number) => String(value).padStart(2, '0');
-
-// Horaire au format simple « HH:MM → HH:MM » avec le sélecteur d'heure natif.
-// La valeur enregistrée reste « HH:MM – HH:MM » (utilisée aussi par l'export PDF).
+const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SchedulePicker = ({ value, disabled, onChange, label }: { value: string; disabled: boolean; onChange: (value: string) => void; label: string }) => {
-  const [startH, startM, endH, endM] = parseSchedule(value);
-  const start = `${pad(startH)}:${pad(startM)}`;
-  const end = `${pad(endH)}:${pad(endM)}`;
-  const update = (nextStart: string, nextEnd: string) => {
-    const [sh, sm] = (nextStart || '00:00').split(':').map(Number);
-    const [eh, em] = (nextEnd || '00:00').split(':').map(Number);
-    onChange(formatSchedule([sh || 0, sm || 0, eh || 0, em || 0]));
-  };
-  const inputClass = 'h-8 w-full min-w-0 rounded-md border border-base bg-surface px-1 text-center text-xs tabular-nums text-primary outline-none focus:border-accent/60 disabled:opacity-60';
-  return <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
-    <input type="time" step={300} value={start} disabled={disabled} aria-label={`Début ${label}`} onChange={(event) => update(event.target.value, end)} className={inputClass} />
-    <span className="text-xs text-muted">→</span>
-    <input type="time" step={300} value={end} disabled={disabled} aria-label={`Fin ${label}`} onChange={(event) => update(start, event.target.value)} className={inputClass} />
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedValue = normalizeSchedule(value);
+  const isOff = normalizedValue === 'OFF';
+  const [start, end] = (normalizedValue && !isOff ? normalizedValue : defaultSchedule).split(' – ');
+  const displaySchedule = isOff ? 'OFF' : normalizedValue.replace(/:/g, 'h').replace(' – ', ' - ');
+  const update = (nextStart: string, nextEnd: string) => onChange(`${nextStart || '00:00'} – ${nextEnd || '00:00'}`);
+  const pickerClass = 'h-9 w-full min-w-0 rounded-md border border-base bg-surface px-2 text-sm tabular-nums text-primary outline-none focus:border-accent/60 disabled:opacity-60';
+  return <div className="min-w-0 space-y-1">
+    <button type="button" disabled={disabled} aria-label={`Modifier l’horaire ${label}`} aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} className="flex h-9 w-full min-w-[168px] items-center justify-between gap-1 rounded-md border border-base bg-surface px-2 text-left font-mono text-sm tabular-nums text-primary hover:border-accent/60 disabled:opacity-60">
+      <span className="whitespace-nowrap">{displaySchedule || '\u00a0'}</span>
+      <ChevronDown size={14} className={`shrink-0 text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+    </button>
+    {isOpen && <div className="w-full min-w-[168px] space-y-3 rounded-md border border-base bg-surface-2 p-3">
+      <button type="button" disabled={disabled} aria-pressed={isOff} onClick={() => onChange(isOff ? defaultSchedule : 'OFF')} className={`h-9 w-full rounded-md border px-2 text-left text-sm font-semibold ${isOff ? 'border-accent bg-accent-4 text-accent' : 'border-base bg-surface text-secondary hover:border-accent/60'}`}>OFF</button>
+      <label className="block space-y-1 text-xs text-secondary">Début<input type="time" step={60} value={start} disabled={disabled} aria-label={`Heure de début ${label}`} onChange={(event) => update(event.target.value, end)} className={pickerClass} /></label>
+      <label className="block space-y-1 text-xs text-secondary">Fin<input type="time" step={60} value={end} disabled={disabled} aria-label={`Heure de fin ${label}`} onChange={(event) => update(start, event.target.value)} className={pickerClass} /></label>
+    </div>}
   </div>;
 };
 
@@ -104,7 +143,7 @@ export default function PlanningPage() {
   useEffect(() => { setMobileDayIndex(Math.max(0, weekDates.indexOf(selectedDate))); }, [weekDates, selectedDate]);
   const mobileDate = weekDates[mobileDayIndex] || weekDates[0];
   const getAssignment = (date: string, slot: number): PlanningAssignment =>
-    (weekAssignments[date] || []).find((item) => item.slot === slot) || { slot, employeeId: null, employeeName: '', schedule: defaultSchedule };
+    (weekAssignments[date] || []).find((item) => item.slot === slot) || { slot, employeeId: null, employeeName: '', schedule: scheduleForDate(date, category, slot) };
   const assignedCount = weekDates.reduce((total, date) => total + (weekAssignments[date] || []).filter((item) => item.employeeName.trim()).length, 0);
 
   useEffect(() => {
@@ -122,12 +161,12 @@ export default function PlanningPage() {
     setDirtyDates([]);
     Promise.all(weekDates.map((date) => planningService.getDaily(date, category)))
       .then((days) => {
-        if (active) setWeekAssignments(Object.fromEntries(days.map((day) => [day.date, normalizeAssignments(day.assignments)])));
+        if (active) setWeekAssignments(Object.fromEntries(days.map((day) => [day.date, normalizeAssignments(day.assignments, day.date, category)])));
       })
       .catch((requestError) => {
         if (!active) return;
         setError(requestError?.response?.data?.error?.message || 'Impossible de charger cette semaine de planning.');
-        setWeekAssignments(Object.fromEntries(weekDates.map((date) => [date, emptyAssignments()])));
+        setWeekAssignments(Object.fromEntries(weekDates.map((date) => [date, emptyAssignments(date, category)])));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -153,7 +192,7 @@ export default function PlanningPage() {
   const updateAssignment = (date: string, slot: number, patch: Partial<PlanningAssignment>) => {
     setWeekAssignments((current) => ({
       ...current,
-      [date]: (current[date] || emptyAssignments()).map((item) => item.slot === slot ? { ...item, ...patch } : item),
+      [date]: (current[date] || emptyAssignments(date, category)).map((item) => item.slot === slot ? { ...item, ...patch } : item),
     }));
     setDirtyDates((current) => current.includes(date) ? current : [...current, date]);
   };
@@ -167,7 +206,7 @@ export default function PlanningPage() {
     const nextSlot = Math.max(0, ...slots) + 1;
     setWeekAssignments((current) => Object.fromEntries(weekDates.map((date) => [
       date,
-      [...(current[date] || emptyAssignments()), { slot: nextSlot, employeeId: null, employeeName: '', schedule: defaultSchedule }],
+      [...(current[date] || emptyAssignments(date, category)), { slot: nextSlot, employeeId: null, employeeName: '', schedule: scheduleForDate(date, category, nextSlot) }],
     ])));
     setDirtyDates((current) => [...new Set([...current, ...weekDates])]);
   };
@@ -175,7 +214,7 @@ export default function PlanningPage() {
   const removeAssignment = (slot: number) => {
     setWeekAssignments((current) => Object.fromEntries(weekDates.map((date) => [
       date,
-      (current[date] || emptyAssignments()).filter((item) => item.slot !== slot),
+      (current[date] || emptyAssignments(date, category)).filter((item) => item.slot !== slot),
     ])));
     setDirtyDates((current) => [...new Set([...current, ...weekDates])]);
   };
@@ -193,7 +232,7 @@ export default function PlanningPage() {
     const savedDays: Array<[string, PlanningAssignment[]]> = [];
     const failedDates: string[] = [];
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') savedDays.push([datesToSave[index], normalizeAssignments(result.value.assignments)]);
+      if (result.status === 'fulfilled') savedDays.push([datesToSave[index], normalizeAssignments(result.value.assignments, datesToSave[index], category)]);
       else failedDates.push(datesToSave[index]);
     });
     if (savedDays.length) setWeekAssignments((current) => ({ ...current, ...Object.fromEntries(savedDays) }));
@@ -220,7 +259,19 @@ export default function PlanningPage() {
     }
   };
 
-  const weekLabel = `${displayDate(weekDates[0])} – ${displayDate(weekDates[5])}`;
+  const exportJpg = async () => {
+    setExporting(true);
+    try {
+      await exportWeeklyPlanningJpg({ category, prefix: activeCategory.prefix, weekDates, assignmentsByDate: weekAssignments });
+      showToast(`Image JPG HD ${category} téléchargée.`, 'success');
+    } catch {
+      showToast('La génération de l’image JPG a échoué.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const weekLabel = `${displayDate(weekDates[0])} – ${displayDate(weekDates[weekDates.length - 1])}`;
   const dirty = dirtyDates.length > 0;
 
   return (
@@ -229,7 +280,7 @@ export default function PlanningPage() {
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-accent"><CalendarDays size={16} /> Organisation des équipes</div>
           <h1 className="text-2xl font-bold text-primary sm:text-3xl">Planning</h1>
-          <p className="mt-1 text-sm text-secondary">Organisez les équipes du lundi au samedi, jour par jour.</p>
+          <p className="mt-1 text-sm text-secondary">Organisez les équipes du lundi au dimanche, jour par jour.</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-base bg-surface px-4 py-3 text-sm text-secondary">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-4 text-accent"><CalendarDays size={17} /></span>
@@ -271,10 +322,11 @@ export default function PlanningPage() {
 
           <div className="overflow-hidden rounded-2xl border border-base bg-surface">
             <div className="flex flex-col justify-between gap-3 border-b border-base px-4 py-4 sm:px-5 md:flex-row md:items-center">
-              <div><h3 className="font-semibold text-primary">Personnel prévu</h3><p className="mt-1 text-xs text-muted">Lundi à samedi · chaque journée est enregistrée séparément.</p></div>
-              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center [&>button]:justify-center">
+              <div><h3 className="font-semibold text-primary">Personnel prévu</h3><p className="mt-1 text-xs text-muted">Lundi à dimanche · chaque journée est enregistrée séparément.</p></div>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&>button]:justify-center">
                 <button type="button" onClick={addAssignment} disabled={loading || saving || exporting} className="flex h-10 items-center gap-2 rounded-lg border border-base px-3 text-sm font-medium text-secondary hover:bg-surface-2 hover:text-primary disabled:opacity-50"><Plus size={16} /> Ajouter une ligne</button>
                 <button type="button" onClick={exportPdf} disabled={loading || saving || exporting} className="flex h-10 items-center gap-2 rounded-lg border border-accent/40 bg-accent-4 px-3 text-sm font-medium text-accent hover:bg-accent/15 disabled:opacity-50"><Download size={16} />{exporting ? 'Création…' : 'Exporter PDF'}</button>
+                <button type="button" onClick={exportJpg} disabled={loading || saving || exporting} className="flex h-10 items-center gap-2 rounded-lg border border-accent/40 bg-accent-4 px-3 text-sm font-medium text-accent hover:bg-accent/15 disabled:opacity-50"><Download size={16} />{exporting ? 'Création…' : 'Exporter JPG HD'}</button>
                 <button type="button" onClick={save} disabled={loading || saving || exporting || !dirty} className="flex h-10 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"><Save size={16} />{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
               </div>
             </div>
@@ -283,8 +335,8 @@ export default function PlanningPage() {
             {loading ? <div className="px-5 py-12 text-center text-sm text-muted">Chargement du planning…</div> : <>
               <datalist id="planning-employees">{employees.map((employee) => <option key={employee.id} value={fullName(employee)} />)}</datalist>
               {/* Grand écran : tableau de la semaine */}
-              <div className="hidden xl:block">
-                <table className="w-full table-fixed text-left">
+              <div className="hidden overflow-x-auto xl:block">
+                <table className="w-full min-w-[1352px] table-fixed text-left">
                   <thead>
                     <tr className="bg-surface-2/60 text-[11px] uppercase tracking-wide text-muted">
                       <th className="w-16 px-3 py-3 font-medium">Poste</th>
