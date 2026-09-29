@@ -202,7 +202,8 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   }
 
   // Historique Bar réservé uniquement à l'admin.
-  const visibleTabs = tabs.filter(t => t.id !== 'historique');
+  const visibleTabs = tabs.filter(t => t.id !== 'historique' && t.id !== 'historique-produits' && t.id !== 'inventaire');
+
 
   // 2. Barman : UNIQUEMENT l'onglet commandes
   if (role === 'water' || role === 'barman' || role === 'hotesse') {

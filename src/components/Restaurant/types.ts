@@ -65,3 +65,22 @@ export interface Client {
   numero_piece?: string;
   statut?: string;
 }
+
+// ==================== INVENTAIRE ====================
+
+export interface ProductHistoryItem {
+  date_vente: string;      // 'YYYY-MM-DD'
+  product_id: number;
+  produit: string;
+  categorie: string;
+  quantite_totale: number;
+  montant_total: number;
+  nb_commandes: number;
+}
+
+export interface ProductHistoryGroup {
+  date: string;
+  totalArticles: number;
+  totalMontant: number;
+  items: ProductHistoryItem[];
+}

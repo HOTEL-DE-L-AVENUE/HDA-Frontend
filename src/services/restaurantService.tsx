@@ -260,3 +260,18 @@ export const updateSubcategory = (id: number, data: { category_id?: number; nom?
 
 export const deleteSubcategory = (id: number) =>
   api.delete(`/api/restaurant/subcategories/${id}`).then(res => res.data);
+
+// ==================== INVENTAIRE ====================
+
+export interface ProductHistoryItem {
+  date_vente: string;
+  product_id: number;
+  produit: string;
+  categorie: string;
+  quantite_totale: number;
+  montant_total: number;
+  nb_commandes: number;
+}
+
+export const getProductHistory = (params: { dateFrom?: string; dateTo?: string; productName?: string }) =>
+  api.get<ApiResponse<ProductHistoryItem[]>>('/api/restaurant/product-history', { params }).then(res => res.data);
