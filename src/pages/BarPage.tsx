@@ -17,6 +17,7 @@ import { BarCommandeView } from '../components/Bar/BarCommande';
 import { BarReports } from '../components/Bar/BarReports';
 import { PafSection } from '../components/Bar/PafSection';
 import { BarHistory } from '../components/Bar/BarHistory';
+import { ProductHistory } from '../components/Bar/ProductHistory';
 import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
@@ -33,7 +34,6 @@ export const BarPage: React.FC = () => {
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
 
-  // Modification ici : 'commandes' défini par défaut
   const [activeTab, setActiveTab] = useState<BarTabId>('commandes');
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
@@ -207,7 +207,6 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  // Fonction pour ajouter instantanément la nouvelle boisson dans le state local
   const handleProductAdded = (newProduct: BarProduct) => {
     setCocktails((prev) => [...prev, newProduct]);
   };
@@ -307,6 +306,8 @@ export const BarPage: React.FC = () => {
       {activeTab === 'rapports' && <BarReports commandes={commandes} stock={Object.entries(stockMap).map(([product_id, value]) => ({ id: Number(product_id), product_id: Number(product_id), location_id: 0, quantite: value.quantite, unite: value.unite, product_nom: cocktails.find((cocktail) => cocktail.id === Number(product_id))?.nom || '', product_categorie: cocktails.find((cocktail) => cocktail.id === Number(product_id))?.categorie || '', location_nom: 'Bar' }))} />}
 
       {userIsAdmin && activeTab === 'historique' && <BarHistory />}
+
+      {userIsAdmin && activeTab === 'historique-produits' && <ProductHistory />}
 
       {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
         <CaisseManager

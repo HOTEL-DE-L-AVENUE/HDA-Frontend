@@ -6,6 +6,7 @@ import type {
   BarProduct,
   BarStockItem,
   BarPaymentMethod,
+  ProductHistoryItem,
 } from '../types/bar.type';
 
 const BASE = '/api/bar';
@@ -136,12 +137,27 @@ export const closeAllBarOrders = (order_ids: number[]) => post<{ closed_orders: 
 export const updateBarOrderStatus = (id: number, statut: BarOrderStatus, moyen_paiement?: BarPaymentMethod) =>
   put<BarOrderResponse>('/orders/' + id + '/status', { statut, moyen_paiement });
 
+// ==================== HISTORIQUE PRODUITS ====================
+
+export const getProductHistory = async (params: { dateFrom?: string; dateTo?: string; productName?: string }): Promise<ProductHistoryItem[]> => {
+  const response = await get<ProductHistoryItem[] | { data?: ProductHistoryItem[] }>('/product-history', params);
+  // Le backend enveloppe toujours la réponse dans { data: [...] } via `ok(res, ...)`.
+  if (Array.isArray(response)) return response;
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as { data?: ProductHistoryItem[] }).data ?? [];
+  }
+  return [];
+};
+
 const barService = {
   getBarTables, getBarTableById, createBarTable, updateBarTable, deleteBarTable, getBarTablesStats,
   getBarCashiers, getBarCashierById, createBarCashier, updateBarCashier, deleteBarCashier,
   openBarSession, closeBarSession, getBarSessions, getBarSessionById, getBarOpenSessions, getBarSessionStats, getBarCashierStatus,
   getBarProducts, getBarProductById, createBarProduct, updateBarProduct, deleteBarProduct,
-  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions, getBarOrders, getBarHistory, getBarDailyReport, saveBarDailyReport, createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
+  getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions,
+  getBarOrders, getBarHistory, getBarDailyReport, saveBarDailyReport,
+  createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
+  getProductHistory,
 };
 
 export default barService;

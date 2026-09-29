@@ -8,6 +8,7 @@ export const BAR_TABS = [
   { id: 'rapports', label: 'Rapports' },
   { id: 'caisse', label: 'Caisse' },
   { id: 'historique', label: 'Historique' },
+  { id: 'historique-produits', label: 'Historique produits' },
 ] as const;
   
 export type BarTabId = typeof BAR_TABS[number]['id'];
