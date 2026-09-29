@@ -475,8 +475,12 @@ const ClientsPage: React.FC = () => {
     
     setIsProcessing(true);
     try {
-      await deleteClient(clientToDelete.id);
-      toast.success('Client supprimé avec succès');
+      const result = await deleteClient(clientToDelete.id);
+      // Client avec historique (séjours, commandes, casino, paiements…) : retiré de la
+      // liste sans changer son statut, historique conservé. Sinon : effacé.
+      toast.success(result?.archived
+        ? `Client supprimé de la liste. Son historique (${result.relatedCount ?? 'plusieurs'} enregistrement(s)) est conservé.`
+        : 'Client supprimé définitivement');
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
     } catch (error: any) {
@@ -1809,7 +1813,7 @@ const ClientsPage: React.FC = () => {
                 Êtes-vous sûr de vouloir supprimer le client <strong>{clientToDelete.nom} {clientToDelete.prenom || ''}</strong> ?
               </p>
               <p className="text-sm text-danger mb-6">
-                ⚠️ Cette action est irréversible et supprimera définitivement le client.
+                ⚠️ Le client sera retiré de la liste et des recherches. S’il a un historique (séjours, commandes, casino, paiements…), cet historique est conservé.
               </p>
               <div className="flex justify-end gap-3">
                 <button

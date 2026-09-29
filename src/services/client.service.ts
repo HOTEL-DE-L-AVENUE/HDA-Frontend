@@ -175,12 +175,13 @@ export const clientService = {
   },
 
   // Supprimer un client
-  deleteClient: async (id: number): Promise<{ 
-    success: boolean; 
-    message: string; 
-    deleted: boolean; 
-    deactivated: boolean; 
-    relatedCount?: number 
+  deleteClient: async (id: number): Promise<{
+    success: boolean;
+    message: string;
+    deleted: boolean;
+    deactivated: boolean;
+    archived?: boolean; // true : retiré de la liste, historique conservé
+    relatedCount?: number
   }> => {
     try {
       const response = await api.delete<ApiResponse<{ 

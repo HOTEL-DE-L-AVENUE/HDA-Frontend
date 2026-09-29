@@ -140,8 +140,9 @@ export const ClientSearch: React.FC<ClientSearchProps> = ({
     
     setIsDeleting(true);
     try {
-      await deleteClient(clientToDelete.id);
-      toast.success('Client supprimé avec succès');
+      const result = await deleteClient(clientToDelete.id);
+      // Client avec historique : retiré de la liste, historique conservé (voir ClientsPage).
+      toast.success(result?.archived ? 'Client supprimé de la liste (historique conservé).' : 'Client supprimé définitivement');
       setDeleteModalOpen(false);
       setClientToDelete(null);
       if (onDelete) {
