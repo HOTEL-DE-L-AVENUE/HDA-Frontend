@@ -12,6 +12,7 @@ import { MenuTab } from '../components/Restaurant/Tabs/MenuTab';
 import { StockTab } from '../components/Restaurant/Tabs/StockTab';
 import { CaisseTab } from '../components/Restaurant/Tabs/CaisseTab';
 import { HistoryTab } from '../components/Restaurant/Tabs/HistoryTab';
+import { InventaireTab } from '../components/Restaurant/Tabs/InventaireTab';
 import { RestaurantReports } from '../components/Restaurant/RestaurantReports';
 import { OrderModal } from '../components/Restaurant/Modals/OrderModal';
 import { ProductModal } from '../components/Restaurant/Modals/ProductModal';
@@ -564,6 +565,7 @@ export const RestaurantPage: React.FC = () => {
           />
         )}
         {activeTab === 'historique' && <HistoryTab orders={orders} />}
+        {userIsAdmin && activeTab === 'inventaire' && <InventaireTab />}
         {activeTab === 'rapports' && <RestaurantReports orders={orders} stock={restaurantStock} />}
       </div>
 
