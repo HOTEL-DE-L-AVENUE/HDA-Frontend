@@ -40,6 +40,14 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [hotelSection, setHotelSection] = useState<'CONSOMMABLE' | 'NON_CONSOMMABLE'>('CONSOMMABLE');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'history'>('inventory');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [form, setForm] = useState<{
     nom: string;
     categorie: string;
@@ -124,6 +132,49 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     }
   };
 
+  const loadProductHistory = async (productId: number) => {
+    if (!productId) return;
+    setHistoryLoading(true);
+    try {
+      const locationId = isHotel ? 5 : isBar ? 2 : 3; // Hotel=5, Bar=2, Restaurant=3
+      const response = await api.get('/api/stock/movements/history', {
+        params: { product_id: productId, date: selectedDate, location_id: locationId }
+      });
+      const payload = response.data?.data ?? response.data;
+      setHistoryData(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      console.error('Error loading history:', err);
+      setHistoryData([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const loadHistory = async (product: any = selectedProduct) => {
+    if (!product) return;
+    setHistoryLoading(true);
+    try {
+      const locationId = isHotel ? 5 : isBar ? 2 : 3; // Hotel=5, Bar=2, Restaurant=3
+      const params: any = { product_id: product.product_id, location_id: locationId };
+      
+      if (startDate && endDate) {
+        params.start_date = startDate;
+        params.end_date = endDate;
+      } else if (selectedDate) {
+        params.date = selectedDate;
+      }
+      
+      const response = await api.get('/api/stock/movements/history', { params });
+      const payload = response.data?.data ?? response.data;
+      setHistoryData(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      console.error('Error loading history:', err);
+      setHistoryData([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (useBackend) {
       void refetchStock();
@@ -138,6 +189,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
   const items = useBackend
     ? backendStock.map((bs) => ({
         id: String(bs.id),
+        product_id: bs.product_id,
         nom: bs.nom || bs.product_nom || '',
         categorie: bs.categorie || (isBar ? 'Bar' : 'Hôtel'),
         quantite: bs.quantite ?? 0,
@@ -280,15 +332,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
     setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
   };
 
-  const openEdit = async (item: StockItem) => {
-    const adminPassword = window.prompt('Mot de passe administrateur requis pour modifier le stock :');
-    if (!adminPassword) return;
-    try {
-      await api.post('/api/auth/verify-admin-password', { password: adminPassword });
-    } catch (err) {
-      setError(getErrorMessage(err));
-      return;
-    }
+  const openEdit = (item: StockItem) => {
     setEditItem(item);
     setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 0, fournisseur: item.fournisseur || '', typeProduit: (item as any).typeProduit || 'CONSOMMABLE', etat: (item as any).etat || 'DISPONIBLE' });
     setShowModal(true);
@@ -415,10 +459,26 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
 
           <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
-              <h3 className="text-white font-semibold flex items-center gap-2">
-                <Package size={18} className="text-amber-400" />
-                Inventaire
-              </h3>
+              <div className="flex items-center gap-4">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Package size={18} className="text-amber-400" />
+                  Stock
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('inventory')}
+                    className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'inventory' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}
+                  >
+                    Inventaire
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('history')}
+                    className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'history' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}
+                  >
+                    Historique
+                  </button>
+                </div>
+              </div>
               {isHotel && (
                 <div className="flex gap-2 w-full sm:w-auto">
                   <button onClick={() => setHotelSection('CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Consommables</button>
@@ -443,7 +503,186 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
                 )}
               </div>
             </div>
-            <DataTable data={filtered} columns={columns} />
+            {activeTab === 'inventory' ? (
+              <DataTable data={filtered} columns={columns} />
+            ) : (
+              <div className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Période</label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <button 
+                      onClick={() => { setStartDate(''); setEndDate(''); setSelectedDate(new Date().toISOString().split('T')[0]); }}
+                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm"
+                    >
+                      Aujourd'hui
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        const today = new Date();
+                        const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        setStartDate(lastWeek.toISOString().split('T')[0]);
+                        setEndDate(today.toISOString().split('T')[0]);
+                        setSelectedDate('');
+                      }}
+                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm"
+                    >
+                      7 jours
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        const today = new Date();
+                        const lastMonth = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        setStartDate(lastMonth.toISOString().split('T')[0]);
+                        setEndDate(today.toISOString().split('T')[0]);
+                        setSelectedDate('');
+                      }}
+                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm"
+                    >
+                      30 jours
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Date de début</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => { setStartDate(e.target.value); setSelectedDate(''); }}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Date de fin</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => { setEndDate(e.target.value); setSelectedDate(''); }}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <label className="block text-xs text-gray-400 mb-1">Ou date unique</label>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => { setSelectedDate(e.target.value); setStartDate(''); setEndDate(''); }}
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Produit</label>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      value={historySearch}
+                      onChange={e => setHistorySearch(e.target.value)}
+                      placeholder="Rechercher un produit..."
+                      className="w-full h-10 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                </div>
+
+                {!selectedProduct ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items
+                      .filter(item => item.nom.toLowerCase().includes(historySearch.toLowerCase()))
+                      .map(item => (
+                        <button
+                          key={item.id}
+                          onClick={() => { setSelectedProduct(item); loadHistory(item); }}
+                          className="bg-slate-800 hover:bg-slate-700 border border-slate-700/50 rounded-xl p-4 text-left transition-all"
+                        >
+                          <p className="text-white font-medium">{item.nom}</p>
+                          <p className="text-slate-500 text-xs">{item.categorie}</p>
+                          <p className="text-amber-400 text-sm mt-2">{item.quantite} {item.unite}</p>
+                        </button>
+                      ))}
+                  </div>
+                ) : (
+                  <div>
+                    <button
+                      onClick={() => { setSelectedProduct(null); setHistoryData([]); }}
+                      className="mb-4 text-slate-400 hover:text-white text-sm flex items-center gap-2"
+                    >
+                      ← Changer de produit
+                    </button>
+
+                    <div className="bg-slate-800 rounded-xl p-4 mb-4">
+                      <h4 className="text-white font-semibold">{selectedProduct.nom}</h4>
+                      <p className="text-slate-500 text-sm">{selectedProduct.categorie}</p>
+                      <p className="text-amber-400 text-sm mt-1">Stock actuel: {selectedProduct.quantite} {selectedProduct.unite}</p>
+                    </div>
+
+                    <button
+                      onClick={loadHistory}
+                      className="px-4 py-2 bg-amber-500 text-black rounded-lg text-sm mb-4"
+                    >
+                      Afficher les mouvements
+                    </button>
+
+                    {historyLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
+                        <span className="text-slate-400 text-sm">Chargement de l'historique...</span>
+                      </div>
+                    ) : historyData.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500">
+                        Aucun mouvement de stock trouvé pour ce produit à cette date
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="bg-slate-800 rounded-xl p-4 mb-4">
+                          <h4 className="text-white font-semibold">Mouvements du {new Date(selectedDate).toLocaleDateString('fr-FR')}</h4>
+                          <p className="text-slate-500 text-sm">{historyData.length} mouvement(s)</p>
+                        </div>
+
+                        {historyData.map((movement) => (
+                          <div key={movement.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                                  movement.type_mouvement === 'ENTREE' 
+                                    ? 'bg-emerald-500/20 text-emerald-400' 
+                                    : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {movement.type_mouvement === 'ENTREE' ? 'Entrée' : 'Sortie'}
+                                </span>
+                                <span className="ml-2 text-slate-500 text-xs">
+                                  {movement.source_module || 'Général'}
+                                </span>
+                              </div>
+                              <span className="text-slate-400 text-xs">
+                                {new Date(movement.created_at).toLocaleString('fr-FR')}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <p className="text-slate-500 text-xs">Quantité</p>
+                                <p className={`font-semibold ${movement.type_mouvement === 'ENTREE' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {movement.type_mouvement === 'ENTREE' ? '+' : '-'}{movement.quantite} {movement.product_unite}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500 text-xs">Lieu</p>
+                                <p className="text-slate-300">{movement.location_nom || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500 text-xs">Référence</p>
+                                <p className="text-slate-300">{movement.reference_id || 'N/A'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? 'Modifier l\'article' : 'Ajouter un article'}>
@@ -452,7 +691,27 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories }
               <Select label="Catégorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Quantité" type="number" value={form.quantite} onChange={e => setForm({...form, quantite: Number(e.target.value)})} />
-                <Input label="Unité" value={form.unite} onChange={e => setForm({...form, unite: e.target.value})} placeholder="kg, pièce, litre..." />
+                <Select 
+                  label="Unité" 
+                  value={form.unite} 
+                  onChange={e => setForm({...form, unite: e.target.value})} 
+                  options={[
+                    { value: 'pièce', label: 'Pièce' },
+                    { value: 'kg', label: 'Kilogramme (kg)' },
+                    { value: 'g', label: 'Gramme (g)' },
+                    { value: 'L', label: 'Litre (L)' },
+                    { value: 'mL', label: 'Millilitre (mL)' },
+                    { value: 'm', label: 'Mètre (m)' },
+                    { value: 'cm', label: 'Centimètre (cm)' },
+                    { value: 'unité', label: 'Unité' },
+                    { value: 'bouteille', label: 'Bouteille' },
+                    { value: 'paquet', label: 'Paquet' },
+                    { value: 'carton', label: 'Carton' },
+                    { value: 'boîte', label: 'Boîte' },
+                    { value: 'sac', label: 'Sac' },
+                    { value: 'rouleau', label: 'Rouleau' },
+                  ]} 
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Prix unitaire (MGA)" type="number" value={form.prixUnitaire} onChange={e => setForm({...form, prixUnitaire: Number(e.target.value)})} />
