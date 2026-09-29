@@ -3,6 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { RoomMaintenance, Room, Equipment, MaintenanceWorker } from '../../../types/hotel.types';
 import { X, Loader, AlertCircle } from 'lucide-react';
 import { Modal } from '../../Modal';
+import { StockProductPicker } from '../StockProductPicker';
+
+interface SelectedProduct {
+  product_id: number;
+  nom: string;
+  unite: string;
+  available_quantity: number;
+  quantity: number;
+}
 
 interface MaintenanceFormModalProps {
   isOpen: boolean;
@@ -41,6 +50,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
     labor_cost: 0,
     other_intervention_description: '',
   });
+  const [materialsUsed, setMaterialsUsed] = useState<SelectedProduct[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -91,7 +101,14 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSave(formData);
+      const submitData = {
+        ...formData,
+        materials_used: materialsUsed.map(m => ({
+          product_id: m.product_id,
+          quantity: m.quantity
+        }))
+      };
+      await onSave(submitData);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -233,6 +250,18 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
               rows={3}
               placeholder="Décrivez l'intervention..."
               disabled={isSubmitting}
+            />
+          </div>
+
+          {/* Matériaux utilisés */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Matériaux/produits utilisés
+            </label>
+            <StockProductPicker
+              onChange={setMaterialsUsed}
+              initialProducts={materialsUsed}
+              locationId={5}
             />
           </div>
 

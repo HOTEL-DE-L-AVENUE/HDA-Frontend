@@ -174,6 +174,10 @@ export interface RoomMaintenance {
   materials_cost?: number;
   labor_cost?: number;
   total_cost?: number;
+  materials_used?: Array<{ product_id: number; quantity: number }>;
+  materials_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
 }
 
 export interface MaintenanceWorker {
@@ -210,6 +214,7 @@ export interface HousekeepingTask {
   assigned_user?: User;
   created_at?: string;
   updated_at?: string;
+  products_used?: Array<{ product_id: number; quantity: number }>;
 }
 
 // ============================================

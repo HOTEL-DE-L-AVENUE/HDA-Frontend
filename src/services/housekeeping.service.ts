@@ -85,9 +85,12 @@ export const housekeepingService = {
   },
 
   // Mettre à jour le statut d'une tâche
-  updateTaskStatus: async (id: number, statut: string): Promise<HousekeepingTask> => {
+  updateTaskStatus: async (id: number, statut: string, productsUsed?: any[]): Promise<HousekeepingTask> => {
     try {
-      const response = await api.put<ApiResponse<HousekeepingTask>>(`${BASE_URL}/${id}/status`, { statut });
+      const response = await api.put<ApiResponse<HousekeepingTask>>(`${BASE_URL}/${id}/status`, { 
+        statut,
+        products_used: productsUsed
+      });
       return response.data.data;
     } catch (error) {
       console.error(`❌ Erreur updateTaskStatus ${id}:`, error);
