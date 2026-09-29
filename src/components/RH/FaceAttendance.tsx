@@ -169,7 +169,12 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
 // ─────────────────────────────────────────────
 const ENROLL_SAMPLES = 5;
 
-export const FaceEnrollModal = ({ employee, close, saved, toast }: { employee: RHEmployee; close: () => void; saved: () => void; toast: Toast }) => {
+// Deux modes :
+// - employé existant (employee.id) : « Enregistrer » envoie directement au serveur ;
+// - nouvel employé (onCaptured) : la fiche n'existe pas encore, les captures sont rendues
+//   au formulaire, qui les enregistre juste après avoir créé l'employé.
+type EnrollTarget = Pick<RHEmployee, 'first_name' | 'last_name'> & { id?: number; face_samples?: number };
+export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: { employee: EnrollTarget; close: () => void; saved?: (faceSamples: number) => void; onCaptured?: (descriptors: number[][]) => void; toast: Toast }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { ready, error, status } = useCameraAndModels(videoRef);
   const [consent, setConsent] = useState(false);
@@ -206,19 +211,20 @@ export const FaceEnrollModal = ({ employee, close, saved, toast }: { employee: R
   };
 
   const save = async () => {
+    if (onCaptured || !employee.id) { onCaptured?.(samples); close(); return; }
     setSaving(true);
-    try { await rhService.enrollFace(employee.id, samples); toast('Visage enregistré.', 'success'); saved(); close(); }
+    try { const r = await rhService.enrollFace(employee.id, samples); toast('Visage enregistré.', 'success'); saved?.(r.face_samples); close(); }
     catch (err: any) { toast(err?.response?.data?.message || 'Enregistrement du visage impossible.', 'error'); }
     finally { setSaving(false); }
   };
   const remove = async () => {
-    if (!window.confirm(`Supprimer le visage enregistré de ${employee.first_name} ${employee.last_name} ?`)) return;
-    try { await rhService.deleteFace(employee.id); toast('Visage supprimé.', 'success'); saved(); close(); }
+    if (!employee.id || !window.confirm(`Supprimer le visage enregistré de ${employee.first_name} ${employee.last_name} ?`)) return;
+    try { await rhService.deleteFace(employee.id); toast('Visage supprimé.', 'success'); saved?.(0); close(); }
     catch (err: any) { toast(err?.response?.data?.message || 'Suppression impossible.', 'error'); }
   };
 
   return <div className="fixed inset-0 z-[80] overflow-y-auto overscroll-contain bg-black/50 p-4"><div className="mx-auto my-8 max-w-xl rounded-2xl bg-surface p-6">
-    <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-xl font-bold text-primary"><ScanFace /> Visage de {employee.first_name} {employee.last_name}</h2><button type="button" onClick={close}><X /></button></div>
+    <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-xl font-bold text-primary"><ScanFace /> Visage de {`${employee.first_name} ${employee.last_name}`.trim() || 'l’employé'}</h2><button type="button" onClick={close}><X /></button></div>
     {enrolled && <p className="mt-2 text-sm text-secondary">Un visage est déjà enregistré. Une nouvelle capture le remplacera.</p>}
     <div className="mt-4"><CameraFrame videoRef={videoRef} tone={samples.length === ENROLL_SAMPLES ? 'success' : capturing ? 'active' : 'idle'}>{!ready && !error && <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white"><Loader2 className="animate-spin" size={32} /></div>}</CameraFrame></div>
     {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
@@ -230,7 +236,7 @@ export const FaceEnrollModal = ({ employee, close, saved, toast }: { employee: R
       <div>{enrolled && <button type="button" onClick={remove} className="flex items-center gap-1 rounded border border-red-600 px-3 py-2 text-sm text-red-600"><Trash2 size={15} /> Supprimer le visage</button>}</div>
       <div className="flex gap-2">
         <button type="button" disabled={capturing} onClick={capture} className={`flex items-center gap-1 rounded border px-3 py-2 text-sm disabled:opacity-40 ${ready && consent ? 'border-[#2b7a78] text-[#2b7a78]' : 'border-base text-secondary'}`}>{capturing ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />} {capturing ? 'Capture…' : samples.length ? 'Recommencer' : 'Capturer'}</button>
-        <button type="button" disabled={samples.length !== ENROLL_SAMPLES || !consent || saving} onClick={save} className="flex items-center gap-1 rounded bg-[#2b7a78] px-4 py-2 text-sm text-white disabled:opacity-40"><Check size={15} /> {saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+        <button type="button" disabled={samples.length !== ENROLL_SAMPLES || !consent || saving} onClick={save} className="flex items-center gap-1 rounded bg-[#2b7a78] px-4 py-2 text-sm text-white disabled:opacity-40"><Check size={15} /> {saving ? 'Enregistrement…' : onCaptured ? 'Valider' : 'Enregistrer'}</button>
       </div>
     </div>
   </div></div>;
