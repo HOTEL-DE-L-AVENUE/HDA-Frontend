@@ -36,6 +36,7 @@ import { ReservationList } from '../components/Hotel/HotellReservationList';
 import { EquipmentManager } from '../components/Hotel/HotelEquipmentManager';
 import { MaintenanceManager } from '../components/Hotel/HotelMaintenanceManager';
 import { HousekeepingManager } from '../components/Hotel/HotelHousekeepingManager';
+import { HotelDailyReport } from '../components/Hotel/HotelDailyReport';
 import { ClientSearch } from '../components/Hotel/ClientSearch';
 import { RoomFormModal } from '../components/Hotel/Modal/RoomFormModal';
 import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormModal';
@@ -65,6 +66,7 @@ const tabs: Tab[] = [
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
+  { id: 'rapport', label: 'Rapport journalière', icon: ClipboardList, mobileLabel: 'Rapport' },
 ];
 
 // Composant pour les statistiques responsives
@@ -461,6 +463,9 @@ const HotelPage: React.FC = () => {
               gradient="from-indigo-500 to-blue-600"
             />
           </div>
+        )}
+        {activeTab === 'rapport' && (
+          <HotelDailyReport refreshTrigger={dataRefreshKey} />
         )}
       </div>
 
