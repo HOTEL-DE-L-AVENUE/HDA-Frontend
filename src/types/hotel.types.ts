@@ -598,8 +598,6 @@ export interface HotelDailyReportMetrics {
  * réception à la régénération suivante.
  */
 export interface HotelDailyReportAutoState {
-  /** false = la réception a repris la main sur l'ensemble du rapport. */
-  auto: boolean;
   /** Corrections manuelles, par numéro de chambre puis par champ. */
   overrides: Record<string, Partial<HotelDailyReportRoomLine>>;
   /** Chambres retirées du rapport malgré leur présence en base. */
