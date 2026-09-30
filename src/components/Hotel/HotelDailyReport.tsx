@@ -5,17 +5,16 @@
 // Le rapport est automatique : chaque ligne est dérivée en continu des chambres
 // et des réservations couvrant la nuitée, les données sources sont rafraîchies
 // périodiquement, et le rapport est enregistré tout seul dès qu'il change.
-// La réception garde la main : corriger un champ pose une exception sur ce seul
-// champ (le reste continue de suivre les réservations), et le mode « saisie
-// libre » gèle entièrement le rapport. Ces exceptions sont persistées avec le
-// rapport, sinon la régénération suivante les écraserait.
+// La réception garde la main sans quitter l'automatisme : corriger un champ pose
+// une exception sur ce seul champ, le reste de la ligne continue de suivre les
+// réservations. Ces exceptions sont persistées avec le rapport, sinon la
+// régénération suivante les écraserait.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ClipboardList,
   Clipboard,
   Loader,
-  Lock,
   Plus,
   Printer,
   RefreshCw,
@@ -37,6 +36,7 @@ import { useRooms } from '../../hooks/useRooms';
 import { useReservations } from '../../hooks/useReservations';
 import { useClients } from '../../hooks/useClients';
 import { hotelReportService } from '../../services/hotelReport.service';
+import { HotelReportWhatsapp } from './HotelReportWhatsapp';
 import AuthService from '../../services/authService';
 
 /** Cadence de rafraîchissement des chambres / réservations pendant la nuitée. */
@@ -156,7 +156,6 @@ const emptyLine = (numero = ''): HotelDailyReportRoomLine => ({
 });
 
 const EMPTY_AUTO_STATE: HotelDailyReportAutoState = {
-  auto: true,
   overrides: {},
   removed: [],
   extra: [],
@@ -299,11 +298,9 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
   const [observations, setObservations] = useState('');
 
   // État d'automatisation : ce que la génération ne peut pas redéduire.
-  const [autoMode, setAutoMode] = useState(true);
   const [overrides, setOverrides] = useState<HotelDailyReportAutoState['overrides']>({});
   const [removed, setRemoved] = useState<string[]>([]);
   const [extraLines, setExtraLines] = useState<HotelDailyReportRoomLine[]>([]);
-  const [manualLines, setManualLines] = useState<HotelDailyReportRoomLine[]>([]);
   const [heureDebutManuelle, setHeureDebutManuelle] = useState(false);
   const [heureFinManuelle, setHeureFinManuelle] = useState(false);
 
@@ -359,14 +356,11 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
       .map((line) => ({ ...line, ...(overrides[line.numero] || {}) }));
   }, [generatedLines, overrides, removed]);
 
-  const lines = useMemo(
-    () => (autoMode ? [...autoLines, ...extraLines] : manualLines),
-    [autoMode, autoLines, extraLines, manualLines]
-  );
+  const lines = useMemo(() => [...autoLines, ...extraLines], [autoLines, extraLines]);
 
   const autoState = useMemo<HotelDailyReportAutoState>(
-    () => ({ auto: autoMode, overrides, removed, extra: extraLines, heureDebutManuelle, heureFinManuelle }),
-    [autoMode, overrides, removed, extraLines, heureDebutManuelle, heureFinManuelle]
+    () => ({ overrides, removed, extra: extraLines, heureDebutManuelle, heureFinManuelle }),
+    [overrides, removed, extraLines, heureDebutManuelle, heureFinManuelle]
   );
 
   // Chargement du rapport de la date : s'il existe, il rétablit l'état
@@ -385,7 +379,6 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
       .then((saved) => {
         if (!active) return;
         const state = { ...EMPTY_AUTO_STATE, ...(saved?.autoState || {}) };
-        setAutoMode(state.auto);
         setOverrides(state.overrides || {});
         setRemoved(state.removed || []);
         setExtraLines(state.extra || []);
@@ -393,10 +386,6 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
         setHeureFinManuelle(Boolean(state.heureFinManuelle));
 
         if (saved) {
-          // Un rapport figé (saisie libre) est rechargé tel quel.
-          setManualLines(
-            Array.isArray(saved.rooms) ? saved.rooms.map((line) => ({ ...emptyLine(), ...line })) : []
-          );
           setHeureDebut(saved.heureDebut || formatNowTime());
           setHeureFin(saved.heureFin || formatNowTime());
           setReceptionniste(saved.receptionniste || '');
@@ -408,7 +397,6 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
           // le réceptionniste est l'utilisateur connecté.
           const currentUser = AuthService.getCurrentUser();
           const now = formatNowTime();
-          setManualLines([]);
           setHeureDebut(now);
           setHeureFin(now);
           setReceptionniste(`${currentUser?.prenom || ''} ${currentUser?.nom || ''}`.trim());
@@ -494,13 +482,9 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
     return () => window.clearTimeout(timer);
   }, [payloadSignature, loadedDate, reportDate, isLoadingReport, lines.length, persist]);
 
-  /** Modifie une ligne : en mode automatique, seul le champ touché est figé. */
+  /** Modifie une ligne : seul le champ touché est figé, le reste suit les réservations. */
   const updateLine = useCallback(
     (index: number, patch: Partial<HotelDailyReportRoomLine>) => {
-      if (!autoMode) {
-        setManualLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
-        return;
-      }
       if (index < autoLines.length) {
         const numero = autoLines[index].numero;
         setOverrides((current) => ({ ...current, [numero]: { ...(current[numero] || {}), ...patch } }));
@@ -509,15 +493,11 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
       const extraIndex = index - autoLines.length;
       setExtraLines((current) => current.map((line, i) => (i === extraIndex ? { ...line, ...patch } : line)));
     },
-    [autoMode, autoLines]
+    [autoLines]
   );
 
   const removeLine = useCallback(
     (index: number) => {
-      if (!autoMode) {
-        setManualLines((current) => current.filter((_, i) => i !== index));
-        return;
-      }
       if (index < autoLines.length) {
         const numero = autoLines[index].numero;
         setRemoved((current) => (current.includes(numero) ? current : [...current, numero]));
@@ -526,13 +506,12 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
       const extraIndex = index - autoLines.length;
       setExtraLines((current) => current.filter((_, i) => i !== extraIndex));
     },
-    [autoMode, autoLines]
+    [autoLines]
   );
 
   const addLine = useCallback(() => {
-    if (autoMode) setExtraLines((current) => [...current, emptyLine()]);
-    else setManualLines((current) => [...current, emptyLine()]);
-  }, [autoMode]);
+    setExtraLines((current) => [...current, emptyLine()]);
+  }, []);
 
   const resetAutomation = useCallback(() => {
     if (!window.confirm('Repartir de la situation issue des réservations ? Les corrections manuelles de ce rapport seront perdues.')) {
@@ -541,25 +520,9 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
     setOverrides({});
     setRemoved([]);
     setExtraLines([]);
-    setAutoMode(true);
     setHeureFinManuelle(false);
     toast.success('Rapport régénéré automatiquement.');
   }, []);
-
-  const toggleAutoMode = useCallback(() => {
-    if (autoMode) {
-      // Passage en saisie libre : on gèle la situation telle qu'elle est affichée.
-      setManualLines(lines);
-      setAutoMode(false);
-      toast.success('Saisie libre : le rapport ne suit plus les réservations.');
-      return;
-    }
-    if (!window.confirm('Revenir au rapport automatique ? Les lignes saisies librement seront remplacées par la situation des réservations.')) {
-      return;
-    }
-    setAutoMode(true);
-    toast.success('Rapport automatique réactivé.');
-  }, [autoMode, lines]);
 
   const reportText = useMemo(() => {
     const header = `Situation du chambre durant la Nuité ${toShortDate(reportDate)} à ${heureDebut || '—'} a ${heureFin || '—'}`;
@@ -639,24 +602,18 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-bold text-primary md:text-lg">Rapport journalière</h3>
-                <span
-                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                    autoMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
-                  }`}
-                >
-                  {autoMode ? <Zap size={11} /> : <Lock size={11} />}
-                  {autoMode ? 'Automatique' : 'Saisie libre'}
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                  <Zap size={11} />
+                  Automatique
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-muted md:text-sm">
-                {autoMode
-                  ? 'Situation des chambres générée et enregistrée automatiquement depuis les réservations.'
-                  : 'Rapport figé : les lignes ne suivent plus les réservations.'}
+                Situation des chambres générée et enregistrée automatiquement depuis les réservations.
               </p>
               <p className={`mt-1 flex items-center gap-1.5 text-[11px] ${saveColor[saveState]}`}>
                 {saveState === 'saving' && <Loader size={11} className="animate-spin" />}
                 {saveLabel[saveState]}
-                {autoMode && overridesCount > 0 && (
+                {overridesCount > 0 && (
                   <span className="text-muted">· {overridesCount} correction(s) manuelle(s) conservée(s)</span>
                 )}
               </p>
@@ -730,18 +687,6 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <button
           type="button"
-          onClick={toggleAutoMode}
-          className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-medium transition-colors md:text-sm ${
-            autoMode
-              ? 'border border-base text-primary hover:bg-surface-2'
-              : 'bg-accent text-black hover:bg-accent/90'
-          }`}
-        >
-          {autoMode ? <Lock size={15} /> : <Zap size={15} />}
-          {autoMode ? 'Passer en saisie libre' : 'Repasser en automatique'}
-        </button>
-        <button
-          type="button"
           onClick={resetAutomation}
           disabled={isBusy}
           className="flex items-center gap-1.5 rounded-xl border border-base px-4 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-surface-2 disabled:opacity-50 md:text-sm"
@@ -801,8 +746,7 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
         )}
 
         {lines.map((line, index) => {
-          const isAuto = autoMode && index < autoLines.length;
-          const patched = isAuto ? overrides[line.numero] : undefined;
+          const patched = index < autoLines.length ? overrides[line.numero] : undefined;
           return (
             <div key={`${line.room_id ?? 'manuel'}-${line.numero}-${index}`} className="rounded-2xl border border-base bg-surface p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -920,6 +864,9 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
           className="min-h-[420px] w-full resize-y rounded-xl border border-base bg-surface-2 p-4 font-mono text-xs leading-6 text-primary outline-none"
         />
       </div>
+
+      {/* Envoi WhatsApp */}
+      <HotelReportWhatsapp reportDate={reportDate} savedAt={savedAt} />
 
       {/* Légende */}
       <div className="rounded-2xl border border-base bg-surface p-4 print:hidden">
