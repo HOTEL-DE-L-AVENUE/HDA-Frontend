@@ -361,17 +361,20 @@ export const CocktailMenu: React.FC<Props> = ({
             onChange={(e) => setNom(e.target.value)}
             placeholder="Ex: Mojito, Whisky..."
           />
-          <Select
-            label="Catégorie"
-            value={categorie}
-            onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
-            options={[
-              { value: 'Alcools', label: 'Alcools' },
-              { value: 'Bières & Soft', label: 'Bières & Soft' },
-              { value: 'Cocktails', label: 'Cocktails' },
-              { value: 'Sans alcool', label: 'Sans alcool' },
-            ]}
-          />
+          <>
+            <Input
+              label="Catégorie"
+              value={categorie}
+              onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
+              placeholder="Saisir ou rechercher une catégorie"
+              list="bar-product-categories"
+            />
+            <datalist id="bar-product-categories">
+              {categoryNames.filter((category) => category !== 'Toutes').map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+          </>
           {getSubcategories(categorie).length > 0 && (
             <Select
               label="Sous-catégorie"
