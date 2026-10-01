@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { BarCommande, BarStockItem } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
+import { printThermalText } from '../../utils/thermalPrint';
 import { Clipboard, Printer, Save } from 'lucide-react';
 import barService from '../../services/bar.service';
 
@@ -173,7 +174,7 @@ export const BarReports: React.FC<Props> = ({ commandes, stock }) => {
     setCopied(true);
   };
 
-  const printReport = () => window.print();
+  const printReport = () => printThermalText('Rapport Bar', buildReportText());
   const updatePersonnel = (key: keyof typeof personnel, value: string) => setPersonnel((current) => ({ ...current, [key]: value }));
   const updateManual = (key: keyof typeof manual, value: string) => setManual((current) => ({ ...current, [key]: value }));
   const statuses: Array<{ label: string; value: BarCommande['statut'] }> = [

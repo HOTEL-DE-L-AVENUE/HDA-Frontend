@@ -2,6 +2,7 @@
 import { Clipboard, Download, MessageCircle, Printer } from 'lucide-react';
 import { ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
+import { printThermalText } from '../../../utils/thermalPrint';
 
 // Destinataire du bouton WhatsApp : 0388337122 au format international (Madagascar, +261).
 const REPORT_WHATSAPP_NUMBER = '261388337122';
@@ -289,7 +290,7 @@ export const DailyReportSheet: React.FC<DailyReportSheetProps> = (props) => {
         <button type="button" className="action" onClick={sendReportOnWhatsApp} title="Ouvrir WhatsApp avec le rapport pour le 0388337122" style={{ backgroundColor: '#25D366', borderColor: '#25D366', color: '#fff' }}><MessageCircle size={15} /> WhatsApp</button>
         <button type="button" className="action secondary" onClick={copyReport}><Clipboard size={15} /> {copied ? 'Copié' : 'Copier'}</button>
         <button type="button" className="action secondary" onClick={downloadReport}><Download size={15} /> Télécharger</button>
-        <button type="button" className="action" onClick={() => window.print()}><Printer size={15} /> Imprimer</button>
+        <button type="button" className="action" onClick={() => printThermalText('Rapport Casino', report)}><Printer size={15} /> Imprimer</button>
       </div>
     </div>    <textarea readOnly value={report} aria-label="Rapport journalier généré" className="w-full min-h-[680px] rounded-xl p-4 text-sm leading-6 text-primary outline-none resize-y" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }} />
   </section>;
