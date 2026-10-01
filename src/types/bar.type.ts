@@ -1,3 +1,13 @@
+export interface BarEquipment {
+  id: number;
+  nom: string;
+  categorie: string;
+  description: string;
+  quantite: number;
+  etat: 'EN_SERVICE' | 'A_REPARER' | 'HORS_SERVICE';
+  created_at?: string;
+  updated_at?: string;
+}
 // ─── Métier (aligné sur la BDD) ──────────────────────────────
 
 /** Correspond à products (type_produit = PRODUIT_FINI, source_module = BAR) */
