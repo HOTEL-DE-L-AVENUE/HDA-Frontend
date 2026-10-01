@@ -10,7 +10,8 @@ interface Props {
 
 export const BarTabs: React.FC<Props> = ({ activeTab, onTabChange }) => {
   const currentUser = AuthService.getCurrentUser();
-  const visibleTabs = filterTabsByRole([...BAR_TABS], currentUser?.role);
+  const visibleTabs = filterTabsByRole([...BAR_TABS], currentUser?.role)
+    .filter((tab) => tab.id !== 'equipement' || currentUser?.role?.toLowerCase() === 'admin');
 
   return (
     <div className="flex gap-1 bg-surface border border-base rounded-2xl p-1 overflow-x-auto scrollbar-hide">

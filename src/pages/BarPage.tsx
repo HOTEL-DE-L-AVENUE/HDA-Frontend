@@ -18,6 +18,7 @@ import { BarReports } from '../components/Bar/BarReports';
 import { PafSection } from '../components/Bar/PafSection';
 import { BarHistory } from '../components/Bar/BarHistory';
 import { ProductHistory } from '../components/Bar/ProductHistory';
+import { BarEquipmentManager } from '../components/Bar/BarEquipmentManager';
 import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
@@ -281,6 +282,8 @@ export const BarPage: React.FC = () => {
           <BestSellers commandes={commandes} />
         </div>
       )}
+
+      {userIsAdmin && activeTab === 'equipement' && <BarEquipmentManager />}
 
       {activeTab === 'commandes' && (
         <BarCommandeView

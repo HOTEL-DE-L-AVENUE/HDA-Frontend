@@ -7,6 +7,7 @@ import type {
   BarStockItem,
   BarPaymentMethod,
   ProductHistoryItem,
+  BarEquipment,
 } from '../types/bar.type';
 
 const BASE = '/api/bar';
@@ -82,6 +83,13 @@ export const createBarProduct = (data: {
 export const updateBarProduct = (id: number, data: Partial<BarProduct>) =>
   put<BarProduct>(`/products/${id}`, data);
 export const deleteBarProduct = (id: number) => remove<null>(`/products/${id}`);
+// ==================== EQUIPMENT ====================
+
+export type BarEquipmentPayload = Omit<BarEquipment, 'id' | 'created_at' | 'updated_at'>;
+export const getBarEquipments = () => get<BarEquipment[] | { data?: BarEquipment[] }>('/equipments');
+export const createBarEquipment = (data: BarEquipmentPayload) => post<BarEquipment>('/equipments', data);
+export const updateBarEquipment = (id: number, data: BarEquipmentPayload) => put<BarEquipment>(`/equipments/${id}`, data);
+export const deleteBarEquipment = (id: number) => remove<null>(`/equipments/${id}`);
 
 // ==================== STOCK ====================
 
@@ -154,6 +162,7 @@ const barService = {
   getBarCashiers, getBarCashierById, createBarCashier, updateBarCashier, deleteBarCashier,
   openBarSession, closeBarSession, getBarSessions, getBarSessionById, getBarOpenSessions, getBarSessionStats, getBarCashierStatus,
   getBarProducts, getBarProductById, createBarProduct, updateBarProduct, deleteBarProduct,
+  getBarEquipments, createBarEquipment, updateBarEquipment, deleteBarEquipment,
   getBarStock, updateBarStock, addBarTransaction, getBarLatestTransaction, getBarTransactions,
   getBarOrders, getBarHistory, getBarDailyReport, saveBarDailyReport,
   createBarOrder, updateBarOrder, deleteBarOrder, closeAllBarOrders, updateBarOrderStatus,
