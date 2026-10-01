@@ -44,6 +44,23 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
   }, [locationId]);
 
   useEffect(() => {
+    setSelectedProducts(initialProducts);
+  }, [initialProducts]);
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    setSelectedProducts(current => current.map(selected => {
+      const product = products.find(item => item.product_id === selected.product_id);
+      return product ? {
+        ...selected,
+        nom: product.nom || selected.nom,
+        unite: product.unite || selected.unite,
+        available_quantity: product.quantite,
+      } : selected;
+    }));
+  }, [products]);
+
+  useEffect(() => {
     onChange(selectedProducts);
   }, [selectedProducts, onChange]);
 
@@ -71,7 +88,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
         id: p.id,
         product_id: p.product_id,
         nom: p.product_nom || p.nom,
-        categorie: p.category_id || p.categorie || 'Stock',
+        categorie: p.category_name || p.categorie || 'Stock',
         quantite: p.quantite,
         unite: p.product_unite || p.unite
       }));
@@ -241,9 +258,10 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
                   <input
                     type="number"
                     min="1"
+                    step="1"
                     max={sp.available_quantity}
                     value={sp.quantity}
-                    onChange={e => updateQuantity(sp.product_id, parseInt(e.target.value) || 0)}
+                    onChange={e => updateQuantity(sp.product_id, Math.floor(Number(e.target.value) || 0))}
                     className="w-20 h-8 px-2 bg-slate-700 border border-slate-600 rounded text-white text-sm text-center focus:outline-none focus:border-amber-500/50"
                   />
                   <span className="text-slate-400 text-sm">{sp.unite}</span>

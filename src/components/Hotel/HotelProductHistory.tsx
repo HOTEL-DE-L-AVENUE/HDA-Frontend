@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Package, Search, TrendingUp } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../utils/data';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getFirstDayOfMonth = () => {
@@ -21,6 +20,7 @@ interface HistoryItem {
   categorie: string;
   quantite_totale: number;
   montant_total: number;
+  type_mouvement: 'ENTREE' | 'SORTIE' | 'AJUSTEMENT';
   source?: string;
   nb_operations?: number;
 }
@@ -40,18 +40,16 @@ export const HotelProductHistory: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadHistory = async () => {
+  const loadHistory = async (filters = { dateFrom, dateTo, productName }) => {
     setLoading(true);
     setError(null);
     try {
       // Use the new hotel product history endpoint
-      const params: any = { location_id: 5 };
-      if (dateFrom && dateTo) {
-        params.dateFrom = dateFrom;
-        params.dateTo = dateTo;
-      }
-      if (productName) {
-        params.productName = productName;
+      const params: any = { locationId: 5 };
+      if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+      if (filters.dateTo) params.dateTo = filters.dateTo;
+      if (filters.productName) {
+        params.productName = filters.productName;
       }
       
       const response = await api.get('/api/hebergement/product-history', { params });
@@ -65,6 +63,9 @@ export const HotelProductHistory: React.FC = () => {
         categorie: m.categorie,
         quantite_totale: m.quantite_totale,
         montant_total: 0, // Stock movements don't have monetary value like bar sales
+        source: m.source,
+        type_mouvement: m.type_mouvement,
+        nb_operations: m.nb_operations,
       }));
       
       setItems(historyItems);
@@ -98,7 +99,6 @@ export const HotelProductHistory: React.FC = () => {
   }, [items]);
 
   const grandTotalArticles = groups.reduce((sum, g) => sum + g.totalArticles, 0);
-  const grandTotalMontant = groups.reduce((sum, g) => sum + g.totalMontant, 0);
 
   return (
     <section className="space-y-4">
@@ -112,7 +112,7 @@ export const HotelProductHistory: React.FC = () => {
             <div>
               <h2 className="font-semibold text-primary">Historique des produits hôtel</h2>
               <p className="mt-1 text-sm text-muted">
-                Liste des produits consommés par jour (ménage, maintenance, équipements).
+                Journal complet des entrées et sorties (stock, ménage, maintenance, équipements).
               </p>
             </div>
           </div>
@@ -167,10 +167,12 @@ export const HotelProductHistory: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              setDateFrom(getFirstDayOfMonth());
-              setDateTo(getToday());
+              const resetDateFrom = getFirstDayOfMonth();
+              const resetDateTo = getToday();
+              setDateFrom(resetDateFrom);
+              setDateTo(resetDateTo);
               setProductName('');
-              void loadHistory();
+              void loadHistory({ dateFrom: resetDateFrom, dateTo: resetDateTo, productName: '' });
             }}
             className="rounded-xl border border-base bg-surface-2 px-4 py-2 text-sm text-secondary hover:text-primary"
           >
@@ -183,11 +185,11 @@ export const HotelProductHistory: React.FC = () => {
       {!loading && !error && groups.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-base bg-surface p-4">
-            <p className="text-xs text-muted">Jours avec consommation</p>
+            <p className="text-xs text-muted">Jours avec mouvements</p>
             <p className="mt-1 text-lg font-semibold text-accent">{groups.length}</p>
           </div>
           <div className="rounded-xl border border-base bg-surface p-4">
-            <p className="text-xs text-muted">Total articles consommés</p>
+            <p className="text-xs text-muted">Unités déplacées</p>
             <p className="mt-1 text-lg font-semibold text-accent">{grandTotalArticles}</p>
           </div>
           <div className="rounded-xl border border-base bg-surface p-4">
@@ -210,7 +212,7 @@ export const HotelProductHistory: React.FC = () => {
       {/* Aucun résultat */}
       {!loading && !error && groups.length === 0 && (
         <div className="rounded-xl border border-base bg-surface p-6 text-center text-sm text-muted">
-          Aucun produit consommé sur cette période.
+          Aucun mouvement de stock sur cette période.
         </div>
       )}
 
@@ -245,8 +247,8 @@ export const HotelProductHistory: React.FC = () => {
                       <span className="inline-flex min-w-[3rem] justify-center rounded-md bg-surface-2 px-2 py-0.5 text-xs font-bold text-accent">
                         {item.quantite_totale}×
                       </span>
-                      <span className="text-secondary truncate">{item.produit}</span>
-                      <span className="hidden text-xs text-muted sm:inline">· {item.categorie}</span>
+                        <span className="text-secondary truncate">{item.produit}</span>
+                        <span className="hidden text-xs text-muted sm:inline">· {item.categorie}</span>
                       {item.source && (
                         <span className="hidden text-xs text-accent sm:inline">· {item.source}</span>
                       )}
@@ -255,7 +257,9 @@ export const HotelProductHistory: React.FC = () => {
                       {item.nb_operations && item.nb_operations > 1 && (
                         <span className="text-xs text-muted">({item.nb_operations} opérations)</span>
                       )}
-                      <strong className="shrink-0 text-accent">Stock</strong>
+                      <strong className={`shrink-0 ${item.type_mouvement === 'ENTREE' ? 'text-emerald-400' : item.type_mouvement === 'SORTIE' ? 'text-amber-400' : 'text-blue-400'}`}>
+                        {item.type_mouvement === 'ENTREE' ? 'Entrée' : item.type_mouvement === 'SORTIE' ? 'Sortie' : 'Ajustement'}
+                      </strong>
                     </div>
                   </li>
                 ))}

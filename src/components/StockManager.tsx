@@ -59,7 +59,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories, 
     { value: 'pièces', label: 'Pièces' },
   ];
 
-  const locationId = isHotel ? 5 : isBar ? 2 : 3;
+  const locationId = isHotel ? 5 : isBar ? 3 : 2;
 
   const fetchData = async () => {
     setLoading(true);
@@ -73,11 +73,11 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories, 
         id: p.id,
         product_id: p.product_id,
         nom: p.product_nom || p.nom,
-        categorie: p.category_id ? `Catégorie ${p.category_id}` : 'Stock',
+        categorie: p.category_name || (p.category_id ? `Catégorie ${p.category_id}` : 'Stock'),
         quantite: p.quantite || 0,
         unite: p.product_unite || p.unite || 'unités',
         prix: p.prix_vente || 0,
-        seuil_minimum: 5,
+        seuil_minimum: p.seuil_minimum ?? 5,
       }));
       setStockItems(mappedItems);
     } catch (err) {
@@ -102,7 +102,7 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories, 
       setError('Le nom du produit est requis.');
       return;
     }
-    if (quantite < 0 || prix < 0 || seuilMinimum < 0) {
+    if ((isHotel && !Number.isInteger(quantite)) || quantite < 0 || prix < 0 || !Number.isInteger(seuilMinimum) || seuilMinimum < 0) {
       setError('La quantité, le prix et le seuil doivent être des nombres positifs.');
       return;
     }
@@ -112,59 +112,41 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories, 
 
     try {
       if (editItem) {
-        // Update stock quantity
-        await api.put(`/api/stock/stocks/${editItem.id}`, {
-          quantite: quantite,
-          seuil_minimum: seuilMinimum,
-        });
-      } else {
-        // Create new product
-        const productResponse = await api.post('/api/stock/products', {
+        const updates = {
           nom: productName,
-          category_id: 1, // Default category
+          categorie: form.categorie,
+          prix: prix,
+          unite: form.unite,
+          quantite,
+          seuil_minimum: seuilMinimum,
+        };
+        if (isHotel) {
+          await api.put(`/api/hebergement/stock/${editItem.id}`, updates);
+        } else {
+          await api.put(`/api/stock/stocks/${editItem.id}`, {
+            quantite,
+            seuil_minimum: seuilMinimum,
+          });
+        }
+      } else {
+        await api.post('/api/stock/products-with-stock', {
+          nom: productName,
+          categorie: form.categorie || categories[0] || 'Hôtel',
           code: `${module.toUpperCase()}-${Date.now()}`,
           unite: form.unite,
           prix_vente: prix,
-          actif: true,
-          type_produit: 'CONSOMMABLE',
+          quantite,
+          seuil_minimum: seuilMinimum,
+          location_id: locationId,
+          source_module: module.toUpperCase(),
         });
-        
-        const productId = productResponse.data?.id || productResponse.data?.data?.id;
-        
-        if (productId) {
-          // Try to create stock row - if it fails due to duplicate, update instead
-          try {
-            await api.post('/api/stock/stocks', {
-              product_id: productId,
-              location_id: locationId,
-              quantite: quantite,
-              seuil_minimum: seuilMinimum,
-            });
-          } catch (err: any) {
-            // If duplicate, find existing stock and update it
-            if (err.response?.status === 409) {
-              const stocksResponse = await api.get('/api/stock/stocks/with-products', {
-                params: { location_id: locationId }
-              });
-              const existingStock = stocksResponse.data?.data?.find((s: any) => s.product_id === productId);
-              if (existingStock) {
-                await api.put(`/api/stock/stocks/${existingStock.id}`, {
-                  quantite: quantite,
-                  seuil_minimum: seuilMinimum,
-                });
-              }
-            } else {
-              throw err;
-            }
-          }
-        }
       }
 
       await fetchData();
       setShowModal(false);
       resetForm();
-    } catch (err) {
-      setError('Erreur lors de la sauvegarde du stock');
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.error || 'Erreur lors de la sauvegarde du stock');
       console.error(err);
     } finally {
       setLoading(false);
@@ -386,57 +368,52 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories, 
       </div>
 
       {/* Modal de création/modification */}
-      <Modal 
+      <Modal
         isOpen={showModal} 
         onClose={() => { setShowModal(false); resetForm(); }} 
-        title={editItem ? 'Modifier la quantité' : 'Ajouter un produit au stock'}
+        title={editItem ? 'Modifier le produit et le stock' : 'Ajouter un produit au stock'}
       >
         <div className="space-y-4">
-          {!editItem && (
-            <>
-              <Input 
-                label="Nom du produit" 
-                value={form.product_name} 
-                onChange={e => setForm({...form, product_name: e.target.value})} 
-                placeholder="Ex: Serviette, Savon, Produit..." 
-              />
-              <Select 
-                label="Catégorie" 
-                value={form.categorie} 
-                onChange={e => setForm({...form, categorie: e.target.value})} 
-                options={categories.map(c => ({ value: c, label: c }))} 
-              />
-              <Input 
-                label="Prix unitaire (MGA)" 
-                type="number" 
-                value={form.prix} 
-                onChange={e => setForm({...form, prix: Number(e.target.value)})} 
-                placeholder="0" 
-              />
-            </>
-          )}
-
-          {editItem && (
-            <div className="bg-slate-800/50 rounded-xl p-4 space-y-2">
-              <p className="text-white font-medium">{form.product_name}</p>
-              <p className="text-slate-400 text-sm">Catégorie: {form.categorie}</p>
-              <p className="text-slate-400 text-sm">Prix unitaire: {formatCurrency(form.prix)}</p>
-              <p className="text-slate-400 text-sm">Quantité actuelle: {editItem.quantite} {editItem.unite || 'unités'}</p>
-            </div>
-          )}
+          <Input
+            label="Nom du produit"
+            value={form.product_name}
+            onChange={e => setForm({...form, product_name: e.target.value})}
+            disabled={Boolean(editItem && !isHotel)}
+            placeholder="Ex: Serviette, Savon, Produit..."
+          />
+          <Select
+            label="Catégorie"
+            value={form.categorie}
+            onChange={e => setForm({...form, categorie: e.target.value})}
+            disabled={Boolean(editItem && !isHotel)}
+            options={[...new Set([...categories, ...(form.categorie ? [form.categorie] : [])])].map(c => ({ value: c, label: c }))}
+          />
+          <Input
+            label="Prix unitaire (MGA)"
+            type="number"
+            min="0"
+            step="1"
+            value={form.prix}
+            onChange={e => setForm({...form, prix: Number(e.target.value) || 0})}
+            disabled={Boolean(editItem && !isHotel)}
+            placeholder="0"
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <Input 
               label="Quantité" 
               type="number" 
+              min="0"
+              step={isHotel ? '1' : 'any'}
               value={form.quantite} 
-              onChange={e => setForm({...form, quantite: Number(e.target.value)})} 
+              onChange={e => setForm({...form, quantite: isHotel ? Math.max(0, Math.floor(Number(e.target.value) || 0)) : Number(e.target.value) || 0})}
               placeholder="0" 
             />
             <Select 
               label="Unité" 
               value={form.unite} 
               onChange={e => setForm({...form, unite: e.target.value})} 
+              disabled={Boolean(editItem && !isHotel)}
               options={uniteOptions} 
             />
           </div>
@@ -444,15 +421,15 @@ export const StockManager: React.FC<StockManagerProps> = ({ module, categories, 
           <Input 
             label="Seuil minimum d'alerte" 
             type="number" 
+            min="0"
+            step="1"
             value={form.seuil_minimum} 
-            onChange={e => setForm({...form, seuil_minimum: Number(e.target.value)})} 
+            onChange={e => setForm({...form, seuil_minimum: Math.max(0, Math.floor(Number(e.target.value) || 0))})}
+            disabled={Boolean(editItem && !isHotel)}
             placeholder="5" 
           />
-
-          {editItem && (
-            <p className="text-xs text-amber-400">
-              * Modification de la quantité uniquement. Pour modifier le prix ou la catégorie, veuillez supprimer et recréer l'article.
-            </p>
+          {editItem && !isHotel && (
+            <p className="text-xs text-slate-400">Dans ce module, seule la quantité de stock est modifiée.</p>
           )}
 
           <div className="flex gap-3 pt-2">
