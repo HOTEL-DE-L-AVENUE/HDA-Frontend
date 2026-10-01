@@ -210,6 +210,7 @@ export interface HousekeepingTask {
   commentaire: string | null;
   planned_at: string | null;
   completed_at: string | null;
+  exceptional_details?: string | null;
   room?: Room;
   assigned_user?: User;
   created_at?: string;

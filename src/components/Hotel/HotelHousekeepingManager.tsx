@@ -38,7 +38,7 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
     deleteTask
   } = useHousekeeping();
 
-  const { rooms, loadRooms, updateRoomStatus } = useRooms();
+  const { rooms, loadRooms } = useRooms();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<HousekeepingTask | null>(null);
@@ -99,13 +99,7 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
 
       await updateStatus(id, statut, productsUsed);
       
-      // Change room status based on task status
-      if (statut === 'EN_COURS') {
-        await updateRoomStatus(task.room_id, 'NETTOYAGE');
-      } else if (statut === 'TERMINE') {
-        await updateRoomStatus(task.room_id, 'LIBRE');
-        onTaskCompleted?.();
-      }
+      if (statut === 'TERMINE') onTaskCompleted?.();
       
       toast.success(`Statut mis à jour: ${statut}`);
       await loadAll();
@@ -121,13 +115,8 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
         await updateTask(selectedTask.id, data);
         toast.success('Tâche modifiée avec succès');
       } else {
-        const newTask = await createTask(data);
+        await createTask(data);
         toast.success('Tâche créée avec succès');
-        
-        // If task is created with EN_COURS status, update room status
-        if (data.statut === 'EN_COURS') {
-          await updateRoomStatus(data.room_id, 'NETTOYAGE');
-        }
       }
       setIsModalOpen(false);
       setSelectedTask(null);

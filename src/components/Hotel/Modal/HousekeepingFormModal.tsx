@@ -52,8 +52,19 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
         statut: initialData.statut,
         commentaire: initialData.commentaire || '',
         planned_at: initialData.planned_at?.split('T')[0] || '',
-        exceptional_details: '',
+        exceptional_details: initialData.exceptional_details || '',
       });
+      let savedProducts: any = initialData.products_used || [];
+      if (typeof savedProducts === 'string') {
+        try { savedProducts = JSON.parse(savedProducts); } catch { savedProducts = []; }
+      }
+      setProductsUsed(Array.isArray(savedProducts) ? savedProducts.map((item: any) => ({
+        product_id: Number(item.product_id),
+        nom: item.nom || `Produit #${item.product_id}`,
+        unite: item.unite || 'unités',
+        available_quantity: Number(item.available_quantity || item.quantity || 0),
+        quantity: Number(item.quantity || 1),
+      })) : []);
     } else {
       setFormData({
         room_id: defaultRoomId || 0,
@@ -63,6 +74,7 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
         planned_at: new Date().toISOString().split('T')[0],
         exceptional_details: '',
       });
+      setProductsUsed([]);
     }
     setErrors({});
   }, [initialData, isOpen, defaultRoomId]);

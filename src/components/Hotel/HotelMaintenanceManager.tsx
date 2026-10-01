@@ -40,7 +40,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
     deleteMaintenance
   } = useMaintenance();
 
-  const { rooms, loadRooms, updateRoomStatus } = useRooms();
+  const { rooms, loadRooms } = useRooms();
   const { equipments, loadEquipments } = useEquipment();
   const [workers, setWorkers] = useState<MaintenanceWorker[]>([]);
 
@@ -108,13 +108,7 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
 
       await updateStatus(id, statut);
       
-      // Change room status based on maintenance status
-      if (statut === 'EN_COURS' && maintenance.room_id) {
-        await updateRoomStatus(maintenance.room_id, 'MAINTENANCE');
-      } else if (['TERMINE', 'ANNULE'].includes(statut) && maintenance.room_id) {
-        await updateRoomStatus(maintenance.room_id, 'LIBRE');
-        onMaintenanceCompleted?.();
-      }
+      if (['TERMINE', 'ANNULE'].includes(statut)) onMaintenanceCompleted?.();
       
       toast.success(`Statut mis à jour: ${statut}`);
       await loadAll();
@@ -133,10 +127,6 @@ export const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ initialR
         await createMaintenance(data);
         toast.success('Maintenance créée avec succès');
         
-        // If maintenance is created with EN_COURS status and has a room, update room status
-        if (data.statut === 'EN_COURS' && data.room_id) {
-          await updateRoomStatus(data.room_id, 'MAINTENANCE');
-        }
       }
       setIsModalOpen(false);
       setSelectedMaintenance(null);
