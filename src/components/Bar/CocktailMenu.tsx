@@ -339,7 +339,7 @@ export const CocktailMenu: React.FC<Props> = ({
                       </div>
                     )}
                     {userIsAdmin && (
-                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
+                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex group-focus-within:flex [@media(hover:none)]:flex" onClick={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
                         <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>
                       </div>
@@ -361,17 +361,20 @@ export const CocktailMenu: React.FC<Props> = ({
             onChange={(e) => setNom(e.target.value)}
             placeholder="Ex: Mojito, Whisky..."
           />
-          <Select
-            label="Catégorie"
-            value={categorie}
-            onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
-            options={[
-              { value: 'Alcools', label: 'Alcools' },
-              { value: 'Bières & Soft', label: 'Bières & Soft' },
-              { value: 'Cocktails', label: 'Cocktails' },
-              { value: 'Sans alcool', label: 'Sans alcool' },
-            ]}
-          />
+          <>
+            <Input
+              label="Catégorie"
+              value={categorie}
+              onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
+              placeholder="Saisir ou rechercher une catégorie"
+              list="bar-product-categories"
+            />
+            <datalist id="bar-product-categories">
+              {categoryNames.filter((category) => category !== 'Toutes').map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+          </>
           {getSubcategories(categorie).length > 0 && (
             <Select
               label="Sous-catégorie"
