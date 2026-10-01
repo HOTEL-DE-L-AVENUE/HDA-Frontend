@@ -23,6 +23,7 @@ import {
   Settings,
   LogOut,
   User,
+  TrendingUp,
   Bell,
   Search,
   Moon,
@@ -46,6 +47,7 @@ import { reservationService } from '../services/reservation.service';
 import type { HotelPaymentMethod } from '../services/reservation.service';
 import { Room, Reservation } from '../types/hotel.types';
 import { StockManager, CaisseManager } from '../components/StockManager';
+import { HotelProductHistory } from '../components/Hotel/HotelProductHistory';
 import AuthService from '../services/authService';
 import { filterTabsByRole, getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 import api from '../lib/api';
@@ -65,6 +67,7 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
+  { id: 'inventory', label: 'Inventaire', icon: TrendingUp, mobileLabel: 'Invent.' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
   { id: 'rapport', label: 'Rapport journalière', icon: ClipboardList, mobileLabel: 'Rapport' },
 ];
@@ -451,7 +454,13 @@ const HotelPage: React.FC = () => {
             <StockManager
               module="hotel"
               categories={['Mini-bar', 'Entretien', 'Linge', 'Fournitures', 'Autre']}
+              refreshTrigger={dataRefreshKey}
             />
+          </div>
+        )}
+        {activeTab === 'inventory' && (
+          <div className="overflow-x-auto">
+            <HotelProductHistory />
           </div>
         )}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (

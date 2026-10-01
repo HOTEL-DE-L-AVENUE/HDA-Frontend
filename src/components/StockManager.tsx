@@ -1,1443 +1,479 @@
+// src/components/StockManager.tsx
 import React, { useState, useEffect } from 'react';
-import { useHDA } from '../context/HDAContext';
-import { ModuleType, StockItem } from '../types';
-import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from '../components/UI';
-import BarTransactionsCard from './Bar/BarTransactionsCard';
-import { formatCurrency } from '../utils/data';
-import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
+import { Plus, Edit2, Trash2, Search, AlertCircle, Package, Loader2 } from 'lucide-react';
 import api from '../lib/api';
-import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle, DollarSign, RefreshCw, Printer, LockKeyhole } from 'lucide-react';
+import { DataTable, Modal, Input, Select, Button, Badge } from './UI';
+import { formatCurrency } from '../utils/data';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
-import barService from '../services/bar.service';
-import type { BarSession } from '../types/bar.type';
 
-interface StockManagerProps {
-  module: ModuleType;
-  categories: string[];
-}
-
-interface BackendStockItem {
+interface StockItem {
   id: number;
   product_id: number;
-  product_nom?: string | null;
-  product_unite?: string | null;
-  quantite: number | null;
-  seuil_minimum: number | null;
-  unite: string | null;
-  nom: string | null;
-  categorie: string | null;
-  prix: number | null;
-  type_produit?: string | null;
-  etat?: string | null;
+  nom: string;
+  categorie: string;
+  quantite: number;
+  unite: string;
+  prix: number;
+  seuil_minimum: number;
 }
 
-export const StockManager: React.FC<StockManagerProps> = ({ module, categories }) => {
-  const { state, dispatch, getModuleStock, addNotification } = useHDA();
+interface StockManagerProps {
+  module: 'hotel' | 'bar' | 'restaurant';
+  categories: string[];
+  refreshTrigger?: number;
+}
+
+export const StockManager: React.FC<StockManagerProps> = ({ module, categories, refreshTrigger }) => {
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [pendingDeleteItem, setPendingDeleteItem] = useState<StockItem | null>(null);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [hotelSection, setHotelSection] = useState<'CONSOMMABLE' | 'NON_CONSOMMABLE'>('CONSOMMABLE');
-  const [activeTab, setActiveTab] = useState<'inventory' | 'history'>('inventory');
-  const [historySearch, setHistorySearch] = useState('');
-  const [historyData, setHistoryData] = useState<any[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [form, setForm] = useState<{
-    nom: string;
-    categorie: string;
-    quantite: number;
-    unite: string;
-    prixUnitaire: number;
-    seuilMinimum: number;
-    fournisseur: string;
-    typeProduit: 'CONSOMMABLE' | 'NON_CONSOMMABLE';
-    etat: 'DISPONIBLE' | 'EN_LAVAGE' | 'USE' | 'ENDOMMAGE' | 'REBUT' | 'PERDU';
-  }>({
-    nom: '', categorie: categories[0], quantite: 0, unite: '',
-    prixUnitaire: 0, seuilMinimum: 0, fournisseur: ''
-    , typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE'
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [backendStock, setBackendStock] = useState<BackendStockItem[]>([]);
-  const apiBase = module === 'bar'
-    ? '/api/bar/stock'
-    : module === 'hotel'
-      ? '/api/stock/stocks/with-products?location_id=5'
-      // : '/api/hebergement/stock'; // COMMENTED OUT
-      : '/api/stock/stocks/with-products?location_id=5'; // Fallback for disabled hebergement
+  
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
 
-  const isBar = module === 'bar';
-  // const isHebergement = module === 'hebergement'; // COMMENTED OUT
-  const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
-  const useBackend = isBar || isHebergement || isHotel;
+  const isBar = module === 'bar';
+  const isRestaurant = module === 'restaurant';
 
-  const getErrorMessage = (err: unknown) => {
-    if (typeof err === 'object' && err !== null && 'response' in err) {
-      const response = (err as { response?: { data?: { message?: string; error?: { message?: string } } } }).response;
-      return response?.data?.message || response?.data?.error?.message || 'Erreur réseau';
-    }
-    return err instanceof Error ? err.message : 'Erreur de connexion';
-  };
+  // Form state
+  const [form, setForm] = useState({
+    product_name: '',
+    categorie: categories[0],
+    prix: 0,
+    quantite: 0,
+    unite: 'unités',
+    seuil_minimum: 5,
+  });
 
-  const handleDeleteItem = async () => {
-    if (!pendingDeleteItem) return;
+  const uniteOptions = [
+    { value: 'unités', label: 'Unités' },
+    { value: 'bouteilles', label: 'Bouteilles' },
+    { value: 'litres', label: 'Litres' },
+    { value: 'cl', label: 'Cl' },
+    { value: 'ml', label: 'Ml' },
+    { value: 'pièces', label: 'Pièces' },
+  ];
 
-    const item = pendingDeleteItem;
+  const locationId = isHotel ? 5 : isBar ? 2 : 3;
+
+  const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      if (useBackend) {
-        if (isHotel) {
-          const backendItem = backendStock.find((entry) => String(entry.id) === String(item.id));
-          if (backendItem) await api.delete(`/api/stock/stocks/${backendItem.id}`);
-        } else {
-          await api.delete(`${apiBase}/${item.id}`);
-        }
-        await refetchStock();
-        if (editItem?.id === item.id) {
-          setShowModal(false);
-          setEditItem(null);
-        }
-      } else {
-        dispatch({ type: 'DELETE_STOCK_ITEM', payload: item.id });
-      }
-      setPendingDeleteItem(null);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const refetchStock = async () => {
-    if (!useBackend) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.get(apiBase);
-      const payload = response.data?.data ?? response.data;
-      setBackendStock(Array.isArray(payload) ? payload : []);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProductHistory = async (productId: number) => {
-    if (!productId) return;
-    setHistoryLoading(true);
-    try {
-      const locationId = isHotel ? 5 : isBar ? 2 : 3; // Hotel=5, Bar=2, Restaurant=3
-      const response = await api.get('/api/stock/movements/history', {
-        params: { product_id: productId, date: selectedDate, location_id: locationId }
+      const response = await api.get('/api/stock/stocks/with-products', {
+        params: { location_id: locationId }
       });
       const payload = response.data?.data ?? response.data;
-      setHistoryData(Array.isArray(payload) ? payload : []);
+      const mappedItems = (Array.isArray(payload) ? payload : []).map((p: any) => ({
+        id: p.id,
+        product_id: p.product_id,
+        nom: p.product_nom || p.nom,
+        categorie: p.category_id ? `Catégorie ${p.category_id}` : 'Stock',
+        quantite: p.quantite || 0,
+        unite: p.product_unite || p.unite || 'unités',
+        prix: p.prix_vente || 0,
+        seuil_minimum: 5,
+      }));
+      setStockItems(mappedItems);
     } catch (err) {
-      console.error('Error loading history:', err);
-      setHistoryData([]);
+      setError('Erreur lors du chargement des données');
+      console.error(err);
     } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  const loadHistory = async (product: any = selectedProduct) => {
-    if (!product) return;
-    setHistoryLoading(true);
-    try {
-      const locationId = isHotel ? 5 : isBar ? 2 : 3; // Hotel=5, Bar=2, Restaurant=3
-      const params: any = { product_id: product.product_id, location_id: locationId };
-      
-      if (startDate && endDate) {
-        params.start_date = startDate;
-        params.end_date = endDate;
-      } else if (selectedDate) {
-        params.date = selectedDate;
-      }
-      
-      const response = await api.get('/api/stock/movements/history', { params });
-      const payload = response.data?.data ?? response.data;
-      setHistoryData(Array.isArray(payload) ? payload : []);
-    } catch (err) {
-      console.error('Error loading history:', err);
-      setHistoryData([]);
-    } finally {
-      setHistoryLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (useBackend) {
-      void refetchStock();
-    } else {
-      setBackendStock([]);
-      setError(null);
-    }
-  }, [useBackend, module]);
-
-  const contextItems = getModuleStock(module);
-
-  const items = useBackend
-    ? backendStock.map((bs) => ({
-        id: String(bs.id),
-        product_id: bs.product_id,
-        nom: bs.nom || bs.product_nom || '',
-        categorie: bs.categorie || (isBar ? 'Bar' : 'Hôtel'),
-        quantite: bs.quantite ?? 0,
-        unite: bs.unite || bs.product_unite || 'unités',
-        prixUnitaire: bs.prix ?? 0,
-        seuilMinimum: bs.seuil_minimum ?? 0,
-        typeProduit: bs.type_produit === 'NON_CONSOMMABLE' ? 'NON_CONSOMMABLE' : 'CONSOMMABLE',
-        etat: bs.etat || 'DISPONIBLE',
-        fournisseur: '',
-        status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
-        module: isBar ? 'bar' : isHotel ? 'hotel' : 'restaurant' as ModuleType, // Changed hebergement to restaurant as fallback
-        createdAt: '',
-        updatedAt: '',
-      })) as unknown as StockItem[]
-    : contextItems;
-
-  const filtered = items.filter(item => {
-    const matchSearch = item.nom.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchHotelSection = !isHotel || item.typeProduit === hotelSection;
-    return matchSearch && matchStatus && matchHotelSection;
-  });
-
-  const computeStatus = (qty: number, seuil: number) => {
-    if (qty === 0) return 'epuise';
-    if (qty <= seuil) return 'faible';
-    return 'disponible';
-  };
-
-  const notifyStockLevel = (nom: string, quantite: number, unite: string) => {
-    const source = module === 'bar' ? 'Bar' : module === 'restaurant' ? 'Restaurant' : module;
-    const actionUrl = `/${module}?tab=stock`;
-
-    if (quantite <= 3) {
-      addNotification('error', `Stock critique: ${nom} (${quantite} ${unite})`, source, actionUrl);
-    } else if (quantite <= 5) {
-      addNotification('warning', `Stock faible: ${nom} (${quantite} ${unite})`, source, actionUrl);
-    }
-  };
+    fetchData();
+  }, [module, refreshTrigger]);
 
   const handleSubmit = async () => {
-    const nom = form.nom.trim();
+    const productName = form.product_name.trim();
     const quantite = Number(form.quantite);
-    const prixUnitaire = Number(form.prixUnitaire);
-    const seuilMinimum = Number(form.seuilMinimum);
+    const prix = Number(form.prix);
+    const seuilMinimum = Number(form.seuil_minimum);
 
-    if (!nom) {
+    if (!productName) {
       setError('Le nom du produit est requis.');
       return;
     }
-    if (!Number.isFinite(quantite) || quantite < 0 || !Number.isFinite(prixUnitaire) || prixUnitaire < 0 || !Number.isFinite(seuilMinimum) || seuilMinimum < 0) {
+    if (quantite < 0 || prix < 0 || seuilMinimum < 0) {
       setError('La quantité, le prix et le seuil doivent être des nombres positifs.');
       return;
     }
-    const status = computeStatus(quantite, seuilMinimum);
 
-    if (useBackend) {
-      setLoading(true);
-      setError(null);
-      try {
-        const payload = {
-          nom,
-          categorie: form.categorie || (isBar ? 'Bar' : 'Hébergement'),
-          quantite,
-          prix: prixUnitaire,
-          prixUnitaire,
-          price: prixUnitaire,
-          unite: form.unite.trim() || 'unités',
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (editItem) {
+        // Update stock quantity
+        await api.put(`/api/stock/stocks/${editItem.id}`, {
+          quantite: quantite,
           seuil_minimum: seuilMinimum,
-          seuilMinimum,
-          ...(isBar && { ingredients: '', alcool: true }),
-        };
-
-        if (isHotel) {
-          const productPayload = {
-            nom,
-            unite: form.unite.trim() || 'unités',
-            prix_achat: prixUnitaire,
-            prix_vente: prixUnitaire,
-            type_produit: form.typeProduit,
-            actif: 1,
-          };
-          if (editItem && editItem.id) {
-            const backendItem = backendStock.find((item) => String(item.id) === String(editItem.id));
-            if (!backendItem) throw new Error('Article de stock introuvable');
-            await api.put(`/api/stock/products/${backendItem.product_id}`, productPayload);
-            await api.put(`/api/stock/stocks/${backendItem.id}`, {
-              product_id: backendItem.product_id,
-              location_id: 5,
-              quantite,
-              seuil_minimum: seuilMinimum,
-              etat: form.etat,
-            });
-          } else {
-            const productResponse = await api.post('/api/stock/products', productPayload);
-            const product = productResponse.data?.data;
+        });
+      } else {
+        // Create new product
+        const productResponse = await api.post('/api/stock/products', {
+          nom: productName,
+          category_id: 1, // Default category
+          code: `${module.toUpperCase()}-${Date.now()}`,
+          unite: form.unite,
+          prix_vente: prix,
+          actif: true,
+          type_produit: 'CONSOMMABLE',
+        });
+        
+        const productId = productResponse.data?.id || productResponse.data?.data?.id;
+        
+        if (productId) {
+          // Try to create stock row - if it fails due to duplicate, update instead
+          try {
             await api.post('/api/stock/stocks', {
-              product_id: product.id,
-              location_id: 5,
-              quantite,
+              product_id: productId,
+              location_id: locationId,
+              quantite: quantite,
               seuil_minimum: seuilMinimum,
-              etat: form.etat,
             });
+          } catch (err: any) {
+            // If duplicate, find existing stock and update it
+            if (err.response?.status === 409) {
+              const stocksResponse = await api.get('/api/stock/stocks/with-products', {
+                params: { location_id: locationId }
+              });
+              const existingStock = stocksResponse.data?.data?.find((s: any) => s.product_id === productId);
+              if (existingStock) {
+                await api.put(`/api/stock/stocks/${existingStock.id}`, {
+                  quantite: quantite,
+                  seuil_minimum: seuilMinimum,
+                });
+              }
+            } else {
+              throw err;
+            }
           }
-        } else if (editItem && editItem.id) {
-          await api.put(`${apiBase}/${editItem.id}`, payload);
-        } else {
-          await api.post(apiBase, payload);
         }
-
-        await refetchStock();
-        
-        notifyStockLevel(nom, quantite, form.unite);
-        
-        setShowModal(false);
-        setEditItem(null);
-        setForm({ nom: '', categorie: categories[0] || (isBar ? 'Bar' : 'Hébergement'), quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
       }
-      return;
-    }
 
-    if (editItem) {
-      dispatch({ type: 'UPDATE_STOCK_ITEM', payload: {
-        ...editItem, ...form, status, updatedAt: new Date().toISOString()
-      }});
-      
-      notifyStockLevel(nom, quantite, form.unite);
-    } else {
-      dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
-      
-      notifyStockLevel(nom, quantite, form.unite);
+      await fetchData();
+      setShowModal(false);
+      resetForm();
+    } catch (err) {
+      setError('Erreur lors de la sauvegarde du stock');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-
-    setShowModal(false);
-    setEditItem(null);
-    setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
   };
 
-  const openEdit = (item: StockItem) => {
-    setEditItem(item);
-    setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 0, fournisseur: item.fournisseur || '', typeProduit: (item as any).typeProduit || 'CONSOMMABLE', etat: (item as any).etat || 'DISPONIBLE' });
+  const handleDelete = async (item: StockItem) => {
+    const productName = item.nom || `l'article #${item.product_id}`;
+    if (!confirm(`Voulez-vous vraiment supprimer ${productName} du stock ?`)) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      await api.delete(`/api/stock/stocks/${item.id}`);
+      await fetchData();
+    } catch (err) {
+      setError('Erreur lors de la suppression');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setForm({
+      product_name: '',
+      categorie: categories[0],
+      prix: 0,
+      quantite: 0,
+      unite: 'unités',
+      seuil_minimum: 5,
+    });
+    setEditItem(null);
+  };
+
+  const openCreateModal = () => {
+    resetForm();
     setShowModal(true);
   };
 
-  const currentUser = AuthService.getCurrentUser();
-  const userIsAdmin = isAdmin(currentUser);
+  const openEditModal = (item: StockItem) => {
+    setEditItem(item);
+    setForm({
+      product_name: item.nom,
+      categorie: item.categorie,
+      prix: item.prix,
+      quantite: item.quantite,
+      unite: item.unite,
+      seuil_minimum: item.seuil_minimum,
+    });
+    setShowModal(true);
+  };
 
-  const totalValue = items.reduce((sum, i) => sum + (i.quantite * i.prixUnitaire), 0);
-  const alerts = items.filter(i => i.status !== 'disponible').length;
+  // Calcul du statut
+  const getStatus = (item: StockItem) => {
+    const quantite = item.quantite || 0;
+    const seuil = item.seuil_minimum || 5;
+    if (quantite === 0) return 'epuise';
+    if (quantite <= seuil) return 'faible';
+    return 'disponible';
+  };
 
-  const baseColumns = [
-    { key: 'nom', label: 'Produit', render: (item: StockItem) => (
-      <div>
-        <p className="text-white font-medium">{item.nom}</p>
-        <p className="text-slate-500 text-xs">{item.categorie}</p>
-      </div>
-    )},
-    { key: 'quantite', label: 'Stock', render: (item: StockItem) => (
-      <div>
-        <p className="text-white font-semibold">{item.quantite} {item.unite}</p>
-        <p className="text-slate-600 text-xs">Min: {item.seuilMinimum}</p>
-      </div>
-    )},
-    { key: 'prixUnitaire', label: 'Prix Unit.', render: (item: StockItem) => (
-      <span className="text-white">{formatCurrency(item.prixUnitaire)}</span>
-    )},
-    { key: 'valeur', label: 'Valeur', render: (item: StockItem) => (
-      <span className="text-amber-400 font-semibold">{formatCurrency(item.quantite * item.prixUnitaire)}</span>
-    )},
-    { key: 'status', label: 'Statut', render: (item: StockItem) => (
-      <Badge variant={item.status}>
-        {item.status === 'disponible' ? 'Disponible' : item.status === 'faible' ? 'Faible' : 'Épuisé'}
-      </Badge>
-    )},
-    ...(isHotel ? [{ key: 'etat', label: 'État', render: (item: StockItem) => {
-      const etat = (item as StockItem & { etat?: string }).etat || 'DISPONIBLE';
-      const labels: Record<string, string> = {
-        DISPONIBLE: 'Disponible', EN_LAVAGE: 'En lavage', USE: 'Usé',
-        ENDOMMAGE: 'Endommagé', REBUT: 'Au rebut', PERDU: 'Perdu',
-      };
-      return <span className="text-slate-300 text-sm">{labels[etat] || etat}</span>;
-    }}] : []),
+  // Filtrer les articles
+  const filteredItems = stockItems.filter(item => {
+    const matchSearch = (item.nom || '').toLowerCase().includes(search.toLowerCase());
+    const status = getStatus(item);
+    const matchStatus = filterStatus === 'all' || status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  // Statistiques
+  const totalValue = stockItems.reduce((sum, item) => sum + (item.quantite || 0) * (item.prix || 0), 0);
+  const alerts = stockItems.filter(item => getStatus(item) !== 'disponible').length;
+  const outOfStock = stockItems.filter(item => (item.quantite || 0) === 0).length;
+
+  // Colonnes pour le DataTable
+  const columns = [
+    {
+      key: 'product',
+      label: 'Produit',
+      render: (item: any) => (
+        <div>
+          <p className="text-white font-medium">{item.nom}</p>
+          <p className="text-slate-500 text-xs">{item.categorie}</p>
+        </div>
+      )
+    },
+    {
+      key: 'quantite',
+      label: 'Stock',
+      render: (item: StockItem) => (
+        <div>
+          <p className="text-white font-semibold">{item.quantite || 0} {item.unite || 'unités'}</p>
+          <p className="text-slate-600 text-xs">Min: {item.seuil_minimum || 5}</p>
+        </div>
+      )
+    },
+    {
+      key: 'prix',
+      label: 'Prix Unit.',
+      render: (item: any) => (
+        <span className="text-white">{formatCurrency(item.prix || 0)}</span>
+      )
+    },
+    {
+      key: 'valeur',
+      label: 'Valeur',
+      render: (item: any) => (
+        <span className="text-amber-400 font-semibold">
+          {formatCurrency((item.quantite || 0) * (item.prix || 0))}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Statut',
+      render: (item: StockItem) => {
+        const status = getStatus(item);
+        return (
+          <Badge variant={status}>
+            {status === 'disponible' ? 'Disponible' : status === 'faible' ? 'Faible' : 'Épuisé'}
+          </Badge>
+        );
+      }
+    },
+    ...(userIsAdmin ? [{
+      key: 'actions',
+      label: '',
+      render: (item: StockItem) => (
+        <div className="flex gap-2">
+          <button 
+            onClick={() => openEditModal(item)} 
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+            title="Modifier la quantité"
+          >
+            <Edit2 size={14} />
+          </button>
+          <button 
+            onClick={() => handleDelete(item)} 
+            className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all"
+            title="Supprimer"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )
+    }] : [])
   ];
 
-  const columns = userIsAdmin ? [
-    ...baseColumns,
-    { key: 'actions', label: '', render: (item: StockItem) => (
-      <div className="flex gap-2">
-        <button onClick={() => openEdit(item)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Modifier l'article">
-          <Edit2 size={14} />
-        </button>
-        <button onClick={async () => {
-          setPendingDeleteItem(item);
-        }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all" title="Supprimer l'article">
-          <Trash2 size={14} />
-        </button>
+  if (loading && stockItems.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
+        <span className="text-slate-400 text-sm">Chargement du stock...</span>
       </div>
-    )},
-  ] : baseColumns;
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <Modal
-        isOpen={pendingDeleteItem !== null}
-        onClose={() => { if (!loading) setPendingDeleteItem(null); }}
-        title="Supprimer l’article"
-        size="sm"
-      >
-        <div className="space-y-5">
-          <div className="flex gap-3 rounded-xl border border-red-400/30 bg-red-500/10 p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
-              <Trash2 size={20} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-primary">Supprimer cet article ?</p>
-              <p className="mt-1 break-words text-sm leading-relaxed text-secondary">
-                « {pendingDeleteItem?.nom} » sera définitivement retiré du menu et du stock.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted">Cette action est irréversible.</p>
-            </div>
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 text-sm flex items-center gap-2">
+          <AlertCircle size={16} />
+          {error}
+        </div>
+      )}
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Produits', value: stockItems.length, color: 'text-white', sub: 'articles total' },
+          { label: 'Valeur Totale', value: formatCurrency(totalValue), color: 'text-amber-400', sub: 'en stock' },
+          { label: 'Alertes', value: alerts, color: alerts > 0 ? 'text-amber-400' : 'text-emerald-400', sub: 'à surveiller' },
+          { label: 'Épuisés', value: outOfStock, color: 'text-red-400', sub: 'rupture de stock' },
+        ].map(stat => (
+          <div key={stat.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-4">
+            <p className="text-slate-500 text-xs font-medium mb-1">{stat.label}</p>
+            <p className={`${stat.color} font-bold text-xl`}>{stat.value}</p>
+            <p className="text-slate-600 text-xs">{stat.sub}</p>
           </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" onClick={() => setPendingDeleteItem(null)} disabled={loading} className="w-full sm:w-auto">
+        ))}
+      </div>
+
+      {/* Tableau du stock */}
+      <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
+          <h3 className="text-white font-semibold flex items-center gap-2">
+            <Package size={18} className="text-amber-400" />
+            Inventaire {isHotel ? 'Hôtel' : isBar ? 'Bar & Lounge' : 'Restaurant'}
+          </h3>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input 
+                value={search} 
+                onChange={e => setSearch(e.target.value)} 
+                placeholder="Rechercher..." 
+                className="w-full sm:w-48 h-9 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50" 
+              />
+            </div>
+            <select 
+              value={filterStatus} 
+              onChange={e => setFilterStatus(e.target.value)} 
+              className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              <option value="disponible">Disponible</option>
+              <option value="faible">Faible</option>
+              <option value="epuise">Épuisé</option>
+            </select>
+            {userIsAdmin && (
+              <Button icon={<Plus size={16} />} onClick={openCreateModal}>
+                Ajouter
+              </Button>
+            )}
+          </div>
+        </div>
+        <DataTable data={filteredItems} columns={columns} />
+      </div>
+
+      {/* Modal de création/modification */}
+      <Modal 
+        isOpen={showModal} 
+        onClose={() => { setShowModal(false); resetForm(); }} 
+        title={editItem ? 'Modifier la quantité' : 'Ajouter un produit au stock'}
+      >
+        <div className="space-y-4">
+          {!editItem && (
+            <>
+              <Input 
+                label="Nom du produit" 
+                value={form.product_name} 
+                onChange={e => setForm({...form, product_name: e.target.value})} 
+                placeholder="Ex: Serviette, Savon, Produit..." 
+              />
+              <Select 
+                label="Catégorie" 
+                value={form.categorie} 
+                onChange={e => setForm({...form, categorie: e.target.value})} 
+                options={categories.map(c => ({ value: c, label: c }))} 
+              />
+              <Input 
+                label="Prix unitaire (MGA)" 
+                type="number" 
+                value={form.prix} 
+                onChange={e => setForm({...form, prix: Number(e.target.value)})} 
+                placeholder="0" 
+              />
+            </>
+          )}
+
+          {editItem && (
+            <div className="bg-slate-800/50 rounded-xl p-4 space-y-2">
+              <p className="text-white font-medium">{form.product_name}</p>
+              <p className="text-slate-400 text-sm">Catégorie: {form.categorie}</p>
+              <p className="text-slate-400 text-sm">Prix unitaire: {formatCurrency(form.prix)}</p>
+              <p className="text-slate-400 text-sm">Quantité actuelle: {editItem.quantite} {editItem.unite || 'unités'}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input 
+              label="Quantité" 
+              type="number" 
+              value={form.quantite} 
+              onChange={e => setForm({...form, quantite: Number(e.target.value)})} 
+              placeholder="0" 
+            />
+            <Select 
+              label="Unité" 
+              value={form.unite} 
+              onChange={e => setForm({...form, unite: e.target.value})} 
+              options={uniteOptions} 
+            />
+          </div>
+
+          <Input 
+            label="Seuil minimum d'alerte" 
+            type="number" 
+            value={form.seuil_minimum} 
+            onChange={e => setForm({...form, seuil_minimum: Number(e.target.value)})} 
+            placeholder="5" 
+          />
+
+          {editItem && (
+            <p className="text-xs text-amber-400">
+              * Modification de la quantité uniquement. Pour modifier le prix ou la catégorie, veuillez supprimer et recréer l'article.
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1">
               Annuler
             </Button>
-            <Button type="button" variant="danger" onClick={() => void handleDeleteItem()} disabled={loading} className="w-full sm:w-auto">
-              <Trash2 size={16} />
-              {loading ? 'Suppression...' : 'Supprimer'}
+            <Button onClick={handleSubmit} className="flex-1" disabled={loading}>
+              {loading ? 'Enregistrement...' : (editItem ? 'Mettre à jour' : 'Ajouter')}
             </Button>
           </div>
         </div>
       </Modal>
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
-          <span className="text-slate-400 text-sm">Chargement du stock...</span>
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 text-sm flex items-center gap-2">
-          <AlertCircle size={16} />
-          {error} — Affichage des données en cache.
-        </div>
-      )}
-
-      {!loading && !error && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Produits', value: items.length, color: 'text-white', sub: 'articles total' },
-              { label: 'Valeur Totale', value: formatCurrency(totalValue), color: 'text-amber-400', sub: 'en stock' },
-              { label: 'Alertes', value: alerts, color: alerts > 0 ? 'text-amber-400' : 'text-emerald-400', sub: 'à surveiller' },
-              { label: 'Épuisés', value: items.filter(i => i.status === 'epuise').length, color: 'text-red-400', sub: 'rupture de stock' },
-            ].map(stat => (
-              <div key={stat.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-4">
-                <p className="text-slate-500 text-xs font-medium mb-1">{stat.label}</p>
-                <p className={`${stat.color} font-bold text-xl`}>{stat.value}</p>
-                <p className="text-slate-600 text-xs">{stat.sub}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
-              <div className="flex items-center gap-4">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Package size={18} className="text-amber-400" />
-                  Stock
-                </h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setActiveTab('inventory')}
-                    className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'inventory' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}
-                  >
-                    Inventaire
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('history')}
-                    className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'history' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}
-                  >
-                    Historique
-                  </button>
-                </div>
-              </div>
-              {isHotel && (
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button onClick={() => setHotelSection('CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Consommables</button>
-                  <button onClick={() => setHotelSection('NON_CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'NON_CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Non consommables</button>
-                </div>
-              )}
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="relative flex-1 sm:flex-none">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." className="w-full sm:w-48 h-9 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50" />
-                </div>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none">
-                  <option value="all">Tous</option>
-                  <option value="disponible">Disponible</option>
-                  <option value="faible">Faible</option>
-                  <option value="epuise">Épuisé</option>
-                </select>
-                {userIsAdmin && (
-                  <Button icon={<Plus size={16} />} onClick={() => { setEditItem(null); setShowModal(true); }}>
-                    Ajouter
-                  </Button>
-                )}
-              </div>
-            </div>
-            {activeTab === 'inventory' ? (
-              <DataTable data={filtered} columns={columns} />
-            ) : (
-              <div className="p-6">
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Période</label>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    <button 
-                      onClick={() => { setStartDate(''); setEndDate(''); setSelectedDate(new Date().toISOString().split('T')[0]); }}
-                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm"
-                    >
-                      Aujourd'hui
-                    </button>
-                    <button 
-                      onClick={() => { 
-                        const today = new Date();
-                        const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                        setStartDate(lastWeek.toISOString().split('T')[0]);
-                        setEndDate(today.toISOString().split('T')[0]);
-                        setSelectedDate('');
-                      }}
-                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm"
-                    >
-                      7 jours
-                    </button>
-                    <button 
-                      onClick={() => { 
-                        const today = new Date();
-                        const lastMonth = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                        setStartDate(lastMonth.toISOString().split('T')[0]);
-                        setEndDate(today.toISOString().split('T')[0]);
-                        setSelectedDate('');
-                      }}
-                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm"
-                    >
-                      30 jours
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Date de début</label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => { setStartDate(e.target.value); setSelectedDate(''); }}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Date de fin</label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => { setEndDate(e.target.value); setSelectedDate(''); }}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <label className="block text-xs text-gray-400 mb-1">Ou date unique</label>
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => { setSelectedDate(e.target.value); setStartDate(''); setEndDate(''); }}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Produit</label>
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      value={historySearch}
-                      onChange={e => setHistorySearch(e.target.value)}
-                      placeholder="Rechercher un produit..."
-                      className="w-full h-10 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50"
-                    />
-                  </div>
-                </div>
-
-                {!selectedProduct ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {items
-                      .filter(item => item.nom.toLowerCase().includes(historySearch.toLowerCase()))
-                      .map(item => (
-                        <button
-                          key={item.id}
-                          onClick={() => { setSelectedProduct(item); loadHistory(item); }}
-                          className="bg-slate-800 hover:bg-slate-700 border border-slate-700/50 rounded-xl p-4 text-left transition-all"
-                        >
-                          <p className="text-white font-medium">{item.nom}</p>
-                          <p className="text-slate-500 text-xs">{item.categorie}</p>
-                          <p className="text-amber-400 text-sm mt-2">{item.quantite} {item.unite}</p>
-                        </button>
-                      ))}
-                  </div>
-                ) : (
-                  <div>
-                    <button
-                      onClick={() => { setSelectedProduct(null); setHistoryData([]); }}
-                      className="mb-4 text-slate-400 hover:text-white text-sm flex items-center gap-2"
-                    >
-                      ← Changer de produit
-                    </button>
-
-                    <div className="bg-slate-800 rounded-xl p-4 mb-4">
-                      <h4 className="text-white font-semibold">{selectedProduct.nom}</h4>
-                      <p className="text-slate-500 text-sm">{selectedProduct.categorie}</p>
-                      <p className="text-amber-400 text-sm mt-1">Stock actuel: {selectedProduct.quantite} {selectedProduct.unite}</p>
-                    </div>
-
-                    <button
-                      onClick={loadHistory}
-                      className="px-4 py-2 bg-amber-500 text-black rounded-lg text-sm mb-4"
-                    >
-                      Afficher les mouvements
-                    </button>
-
-                    {historyLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
-                        <span className="text-slate-400 text-sm">Chargement de l'historique...</span>
-                      </div>
-                    ) : historyData.length === 0 ? (
-                      <div className="text-center py-12 text-slate-500">
-                        Aucun mouvement de stock trouvé pour ce produit à cette date
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="bg-slate-800 rounded-xl p-4 mb-4">
-                          <h4 className="text-white font-semibold">Mouvements du {new Date(selectedDate).toLocaleDateString('fr-FR')}</h4>
-                          <p className="text-slate-500 text-sm">{historyData.length} mouvement(s)</p>
-                        </div>
-
-                        {historyData.map((movement) => (
-                          <div key={movement.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                  movement.type_mouvement === 'ENTREE' 
-                                    ? 'bg-emerald-500/20 text-emerald-400' 
-                                    : 'bg-red-500/20 text-red-400'
-                                }`}>
-                                  {movement.type_mouvement === 'ENTREE' ? 'Entrée' : 'Sortie'}
-                                </span>
-                                <span className="ml-2 text-slate-500 text-xs">
-                                  {movement.source_module || 'Général'}
-                                </span>
-                              </div>
-                              <span className="text-slate-400 text-xs">
-                                {new Date(movement.created_at).toLocaleString('fr-FR')}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <p className="text-slate-500 text-xs">Quantité</p>
-                                <p className={`font-semibold ${movement.type_mouvement === 'ENTREE' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {movement.type_mouvement === 'ENTREE' ? '+' : '-'}{movement.quantite} {movement.product_unite}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500 text-xs">Lieu</p>
-                                <p className="text-slate-300">{movement.location_nom || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500 text-xs">Référence</p>
-                                <p className="text-slate-300">{movement.reference_id || 'N/A'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? 'Modifier l\'article' : 'Ajouter un article'}>
-            <div className="space-y-4">
-              <Input label="Nom du produit" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} placeholder="Ex: Filet de Boeuf" />
-              <Select label="Catégorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Quantité" type="number" value={form.quantite} onChange={e => setForm({...form, quantite: Number(e.target.value)})} />
-                <Select 
-                  label="Unité" 
-                  value={form.unite} 
-                  onChange={e => setForm({...form, unite: e.target.value})} 
-                  options={[
-                    { value: 'pièce', label: 'Pièce' },
-                    { value: 'kg', label: 'Kilogramme (kg)' },
-                    { value: 'g', label: 'Gramme (g)' },
-                    { value: 'L', label: 'Litre (L)' },
-                    { value: 'mL', label: 'Millilitre (mL)' },
-                    { value: 'm', label: 'Mètre (m)' },
-                    { value: 'cm', label: 'Centimètre (cm)' },
-                    { value: 'unité', label: 'Unité' },
-                    { value: 'bouteille', label: 'Bouteille' },
-                    { value: 'paquet', label: 'Paquet' },
-                    { value: 'carton', label: 'Carton' },
-                    { value: 'boîte', label: 'Boîte' },
-                    { value: 'sac', label: 'Sac' },
-                    { value: 'rouleau', label: 'Rouleau' },
-                  ]} 
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Prix unitaire (MGA)" type="number" value={form.prixUnitaire} onChange={e => setForm({...form, prixUnitaire: Number(e.target.value)})} />
-                <Input label="Seuil minimum" type="number" value={form.seuilMinimum} onChange={e => setForm({...form, seuilMinimum: Number(e.target.value)})} />
-              </div>
-              <Input label="Fournisseur (optionnel)" value={form.fournisseur} onChange={e => setForm({...form, fournisseur: e.target.value})} />
-              {isHotel && (
-                <>
-                  <Select label="Catégorie de stock" value={form.typeProduit} onChange={e => setForm({...form, typeProduit: e.target.value as 'CONSOMMABLE' | 'NON_CONSOMMABLE'})} options={[{ value: 'CONSOMMABLE', label: 'Consommable - entretien' }, { value: 'NON_CONSOMMABLE', label: 'Non consommable - linge' }]} />
-                  {form.typeProduit === 'NON_CONSOMMABLE' && <Select label="État du linge" value={form.etat} onChange={e => setForm({...form, etat: e.target.value as typeof form.etat})} options={[{value:'DISPONIBLE',label:'Disponible'},{value:'EN_LAVAGE',label:'En lavage'},{value:'USE',label:'Usé'},{value:'ENDOMMAGE',label:'Endommagé'},{value:'REBUT',label:'Au rebut'},{value:'PERDU',label:'Perdu'}]} />}
-                </>
-              )}
-              <div className="flex gap-3 pt-2">
-                <Button variant="secondary" onClick={() => { setShowModal(false); setEditItem(null); }} className="flex-1">Annuler</Button>
-                <Button onClick={handleSubmit} className="flex-1">{editItem ? 'Mettre à jour' : 'Ajouter'}</Button>
-              </div>
-            </div>
-          </Modal>
-         </>
-       )}
     </div>
   );
 };
 
-interface CaisseManagerProps {
-  module: ModuleType;
-  categories: string[];
-  title?: string;
-  gradient?: string;
-  pendingOrders?: Array<{
-    id: number;
-    client?: string;
-    table?: string | number;
-    total: number;
-    created_at?: string;
-    nombre_personnes?: number;
-    moyen_paiement?: string;
-    items?: Array<{ nom?: string; product_nom?: string; quantite: number; prix?: number; prix_unitaire?: number }>;
-  }>;
-  allOrders?: Array<{
-    id: number;
-    client?: string;
-    table?: string | number;
-    total: number;
-    statut?: string;
-    moyen_paiement?: string;
-    created_at?: string;
-    items?: Array<{ nom?: string; quantite: number; prix?: number; categorie?: string }>;
-  }>;
-  onEncaisserCommande?: (orderId: number) => Promise<void> | void;
-  onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
-  onRefresh?: () => Promise<void> | void;
-}
-
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onCloseAllOrders, onRefresh }) => {
-  const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
-  const [backendTransactions, setBackendTransactions] = useState<FinancialTransaction[]>([]);
-  const [moduleStockSummary, setModuleStockSummary] = useState<{ entrees: number; sorties: number; solde: number } | null>(null);
-  const [backendError, setBackendError] = useState<string | null>(null);
-  const [currentBarSession, setCurrentBarSession] = useState<BarSession | null>(null);
-  const [isClosingBarSession, setIsClosingBarSession] = useState(false);
-  const [showCloseOrdersModal, setShowCloseOrdersModal] = useState(false);
-  const [isClosingOrders, setIsClosingOrders] = useState(false);
-  const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
-
-  const isBar = module === 'bar';
-  const isRestaurant = module === 'restaurant';
-  const isOrderRegister = isBar || isRestaurant;
-  // const isHebergement = module === 'hebergement'; // COMMENTED OUT
-  const isHebergement = false; // Disabled
-  const isHotel = module === 'hotel';
-  const isBackendCaisse = module === 'restaurant' /* || module === 'hebergement' */ || module === 'hotel' || module === 'bar'; // COMMENTED OUT hebergement
-  const canViewBarBalance = !isBar || isAdmin(AuthService.getCurrentUser());
-  const transactionTitle = isBar
-    ? 'Transactions Bar'
-    : isHebergement
-      ? 'Transactions Hébergement'
-      : isHotel
-        ? 'Transactions Hôtel'
-        : 'Transactions Restaurant';
-
-  useEffect(() => {
-    if (!isBackendCaisse) return;
-
-    Promise.all([
-      financeService.getTransactions({ module: module.toUpperCase() }),
-      financeService.getFinancialStats(),
-    ])
-      .then(([transactions, stats]) => {
-        setBackendTransactions(transactions);
-        const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
-        setModuleStockSummary(summary || null);
-        setBackendError(null);
-      })
-      .catch(() => setBackendError('Impossible de charger les données de la caisse.'));
-  }, [isBackendCaisse, module]);
-
-  useEffect(() => {
-    if (!isBar) return;
-
-    const currentUser = AuthService.getCurrentUser();
-    if (!currentUser?.id) return;
-
-    barService.getBarOpenSessions()
-      .then((sessions) => {
-        const session = sessions.find((item) => Number(item.user_id) === Number(currentUser.id));
-        setCurrentBarSession(session || null);
-      })
-      .catch(() => setCurrentBarSession(null));
-  }, [isBar]);
-
-  const backendEntrees = backendTransactions
-    .filter((transaction) => isFinancialInflow(transaction.type_flux))
-    .reduce((total, transaction) => total + Number(transaction.montant), 0);
-  const backendSorties = backendTransactions
-    .filter((transaction) => isFinancialOutflow(transaction.type_flux))
-    .reduce((total, transaction) => total + Number(transaction.montant), 0);
-  const localCaisse = getModuleCaisseSolde(module);
-  const sortiesStock = moduleStockSummary ? Number(moduleStockSummary.sorties) : backendSorties;
-  const solde = isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
-  const entrees = isBackendCaisse
-    ? Math.max(Number(moduleStockSummary?.entrees || 0), backendEntrees)
-    : localCaisse.entrees;
-  const sorties = isBackendCaisse ? sortiesStock : localCaisse.sorties;
-
-  // Récupération des commandes payées avec extraction sécurisée du montant
-  const restaurantOrders = (state.orders || state.commandes || []).filter(
-    (o: any) => (o.module === 'restaurant' || !o.module) && (o.statut === 'Payée' || o.status === 'payee' || o.status === 'payée')
-  );
-
-  const orderTransactions = restaurantOrders.map((o: any) => ({
-    type: 'entree',
-    montant: o.montant || o.total || o.price || o.prix || 0,
-    description: `Encaissement ${o.table ? 'Table ' + o.table : 'Commande'}`,
-    categorie: 'Ventes Restaurant',
-    userName: o.userName || 'Caisse',
-    heure: o.heure || o.createdAt || new Date().toISOString()
-  }));
-
-  // Exclure les données factices/par défaut du state initial
-  const dummyDescriptions = ['Service dîner gala', 'Déjeuner groupe - 15 couverts', 'Approvisionnement fruits de mer'];
-  const manualTransactions = (state.transactions || []).filter((t: any) => 
-    t.module === 'restaurant' && !dummyDescriptions.includes(t.description)
-  );
-
-  // Combinaison et tri pour afficher les plus récents en premier (pile/file descendants)
-  const allRestaurantTransactions = [...orderTransactions, ...manualTransactions].sort((a: any, b: any) => {
-    const dateA = new Date(a.heure || a.createdAt || 0).getTime();
-    const dateB = new Date(b.heure || b.createdAt || 0).getTime();
-    return dateB - dateA;
-  });
-
-  const handleSubmit = async () => {
-    if (!form.description || !form.montant) return;
-
-    if (isBackendCaisse) {
-      try {
-        const transaction = await financeService.createTransaction({
-          module: module.toUpperCase(),
-          type_flux: form.type === 'entree' ? 'ENTREE' : 'SORTIE',
-          montant: form.montant,
-          description: `${form.categorie} - ${form.description}`,
-        });
-        const [transactions, stats] = await Promise.all([
-          financeService.getTransactions({ module: module.toUpperCase() }),
-          financeService.getFinancialStats(),
-        ]);
-        setBackendTransactions(transactions.length ? transactions : [transaction]);
-        const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
-        setModuleStockSummary(summary || null);
-        setBackendError(null);
-      } catch {
-        setBackendError('Impossible d’enregistrer la transaction.');
-        return;
-      }
-      setShowModal(false);
-      setForm({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
-      return;
-    }
-
-    dispatch({
-      type: 'ADD_TRANSACTION',
-      payload: {
-        ...form,
-        type: form.type as 'entree' | 'sortie',
-        userId: state.currentUser.id,
-        userName: `${state.currentUser.prenom} ${state.currentUser.nom}`,
-        module,
-      }
-    });
-    setShowModal(false);
-    setForm({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
-  };
-
-  const transactions = isBackendCaisse
-    ? backendTransactions.map((transaction) => ({
-        type: isFinancialInflow(transaction.type_flux) ? 'entree' : 'sortie',
-        montant: transaction.montant,
-        description: transaction.description,
-        categorie: transaction.module,
-        userName: 'Système',
-        heure: transaction.created_at,
-        moyen_paiement: transaction.reservation_moyen_paiement || transaction.moyen_paiement,
-        pdj_inclus: transaction.pdj_inclus,
-        reservation_client: [transaction.reservation_client_prenom, transaction.reservation_client_nom].filter(Boolean).join(' '),
-        reservation_room: transaction.reservation_room_numero,
-        is_reservation: String(transaction.ref_flux_global || '').includes('RESERVATION-'),
-      }))
-    : allRestaurantTransactions;
-
-  const handleEncaisserCommande = async (orderId: number) => {
-    if (onEncaisserCommande) {
-      await onEncaisserCommande(orderId);
-      if (isBackendCaisse) {
-        try {
-          const [txs, stats] = await Promise.all([
-            financeService.getTransactions({ module: module.toUpperCase() }),
-            financeService.getFinancialStats(),
-          ]);
-          setBackendTransactions(txs);
-          const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
-          setModuleStockSummary(summary || null);
-        } catch (err) {
-          console.warn('Failed to refresh backend caisse after encaissement:', err);
-        }
-      }
-    }
-  };
-
-  const handlePrintAllOrders = () => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const allItems = allOrders.flatMap((order) => order.items || []);
-    const sales = new Map<string, { sold: number; net: number; category: string }>();
-    allItems.forEach((item) => {
-      const name = item.nom || 'Article';
-      const sold = Number(item.quantite || 0);
-      const net = sold * Number(item.prix || 0);
-      const existing = sales.get(name) || { sold: 0, net: 0, category: item.categorie || 'Bar' };
-      sales.set(name, { sold: existing.sold + sold, net: existing.net + net, category: existing.category });
-    });
-    const categories = new Map<string, { sold: number; total: number }>();
-    sales.forEach((sale) => {
-      const category = categories.get(sale.category) || { sold: 0, total: 0 };
-      categories.set(sale.category, { sold: category.sold + sale.sold, total: category.total + sale.net });
-    });
-    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
-    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
-    const paymentTotals = new Map<string, number>();
-    allOrders.forEach((order) => {
-      const payment = order.moyen_paiement || 'ESPECES';
-      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
-    });
-    const salesRows = Array.from(sales.entries()).map(([name, sale]) => `<div class="row"><span>${name}</span><span>${sale.sold}</span><span>${formatCurrency(sale.net)}</span><span>${formatCurrency(sale.net)}</span></div>`).join('');
-    const categoryRows = Array.from(categories.entries()).map(([name, category]) => `<div class="category"><span>${name}</span><span>${category.sold}</span><strong>${formatCurrency(category.total)}</strong></div>`).join('');
-    const paymentRows = paymentMethods.map((payment) => `<div class="row"><span>${paymentLabels[payment]}</span><strong>${formatCurrency(paymentTotals.get(payment) || 0)}</strong></div>`).join('');
-    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
-    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : (currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-');
-    const ticketLines = allItems.length;
-    printWindow.document.write(`<!doctype html><html><head><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:11px}h1{text-align:center;font-size:16px;margin:4px 0 12px}h2{text-align:center;font-size:14px;margin:14px 0 5px}.meta{margin:2px 0}.line{border-bottom:1px dashed #111;margin:7px 0}.row{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.row span:last-child,.row strong{text-align:right}.category{display:grid;grid-template-columns:minmax(0,1fr) 34px 68px;gap:3px;border-bottom:1px dotted #aaa;padding:2px 0}.category span:last-child,.category strong{text-align:right}.total{display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:4px}.summary{display:flex;justify-content:space-between;padding:2px 0}</style></head><body><h1>Partial Cash Report</h1><p class="meta">Caissier : <strong>${connectedCashier}</strong></p><p class="meta">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${allOrders.length}<br>Start Date : ${startDate}<br>End Date : ${generatedAt}</p><div class="line"></div><h2>Sales</h2><div class="row"><strong>Name</strong><strong>Sold</strong><strong>Net</strong><strong>Total</strong></div>${salesRows || '<p>Aucune vente.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Product Categories</h2><div class="category"><strong>Name</strong><strong>Sold</strong><strong>Total</strong></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>Lines Removed</h2><div class="category"><span>${connectedCashier}</span><span>0</span><strong>${formatCurrency(0)}</strong></div><h2>Taxes</h2><div class="category"><span>Tax Exempt</span><span></span><strong>${formatCurrency(total)}</strong></div><div class="line"></div><h2>Payments</h2><div class="category"><strong>Type</strong><span></span><strong>Total</strong></div>${paymentRows || '<div class="row"><span>Aucun paiement</span><span></span><strong>AR0</strong></div>'}<div class="line"></div><div class="total"><span>Total</span><span>${formatCurrency(total)}</span></div><h2>SUMMARY</h2><div class="summary"><span>Tickets</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Ticket Lines</span><strong>${ticketLines}</strong></div><div class="summary"><span>Payments</span><strong>${allOrders.length}</strong></div><div class="summary"><span>Net Sales</span><strong>${formatCurrency(total)}</strong></div><div class="summary"><span>Tax</span><strong>${formatCurrency(0)}</strong></div></body></html>`);
-    printWindow.document.close();
-    Array.from(printWindow.document.querySelectorAll('h2'))
-      .filter((heading) => ['Sales', 'Product Categories'].includes(heading.textContent?.trim() || ''))
-      .forEach((heading) => {
-        (heading as HTMLElement).style.display = 'none';
-        let sibling = heading.nextElementSibling;
-        while (sibling && sibling.tagName !== 'H2') {
-          (sibling as HTMLElement).style.display = 'none';
-          sibling = sibling.nextElementSibling;
-        }
-      });
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  const handlePrintDailyOrderDetails = () => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const moduleLabel = module === 'restaurant' ? 'Restaurant' : 'Bar & Lounge';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
-    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : '-';
-    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const itemCount = allOrders.reduce((sum, order) => sum + (order.items || []).reduce((itemSum, item) => itemSum + Number(item.quantite || 0), 0), 0);
-    const sales = new Map<string, { sold: number; net: number; category: string }>();
-    const categories = new Map<string, { sold: number; total: number }>();
-    allOrders.forEach((order) => (order.items || []).forEach((item) => {
-      const name = item.nom || 'Article';
-      const sold = Number(item.quantite || 0);
-      const net = sold * Number(item.prix || 0);
-      const sale = sales.get(name) || { sold: 0, net: 0, category: item.categorie || 'Autre' };
-      sales.set(name, { sold: sale.sold + sold, net: sale.net + net, category: sale.category });
-    }));
-    sales.forEach((sale) => {
-      const category = categories.get(sale.category) || { sold: 0, total: 0 };
-      categories.set(sale.category, { sold: category.sold + sale.sold, total: category.total + sale.net });
-    });
-    const paymentLabels: Record<string, string> = { ESPECES: 'Cash', CREDIT: 'Credit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'Mvola', GRATUIT: 'Gratuit' };
-    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
-    const paymentTotals = new Map<string, number>();
-    allOrders.forEach((order) => {
-      const payment = order.moyen_paiement || 'ESPECES';
-      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
-    });
-    const salesRows = Array.from(sales.entries()).map(([name, sale]) => `<div class="row four"><span>${escapeHtml(name)}</span><span>${sale.sold}</span><span>${formatCurrency(sale.net)}</span><span>${formatCurrency(sale.net)}</span></div>`).join('');
-    const categoryRows = Array.from(categories.entries()).map(([name, category]) => `<div class="row three"><span>${escapeHtml(name)}</span><span>${category.sold}</span><span>${formatCurrency(category.total)}</span></div>`).join('');
-    const paymentRows = paymentMethods.map((payment) => `<div class="row two"><span>${paymentLabels[payment]}</span><span>${formatCurrency(paymentTotals.get(payment) || 0)}</span></div>`).join('');
-    const paidOrders = allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || ''));
-    const ticketLines = allOrders.reduce((sum, order) => sum + (order.items || []).length, 0);
-    const report = `<h1>Partial Cash Report</h1><p>Module : ${escapeHtml(moduleLabel)}</p><p>Cashier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}<br>Sequence : ${allOrders.length}<br>Start Date : ${escapeHtml(startDate)}<br>End Date : ${escapeHtml(generatedAt)}</p><div class="separator"></div><h2>Sales</h2><div class="row four head"><span>Name</span><span>Sold</span><span>Net</span><span>Total</span></div>${salesRows || '<p>Aucune vente.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Product Categories</h2><div class="row three head"><span>Category</span><span>Sold</span><span>Total</span></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Lines Removed</h2><div class="row two"><span>${escapeHtml(connectedCashier)}</span><span>${formatCurrency(0)}</span></div><h2>Taxes</h2><div class="row two"><span>Tax Exempt</span><span>${formatCurrency(0)}</span></div><h2>Payments</h2><div class="row two head"><span>Type</span><span>Total</span></div>${paymentRows}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>SUMMARY</h2><div class="row two"><span>Tickets</span><span>${allOrders.length}</span></div><div class="row two"><span>Ticket Lines</span><span>${ticketLines}</span></div><div class="row two"><span>Payments</span><span>${paidOrders.length}</span></div><div class="row two"><span>Net Sales</span><span>${formatCurrency(total)}</span></div><div class="row two"><span>Tax</span><span>${formatCurrency(0)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.four{grid-template-columns:minmax(0,1fr) 7ch 12ch 12ch;column-gap:7px}.row.four span:not(:first-child){white-space:nowrap}.row.three{grid-template-columns:minmax(0,1fr) 28px 60px}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:not(:first-child){text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  const handlePrintCloseReport = (closedFund?: number) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const paidOrders = allOrders.filter((order) => order.statut === 'Encaissée');
-    const reportOrders = paidOrders.length > 0 ? paidOrders : allOrders;
-    const paymentTotals = new Map<string, number>();
-    reportOrders.forEach((order) => {
-      const payment = order.moyen_paiement || 'ESPECES';
-      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
-    });
-    const total = reportOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const paymentLabels: Record<string, string> = { ESPECES: 'Espèces', CREDIT: 'Crédit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit' };
-    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
-    const paymentRows = paymentMethods.map((payment) => `<div class="row"><span>${paymentLabels[payment]}</span><strong>${formatCurrency(paymentTotals.get(payment) || 0)}</strong></div>`).join('');
-    const openingDate = currentBarSession?.ouverture_at ? new Date(currentBarSession.ouverture_at).toLocaleString('fr-FR') : '-';
-    const closingDate = new Date().toLocaleString('fr-FR');
-    const finalFund = closedFund ?? currentBarSession?.fond_final;
-    const expectedFund = Number(currentBarSession?.fond_initial || 0) + total;
-    const variance = finalFund === undefined ? undefined : finalFund - expectedFund;
-    printWindow.document.write(`<!doctype html><html><head><title>Close Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:12px}h1{text-align:center;font-size:18px;margin:4px 0 12px}h2{font-size:13px;margin:14px 0 5px;border-bottom:1px dashed #111;padding-bottom:4px}.center{text-align:center}.row{display:flex;justify-content:space-between;padding:2px 0}.line{border-bottom:1px dashed #111;margin:8px 0}.label{display:flex;justify-content:space-between}.strong{font-weight:bold;font-size:15px}.small{font-size:11px;margin:3px 0}</style></head><body><h1>Close Cash Report</h1><p class="center">Caisse Bar & Lounge</p><p class="small">Caissier : <strong>${connectedCashier}</strong></p><p class="small">Session : ${currentBarSession?.id || '-'}<br>Ouverture : ${openingDate}<br>Clôture : ${closingDate}</p><h2>Payments Report <span style="float:right">Amount</span></h2>${paymentRows || '<div class="row"><span>Aucun paiement</span><strong>${formatCurrency(0)}</strong></div>'}<div class="line"></div><div class="label strong"><span>Total Sales</span><span>${formatCurrency(total)}</span></div><div class="row"><span>Number of Payments:</span><strong>${reportOrders.length}</strong></div><h2>Tax Analysis <span style="float:right">Amount</span></h2><div class="row"><span>Tax Exempt</span><strong>${formatCurrency(0)}</strong></div><div class="line"></div><div class="label strong"><span>Subtotal</span><span>${formatCurrency(total)}</span></div><div class="label"><span>Taxes</span><span>${formatCurrency(0)}</span></div><div class="label strong"><span>Totals</span><span>${formatCurrency(total)}</span></div>${finalFund !== undefined ? `<h2>Cash Control</h2><div class="row"><span>Fond initial</span><strong>${formatCurrency(Number(currentBarSession?.fond_initial || 0))}</strong></div><div class="row"><span>Fond final</span><strong>${formatCurrency(finalFund)}</strong></div><div class="row"><span>Ecart</span><strong>${formatCurrency(variance || 0)}</strong></div>` : ''}<div class="line"></div><p class="small">Terminal : BAR-${currentBarSession?.id || 'CAISSE'}<br>Sequence : ${reportOrders.length}<br>Imprimé le : ${generatedAt}</p></body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  const handleCloseBarSession = async () => {
-    if (!currentBarSession) return;
-    if (pendingOrders.length > 0) {
-      setBackendError('Encaissez toutes les commandes avant de clôturer la caisse.');
-      return;
-    }
-
-    const finalAmount = window.prompt('Indiquez le fond final de la caisse (MGA) :', String(Math.max(0, Math.round(solde))));
-    if (finalAmount === null) return;
-
-    const fondFinal = Number(finalAmount);
-    if (!Number.isFinite(fondFinal) || fondFinal < 0) {
-      setBackendError('Le fond final doit être un montant positif.');
-      return;
-    }
-
-    try {
-      setIsClosingBarSession(true);
-      await barService.closeBarSession({ session_id: currentBarSession.id, fond_final: fondFinal });
-      handlePrintCloseReport(fondFinal);
-      setCurrentBarSession(null);
-      setBackendError(null);
-      window.alert('La caisse Bar & Lounge a été clôturée.');
-    } catch (error: any) {
-      setBackendError(error?.response?.data?.message || error?.message || 'Impossible de clôturer la caisse.');
-    } finally {
-      setIsClosingBarSession(false);
-    }
-  };
-
-  const handlePrintClosingReport = () => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
-    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : '-';
-    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const ticketLines = allOrders.reduce((sum, order) => sum + (order.items || []).length, 0);
-    const paidOrders = allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || ''));
-    const paymentLabels: Record<string, string> = { ESPECES: 'Cash', CREDIT: 'Credit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'Mvola', GRATUIT: 'Gratuit' };
-    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
-    const paymentTotals = new Map<string, number>();
-    allOrders.forEach((order) => {
-      const payment = order.moyen_paiement || 'ESPECES';
-      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
-    });
-    const paymentRows = paymentMethods.map((payment) => `<div class="row two"><span>${paymentLabels[payment]}</span><span>${formatCurrency(paymentTotals.get(payment) || 0)}</span></div>`).join('');
-    const report = `<h1>Partial Cash Report</h1><p>Cashier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}<br>Sequence : ${allOrders.length}<br>Start Date : ${escapeHtml(startDate)}<br>End Date : ${escapeHtml(generatedAt)}</p><div class="separator"></div><h2>Lines Removed</h2><div class="row two"><span>${escapeHtml(connectedCashier)}</span><span>${formatCurrency(0)}</span></div><h2>Taxes</h2><div class="row two"><span>Tax Exempt</span><span>${formatCurrency(0)}</span></div><h2>Payments</h2><div class="row two head"><span>Type</span><span>Total</span></div>${paymentRows}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>SUMMARY</h2><div class="row two"><span>Tickets</span><span>${allOrders.length}</span></div><div class="row two"><span>Ticket Lines</span><span>${ticketLines}</span></div><div class="row two"><span>Payments</span><span>${paidOrders.length}</span></div><div class="row two"><span>Net Sales</span><span>${formatCurrency(total)}</span></div><div class="row two"><span>Tax</span><span>${formatCurrency(0)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Closing Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  const handlePrintSingleOrder = (order: any) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const orderDate = order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '-';
-    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const orderTotal = Number(order.total || 0);
-    const paymentLabel = order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces';
-    
-    const itemsRows = (order.items || []).map((item: any) => {
-      const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
-      const lineTotal = unitPrice * Number(item.quantite || 0);
-      return `<div class="row"><span>${escapeHtml(item.nom || item.product_nom || 'Article')} x${item.quantite}</span><span>${formatCurrency(lineTotal)}</span></div>`;
-    }).join('');
-
-    const report = `<h1>Reçu de Commande</h1><p>Commande #${order.id}<br>Client : ${escapeHtml(order.client || 'Client anonyme')}<br>Table : ${escapeHtml(String(order.table || 'N/A'))}<br>Date : ${escapeHtml(orderDate)}<br>Caissier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}</p><div class="separator"></div><h2>Articles</h2>${itemsRows || '<p>Aucun article.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(orderTotal)}</strong></div><div class="separator"></div><div class="row"><span>Moyen de paiement</span><span>${escapeHtml(paymentLabel)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Commande</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  const handlePrintSingleTransaction = (transaction: any) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const transactionDate = transaction.heure ? new Date(transaction.heure).toLocaleString('fr-FR') : '-';
-    const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const transactionAmount = Number(transaction.montant || 0);
-    const isInflow = transaction.type === 'entree';
-
-    const report = `<h1>Reçu de Transaction</h1><p>Description : ${escapeHtml(transaction.description)}<br>Catégorie : ${escapeHtml(transaction.categorie)}<br>Date : ${escapeHtml(transactionDate)}<br>Caissier : ${escapeHtml(transaction.userName || connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}</p><div class="separator"></div><div class="total">${isInflow ? 'Encaissement' : 'Décaissement'} <strong>${formatCurrency(transactionAmount)}</strong></div><div class="separator"></div><p class="center">Généré le ${escapeHtml(generatedAt)}</p>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Transaction</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}.center{text-align:center}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
-
-  const handleCloseAllOrders = async () => {
-    if (!onCloseAllOrders || allOrders.length === 0) return;
-
-    setShowCloseOrdersModal(true);
-  };
-
-  const confirmCloseAllOrders = async () => {
-    if (!onCloseAllOrders || allOrders.length === 0) return;
-
-    setIsClosingOrders(true);
-    try {
-      handlePrintClosingReport();
-      await onCloseAllOrders(allOrders.map((order) => order.id));
-      setBackendTransactions([]);
-      setTransactionsRefreshTrigger((value) => value + 1);
-      await onRefresh?.();
-      setShowCloseOrdersModal(false);
-    } catch (error) {
-      setBackendError(error instanceof Error ? error.message : 'Impossible de clôturer les commandes.');
-    } finally {
-      setIsClosingOrders(false);
-    }
-  };
-
+// CaisseManager component (cash register for hotel)
+export const CaisseManager: React.FC<StockManagerProps> = ({ module, categories }) => {
   return (
-    <div className="space-y-6">
-      <Modal
-        isOpen={showCloseOrdersModal}
-        onClose={() => { if (!isClosingOrders) setShowCloseOrdersModal(false); }}
-        title="Clôturer les commandes"
-        size="sm"
-      >
-        <div className="space-y-5">
-          <div className="flex gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">
-              <AlertCircle size={21} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
-              <p className="mt-1 text-sm leading-relaxed text-secondary">
-                Les <strong>{allOrders.length} commande{allOrders.length > 1 ? 's' : ''}</strong> seront clôturées de la caisse.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted">
-                Elles resteront disponibles dans l’historique administrateur.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setShowCloseOrdersModal(false)}
-              disabled={isClosingOrders}
-              className="w-full sm:w-auto"
-            >
-              Annuler
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void confirmCloseAllOrders()}
-              disabled={isClosingOrders}
-              className="w-full sm:w-auto"
-            >
-              <Printer size={16} />
-              {isClosingOrders ? 'Clôture...' : 'Imprimer et clôturer'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-      <div className="flex justify-end">
-        <div className="flex flex-wrap justify-end gap-2">
-          {!isBar && (
-            <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
-              Nouvelle transaction
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className={isOrderRegister ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
-        {/* Caisse Card */}
-        {canViewBarBalance && (
-          <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
-        )}
-        {isOrderRegister && (
-          <section className="rounded-2xl border border-accent/30 bg-surface p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-primary">Commandes de la caisse</h3>
-                <p className="mt-1 text-xs text-muted">Impression et clôture globales</p>
-              </div>
-              <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{allOrders.length}</span>
-            </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintDailyOrderDetails()} disabled={allOrders.length === 0} className="justify-center">
-                Imprimer toutes
-              </Button>
-              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="justify-center">
-                Clôturer toutes
-              </Button>
-              {currentBarSession && (
-                <Button size="sm" variant="secondary" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la session de caisse'} className="justify-center sm:col-span-2 lg:col-span-1 xl:col-span-2">
-                  {isClosingBarSession ? 'Clôture...' : 'Clôturer la caisse'}
-                </Button>
-              )}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base pt-4 text-center">
-              <div>
-                <p className="text-lg font-semibold text-primary">{pendingOrders.length}</p>
-                <p className="text-[11px] text-muted">À encaisser</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || '')).length}</p>
-                <p className="text-[11px] text-muted">Encaissées</p>
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface">
-        <div className="flex items-center justify-between border-b border-base px-6 py-4">
-          <div>
-            <h3 className="font-semibold text-primary">Commandes à encaisser</h3>
-            <p className="text-xs text-muted">Commandes servies en attente de paiement</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{pendingOrders.length}</span>
-            {onRefresh && <button type="button" onClick={() => void onRefresh()} title="Actualiser les commandes" className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted transition hover:bg-surface-3 hover:text-primary"><RefreshCw size={14} /></button>}
-          </div>
-        </div>
-        {pendingOrders.length === 0 ? (
-          <p className="px-6 py-6 text-center text-sm text-muted">Aucune commande à encaisser.</p>
-        ) : (
-          <div className="divide-y divide-base">
-            {pendingOrders.map((order) => (
-              <div key={order.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
-                  <p className="text-xs text-muted">{order.table ? `Table ${order.table}` : 'Sans table'}{order.nombre_personnes ? ` · ${order.nombre_personnes} personne${order.nombre_personnes > 1 ? 's' : ''}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
-                  {order.moyen_paiement && <p className="text-xs text-muted">Paiement : {order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>}
-                  {order.items && order.items.length > 0 && (
-                    <div className="mt-2 space-y-1 border-l-2 border-accent/40 pl-3">
-                      {order.items.map((item, index) => {
-                        const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
-                        return <p key={`${order.id}-item-${index}`} className="text-xs text-secondary">{item.quantite} × {item.nom || item.product_nom || 'Article'} <span className="text-muted">({formatCurrency(unitPrice)} / unité = {formatCurrency(unitPrice * item.quantite)})</span></p>;
-                      })}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-4 sm:justify-end">
-                  <span className="font-bold text-accent">{formatCurrency(order.total)}</span>
-                  {onEncaisserCommande && <Button size="sm" icon={<DollarSign size={14} />} onClick={() => void handleEncaisserCommande(order.id)}>Encaisser</Button>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Transactions adaptées au module */}
-      {isBar ? (
-        <BarTransactionsCard title={transactionTitle} refreshTrigger={transactionsRefreshTrigger} />
-      ) : (
-        <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-800/50 flex items-center justify-between">
-            <h3 className="text-white font-semibold">{transactionTitle}</h3>
-          </div>
-          <div className="divide-y divide-slate-800/50">
-            {backendError && <p className="px-6 py-3 text-sm text-red-400">{backendError}</p>}
-            {allOrders.map((order) => (
-              <div key={`order-${order.id}`} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-all">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm bg-emerald-500/10 text-emerald-400">↗</div>
-                  <div>
-                    <p className="text-white font-medium text-sm">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
-                    <p className="text-slate-500 text-xs">Vente Restaurant{order.table ? ` · Table ${order.table}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-sm text-emerald-400">+ {formatCurrency(order.total)}</span>
-                  <button
-                    onClick={() => handlePrintSingleOrder(order)}
-                    className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
-                    title="Imprimer la transaction"
-                  >
-                    <Printer size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {transactions.length > 0 ? (
-              transactions.map((t: any, index: number) => (
-                <div key={index} className="px-6 py-4 flex items-center justify-between hover:bg-slate-800/20 transition-all">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm ${t.type === 'entree' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                      {t.type === 'entree' ? '↗' : '↙'}
-                    </div>
-                    <div>
-                      <p className="text-white font-medium text-sm">{t.description}</p>
-                      <p className="text-slate-500 text-xs">{t.categorie} • {t.userName || 'Système'} {t.heure ? `• ${t.heure}` : ''}</p>
-                      {isHotel && t.is_reservation && (
-                        <p className="mt-1 text-xs text-slate-400">
-                          {t.reservation_client ? `Client : ${t.reservation_client}` : ''}
-                          {t.reservation_room ? ` • Chambre ${t.reservation_room}` : ''}
-                          {t.reservation_client || t.reservation_room ? ' • ' : ''}
-                          {t.pdj_inclus ? 'PDJ inclus' : 'PDJ non inclus'}
-                          {t.moyen_paiement ? ` • Paiement : ${t.moyen_paiement.replace('_', ' ')}` : ''}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`font-semibold text-sm ${t.type === 'entree' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {t.type === 'entree' ? '+' : '-'} {formatCurrency(t.montant)}
-                    </span>
-                    <button
-                      onClick={() => handlePrintSingleTransaction(t)}
-                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
-                      title="Imprimer la transaction"
-                    >
-                      <Printer size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-6 text-center text-slate-500">
-                <p className="text-sm">Aucune transaction pour le moment.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nouvelle Transaction">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            {['entree', 'sortie'].map(type => (
-              <button
-                key={type}
-                onClick={() => setForm({...form, type})}
-                className={`h-12 rounded-xl font-semibold text-sm transition-all ${
-                  form.type === type
-                    ? type === 'entree' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
-                }`}
-              >
-                {type === 'entree' ? '+ Entrée' : '- Sortie'}
-              </button>
-            ))}
-          </div>
-          <Input label="Montant (MGA)" type="number" value={form.montant} onChange={e => setForm({...form, montant: Number(e.target.value)})} placeholder="0.00" />
-          <Input label="Description" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Description de la transaction..." />
-          <Select label="Catégorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Annuler</Button>
-            <Button onClick={handleSubmit} className="flex-1">Enregistrer</Button>
-          </div>
-        </div>
-      </Modal>
+    <div className="text-center py-12 text-slate-400">
+      <p>Module caisse non implémenté pour le moment</p>
     </div>
   );
 };
