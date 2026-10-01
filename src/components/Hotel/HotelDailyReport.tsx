@@ -38,6 +38,7 @@ import { useClients } from '../../hooks/useClients';
 import { hotelReportService } from '../../services/hotelReport.service';
 import { HotelReportWhatsapp } from './HotelReportWhatsapp';
 import AuthService from '../../services/authService';
+import { printThermalText } from '../../utils/thermalPrint';
 
 /** Cadence de rafraîchissement des chambres / réservations pendant la nuitée. */
 const SOURCE_REFRESH_MS = 60_000;
@@ -721,7 +722,7 @@ export const HotelDailyReport: React.FC<HotelDailyReportProps> = ({ refreshTrigg
         </button>
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={() => printThermalText('Rapport Hôtel', reportText)}
           className="flex items-center gap-1.5 rounded-xl border border-base px-4 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-surface-2 md:text-sm"
         >
           <Printer size={15} />

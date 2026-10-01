@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
+import { escapeHtml, openPrintWindow, printThermal, thermalHeader } from '../utils/thermalPrint';
 import { ShoppingCart, Clock, CheckCircle, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react';
 
 // Composants du module Restaurant
@@ -339,43 +340,38 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
+  // Facture au format ticket 80 mm (imprimante thermique). La fenêtre est ouverte avant
+  // le chargement de la commande pour ne pas être bloquée par le navigateur.
   const handlePrintInvoice = (orderId: number | string) => {
     const numericId = Number(orderId);
+    const printWindow = openPrintWindow();
+    if (!printWindow) return;
     (async () => {
       try {
-        const arrayBuffer = await restaurantService.getInvoicePdf(numericId as number);
-        const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
-
-        const printWindow = window.open('', '_blank', 'width=420,height=720');
-        if (!printWindow) {
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = `facture_commande_${numericId}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-          return;
-        }
-
-        printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Facture #${numericId}</title><style>html,body{height:100%;margin:0}iframe{border:none;width:100%;height:100%}</style></head><body><iframe src="${blobUrl}"></iframe><script>const f=document.querySelector('iframe');f.onload=function(){setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){window.print();}},300);};</script></body></html>`);
-        printWindow.document.close();
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-        return;
+        const res = await restaurantService.getOrderById(numericId);
+        const order = (res as any).data ?? res;
+        const items: any[] = order.items || [];
+        const total = Number(order.montant_total || items.reduce((sum, item) => sum + Number(item.quantite) * Number(item.prix_unitaire || 0), 0));
+        const client = clients.find((candidate) => candidate.id === order.client_id);
+        const clientName = client ? `${client.nom || ''} ${client.prenom || ''}`.trim() : `${order.client_nom || ''} ${order.client_prenom || ''}`.trim();
+        const lines = items.map((item) => {
+          const quantity = Number(item.quantite || 0);
+          const unitPrice = Number(item.prix_unitaire || 0);
+          return `<div class="line"><div class="row"><span>${quantity} x ${escapeHtml(item.product_nom || `#${item.product_id || ''}`)}${item.cuisson ? ` (${escapeHtml(item.cuisson)})` : ''}</span><span>${escapeHtml(formatCurrency(quantity * unitPrice))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(unitPrice))}</div></div>`;
+        }).join('');
+        printThermal(`Facture #${numericId}`, `
+          ${thermalHeader(`Facture #${numericId}`, ["Hotel de L'avenue — Restaurant"])}
+          <p>Date : ${escapeHtml(order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '—')}</p>
+          ${order.table_numero ? `<p>Table : ${escapeHtml(order.table_numero)}</p>` : ''}
+          ${clientName ? `<p>Client : ${escapeHtml(clientName)}</p>` : ''}
+          ${order.notes ? `<p>Notes : ${escapeHtml(order.notes)}</p>` : ''}
+          <div class="sep"></div>
+          ${lines}
+          <div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(total))}</span></div>
+          <div class="footer"><p>Merci de votre visite</p></div>
+        `, { target: printWindow });
       } catch (err) {
-        console.warn('PDF fetch failed, falling back to HTML view', err);
-      }
-
-      try {
-        const html = await restaurantService.getInvoiceHtml(numericId as number);
-        const printWindow = window.open('', '_blank', 'width=420,height=720');
-        if (!printWindow) return alert('Impossible d\'ouvrir une nouvelle fenêtre');
-        const autoPrintHtml = html + `<script>window.onload=function(){setTimeout(()=>{window.focus();window.print();},300)}<\/script>`;
-        printWindow.document.open();
-        printWindow.document.write(autoPrintHtml);
-        printWindow.document.close();
-      } catch (err) {
+        printWindow.close();
         console.error('Erreur récupération facture', err);
         alert('Impossible de récupérer la facture. Vous êtes peut-être déconnecté.');
       }

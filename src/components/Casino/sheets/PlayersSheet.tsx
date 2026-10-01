@@ -4,6 +4,7 @@ import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_V
 import { IdentityVerificationModal } from './IdentityVerificationModal';
 import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
+import { escapeHtml, printThermal, thermalHeader } from '../../../utils/thermalPrint';
 
 interface PlayersSheetProps {
   date: string;
@@ -103,7 +104,6 @@ const parseResultPayments = (value?: string): ResultPayment[] => {
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, registeredPlayers = [], restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
-  const [printingPlayerId, setPrintingPlayerId] = useState<number | null>(null);
   const resultPaymentBackups = useRef<Record<number, string>>({});
   const resultBalanceBases = useRef<Record<number, { deposit: number; credit: number }>>({});
   const [pendingBonus, setPendingBonus] = useState<string | null>(null);
@@ -212,16 +212,33 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     accumulatedByLineId[line.id] = String(accumulatedByPlayerId[playerId]);
   });
 
+  // Fiche joueur au format ticket 80 mm : une ligne par cave avec sa signature.
   const printPlayerSheet = () => {
     if (!selectedPlayer) return;
-    setPrintingPlayerId(selectedPlayer.id);
-    window.setTimeout(() => {
-      window.onafterprint = () => {
-        setPrintingPlayerId(null);
-        window.onafterprint = null;
-      };
-      window.print();
-    }, 0);
+    const amount = (value: number) => `${escapeHtml(casinoCurrency.format(value))} Ar`;
+    const signature = (value?: string) => (value ? `<img class="signature" src="${escapeHtml(value)}" alt="Signature" />` : '<p class="sub">Signature : —</p>');
+    const caves = caveLinesToSign.map((line) => `
+      <div class="line">
+        <div class="row"><span>${escapeHtml(line.time || '—')} · ${escapeHtml(line.caves || '—')} x ${escapeHtml(line.amount || '—')}</span><span>${amount(totalsByLineId[line.id] || 0)}</span></div>
+        <div class="sub">Cumul ${amount(Number(accumulatedByLineId[line.id]) || 0)} · ${escapeHtml(line.payment || '—')}${line.paymentMethod ? ` · ${escapeHtml(line.paymentMethod)}` : ''}</div>
+        ${signature(line.signature)}
+      </div>`).join('');
+    const reglements = selectedResultPayments.map((payment) => `<div class="row"><span>${escapeHtml(payment.option)}</span><span>${amount(selectedResultPayments.length > 1 ? payment.amount : Math.abs(selectedPlayerResult))}</span></div>`).join('');
+    const bonuses = selectedBonuses.map((bonus) => `<div class="row"><span>${escapeHtml(bonus)}</span><span>${selectedBonusResults[bonus] !== undefined ? amount(selectedBonusResults[bonus]) : ''}</span></div>`).join('');
+
+    printThermal(`Fiche joueur ${selectedPlayerName}`, `
+      ${thermalHeader('Fiche joueur', [selectedPlayerName, `N° de fiche : ${selectedPlayer.ficheId ?? selectedPlayer.id}`, `Date : ${date || '—'}`])}
+      <h2>CAVES</h2>
+      ${caves || '<p>Aucune cave.</p>'}
+      <p>Heure de départ : ${escapeHtml(selectedPlayer.departure || '—')}</p>
+      <div class="row total"><span>TOTAL CAVES</span><span>${amount(selectedPlayerTotal)}</span></div>
+      <div class="row"><span>Cashing (jetons)</span><span>${amount(selectedPlayerCashing)}</span></div>
+      <div class="row box"><span>RÉSULTAT</span><span>${amount(selectedPlayerResult)}</span></div>
+      ${reglements ? `<h2>${selectedPlayerResult > 0 ? 'RÈGLEMENT DU DÉPÔT' : 'RÈGLEMENT DU CRÉDIT'}</h2>${reglements}` : ''}
+      ${bonuses ? `<h2>BONUS</h2>${bonuses}${signature(selectedPlayer.bonusSignature)}` : ''}
+      <h2>SIGNATURE FINALE</h2>
+      ${signature(selectedPlayer.finalSignature)}
+    `);
   };
 
   const getPlayerContactNumber = () => {

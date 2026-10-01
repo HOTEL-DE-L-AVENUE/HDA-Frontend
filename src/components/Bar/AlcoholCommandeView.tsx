@@ -852,6 +852,7 @@
 import React, { useEffect, useState } from 'react';
 import type { BarCommande, BarTable, BarProduct } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
+import { escapeHtml, printThermal, thermalHeader } from '../../utils/thermalPrint';
 import alcoholService from '../../services/alcohol.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
@@ -1190,27 +1191,13 @@ export const AlcoholCommandeView: React.FC<Props> = ({
     }
   };
 
-  const escapePrintHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-  } as Record<string, string>)[char] || char);
-
   const handlePrintCommande = (commande: BarCommande) => {
-    const printWindow = window.open('', '_blank', 'width=720,height=640');
-    if (!printWindow) {
-      setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
-      return;
-    }
-
     const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
     const items = commande.items.map((item) => `
-      <tr><td>${escapePrintHtml(item.nom)}</td><td class="number">${item.quantite}</td><td class="number">${formatCurrency(item.prix)}</td><td class="number">${formatCurrency(item.prix * item.quantite)}</td></tr>`).join('');
+      <div class="line"><div class="row"><span>${item.quantite} x ${escapeHtml(item.nom)}</span><span>${escapeHtml(formatCurrency(item.prix * item.quantite))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(item.prix))}</div></div>`).join('');
 
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Commande #${commande.id}</title><style>
-      body { font-family: Arial, sans-serif; color: #111; margin: 32px; } h1 { margin: 0 0 4px; font-size: 22px; } p { margin: 4px 0; } table { width: 100%; border-collapse: collapse; margin-top: 24px; } th, td { padding: 9px 4px; border-bottom: 1px solid #ddd; text-align: left; } .number { text-align: right; } .total { font-size: 18px; font-weight: bold; text-align: right; margin-top: 16px; } .muted { color: #555; font-size: 12px; } @media print { body { margin: 12px; } }
-    </style></head><body><h1>Commande Alcool #${commande.id}</h1><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    const printed = printThermal(`Commande #${commande.id}`, `${thermalHeader(`Commande Alcool #${commande.id}`)}<p><strong>Client :</strong> ${escapeHtml(commande.client)}</p><p><strong>Table :</strong> ${escapeHtml(tableName)}</p><div class="sep"></div>${items}<div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(commande.total))}</span></div><div class="footer"><p>Merci de votre visite</p></div>`);
+    if (!printed) setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
   };
 
   const formatCommandeDate = (value?: string) => {

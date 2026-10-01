@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button, Modal } from '../UI';
 import { AlertTriangle, Check, Copy, Edit3, LockKeyhole, Printer, Trash2, X } from 'lucide-react';
 import { formatCurrency } from '../../utils/data';
+import { escapeHtml, openPrintWindow, printThermal, thermalHeader } from '../../utils/thermalPrint';
 import AuthService from '../../services/authService';
 import { isAdmin } from '../../utils/permissions';
 import {
@@ -61,13 +62,6 @@ const getEntryDetailsText = (item: PafOperation) =>
 const getPaymentLabel = (paymentMethod?: PaymentMethod) =>
   paymentOptions.find((option) => option.value === paymentMethod)?.label || 'Espèces';
 
-const escapeHtml = (value: unknown) => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#039;');
-
 const formatDate = (value: string) => new Date(value).toLocaleString('fr-FR', {
   day: '2-digit',
   month: '2-digit',
@@ -87,50 +81,18 @@ const groupTicketLines = (lines: PafTicketLine[]) =>
     return acc;
   }, []);
 
-type PrintFormat = 'receipt' | 'a4';
-
-const printHtml = (title: string, content: string, format: PrintFormat) => {
-  const printWindow = window.open('', '_blank', 'width=760,height=760');
-  if (!printWindow) return;
-  const isReceipt = format === 'receipt';
-  const pageStyle = isReceipt ? '@page { size: 80mm auto; margin: 4mm; }' : '@page { size: A4 portrait; margin: 14mm; }';
-  const bodyStyle = isReceipt
-    ? 'body.receipt { width: 72mm; max-width: 72mm; margin: 0; font-family: monospace; color: #111827; font-size: 10px; line-height: 1.3; overflow-wrap: anywhere; }'
-    : 'body.a4 { width: auto; margin: 0; font-family: Arial, sans-serif; color: #111827; font-size: 12px; }';
-  printWindow.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
-    ${pageStyle} ${bodyStyle} h1 { margin: 0 0 4px; font-size: ${isReceipt ? '17px' : '22px'}; } h2 { margin: 24px 0 8px; font-size: 15px; } .muted { color: #6b7280; } .header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111827; padding-bottom: 12px; } .box { margin-top: 18px; border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; } .totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; } .total { border: 1px solid #e5e7eb; padding: 8px; } .total strong { display: block; margin-top: 4px; font-size: 15px; } table { width: 100%; border-collapse: collapse; margin-top: 8px; } th, td { padding: 7px 5px; border-bottom: 1px solid #e5e7eb; text-align: left; } th:last-child, td:last-child { text-align: right; } .grand-total { text-align: right; font-size: 17px; font-weight: 700; margin-top: 12px; } .receipt .header { display: block; text-align: center; border-bottom: 1px dashed #111827; padding-bottom: 8px; } .receipt .header > strong { display: block; margin-top: 5px; } .receipt .box { margin-top: 10px; border: 0; border-radius: 0; padding: 0; } .receipt .totals { display: block; } .receipt .total { display: flex; justify-content: space-between; border: 0; border-bottom: 1px dotted #9ca3af; padding: 3px 0; } .receipt .total strong { margin: 0; font-size: inherit; } .receipt h2 { text-align: center; margin: 12px 0 5px; font-size: 12px; } .receipt table { font-size: 10px; } .receipt th, .receipt td { padding: 4px 2px; } .receipt .grand-total { border-top: 1px solid #111827; padding-top: 7px; font-size: 14px; } @media print { .no-print { display: none; } }
-  </style></head><body class="${isReceipt ? 'receipt' : 'a4'}">${content}</body></html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-};
-
-const summaryMarkup = (summary: PafSummary) => `
-  <div class="totals">
-    <div class="total">Tickets<strong>${summary.totalTickets}</strong></div>
-    <div class="total">Montant<strong>${escapeHtml(formatCurrency(summary.totalAmount))}</strong></div>
-    <div class="total">Homme<strong>${summary.homme}</strong></div>
-    <div class="total">Femme<strong>${summary.femme}</strong></div>
-  </div>
-`;
-
-const operationsMarkup = (operations: PafOperation[]) => `
-  <table><thead><tr><th>Date</th><th>Détails</th><th>Paiement</th><th>Montant</th></tr></thead><tbody>
-    ${operations.length > 0 ? operations.map((operation) => `<tr><td>${escapeHtml(formatDate(operation.date))}</td><td>${escapeHtml(getEntryDetailsText(operation))}</td><td>${escapeHtml(getPaymentLabel(operation.paymentMethod))}</td><td>${escapeHtml(formatCurrency(operation.price))}</td></tr>`).join('') : '<tr><td colspan="4">Aucune opération</td></tr>'}
-  </tbody></table>
-`;
+// Tickets PAF : imprimante thermique 80 mm.
+const printHtml = (title: string, content: string, target?: Window) => printThermal(title, content, target ? { target } : {});
 
 const receiptOperationsMarkup = (operations: PafOperation[]) => operations.length > 0
-  ? operations.map((operation) => `<div style="border-bottom:1px dotted #9ca3af;padding:5px 0"><div style="display:flex;justify-content:space-between;gap:6px"><strong>${escapeHtml(getEntryDetailsText(operation))}</strong><strong>${escapeHtml(formatCurrency(operation.price))}</strong></div><div class="muted">${escapeHtml(formatDate(operation.date))} · ${escapeHtml(getPaymentLabel(operation.paymentMethod))}</div></div>`).join('')
+  ? operations.map((operation) => `<div class="line"><div class="row"><strong>${escapeHtml(getEntryDetailsText(operation))}</strong><strong>${escapeHtml(formatCurrency(operation.price))}</strong></div><div class="sub">${escapeHtml(formatDate(operation.date))} · ${escapeHtml(getPaymentLabel(operation.paymentMethod))}</div></div>`).join('')
   : '<p>Aucune opération.</p>';
 
 const receiptSummaryMarkup = (summary: PafSummary) => `
-  <div class="totals">
-    <div class="total"><span>Tickets</span><strong>${summary.totalTickets}</strong></div>
-    <div class="total"><span>Homme</span><strong>${summary.homme}</strong></div>
-    <div class="total"><span>Femme</span><strong>${summary.femme}</strong></div>
-    <div class="total"><span>Total</span><strong>${escapeHtml(formatCurrency(summary.totalAmount))}</strong></div>
-  </div>
+  <div class="row line"><span>Tickets</span><strong>${summary.totalTickets}</strong></div>
+  <div class="row line"><span>Homme</span><strong>${summary.homme}</strong></div>
+  <div class="row line"><span>Femme</span><strong>${summary.femme}</strong></div>
+  <div class="row total"><span>Total</span><span>${escapeHtml(formatCurrency(summary.totalAmount))}</span></div>
 `;
 
 export const PafSection: React.FC = () => {
@@ -198,20 +160,24 @@ export const PafSection: React.FC = () => {
 
   const handlePrintPafTicket = () => {
     if (ticketLines.length === 0) return;
-    const rows = groupTicketLines(ticketLines).map((line) => `<tr><td>${escapeHtml(line.gender)} x${line.qty}</td><td>${escapeHtml(formatCurrency(line.price * line.qty))}</td></tr>`).join('');
-    printHtml('Ticket PAF', `<div class="header"><div><h1>Ticket PAF HDA</h1><div class="muted">${escapeHtml(new Date().toLocaleString('fr-FR'))}</div></div><strong>${escapeHtml(getPaymentLabel(paymentMethod))}</strong></div><div class="box"><table><thead><tr><th>Détails</th><th>Montant</th></tr></thead><tbody>${rows}</tbody></table><div class="grand-total">Total : ${escapeHtml(formatCurrency(ticketTotal))}</div></div>`, 'receipt');
+    const rows = groupTicketLines(ticketLines).map((line) => `<div class="row line"><span>${escapeHtml(line.gender)} x${line.qty} (${escapeHtml(formatCurrency(line.price))})</span><span>${escapeHtml(formatCurrency(line.price * line.qty))}</span></div>`).join('');
+    printHtml('Ticket PAF', `${thermalHeader('Ticket PAF HDA', [`Paiement : ${getPaymentLabel(paymentMethod)}`])}${rows}<div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(ticketTotal))}</span></div>`);
   };
 
   const handlePrintCurrent = () => {
-    printHtml('Compte du jour PAF', `<div class="header"><div><h1>Compte du jour PAF</h1><div class="muted">Imprimé le ${escapeHtml(new Date().toLocaleString('fr-FR'))}</div></div><strong>Session ouverte</strong></div><div class="box">${receiptSummaryMarkup(summary)}<h2>Opérations ouvertes</h2>${receiptOperationsMarkup(history)}</div>`, 'receipt');
+    printHtml('Compte du jour PAF', `${thermalHeader('Compte du jour PAF', ['Session ouverte'])}${receiptSummaryMarkup(summary)}<h2>OPÉRATIONS OUVERTES</h2>${receiptOperationsMarkup(history)}`);
   };
 
   const handlePrintClosure = async (closure: PafClosure) => {
+    // Fenêtre ouverte avant le chargement pour ne pas être bloquée par le navigateur.
+    const target = openPrintWindow();
+    if (!target) return;
     try {
       const detail = closure.operations ? closure : await getPafClosure(closure.id);
       setSelectedClosure(detail);
-      printHtml(`Clôture PAF ${detail.reference}`, `<div class="header"><h1>Clôture PAF HDA</h1><div class="muted">Référence : ${escapeHtml(detail.reference)}<br>Journée : ${escapeHtml(detail.date)}<br>Clôturée le : ${escapeHtml(formatDate(detail.dateCloture))}</div></div><div class="box"><h2>Total général de la clôture</h2><div class="grand-total">${escapeHtml(formatCurrency(detail.summary.totalFinal ?? detail.summary.totalAmount))}</div><div class="totals"><div class="total"><span>Tickets</span><strong>${detail.summary.totalTickets}</strong></div><div class="total"><span>Homme</span><strong>${detail.summary.homme}</strong></div><div class="total"><span>Femme</span><strong>${detail.summary.femme}</strong></div></div></div>`, 'receipt');
+      printHtml(`Clôture PAF ${detail.reference}`, `${thermalHeader('Clôture PAF HDA', [`Référence : ${detail.reference}`, `Journée : ${detail.date}`, `Clôturée le : ${formatDate(detail.dateCloture)}`])}<div class="row line"><span>Tickets</span><strong>${detail.summary.totalTickets}</strong></div><div class="row line"><span>Homme</span><strong>${detail.summary.homme}</strong></div><div class="row line"><span>Femme</span><strong>${detail.summary.femme}</strong></div><div class="box row"><span>TOTAL CLÔTURE</span><span>${escapeHtml(formatCurrency(detail.summary.totalFinal ?? detail.summary.totalAmount))}</span></div>`, target);
     } catch (printError) {
+      target.close();
       console.error('Erreur chargement clôture PAF:', printError);
       setError('Le récapitulatif de clôture n’a pas pu être chargé.');
     }

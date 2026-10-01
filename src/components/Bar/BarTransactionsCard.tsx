@@ -3,6 +3,7 @@ import { formatCurrency, formatDate } from '../../utils/data';
 import { ArrowUpRight, RefreshCw, Loader2, AlertCircle, Printer } from 'lucide-react';
 import { getBarTransactions } from '../../services/bar.service';
 import AuthService from '../../services/authService';
+import { escapeHtml, printThermal, thermalHeader } from '../../utils/thermalPrint';
 
 interface Transaction {
   id: number;
@@ -48,22 +49,12 @@ export default function BarTransactionsCard({ title = 'Transactions Caisse', ref
   const totalQuantite = transactions.reduce((sum, tx) => sum + tx.quantite, 0);
 
   const handlePrintTransaction = (transaction: Transaction) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
     const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
     const transactionDate = transaction.created_at ? new Date(transaction.created_at).toLocaleString('fr-FR') : '-';
     const transactionTotal = transaction.quantite * transaction.prix_unitaire;
 
-    const report = `<h1>Reçu de Transaction Bar</h1><p>Transaction #${transaction.id}<br>Produit : ${escapeHtml(transaction.nom)}<br>Catégorie : ${escapeHtml(transaction.categorie)}<br>Quantité : ${transaction.quantite}<br>Prix unitaire : ${formatCurrency(transaction.prix_unitaire)}<br>Date : ${escapeHtml(transactionDate)}<br>Caissier : ${escapeHtml(connectedCashier)}${transaction.order_id ? `<br>Commande #${transaction.order_id}` : ''}${transaction.table_id ? `<br>Table ${transaction.table_id}` : ''}</p><div class="separator"></div><div class="total">Total <strong>${formatCurrency(transactionTotal)}</strong></div><div class="separator"></div><p class="center">Généré le ${escapeHtml(generatedAt)}</p>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Transaction Bar</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}.center{text-align:center}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    const report = `${thermalHeader('Reçu de Transaction Bar', [`Transaction #${transaction.id}`])}<p>Produit : ${escapeHtml(transaction.nom)}<br>Catégorie : ${escapeHtml(transaction.categorie)}<br>Quantité : ${transaction.quantite}<br>Prix unitaire : ${escapeHtml(formatCurrency(transaction.prix_unitaire))}<br>Date : ${escapeHtml(transactionDate)}<br>Caissier : ${escapeHtml(connectedCashier)}${transaction.order_id ? `<br>Commande #${transaction.order_id}` : ''}${transaction.table_id ? `<br>Table ${transaction.table_id}` : ''}</p><div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(transactionTotal))}</span></div>`;
+    printThermal('Reçu Transaction Bar', report);
   };
 
   if (loading) {

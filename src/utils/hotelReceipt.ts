@@ -4,6 +4,7 @@
 //  - l'historique des paiements (paiement initial + rectifications)
 import { Reservation, ReservationExtraService, ReservationPayment } from '../types/hotel.types';
 import { formatCurrency } from './data';
+import { escapeHtml, printThermal, thermalHeader } from './thermalPrint';
 
 export interface HotelReceiptData {
   reservationId?: number;
@@ -28,10 +29,6 @@ const paymentLabels: Record<string, string> = {
   CARTE: 'Carte bancaire', VIREMENT: 'Virement', CREDIT: 'Crédit', GRATUIT: 'Gratuit',
 };
 
-const escapeHtml = (value: unknown) => String(value ?? '')
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
 const formatDay = (value?: string) => (value ? new Date(value).toLocaleDateString('fr-FR') : '—');
 const formatDateTimeFr = (value?: string) => (value ? new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const nightsBetween = (from?: string, to?: string) => {
@@ -39,49 +36,15 @@ const nightsBetween = (from?: string, to?: string) => {
   return Math.max(0, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000));
 };
 
-const RECEIPT_STYLE = `
-  @page { size: 80mm auto; margin: 3mm; }
-  * { box-sizing: border-box; }
-  body { width: 74mm; margin: 0 auto; font-family: monospace; color: #111; font-size: 10px; line-height: 1.35; }
-  .header { text-align: center; border-bottom: 1px dashed #111; padding-bottom: 6px; margin-bottom: 6px; }
-  .header img { width: 36px; height: 36px; object-fit: contain; }
-  .header h1 { margin: 2px 0 0; font-size: 13px; }
-  .muted { color: #555; font-size: 9px; }
-  p { margin: 2px 0; }
-  h2 { margin: 8px 0 3px; font-size: 11px; text-align: center; border-top: 1px dashed #111; padding-top: 5px; }
-  .row { display: flex; justify-content: space-between; gap: 6px; padding: 2px 0; }
-  .row span:first-child { overflow-wrap: anywhere; }
-  .row span:last-child { white-space: nowrap; text-align: right; }
-  .line { border-bottom: 1px dotted #999; }
-  .sub { color: #555; font-size: 9px; padding-left: 6px; }
-  .total { border-top: 1px solid #111; margin-top: 5px; padding-top: 4px; font-weight: bold; font-size: 12px; }
-  .due { border: 1px solid #111; margin-top: 5px; padding: 4px; font-weight: bold; font-size: 13px; }
+const RECEIPT_CSS = `
+  .due { border: 1px solid #000; margin-top: 5px; padding: 4px; font-weight: bold; font-size: 14px; }
   .paid { font-weight: bold; }
-  .footer { text-align: center; margin-top: 10px; border-top: 1px dashed #111; padding-top: 6px; }
 `;
 
-const printTicket = (title: string, body: string) => {
-  const printWindow = window.open('', '_blank', 'width=420,height=720');
-  if (!printWindow) {
-    alert('Autorisez les fenêtres pop-up pour imprimer le ticket.');
-    return;
-  }
-  printWindow.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${RECEIPT_STYLE}</style></head><body>${body}</body></html>`);
-  printWindow.document.close();
-  printWindow.focus();
-  // Attend le chargement du logo avant d'imprimer.
-  const doPrint = () => { printWindow.print(); };
-  if (printWindow.document.readyState === 'complete') setTimeout(doPrint, 250);
-  else printWindow.onload = () => setTimeout(doPrint, 100);
-};
+const printTicket = (title: string, body: string) => printThermal(title, body, { css: RECEIPT_CSS });
 
 const headerMarkup = (title: string, data: HotelReceiptData) => `
-  <div class="header">
-    <img src="/logo_s.png" alt="HDA" />
-    <h1>${escapeHtml(title)}</h1>
-    ${data.reservationId ? `<p>Réservation n° ${data.reservationId}</p>` : ''}
-    <p class="muted">Imprimé le ${escapeHtml(new Date().toLocaleString('fr-FR'))}</p>
-  </div>
+  ${thermalHeader(title, data.reservationId ? [`Réservation n° ${data.reservationId}`] : [])}
   <p><strong>Client :</strong> ${escapeHtml(data.clientName || '—')}</p>
   <p><strong>Chambre :</strong> ${escapeHtml(data.roomNumber || '—')}</p>
   <p><strong>Séjour :</strong> ${escapeHtml(formatDay(data.dateArrivee))} → ${escapeHtml(formatDay(data.dateDepart))} (${nightsBetween(data.dateArrivee, data.dateDepart)} nuit(s))</p>

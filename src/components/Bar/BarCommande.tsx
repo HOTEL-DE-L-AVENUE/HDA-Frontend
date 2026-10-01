@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { BarCommande, BarTable, BarProduct } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
+import { escapeHtml, printThermal, thermalHeader } from '../../utils/thermalPrint';
 import api from '../../lib/api';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
@@ -631,28 +632,13 @@ export const BarCommandeView: React.FC<Props> = ({
     }
   };
 
-  const escapePrintHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-  } as Record<string, string>)[char] || char);
-
   const handlePrintCommande = (commande: BarCommande) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) {
-      setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
-      return;
-    }
-
     const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
-    const logoSrc = '/logo_s.png';
     const items = commande.items.map((item) => `
-      <tr><td>${escapePrintHtml(item.nom)}</td><td class="number">${item.quantite}</td><td class="number">${formatCurrency(item.prix)}</td><td class="number">${formatCurrency(item.prix * item.quantite)}</td></tr>`).join('');
+      <div class="line"><div class="row"><span>${item.quantite} x ${escapeHtml(item.nom)}</span><span>${escapeHtml(formatCurrency(item.prix * item.quantite))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(item.prix))}</div></div>`).join('');
 
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Commande #${commande.id}</title><style>
-      @page { size: 80mm auto; margin: 4mm; } body { width: 80mm; margin: 0; font-family: monospace; color: #111; font-size: 10px; line-height: 1.3; } .header { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; } .header img { width: 34px; height: 34px; object-fit: contain; } .title { margin: 0; text-align: center; font-size: 14px; } p { margin: 3px 0; } table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; } th, td { padding: 3px 1px; border-bottom: 1px dashed #999; text-align: left; overflow-wrap: anywhere; } th:first-child, td:first-child { width: 42%; } th:nth-child(2), td:nth-child(2) { width: 12%; } th:nth-child(3), td:nth-child(3) { width: 23%; } th:last-child, td:last-child { width: 23%; } .number { text-align: right; } .total { margin-top: 10px; padding-top: 6px; border-top: 1px solid #111; font-size: 14px; font-weight: bold; text-align: right; } .muted { color: #555; font-size: 9px; } @media print { body { width: 80mm; } }
-    </style></head><body><div class="header"><img src="${logoSrc}" alt="HDA" /><h1 class="title">Commande Bar #${commande.id}</h1></div><p class="muted">Imprimee le ${new Date().toLocaleString('fr-FR')}</p><p><strong>Client :</strong> ${escapePrintHtml(commande.client)}</p><p><strong>Table :</strong> ${escapePrintHtml(tableName)}</p><table><thead><tr><th>Article</th><th class="number">Qte</th><th class="number">Prix</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table><p class="total">Total : ${formatCurrency(commande.total)}</p></body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    const printed = printThermal(`Commande #${commande.id}`, `${thermalHeader(`Commande Bar #${commande.id}`)}<p><strong>Client :</strong> ${escapeHtml(commande.client)}</p><p><strong>Table :</strong> ${escapeHtml(tableName)}</p><div class="sep"></div>${items}<div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(commande.total))}</span></div><div class="footer"><p>Merci de votre visite</p></div>`);
+    if (!printed) setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
   };
 
   const formatCommandeDate = (value?: string) => {
