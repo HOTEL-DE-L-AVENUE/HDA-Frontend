@@ -339,7 +339,7 @@ export const CocktailMenu: React.FC<Props> = ({
                       </div>
                     )}
                     {userIsAdmin && (
-                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
+                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex group-focus-within:flex [@media(hover:none)]:flex" onClick={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
                         <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>
                       </div>
