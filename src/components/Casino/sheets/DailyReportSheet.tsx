@@ -1,7 +1,10 @@
      import React, { useMemo, useState } from 'react';
-import { Clipboard, Download, Printer } from 'lucide-react';
+import { Clipboard, Download, MessageCircle, Printer } from 'lucide-react';
 import { ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
+
+// Destinataire du bouton WhatsApp : 0388337122 au format international (Madagascar, +261).
+const REPORT_WHATSAPP_NUMBER = '261388337122';
 
 interface DailyReportSheetProps {
   date: string;
@@ -261,15 +264,33 @@ export const DailyReportSheet: React.FC<DailyReportSheetProps> = (props) => {
     URL.revokeObjectURL(link.href);
   };
 
+  // Ouvre l'application WhatsApp installée (WhatsApp Desktop, ou l'application sur tablette /
+  // téléphone) sur la conversation du 0388337122, rapport déjà saisi : il reste à appuyer sur
+  // « Envoyer ». Si l'application ne prend pas la main (la page garde le focus), on bascule
+  // sur wa.me, qui propose WhatsApp Web.
+  const sendReportOnWhatsApp = () => {
+    const text = encodeURIComponent(report);
+    let appOpened = false;
+    const markOpened = () => { appOpened = true; };
+    window.addEventListener('blur', markOpened, { once: true });
+    document.addEventListener('visibilitychange', markOpened, { once: true });
+    window.location.href = `whatsapp://send?phone=${REPORT_WHATSAPP_NUMBER}&text=${text}`;
+    window.setTimeout(() => {
+      window.removeEventListener('blur', markOpened);
+      document.removeEventListener('visibilitychange', markOpened);
+      if (!appOpened) window.open(`https://wa.me/${REPORT_WHATSAPP_NUMBER}?text=${text}`, '_blank', 'noopener');
+    }, 1500);
+  };
+
   return <section className="flex flex-col gap-4">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 print:hidden">
       <div><h2 className="text-primary text-xl font-bold">Rapport journalier</h2><p className="text-muted text-xs mt-1">Généré automatiquement à partir de la fiche de jeu.</p></div>
       <div className="flex gap-2 flex-wrap">
+        <button type="button" className="action" onClick={sendReportOnWhatsApp} title="Ouvrir WhatsApp avec le rapport pour le 0388337122" style={{ backgroundColor: '#25D366', borderColor: '#25D366', color: '#fff' }}><MessageCircle size={15} /> WhatsApp</button>
         <button type="button" className="action secondary" onClick={copyReport}><Clipboard size={15} /> {copied ? 'Copié' : 'Copier'}</button>
         <button type="button" className="action secondary" onClick={downloadReport}><Download size={15} /> Télécharger</button>
         <button type="button" className="action" onClick={() => window.print()}><Printer size={15} /> Imprimer</button>
       </div>
-    </div>
-    <textarea readOnly value={report} aria-label="Rapport journalier généré" className="w-full min-h-[680px] rounded-xl p-4 text-sm leading-6 text-primary outline-none resize-y" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }} />
+    </div>    <textarea readOnly value={report} aria-label="Rapport journalier généré" className="w-full min-h-[680px] rounded-xl p-4 text-sm leading-6 text-primary outline-none resize-y" style={{ backgroundColor: 'var(--color-bg)', ...casinoBorder }} />
   </section>;
 };
