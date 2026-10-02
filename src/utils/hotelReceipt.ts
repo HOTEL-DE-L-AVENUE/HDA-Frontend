@@ -20,6 +20,9 @@ export interface HotelReceiptData {
   extras: ReservationExtraService[];
   total: number;
   montantPaye: number;
+  montantEncaisse?: number;
+  montantCredit?: number;
+  montantGratuit?: number;
   payments: ReservationPayment[];
   rectificationLines?: Array<{ label: string; montant: number }>;
 }
@@ -50,19 +53,32 @@ const headerMarkup = (title: string, data: HotelReceiptData) => `
   <p><strong>Séjour :</strong> ${escapeHtml(formatDay(data.dateArrivee))} → ${escapeHtml(formatDay(data.dateDepart))} (${nightsBetween(data.dateArrivee, data.dateDepart)} nuit(s))</p>
 `;
 
-const paymentsMarkup = (payments: ReservationPayment[]) => payments.map((payment, index) => `
-  <div class="line">
-    <div class="row paid"><span>${index === 0 ? 'Paiement initial' : `Rectification n°${index}`}</span><span>${escapeHtml(formatCurrency(payment.montant))}</span></div>
-    <div class="sub">${escapeHtml(formatDateTimeFr(payment.created_at))} · ${escapeHtml(paymentLabels[payment.moyen_paiement || ''] || payment.moyen_paiement || '—')}${payment.created_by_nom ? ` · ${escapeHtml(`${payment.created_by_prenom || ''} ${payment.created_by_nom}`.trim())}` : ''}</div>
-  </div>
-`).join('');
+const paymentsMarkup = (payments: ReservationPayment[]) => payments.map((payment, index) => {
+  const modes = payment.details?.modes_paiement || [];
+  const modeLines = modes.map((mode) => `
+    <div class="row"><span>${escapeHtml(paymentLabels[mode.moyen_paiement] || mode.moyen_paiement)}</span><span>${escapeHtml(formatCurrency(mode.montant))}</span></div>
+  `).join('');
+  return `
+    <div class="line">
+      <div class="row paid"><span>Encaissement n°${index + 1}</span><span>${escapeHtml(formatCurrency(payment.montant))}</span></div>
+      ${modeLines || `<div class="sub">${escapeHtml(paymentLabels[payment.moyen_paiement || ''] || payment.moyen_paiement || '—')}</div>`}
+      <div class="sub">${escapeHtml(formatDateTimeFr(payment.created_at))}${payment.created_by_nom ? ` · ${escapeHtml(`${payment.created_by_prenom || ''} ${payment.created_by_nom}`.trim())}` : ''}</div>
+      ${Number(payment.montant_encaisse || 0) > 0 ? `<div class="sub">Argent reçu : ${escapeHtml(formatCurrency(payment.montant_encaisse || 0))}</div>` : ''}
+      ${Number(payment.montant_credit || 0) > 0 ? `<div class="sub">Crédit : ${escapeHtml(formatCurrency(payment.montant_credit || 0))}</div>` : ''}
+      ${Number(payment.montant_gratuit || 0) > 0 ? `<div class="sub">Gratuit autorisé : ${escapeHtml(formatCurrency(payment.montant_gratuit || 0))}</div>` : ''}
+    </div>
+  `;
+}).join('');
 
 const balanceMarkup = (data: HotelReceiptData) => {
   const due = Math.round((data.total - data.montantPaye) * 100) / 100;
   return `
     <div class="row total"><span>TOTAL RÉSERVATION</span><span>${escapeHtml(formatCurrency(data.total))}</span></div>
-    ${data.montantPaye > 0 ? `<div class="row"><span>Déjà payé</span><span>- ${escapeHtml(formatCurrency(data.montantPaye))}</span></div>` : ''}
-    <div class="row due"><span>${due > 0 ? (data.montantPaye > 0 ? 'RECTIFICATION À PAYER' : 'À PAYER') : due < 0 ? 'TROP-PERÇU' : 'SOLDÉ'}</span><span>${escapeHtml(formatCurrency(Math.abs(due)))}</span></div>
+    ${Number(data.montantEncaisse || 0) > 0 ? `<div class="row"><span>Argent encaissé</span><span>${escapeHtml(formatCurrency(data.montantEncaisse || 0))}</span></div>` : ''}
+    ${Number(data.montantGratuit || 0) > 0 ? `<div class="row"><span>Couvert gratuitement</span><span>${escapeHtml(formatCurrency(data.montantGratuit || 0))}</span></div>` : ''}
+    ${Number(data.montantCredit || 0) > 0 ? `<div class="row"><span>Crédit restant</span><span>${escapeHtml(formatCurrency(data.montantCredit || 0))}</span></div>` : ''}
+    ${data.montantPaye > 0 ? `<div class="row"><span>Déjà couvert</span><span>- ${escapeHtml(formatCurrency(data.montantPaye))}</span></div>` : ''}
+    <div class="row due"><span>${due > 0 ? 'RESTE À PAYER' : due < 0 ? 'TROP-PERÇU' : 'SOLDÉ'}</span><span>${escapeHtml(formatCurrency(Math.abs(due)))}</span></div>
   `;
 };
 
@@ -96,7 +112,7 @@ export const printPaymentHistoryTicket = (data: HotelReceiptData) => {
     ${headerMarkup('Historique des paiements', data)}
     <h2>PAIEMENTS</h2>
     ${data.payments.length ? paymentsMarkup(data.payments) : '<p class="muted">Aucun paiement enregistré.</p>'}
-    <div class="row total"><span>TOTAL PAYÉ</span><span>${escapeHtml(formatCurrency(data.montantPaye))}</span></div>
+    <div class="row total"><span>TOTAL COUVERT</span><span>${escapeHtml(formatCurrency(data.montantPaye))}</span></div>
     ${balanceMarkup(data)}
     <div class="footer"><p>Merci de votre visite</p></div>
   `;
@@ -131,6 +147,9 @@ export const receiptDataFromReservation = (reservation: Reservation & { client_n
     extras,
     total,
     montantPaye: Number(reservation.montant_paye || 0),
+    montantEncaisse: Number(reservation.montant_encaisse ?? reservation.montant_paye ?? 0),
+    montantCredit: Number(reservation.montant_credit || 0),
+    montantGratuit: Number(reservation.montant_gratuit || 0),
     payments,
   };
 };

@@ -3,6 +3,12 @@ import { Reservation, ReservationPayment } from '../types/hotel.types';
 
 export type HotelPaymentMethod = 'ESPECES' | 'TPE' | 'MVOLA' | 'ORANGE_MONEY' | 'CARTE' | 'VIREMENT' | 'CREDIT' | 'GRATUIT';
 
+export interface ReservationPaymentInput {
+  montant: number;
+  modes_paiement: Array<{ moyen_paiement: HotelPaymentMethod; montant: number }>;
+  idempotency_key: string;
+}
+
 export interface ReservationFormData {
   client_id: number;
   room_id: number;
@@ -88,6 +94,11 @@ export const reservationService = {
   getReservationPayments: async (id: number): Promise<ReservationPayment[]> => {
     const response = await api.get<ApiResponse<ReservationPayment[]>>(`${BASE_URL}/${id}/payments`);
     return Array.isArray(response.data.data) ? response.data.data : [];
+  },
+
+  createReservationPayment: async (id: number, data: ReservationPaymentInput): Promise<any> => {
+    const response = await api.post<ApiResponse<any>>(`${BASE_URL}/${id}/payments`, data);
+    return response.data.data;
   },
 
   updateReservation: async (id: number, data: Partial<ReservationFormData>): Promise<Reservation> => {
