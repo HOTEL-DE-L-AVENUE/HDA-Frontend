@@ -175,7 +175,26 @@ export const PafSection: React.FC = () => {
     try {
       const detail = closure.operations ? closure : await getPafClosure(closure.id);
       setSelectedClosure(detail);
-      printHtml(`Clôture PAF ${detail.reference}`, `${thermalHeader('Clôture PAF HDA', [`Référence : ${detail.reference}`, `Journée : ${detail.date}`, `Clôturée le : ${formatDate(detail.dateCloture)}`])}<div class="row line"><span>Tickets</span><strong>${detail.summary.totalTickets}</strong></div><div class="row line"><span>Homme</span><strong>${detail.summary.homme}</strong></div><div class="row line"><span>Femme</span><strong>${detail.summary.femme}</strong></div><div class="box row"><span>TOTAL CLÔTURE</span><span>${escapeHtml(formatCurrency(detail.summary.totalFinal ?? detail.summary.totalAmount))}</span></div>`, target);
+
+      const byPaymentObj = detail.summary.byPayment || {};
+      const paymentRows = paymentOptions
+        .map((opt) => {
+          const amt = byPaymentObj[opt.value] || 0;
+          if (amt <= 0) return '';
+          return `<div class="row line"><span>${escapeHtml(opt.label)}</span><strong>${escapeHtml(formatCurrency(amt))}</strong></div>`;
+        })
+        .filter(Boolean)
+        .join('');
+
+      const paymentSectionHtml = paymentRows
+        ? `<div style="border-top:1px dashed #000;margin:6px 0;padding-top:4px;"><div style="font-size:11px;font-weight:bold;margin-bottom:4px;">RÉPARTITION PAIEMENTS</div>${paymentRows}</div>`
+        : '';
+
+      printHtml(
+        `Clôture PAF ${detail.reference}`,
+        `${thermalHeader('Clôture PAF HDA', [`Référence : ${detail.reference}`, `Journée : ${detail.date}`, `Clôturée le : ${formatDate(detail.dateCloture)}`])}<div class="row line"><span>Tickets</span><strong>${detail.summary.totalTickets}</strong></div><div class="row line"><span>Homme</span><strong>${detail.summary.homme}</strong></div><div class="row line"><span>Femme</span><strong>${detail.summary.femme}</strong></div>${paymentSectionHtml}<div class="box row"><span>TOTAL CLÔTURE</span><span>${escapeHtml(formatCurrency(detail.summary.totalFinal ?? detail.summary.totalAmount))}</span></div>`,
+        target,
+      );
     } catch (printError) {
       target.close();
       console.error('Erreur chargement clôture PAF:', printError);
@@ -358,18 +377,103 @@ export const PafSection: React.FC = () => {
 
       {userIsAdmin && <div className="rounded-xl border border-base bg-surface p-4"><div className="mb-3 flex items-center justify-between"><div><h3 className="font-semibold text-primary">Historique des clôtures</h3><p className="text-sm text-slate-500">Les journées clôturées restent conservées et consultables.</p></div><span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-slate-400">{closures.length} clôture{closures.length > 1 ? 's' : ''}</span></div>{closures.length === 0 ? <p className="text-sm text-slate-500">Aucune clôture PAF enregistrée.</p> : <div className="space-y-2">{closures.map((closure) => <div key={closure.id} className="flex flex-col gap-3 rounded-lg bg-surface-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="font-semibold text-primary">{closure.date} <span className="ml-2 text-xs font-normal text-slate-500">{closure.reference}</span></div><div className="mt-1 text-xs text-slate-400">Clôturée le {formatDate(closure.dateCloture)} · {closure.summary.totalTickets} opération{closure.summary.totalTickets > 1 ? 's' : ''} · {formatCurrency(closure.summary.totalAmount)}</div></div><div className="flex gap-2"><button type="button" onClick={() => void handlePrintClosure(closure)} className="inline-flex items-center gap-1 rounded-lg border border-base px-2.5 py-1.5 text-xs text-slate-300 transition hover:text-white"><Printer size={14} /> Imprimer</button><button type="button" onClick={() => void getPafClosure(closure.id).then(setSelectedClosure).catch(() => setError('La clôture n’a pas pu être chargée.'))} className="rounded-lg border border-base px-2.5 py-1.5 text-xs text-slate-300 transition hover:text-white">Consulter</button></div></div>)}</div>}</div>}
 
-      {selectedClosure && <div className="rounded-xl border border-accent/30 bg-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="font-semibold text-primary">Clôture {selectedClosure.reference}</h3><p className="text-sm text-slate-500">Journée {selectedClosure.date} · {formatDate(selectedClosure.dateCloture)}</p></div><button type="button" onClick={() => setSelectedClosure(null)} className="text-slate-400 hover:text-white" aria-label="Fermer le détail"><X size={18} /></button></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg bg-surface-2 p-3 text-sm"><span className="text-slate-400">Opérations</span><strong className="mt-1 block text-primary">{selectedClosure.summary.totalTickets}</strong></div><div className="rounded-lg bg-surface-2 p-3 text-sm"><span className="text-slate-400">Total</span><strong className="mt-1 block text-accent">{formatCurrency(selectedClosure.summary.totalAmount)}</strong></div><div className="rounded-lg bg-surface-2 p-3 text-sm"><span className="text-slate-400">Homme / Femme</span><strong className="mt-1 block text-emerald-400">{selectedClosure.summary.homme} / {selectedClosure.summary.femme}</strong></div></div><div className="mt-3 space-y-2">{(selectedClosure.operations || []).map((operation) => <div key={operation.id} className="rounded-lg bg-surface-2 px-3 py-2 text-sm"><div className="flex justify-between gap-2"><span className="text-primary">{getEntryDetailsText(operation)}</span><span className="text-accent">{formatCurrency(operation.price)}</span></div><div className="mt-1 text-xs text-slate-500">{formatDate(operation.date)} · {getPaymentLabel(operation.paymentMethod)}</div></div>)}</div></div>}
+      {selectedClosure && (
+        <div className="rounded-xl border border-accent/30 bg-surface p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-primary">Clôture {selectedClosure.reference}</h3>
+              <p className="text-sm text-slate-500">Journée {selectedClosure.date} · {formatDate(selectedClosure.dateCloture)}</p>
+            </div>
+            <button type="button" onClick={() => setSelectedClosure(null)} className="text-slate-400 hover:text-white" aria-label="Fermer le détail">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-surface-2 p-3 text-sm">
+              <span className="text-slate-400">Opérations</span>
+              <strong className="mt-1 block text-primary">{selectedClosure.summary.totalTickets}</strong>
+            </div>
+            <div className="rounded-lg bg-surface-2 p-3 text-sm">
+              <span className="text-slate-400">Total</span>
+              <strong className="mt-1 block text-accent">{formatCurrency(selectedClosure.summary.totalAmount)}</strong>
+            </div>
+            <div className="rounded-lg bg-surface-2 p-3 text-sm">
+              <span className="text-slate-400">Homme / Femme</span>
+              <strong className="mt-1 block text-emerald-400">{selectedClosure.summary.homme} / {selectedClosure.summary.femme}</strong>
+            </div>
+          </div>
+
+          {selectedClosure.summary.byPayment && (
+            <div className="mt-3 rounded-lg bg-surface-2 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Répartition par mode de paiement</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {paymentOptions.map((opt) => {
+                  const amt = selectedClosure.summary.byPayment?.[opt.value] || 0;
+                  if (amt <= 0) return null;
+                  return (
+                    <div key={opt.value} className="rounded-md border border-base bg-surface px-2.5 py-1.5 text-xs">
+                      <span className="text-slate-400">{opt.label} : </span>
+                      <strong className="text-accent">{formatCurrency(amt)}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 space-y-2">
+            {(selectedClosure.operations || []).map((operation) => (
+              <div key={operation.id} className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="text-primary">{getEntryDetailsText(operation)}</span>
+                  <span className="text-accent">{formatCurrency(operation.price)}</span>
+                </div>
+                <div className="mt-1 text-xs text-slate-500">{formatDate(operation.date)} · {getPaymentLabel(operation.paymentMethod)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Modal isOpen={showCloseConfirmation} onClose={() => { if (!saving) setShowCloseConfirmation(false); }} title="Confirmer la clôture du PAF" size="sm">
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300"><AlertTriangle size={18} /></div>
-            <div><p className="font-semibold text-primary">Clôturer le compte du jour ?</p><p className="mt-1 text-sm leading-5 text-slate-400">Les opérations ouvertes seront enregistrées dans l’historique et un nouveau compte du jour sera ouvert.</p></div>
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
+              <AlertTriangle size={18} />
+            </div>
+            <div>
+              <p className="font-semibold text-primary">Clôturer le compte du jour ?</p>
+              <p className="mt-1 text-sm leading-5 text-slate-400">Les opérations ouvertes seront enregistrées dans l’historique et un nouveau compte du jour sera ouvert.</p>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2 rounded-xl border border-base bg-surface-2 p-3 text-center">
-            <div><p className="text-xs text-muted">Opérations</p><p className="mt-1 text-lg font-semibold text-primary">{summary.totalTickets}</p></div>
-            <div><p className="text-xs text-muted">Total à clôturer</p><p className="mt-1 text-lg font-semibold text-accent">{formatCurrency(summary.totalAmount)}</p></div>
+            <div>
+              <p className="text-xs text-muted">Opérations</p>
+              <p className="mt-1 text-lg font-semibold text-primary">{summary.totalTickets}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Total à clôturer</p>
+              <p className="mt-1 text-lg font-semibold text-accent">{formatCurrency(summary.totalAmount)}</p>
+            </div>
           </div>
+
+          {summary.byPayment && (
+            <div className="rounded-xl border border-base bg-surface-2 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Détail par mode de paiement</p>
+              <div className="space-y-1 text-xs">
+                {paymentOptions.map((opt) => {
+                  const amt = summary.byPayment?.[opt.value] || 0;
+                  if (amt <= 0) return null;
+                  return (
+                    <div key={opt.value} className="flex justify-between text-slate-300">
+                      <span>{opt.label}</span>
+                      <strong className="text-accent">{formatCurrency(amt)}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <p className="text-xs leading-5 text-slate-500">Cette action remettra les compteurs du jour à zéro. Les données clôturées ne seront pas supprimées.</p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="secondary" onClick={() => setShowCloseConfirmation(false)} disabled={saving} className="justify-center">Annuler</Button>
