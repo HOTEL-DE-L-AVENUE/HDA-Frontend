@@ -1,6 +1,6 @@
 // hotel/RoomList.tsx
-import React, { useState, useEffect } from 'react';
-import { Room, RoomType } from '../../types/hotel.types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { HousekeepingTask, Room, RoomMaintenance, RoomType } from '../../types/hotel.types';
 import {
   DoorOpen,
   Edit,
@@ -23,6 +23,8 @@ import { formatCurrency } from '../../utils/data';
 import { RoomStatusModal } from './Modal/RoomStatusModal';
 import { useRooms } from '../../hooks/useRooms';
 import { roomTypeService } from '../../services/room.service';
+import { housekeepingService } from '../../services/housekeeping.service';
+import { maintenanceService } from '../../services/maintenance.service';
 
 interface RoomListProps {
   rooms?: Room[];
@@ -47,6 +49,8 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
   } = useRooms();
 
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [activeHousekeepingTasks, setActiveHousekeepingTasks] = useState<HousekeepingTask[]>([]);
+  const [activeMaintenanceByRoom, setActiveMaintenanceByRoom] = useState<Map<number, RoomMaintenance['statut']>>(new Map());
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -60,6 +64,44 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('TOUS');
   const [filterType, setFilterType] = useState<string>('TOUS');
+
+  const loadOperationalStatuses = useCallback(async () => {
+    try {
+      const [housekeepingToDo, housekeepingInProgress, maintenanceOpen, maintenanceInProgress] = await Promise.all([
+        housekeepingService.getTasks({ statut: 'A_FAIRE' }),
+        housekeepingService.getTasks({ statut: 'EN_COURS' }),
+        maintenanceService.getMaintenances({ statut: 'OUVERT' }),
+        maintenanceService.getMaintenances({ statut: 'EN_COURS' }),
+      ]);
+
+      setActiveHousekeepingTasks([...housekeepingToDo, ...housekeepingInProgress]);
+      const maintenanceByRoom = new Map<number, RoomMaintenance['statut']>();
+      maintenanceOpen.forEach((maintenance: RoomMaintenance) => {
+        if (Number.isInteger(maintenance.room_id)) maintenanceByRoom.set(maintenance.room_id, 'OUVERT');
+      });
+      maintenanceInProgress.forEach((maintenance: RoomMaintenance) => {
+        if (Number.isInteger(maintenance.room_id)) maintenanceByRoom.set(maintenance.room_id, 'EN_COURS');
+      });
+      setActiveMaintenanceByRoom(maintenanceByRoom);
+    } catch (err) {
+      console.error('❌ Erreur chargement des statuts opérationnels:', err);
+    }
+  }, []);
+
+  const getHousekeepingTask = (roomId: number) => activeHousekeepingTasks
+    .filter(task => task.room_id === roomId)
+    .sort((a, b) => Number(b.statut === 'EN_COURS') - Number(a.statut === 'EN_COURS'))[0];
+
+  const getPrimaryRoomStatus = (room: Room): Room['statut'] => {
+    // These statuses are operational overlays; the room itself remains available.
+    if (room.statut === 'MAINTENANCE' && activeMaintenanceByRoom.has(room.id)) return 'LIBRE';
+    if (room.statut === 'NETTOYAGE' && getHousekeepingTask(room.id)) return 'LIBRE';
+    return room.statut;
+  };
+
+  useEffect(() => {
+    void loadOperationalStatuses();
+  }, [loadOperationalStatuses, refreshTrigger]);
 
   // Charger les types de chambres
   useEffect(() => {
@@ -93,7 +135,7 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
       getRoomTypeName(room).toLowerCase().includes(searchTerm.toLowerCase());
 
     // Filtre par statut
-    const matchesStatus = filterStatus === 'TOUS' || room.statut === filterStatus;
+    const matchesStatus = filterStatus === 'TOUS' || getPrimaryRoomStatus(room) === filterStatus;
 
     // Filtre par type
     const matchesType = filterType === 'TOUS' || room.room_type_id === Number(filterType);
@@ -104,10 +146,10 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
   // Statistiques des chambres
   const stats = {
     total: rooms.length,
-    libre: rooms.filter(r => r.statut === 'LIBRE').length,
-    occupee: rooms.filter(r => r.statut === 'OCCUPEE').length,
-    reservee: rooms.filter(r => r.statut === 'RESERVEE').length,
-    maintenance: rooms.filter(r => r.statut === 'MAINTENANCE').length,
+    libre: rooms.filter(r => getPrimaryRoomStatus(r) === 'LIBRE').length,
+    occupee: rooms.filter(r => getPrimaryRoomStatus(r) === 'OCCUPEE').length,
+    reservee: rooms.filter(r => getPrimaryRoomStatus(r) === 'RESERVEE').length,
+    maintenance: rooms.filter(r => getPrimaryRoomStatus(r) === 'MAINTENANCE').length,
   };
 
   useEffect(() => {
@@ -309,7 +351,10 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
         )}
 
         <button
-          onClick={refresh}
+          onClick={() => {
+            refresh();
+            void loadOperationalStatuses();
+          }}
           className="px-4 py-2.5 rounded-lg btn-primary flex items-center gap-2"
         >
           <Loader size={18} className={loading ? 'animate-spin' : ''} />
@@ -345,6 +390,8 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
             {filteredRooms.map(room => {
               const typeName = getRoomTypeName(room);
               const isProcessing = processingId === room.id;
+              const primaryStatus = getPrimaryRoomStatus(room);
+              const housekeepingTask = getHousekeepingTask(room.id);
 
               return (
                 <div
@@ -370,10 +417,28 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                         {room.capacite && ` • ${room.capacite} pers.`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[room.statut] || ''}`}>
-                        {statusLabels[room.statut] || room.statut}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[primaryStatus] || ''}`}>
+                        {statusLabels[primaryStatus] || primaryStatus}
                       </span>
+                      {housekeepingTask && (
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border ${housekeepingTask.statut === 'EN_COURS' ? 'bg-info/10 text-info border-info/20' : 'bg-warning/10 text-warning border-warning/20'}`}
+                          title={housekeepingTask.statut === 'EN_COURS' ? 'Ménage en cours' : 'Ménage à faire'}
+                        >
+                          <Brush size={12} className="inline mr-1" aria-hidden="true" />
+                          {housekeepingTask.statut === 'EN_COURS' ? 'Nettoyage en cours' : 'Ménage à faire'}
+                        </span>
+                      )}
+                      {activeMaintenanceByRoom.has(room.id) && (
+                        <span
+                          className="px-2.5 py-1 rounded-full text-xs font-medium border bg-danger/10 text-danger border-danger/20"
+                          title={activeMaintenanceByRoom.get(room.id) === 'EN_COURS' ? 'Maintenance en cours' : 'Maintenance à faire'}
+                        >
+                          <Wrench size={12} className="inline mr-1" aria-hidden="true" />
+                          {activeMaintenanceByRoom.get(room.id) === 'EN_COURS' ? 'Maintenance en cours' : 'Maintenance à faire'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -586,5 +651,10 @@ const statusColors: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
+  LIBRE: 'Libre',
+  OCCUPEE: 'Occupée',
+  RESERVEE: 'Réservée',
   NETTOYAGE: 'A nettoyer',
+  MAINTENANCE: 'Maintenance',
+  HORS_SERVICE: 'Hors service',
 };
