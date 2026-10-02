@@ -217,6 +217,12 @@ export const financeService = {
     return response.data.data as FinancialTransaction;
   },
 
+  // Clôture de caisse : les transactions sortent de la caisse du jour (restent en historique).
+  async closeTransactions(module: string, transactionIds: number[]) {
+    const response = await api.post('/api/finance/transactions/close', { module, transaction_ids: transactionIds });
+    return response.data.data as { closed_transactions: number };
+  },
+
   // ==================== CLIENT STATEMENTS ====================
   
   async getClientStatement(clientId: number) {

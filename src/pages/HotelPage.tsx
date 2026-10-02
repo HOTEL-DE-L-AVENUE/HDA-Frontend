@@ -51,6 +51,7 @@ import { HotelProductHistory } from '../components/Hotel/HotelProductHistory';
 import AuthService from '../services/authService';
 import { filterTabsByRole, getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 import api from '../lib/api';
+import { useToast } from '../context/ToastContext';
 
 interface Tab {
   id: string;
@@ -147,6 +148,7 @@ const TabButton: React.FC<{
 // Composant principal
 const HotelPage: React.FC = () => {
   const context = useHDA();
+  const { showToast } = useToast();
 
   const {
     getModuleCaisseSolde,
@@ -188,7 +190,6 @@ const HotelPage: React.FC = () => {
   const [paymentType, setPaymentType] = useState<'TOTAL' | 'PARTIEL'>('TOTAL');
   const [partialPaymentAmount, setPartialPaymentAmount] = useState('');
   const [paymentAllocations, setPaymentAllocations] = useState<Partial<Record<HotelPaymentMethod, string>>>({});
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const paymentRequestLock = useRef(false);
   const paymentIdempotencyKey = useRef('');
@@ -221,7 +222,7 @@ const HotelPage: React.FC = () => {
     setPaymentType('TOTAL');
     setPartialPaymentAmount('');
     setPaymentAllocations({ ESPECES: due > 0 ? String(due) : '' });
-    setPaymentError(null);
+   
     paymentIdempotencyKey.current = globalThis.crypto?.randomUUID?.()
       || `hotel-${res.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   };
@@ -229,7 +230,7 @@ const HotelPage: React.FC = () => {
   // Annulation de l'encaissement
   const handleCancelEncaissement = () => {
     setPaymentReservation(null);
-    setPaymentError(null);
+   
     setPaymentCancelledTrigger(prev => prev + 1);
   };
 
@@ -242,7 +243,7 @@ const HotelPage: React.FC = () => {
       setDataRefreshKey((prev) => prev + 1);
     } catch (error: any) {
       console.error("Erreur lors du check-in", error);
-      alert(error?.response?.data?.message || "Erreur lors du check-in de la réservation.");
+      showToast(error?.response?.data?.message || "Erreur lors du check-in de la réservation.", 'error');
     } finally {
       setIsLoading(false);
     }
@@ -258,15 +259,15 @@ const HotelPage: React.FC = () => {
       .map(([moyen_paiement, value]) => ({ moyen_paiement: moyen_paiement as HotelPaymentMethod, montant: Number(value) }));
     const allocated = modes.reduce((sum, mode) => sum + (Number.isFinite(mode.montant) ? mode.montant : 0), 0);
     if (!Number.isFinite(amount) || amount <= 0 || amount > due) {
-      setPaymentError('Le montant à régler doit être positif et ne peut pas dépasser le solde restant.');
+      showToast('Le montant à régler doit être positif et ne peut pas dépasser le solde restant.', 'error');
       return;
     }
     if (!modes.length || modes.some(mode => !Number.isFinite(mode.montant) || mode.montant <= 0)) {
-      setPaymentError('Sélectionnez au moins un mode et saisissez un montant positif pour chacun.');
+      showToast('Sélectionnez au moins un mode et saisissez un montant positif pour chacun.', 'error');
       return;
     }
     if (Math.round(allocated * 100) !== Math.round(amount * 100)) {
-      setPaymentError('La somme des modes de paiement doit être exactement égale au montant à régler.');
+      showToast('La somme des modes de paiement doit être exactement égale au montant à régler.', 'error');
       return;
     }
     paymentRequestLock.current = true;
@@ -280,10 +281,10 @@ const HotelPage: React.FC = () => {
       await Promise.all([refreshRooms(), loadReservations()]);
       setDataRefreshKey((prev) => prev + 1);
       setPaymentReservation(null);
-      setPaymentError(null);
+     
     } catch (error: any) {
       console.error("Erreur lors de l'encaissement", error);
-      setPaymentError(error?.response?.data?.message || "Erreur lors de l'encaissement de la réservation.");
+      showToast(error?.response?.data?.message || "Erreur lors de l'encaissement de la réservation.", 'error');
     } finally {
       paymentRequestLock.current = false;
       setIsSubmittingPayment(false);
@@ -585,11 +586,11 @@ const HotelPage: React.FC = () => {
             </div>
             <div className="mb-4 grid grid-cols-2 gap-2 text-sm">
               <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-base px-3 py-2.5">
-                <input type="radio" name="paymentType" checked={paymentType === 'TOTAL'} onChange={() => { setPaymentType('TOTAL'); setPaymentError(null); }} disabled={isSubmittingPayment} />
+                <input type="radio" name="paymentType" checked={paymentType === 'TOTAL'} onChange={() => { setPaymentType('TOTAL'); }} disabled={isSubmittingPayment} />
                 <span>Paiement total</span>
               </label>
               <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-base px-3 py-2.5">
-                <input type="radio" name="paymentType" checked={paymentType === 'PARTIEL'} onChange={() => { setPaymentType('PARTIEL'); setPaymentError(null); }} disabled={isSubmittingPayment} />
+                <input type="radio" name="paymentType" checked={paymentType === 'PARTIEL'} onChange={() => { setPaymentType('PARTIEL'); }} disabled={isSubmittingPayment} />
                 <span>Paiement partiel</span>
               </label>
             </div>
@@ -602,7 +603,7 @@ const HotelPage: React.FC = () => {
                   max={paymentDue}
                   step="0.01"
                   value={partialPaymentAmount}
-                  onChange={(event) => { setPartialPaymentAmount(event.target.value); setPaymentError(null); }}
+                  onChange={(event) => { setPartialPaymentAmount(event.target.value); }}
                   className="input-field w-full rounded-lg px-3 py-2.5"
                   placeholder="Saisir le montant en Ar"
                   disabled={isSubmittingPayment}
@@ -622,7 +623,6 @@ const HotelPage: React.FC = () => {
                         checked={selected}
                         disabled={isSubmittingPayment || freeDisabled}
                         onChange={(event) => {
-                          setPaymentError(null);
                           setPaymentAllocations((previous) => {
                             if (!event.target.checked) {
                               const next = { ...previous };
@@ -643,7 +643,7 @@ const HotelPage: React.FC = () => {
                         max={paymentDue}
                         step="0.01"
                         value={paymentAllocations[value] ?? ''}
-                        onChange={(event) => { setPaymentAllocations((previous) => ({ ...previous, [value]: event.target.value })); setPaymentError(null); }}
+                        onChange={(event) => { setPaymentAllocations((previous) => ({ ...previous, [value]: event.target.value })); }}
                         className="input-field mt-2 w-full rounded-lg px-3 py-2 text-sm"
                         placeholder={`Montant ${label} en Ar`}
                         disabled={isSubmittingPayment}
@@ -658,7 +658,6 @@ const HotelPage: React.FC = () => {
               <span className="text-muted">À régler maintenant</span><strong>{formatCurrency(Number.isFinite(paymentTarget) ? paymentTarget : 0)}</strong>
               <span className="text-muted">Répartition</span><strong>{formatCurrency(paymentAllocated)}</strong>
             </div>
-            {paymentError && <div role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{paymentError}</div>}
             </div>
             <div className="flex shrink-0 gap-3 border-t border-base bg-surface p-4 sm:px-5">
               <button type="button" onClick={handleCancelEncaissement} className="flex-1 rounded-lg border border-base px-4 py-2.5 text-sm text-primary hover:bg-surface-2" disabled={isSubmittingPayment}>
