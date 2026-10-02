@@ -122,7 +122,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const resteAPayer = Math.round((grandTotal - montantPaye) * 100) / 100;
 
   useEffect(() => {
-    if (!isOpen || !initialData?.id || montantPaye <= 0) {
+    if (!isOpen || !initialData?.id) {
       setPayments([]);
       return;
     }
@@ -180,6 +180,9 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
       extras: extraServices,
       total: grandTotal,
       montantPaye,
+      montantEncaisse: Number(initialData?.montant_encaisse ?? montantPaye),
+      montantCredit: Number(initialData?.montant_credit || 0),
+      montantGratuit: Number(initialData?.montant_gratuit || 0),
       payments,
       rectificationLines: rectification?.lines,
     };
@@ -1240,7 +1243,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 {montantPaye > 0 ? (
                   <>
                     <div className="flex justify-between text-muted pt-2 border-t border-base"><span>Total de la réservation</span><span>{formatCurrency(grandTotal)}</span></div>
-                    <div className="flex justify-between text-emerald-400"><span>Déjà payé</span><span>− {formatCurrency(montantPaye)}</span></div>
+                    <div className="flex justify-between text-emerald-400"><span>Déjà couvert</span><span>− {formatCurrency(montantPaye)}</span></div>
+                    {Number(initialData?.montant_encaisse || 0) > 0 && <div className="flex justify-between text-muted"><span>Argent réellement encaissé</span><span>{formatCurrency(initialData?.montant_encaisse || 0)}</span></div>}
+                    {Number(initialData?.montant_gratuit || 0) > 0 && <div className="flex justify-between text-violet-300"><span>Couvert gratuitement</span><span>{formatCurrency(initialData?.montant_gratuit || 0)}</span></div>}
+                    {Number(initialData?.montant_credit || 0) > 0 && <div className="flex justify-between text-orange-300"><span>Crédit restant dû</span><span>{formatCurrency(initialData?.montant_credit || 0)}</span></div>}
                     <div className="flex justify-between text-accent pt-2 border-t border-base">
                       <span>{resteAPayer > 0 ? 'Total à payer (rectification)' : resteAPayer < 0 ? 'Trop-perçu à rendre' : 'Total à payer'}</span>
                       <strong>{formatCurrency(Math.abs(resteAPayer))}</strong>

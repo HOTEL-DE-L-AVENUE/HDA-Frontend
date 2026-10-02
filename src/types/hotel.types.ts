@@ -59,12 +59,19 @@ export interface ReservationPayment {
   id: number;
   reservation_id: number;
   montant: number;
+  montant_encaisse?: number;
+  montant_credit?: number;
+  montant_gratuit?: number;
   moyen_paiement: string | null;
+  statut?: string;
   // Ce qui était facturé au moment du paiement (sert à calculer les rectifications)
   details: {
     montant_total: number;
     laundry_price: number;
     services_extras: ReservationExtraService[];
+    modes_paiement?: Array<{ moyen_paiement: string; montant: number }>;
+    montant_cible?: number;
+    statut_paiement_apres_operation?: string;
   } | null;
   created_by_nom?: string | null;
   created_by_prenom?: string | null;
@@ -96,6 +103,11 @@ export interface Reservation {
   services_extras_total?: number | null;
   // Somme déjà encaissée ; reste à payer = montant_total - montant_paye
   montant_paye?: number | null;
+  montant_encaisse?: number | null;
+  montant_credit?: number | null;
+  montant_gratuit?: number | null;
+  montant_restant?: number | null;
+  statut_paiement?: 'IMPAYE' | 'PARTIELLEMENT_PAYE' | 'PAYE' | 'CREDIT' | 'GRATUIT';
   est_payee?: boolean | number;
   client?: Client;
   room?: Room;
