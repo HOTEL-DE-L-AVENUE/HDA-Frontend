@@ -160,7 +160,11 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = cashPaymentTotal;
+  // Retraits autres départements : caisse espèces négative → on ajoute, positive → on soustrait.
+  const otherDepartmentWithdrawalTotal = parseCasinoAmount(values.autres);
+  const totalEspeces = cashPaymentTotal < 0
+    ? cashPaymentTotal + otherDepartmentWithdrawalTotal
+    : cashPaymentTotal - otherDepartmentWithdrawalTotal;
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
