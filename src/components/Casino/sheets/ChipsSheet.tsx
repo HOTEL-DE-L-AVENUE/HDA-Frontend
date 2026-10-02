@@ -22,7 +22,9 @@ export const ChipsSheet: React.FC<ChipsSheetProps> = ({ date, chips, players, ra
   const [identityModal, setIdentityModal] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const withdrawnTotal = chips.reduce((sum, line) => sum + line.value * parseCasinoAmount(line.withdrawn), 0);
   const playersWithStartTime = players.filter((player) => Boolean(player.name.trim() || player.caves.trim() || player.amount.trim()) && Boolean(player.time || player.arrival));
-  const firstPlayer = getEarliestPlayer(playersWithStartTime) || getEarliestPlayer(players);
+  // Premier joueur ajouté via « Play » (ordre d'ajout) : son heure de play = heure d'arrivée du jeu.
+  const firstPlayedPlayer = players.find((player) => player.casinoPlayerGameId && getTimeMinutes(player.time) !== null);
+  const firstPlayer = firstPlayedPlayer || getEarliestPlayer(playersWithStartTime) || getEarliestPlayer(players);
   const firstArrival = firstPlayer?.time || firstPlayer?.arrival || '';
 
   useEffect(() => {
