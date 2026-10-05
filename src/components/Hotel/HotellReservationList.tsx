@@ -211,6 +211,10 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
     return matchesStatus && matchesSearch && matchesTab && matchesDateRange && matchesUser;
   });
+  const filteredReservationsTotal = filteredReservations.reduce(
+    (total, reservation) => total + (Number(reservation.montant_total) || 0),
+    0
+  );
 
   const isLoading = reservationsLoading || clientsLoading || roomsLoading;
 
@@ -428,8 +432,15 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
       {/* Liste */}
       <div className="space-y-2">
-        <div className="flex justify-between text-xs text-gray-500 px-1">
-          <span>{filteredReservations.length} réservation{filteredReservations.length > 1 ? 's' : ''}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2">
+          <span className="text-xs text-gray-400">
+            {filteredReservations.length} réservation{filteredReservations.length > 1 ? 's' : ''}
+          </span>
+          {view === 'history' && (
+            <span className="text-sm font-semibold text-accent">
+              Valeur totale listée : {formatCurrency(filteredReservationsTotal)}
+            </span>
+          )}
         </div>
 
         {filteredReservations.length === 0 ? (

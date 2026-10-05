@@ -483,11 +483,38 @@ interface CaisseManagerProps {
   onRefresh?: () => Promise<void> | void;
 }
 
+const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
+  const isClosedTransaction = (transaction: FinancialTransaction) =>
+    transaction.cloturee === true || Number(transaction.cloturee) === 1;
+  const openTransactions = transactions.filter((transaction) => !isClosedTransaction(transaction));
+  if (openTransactions.length > 0) {
+    return { transactions: openTransactions, isClosed: false };
+  }
+
+  const closedTransactions = transactions.filter(isClosedTransaction);
+  if (closedTransactions.length === 0) {
+    return { transactions: [], isClosed: false };
+  }
+
+  const latestCloseTime = Math.max(...closedTransactions.map((transaction) => {
+    const closeTime = transaction.cloture_at ? new Date(transaction.cloture_at).getTime() : 0;
+    return Number.isNaN(closeTime) ? 0 : closeTime;
+  }));
+  const latestCloseBatch = closedTransactions.filter((transaction) => {
+    const closeTime = transaction.cloture_at ? new Date(transaction.cloture_at).getTime() : 0;
+    return (Number.isNaN(closeTime) ? 0 : closeTime) === latestCloseTime;
+  });
+
+  return { transactions: latestCloseBatch, isClosed: true };
+};
+
 export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onCloseAllOrders, onRefresh }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
   const [backendTransactions, setBackendTransactions] = useState<FinancialTransaction[]>([]);
+  const [hotelLedgerTransactions, setHotelLedgerTransactions] = useState<FinancialTransaction[]>([]);
+  const [hotelTransactionsAreClosed, setHotelTransactionsAreClosed] = useState(false);
   const [moduleStockSummary, setModuleStockSummary] = useState<{ entrees: number; sorties: number; solde: number } | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [currentBarSession, setCurrentBarSession] = useState<BarSession | null>(null);
@@ -518,17 +545,24 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     if (!isBackendCaisse) return;
 
     Promise.all([
-      financeService.getTransactions({ module: module.toUpperCase() }),
+      financeService.getTransactions({ module: module.toUpperCase(), include_closed: isHotel }),
       financeService.getFinancialStats(),
     ])
       .then(([transactions, stats]) => {
-        setBackendTransactions(transactions);
+        if (isHotel) {
+          const snapshot = getHotelCashRegisterSnapshot(transactions);
+          setHotelLedgerTransactions(transactions);
+          setBackendTransactions(snapshot.transactions);
+          setHotelTransactionsAreClosed(snapshot.isClosed);
+        } else {
+          setBackendTransactions(transactions);
+        }
         const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
         setModuleStockSummary(summary || null);
         setBackendError(null);
       })
       .catch(() => setBackendError('Impossible de charger les données de la caisse.'));
-  }, [isBackendCaisse, module]);
+  }, [isBackendCaisse, isHotel, module]);
 
   useEffect(() => {
     if (!isBar) return;
@@ -550,15 +584,23 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const backendSorties = backendTransactions
     .filter((transaction) => isFinancialOutflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
+  const hotelTotalEntrees = hotelLedgerTransactions
+    .filter((transaction) => isFinancialInflow(transaction.type_flux))
+    .reduce((total, transaction) => total + Number(transaction.montant || 0), 0);
+  const hotelTotalSorties = hotelLedgerTransactions
+    .filter((transaction) => isFinancialOutflow(transaction.type_flux))
+    .reduce((total, transaction) => total + Number(transaction.montant || 0), 0);
   const localCaisse = getModuleCaisseSolde(module);
   // Hôtel : la carte reflète la caisse ouverte (transactions non clôturées) ; le résumé
   // global /finance/summary inclut aussi les opérations déjà clôturées.
   const sortiesStock = moduleStockSummary && !isHotel ? Number(moduleStockSummary.sorties) : backendSorties;
-  const solde = isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
+  const solde = isHotel
+    ? hotelTotalEntrees - hotelTotalSorties
+    : isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
   const entrees = isBackendCaisse
-    ? (isHotel ? backendEntrees : Math.max(Number(moduleStockSummary?.entrees || 0), backendEntrees))
+    ? (isHotel ? hotelTotalEntrees : Math.max(Number(moduleStockSummary?.entrees || 0), backendEntrees))
     : localCaisse.entrees;
-  const sorties = isBackendCaisse ? sortiesStock : localCaisse.sorties;
+  const sorties = isHotel ? hotelTotalSorties : isBackendCaisse ? sortiesStock : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
   const restaurantOrders = (state.orders || state.commandes || []).filter(
@@ -599,10 +641,17 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
           description: `${form.categorie} - ${form.description}`,
         });
         const [transactions, stats] = await Promise.all([
-          financeService.getTransactions({ module: module.toUpperCase() }),
+          financeService.getTransactions({ module: module.toUpperCase(), include_closed: isHotel }),
           financeService.getFinancialStats(),
         ]);
-        setBackendTransactions(transactions.length ? transactions : [transaction]);
+        if (isHotel) {
+          setHotelLedgerTransactions(transactions);
+          const snapshot = getHotelCashRegisterSnapshot(transactions);
+          setBackendTransactions(snapshot.transactions.length ? snapshot.transactions : [transaction]);
+          setHotelTransactionsAreClosed(snapshot.isClosed);
+        } else {
+          setBackendTransactions(transactions.length ? transactions : [transaction]);
+        }
         const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
         setModuleStockSummary(summary || null);
         setBackendError(null);
@@ -971,10 +1020,13 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     try {
       await financeService.closeTransactions('HOTEL', ids);
       const [transactions, stats] = await Promise.all([
-        financeService.getTransactions({ module: 'HOTEL' }),
+        financeService.getTransactions({ module: 'HOTEL', include_closed: true }),
         financeService.getFinancialStats(),
       ]);
-      setBackendTransactions(transactions);
+      const snapshot = getHotelCashRegisterSnapshot(transactions);
+      setHotelLedgerTransactions(transactions);
+      setBackendTransactions(snapshot.transactions);
+      setHotelTransactionsAreClosed(snapshot.isClosed);
       setModuleStockSummary(stats.modules.find((item) => item.module.toLowerCase() === 'hotel') || null);
       setTransactionsRefreshTrigger((value) => value + 1);
       setBackendError(null);
@@ -1125,7 +1177,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
               <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintHotelReport()} disabled={backendTransactions.length === 0} className="justify-center">
                 Imprimer tout
               </Button>
-              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => setShowCloseHotelModal(true)} disabled={backendTransactions.length === 0} className="justify-center">
+              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => setShowCloseHotelModal(true)} disabled={backendTransactions.length === 0 || hotelTransactionsAreClosed} className="justify-center">
                 Clôturer la caisse
               </Button>
             </div>
@@ -1184,7 +1236,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       </div>
 
       {/* Transactions adaptées au module */}
-      {isBar ? (
+      {!isHotel || !hotelTransactionsAreClosed ? (isBar ? (
         <BarTransactionsCard title={transactionTitle} refreshTrigger={transactionsRefreshTrigger} />
       ) : (
         <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
@@ -1256,7 +1308,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
             )}
           </div>
         </div>
-      )}
+      )) : null}
 
       {/* Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nouvelle Transaction">
