@@ -28,7 +28,8 @@ import {
   Search,
   Moon,
   Sun,
-  Package
+  Package,
+  History
 } from 'lucide-react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency, formatDate } from '../utils/data';
@@ -71,6 +72,7 @@ const tabs: Tab[] = [
   { id: 'inventory', label: 'Inventaire', icon: TrendingUp, mobileLabel: 'Invent.' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
   { id: 'rapport', label: 'Rapport journalière', icon: ClipboardList, mobileLabel: 'Rapport' },
+  { id: 'historiqueReservations', label: 'Historique', icon: History, mobileLabel: 'Historique' },
 ];
 
 const hotelPaymentMethods: Array<{ value: HotelPaymentMethod; label: string }> = [
@@ -459,6 +461,22 @@ const HotelPage: React.FC = () => {
         {activeTab === 'reservations' && (
           <div className="overflow-x-auto">
             <ReservationList
+              view="active"
+              onEdit={(res) => {
+                setSelectedReservation(res);
+                setIsReservationModalOpen(true);
+              }}
+              onEncaisser={handleEncaisser}
+              onCheckIn={handleCheckIn}
+              refreshTrigger={dataRefreshKey}
+              paymentCancelledTrigger={paymentCancelledTrigger}
+            />
+          </div>
+        )}
+        {activeTab === 'historiqueReservations' && (
+          <div className="overflow-x-auto">
+            <ReservationList
+              view="history"
               onEdit={(res) => {
                 setSelectedReservation(res);
                 setIsReservationModalOpen(true);

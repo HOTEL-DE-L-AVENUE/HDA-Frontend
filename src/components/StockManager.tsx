@@ -1065,7 +1065,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       </Modal>
       <div className="flex justify-end">
         <div className="flex flex-wrap justify-end gap-2">
-          {!isBar && (
+          {!isBar && !isHotel && (
             <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
               Nouvelle transaction
             </Button>
