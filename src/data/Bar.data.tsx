@@ -5,7 +5,7 @@ export const BAR_TABS = [
   { id: 'commandes', label: 'Commandes' },
   { id: 'bar', label: 'Bar & Cocktails' },
   { id: 'equipement', label: 'Équipement' },
-  { id: 'stock', label: 'Stock' },
+ 
   { id: 'rapports', label: 'Rapports' },
   { id: 'caisse', label: 'Caisse' },
   { id: 'historique', label: 'Historique' },
