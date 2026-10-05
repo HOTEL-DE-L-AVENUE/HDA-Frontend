@@ -37,9 +37,10 @@ interface ReservationListProps {
   onDelete?: (reservationId: number) => void;
   refreshTrigger?: number;
   paymentCancelledTrigger?: number;
+  view?: 'active' | 'history';
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger, paymentCancelledTrigger }) => {
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger, paymentCancelledTrigger, view = 'active' }) => {
   const {
     reservations,
     loading: reservationsLoading,
@@ -64,7 +65,6 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
   const [barSpendByReservation, setBarSpendByReservation] = useState<Record<number, number>>({});
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [historyFromDate, setHistoryFromDate] = useState('');
   const [historyToDate, setHistoryToDate] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -185,13 +185,13 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       res.room?.numero?.includes(searchTerm);
 
     // Filter by tab (active vs history)
-    const matchesTab = activeTab === 'active'
+    const matchesTab = view === 'active'
       ? !['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut)
       : ['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut);
 
     // Filter by date range in history tab
     let matchesDateRange = true;
-    if (activeTab === 'history') {
+    if (view === 'history') {
       if (historyFromDate) {
         matchesDateRange = matchesDateRange && new Date(res.date_arrivee) >= new Date(historyFromDate);
       }
@@ -202,7 +202,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
     // Filter by user name in history tab
     let matchesUser = true;
-    if (activeTab === 'history' && userSearchTerm) {
+    if (view === 'history' && userSearchTerm) {
       const userSearchLower = userSearchTerm.toLowerCase();
       const creatorName = `${res.created_by_prenom || ''} ${res.created_by_nom || ''}`.toLowerCase();
       const modifierName = `${res.modified_by_prenom || ''} ${res.modified_by_nom || ''}`.toLowerCase();
@@ -355,22 +355,6 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
       {/* Filtres */}
       <div className="flex gap-2">
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('active')}
-            className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'active' ? 'bg-accent text-black' : 'bg-gray-900 text-gray-400'}`}
-          >
-            Actives
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'history' ? 'bg-accent text-black' : 'bg-gray-900 text-gray-400'}`}
-          >
-            Historique
-          </button>
-        </div>
         <input
           type="text"
           placeholder="Rechercher..."
@@ -384,7 +368,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
         >
           <option value="TOUS">Tous</option>
-          {activeTab === 'active' ? (
+          {view === 'active' ? (
             <>
               <option value="CONFIRMEE">Confirmées</option>
               <option value="CHECKED_IN">Check-in</option>
@@ -408,7 +392,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       </div>
 
       {/* History date filters */}
-      {activeTab === 'history' && (
+      {view === 'history' && (
         <div className="flex gap-2 flex-wrap">
           <input
             type="text"
@@ -520,7 +504,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                           </span>
                         )}
                         {/* User tracking information */}
-                        {activeTab === 'history' && (
+                        {view === 'history' && (
                           <>
                             {res.created_by_nom && (
                               <span className="text-green-400">
