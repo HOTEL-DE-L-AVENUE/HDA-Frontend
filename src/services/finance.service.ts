@@ -40,6 +40,8 @@ export interface FinancialTransaction {
   statut_sync: string;
   synced_at: string | null;
   created_at: string;
+  cloturee?: boolean | number;
+  cloture_at?: string | null;
   pdj_inclus?: boolean;
   reservation_moyen_paiement?: string;
   reservation_client_nom?: string;
@@ -176,7 +178,7 @@ export const financeService = {
 
   // ==================== FINANCIAL TRANSACTIONS ====================
   
-  async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string }) {
+  async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string; include_closed?: boolean }) {
     // The API paginates at 20 rows by default. Finance needs the complete
     // ledger; otherwise a module total can exist while its history is absent.
     const allTransactions: FinancialTransaction[] = [];
