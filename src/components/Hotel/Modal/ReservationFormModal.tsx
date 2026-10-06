@@ -443,7 +443,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
         await signatureService.createSignature('client_kyc', newClient.id, quickClientSignature, newClient.id);
       }
 
-      toast.success('Client créé avec succès');
+      toast.success(`Client créé avec succès — code ${newClient.code_client}`);
 
       // Recharger la liste des clients
       await loadClients();
@@ -722,6 +722,9 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                     setQuickClientErrors({});
                     setQuickClientSignature(null);
                     setShowClientModal(true);
+                    clientService.getNextClientCode()
+                      .then((code) => setQuickClientData(prev => (prev.code_client ? prev : { ...prev, code_client: code })))
+                      .catch((err) => console.error('Erreur aperçu code client:', err));
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-black hover:bg-accent-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all"
                 >
@@ -829,7 +832,6 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                     errors.date_arrivee ? 'border-red-500 focus:border-red-500' : ''
                   }`}
                   required
-                  min={new Date().toISOString().split('T')[0]}
                   disabled={isSubmitting}
                   style={{ minHeight: '42px' }}
                 />
@@ -852,7 +854,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                     errors.date_depart ? 'border-red-500 focus:border-red-500' : ''
                   }`}
                   required
-                  min={formData.date_arrivee || new Date().toISOString().split('T')[0]}
+                  min={formData.date_arrivee || undefined}
                   disabled={isSubmitting}
                   style={{ minHeight: '42px' }}
                 />

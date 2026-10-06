@@ -129,10 +129,9 @@ export const ClientCoreFormFields: React.FC<ClientCoreFormFieldsProps> = ({
           type="text"
           name="code_client"
           value={formData.code_client || ''}
-          onChange={onChange}
-          className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 transition"
-          disabled={isSubmitting}
-          placeholder="Auto-généré si vide"
+          readOnly
+          className="w-full px-4 py-2.5 bg-surface-2 border border-base rounded-xl text-muted cursor-not-allowed focus:outline-none"
+          placeholder={`Généré automatiquement (CH…/${new Date().getFullYear()})`}
         />
       </div>
       <div>
