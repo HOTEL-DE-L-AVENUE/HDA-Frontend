@@ -293,6 +293,7 @@ export const CocktailMenu: React.FC<Props> = ({
   const selectCategory = (category: string) => {
     setSelectedCategory(category);
     setSelectedSubcategory('Toutes');
+    setSearchTerm('');
   };
 
   const handleAddArticle = async (cocktail: BarProduct) => {
