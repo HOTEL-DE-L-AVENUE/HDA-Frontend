@@ -59,6 +59,22 @@ export interface Order {
   special_person_name?: string;
 }
 
+export interface RestaurantHistoryPayment {
+  payment_id: number;
+  order_id: number;
+  date_paiement: string;
+  montant: number;
+  moyen_paiement: string | null;
+  table_numero: string | null;
+  items: Array<{
+    id: number;
+    quantite: number;
+    prix_unitaire: number;
+    product_nom: string;
+    category_nom: string | null;
+  }>;
+}
+
 export interface RecipeIngredient {
   id: number;
   recipe_id: number;
