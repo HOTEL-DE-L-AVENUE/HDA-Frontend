@@ -71,7 +71,7 @@ const tabs: Tab[] = [
   { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
   { id: 'rapports', label: 'Rapports', icon: ClipboardList, mobileLabel: 'Rapport' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
-  { id: 'rapport', label: 'Rapport journalière', icon: ClipboardList, mobileLabel: 'Rapport' },
+  
   { id: 'historiqueReservations', label: 'Historique', icon: History, mobileLabel: 'Historique' },
 ];
 
