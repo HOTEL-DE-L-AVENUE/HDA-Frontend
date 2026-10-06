@@ -24,7 +24,7 @@ import {
   Check
 } from 'lucide-react';
 import { useClients } from '../hooks/useClients';
-import { Client, ClientFormData, ClientKyc, ClientKycFormData } from '../services/client.service';
+import { Client, ClientFormData, ClientKyc, ClientKycFormData, clientService } from '../services/client.service';
 import { ClientCoreFormFields } from '../components/Clients/ClientCoreFormFields';
 import { IdentityDocumentsCapture, identityDocumentUrl } from '../components/Clients/IdentityDocumentsCapture';
 import { signatureService } from '../services/signature.service';
@@ -373,7 +373,7 @@ const ClientsPage: React.FC = () => {
         toast.success('Client mis à jour avec succès');
       } else {
         client = await createClient(formData);
-        toast.success('Client créé avec succès');
+        toast.success(`Client créé avec succès — code ${client.code_client}`);
       }
 
       // Sauvegarde automatique du KYC si des données ont été remplies
@@ -436,6 +436,9 @@ const ClientsPage: React.FC = () => {
       date_verification: '',
     });
     setIsModalOpen(true);
+    clientService.getNextClientCode()
+      .then((code) => setFormData((prev) => (prev.code_client ? prev : { ...prev, code_client: code })))
+      .catch((err) => console.error('❌ Erreur aperçu code client:', err));
   };
 
   // Ouvrir le modal de modification

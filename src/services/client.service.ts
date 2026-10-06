@@ -152,6 +152,12 @@ export const clientService = {
     }
   },
 
+  // Aperçu du prochain code client (CH<n>/<année>) — le code définitif est attribué à l'enregistrement
+  getNextClientCode: async (): Promise<string> => {
+    const response = await api.get<ApiResponse<{ code_client: string }>>('/api/clients/next-code');
+    return response.data.data.code_client;
+  },
+
   // Créer un client
   createClient: async (data: ClientFormData): Promise<Client> => {
     try {
