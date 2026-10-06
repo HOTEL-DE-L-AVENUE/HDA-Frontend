@@ -38,7 +38,7 @@ import { ReservationList } from '../components/Hotel/HotellReservationList';
 import { EquipmentManager } from '../components/Hotel/HotelEquipmentManager';
 import { MaintenanceManager } from '../components/Hotel/HotelMaintenanceManager';
 import { HousekeepingManager } from '../components/Hotel/HotelHousekeepingManager';
-import { HotelDailyReport } from '../components/Hotel/HotelDailyReport';
+import { HotelReservationCollectionReport } from '../components/Hotel/HotelReservationCollectionReport';
 import { ClientSearch } from '../components/Hotel/ClientSearch';
 import { RoomFormModal } from '../components/Hotel/Modal/RoomFormModal';
 import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormModal';
@@ -69,7 +69,7 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
-  { id: 'inventory', label: 'Inventaire', icon: TrendingUp, mobileLabel: 'Invent.' },
+  { id: 'rapports', label: 'Rapports', icon: ClipboardList, mobileLabel: 'Rapport' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
   { id: 'rapport', label: 'Rapport journalière', icon: ClipboardList, mobileLabel: 'Rapport' },
   { id: 'historiqueReservations', label: 'Historique', icon: History, mobileLabel: 'Historique' },
@@ -535,10 +535,12 @@ const HotelPage: React.FC = () => {
             />
           </div>
         )}
-        {activeTab === 'inventory' && (
-          <div className="overflow-x-auto">
-            <HotelProductHistory />
-          </div>
+        {activeTab === 'rapports' && (
+          <HotelReservationCollectionReport
+            reservations={reservationsData}
+            rooms={roomsData}
+            refreshTrigger={dataRefreshKey}
+          />
         )}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
           <div className="overflow-x-auto">
