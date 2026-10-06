@@ -11,7 +11,6 @@ import { useHDA } from '../../../context/HDAContext';
 import AuthService from '../../../services/authService';
 import { isAdmin } from '../../../utils/permissions';
 import { formatCurrency } from '../../../utils/data';
-import api from '../../../lib/api';
 
 // ==================== TYPES ====================
 
@@ -368,15 +367,7 @@ const StockPanel: React.FC = () => {
     finally { setAddLoading(false); }
   };
 
-  const openEdit = async (item: StockItem) => {
-    const adminPassword = window.prompt('Mot de passe administrateur requis pour modifier le stock :');
-    if (!adminPassword) return;
-    try {
-      await api.post('/api/auth/verify-admin-password', { password: adminPassword });
-    } catch (err) {
-      setError(getErrorMessage(err));
-      return;
-    }
+  const openEdit = (item: StockItem) => {
     setEditItem(item);
     setForm({
       nom: item.product_nom || '',
