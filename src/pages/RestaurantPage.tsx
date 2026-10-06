@@ -396,6 +396,12 @@ export const RestaurantPage: React.FC = () => {
     setShowProductModal(true);
   };
 
+  const handleEditExistingProduct = (product: Product) => {
+    setShowProductModal(false);
+    setEditingProduct(product);
+    requestAnimationFrame(() => setShowProductModal(true));
+  };
+
   const handleUpdateProduct = async (formData: any) => {
     if (!editingProduct) return;
     try {
@@ -708,7 +714,9 @@ export const RestaurantPage: React.FC = () => {
           setEditingProduct(null);
         }}
         onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
+        onEditExisting={handleEditExistingProduct}
         categories={categories}
+        products={products}
         editingProduct={editingProduct}
       />
       <ClientModal

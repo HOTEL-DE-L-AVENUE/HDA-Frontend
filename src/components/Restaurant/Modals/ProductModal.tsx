@@ -1,5 +1,6 @@
 // src/components/Restaurant/Modals/ProductModal.tsx
 import React, { useState, useEffect } from 'react';
+import { Edit3 } from 'lucide-react';
 import { Modal, Input, Select, Button } from '../../UI';
 import type { Category, Product } from '../types';
 
@@ -7,15 +8,32 @@ interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
+  onEditExisting?: (product: Product) => void;
   categories: Category[];
+  products: Product[];
   editingProduct?: Product | null;
 }
+
+const normalizeProductName = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
+const isSimilarProductName = (first: string, second: string) => {
+  const firstName = normalizeProductName(first);
+  const secondName = normalizeProductName(second);
+  return Boolean(firstName && secondName && firstName === secondName);
+};
 
 export const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  onEditExisting,
   categories,
+  products,
   editingProduct
 }) => {
   const [form, setForm] = useState({
@@ -58,8 +76,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
   }, [editingProduct, categories]);
 
+  const [duplicateMatches, setDuplicateMatches] = useState<Product[]>([]);
+
   const handleSubmit = () => {
     if (!form.nom || !form.category_id) return;
+
+    if (!editingProduct) {
+      const matches = products.filter((product) =>
+        isSimilarProductName(product.nom, form.nom)
+      );
+      if (matches.length > 0) {
+        setDuplicateMatches(matches);
+        return;
+      }
+    }
 
     // Prépare l'objet à envoyer en incluant l'ID si on est en mode édition
     const payload: any = {
@@ -82,9 +112,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     onClose();
   };
 
+  const handleEditExisting = (product: Product) => {
+    setDuplicateMatches([]);
+    onEditExisting?.(product);
+  };
+
+  const closeDuplicateAlert = () => setDuplicateMatches([]);
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editingProduct ? "Modifier le plat" : "Ajouter un plat"} size="lg">
-      <div className="space-y-4">
+    <>
+      <Modal isOpen={isOpen} onClose={onClose} title={editingProduct ? "Modifier le plat" : "Ajouter un plat"} size="lg">
+        <div className="space-y-4">
         <Input
           label="Nom du plat"
           value={form.nom}
@@ -200,6 +238,60 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           </Button>
         </div>
       </div>
-    </Modal>
+      </Modal>
+
+      <Modal
+        isOpen={duplicateMatches.length > 0}
+        onClose={closeDuplicateAlert}
+        title="Plat déjà inscrit"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">
+            « <span className="font-semibold text-primary">{form.nom.trim()}</span> » ressemble à {duplicateMatches.length > 1 ? 'des plats déjà inscrits' : 'un plat déjà inscrit'}.
+            Voulez-vous modifier le plat existant plutôt que d’en créer un nouveau ?
+          </p>
+
+          <div className="space-y-2">
+            {duplicateMatches.map((product) => (
+              <div key={product.id} className="flex items-center justify-between gap-3 rounded-lg border border-base bg-surface-2 p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-primary">{product.nom}</p>
+                  <p className="text-xs text-muted">
+                    {product.category?.nom || 'Sans catégorie'} · {product.prix_vente} MGA
+                  </p>
+                </div>
+                <Button type="button" icon={<Edit3 size={14} />} onClick={() => handleEditExisting(product)}>
+                  Modifier
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={closeDuplicateAlert} className="flex-1">
+              Annuler
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => {
+              setDuplicateMatches([]);
+              onSubmit({
+                nom: form.nom,
+                code: form.code,
+                category_id: form.category_id,
+                prix_vente: form.prix_vente,
+                prix_achat: form.prix_achat,
+                unite: form.unite,
+                type_produit: form.type_produit,
+                actif: form.actif,
+                couleur: form.couleur,
+              });
+              onClose();
+            }} className="flex-1">
+              Ajouter quand même
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 };
