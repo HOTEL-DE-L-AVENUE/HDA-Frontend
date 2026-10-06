@@ -40,6 +40,8 @@ export interface FinancialTransaction {
   statut_sync: string;
   synced_at: string | null;
   created_at: string;
+  cloturee?: boolean | number;
+  cloture_at?: string | null;
   pdj_inclus?: boolean;
   reservation_moyen_paiement?: string;
   reservation_client_nom?: string;
@@ -176,7 +178,7 @@ export const financeService = {
 
   // ==================== FINANCIAL TRANSACTIONS ====================
   
-  async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string }) {
+  async getTransactions(params?: { client_id?: number; module?: string; type_flux?: string; include_closed?: boolean }) {
     // The API paginates at 20 rows by default. Finance needs the complete
     // ledger; otherwise a module total can exist while its history is absent.
     const allTransactions: FinancialTransaction[] = [];
@@ -215,6 +217,12 @@ export const financeService = {
   }) {
     const response = await api.post('/api/finance/transactions', data);
     return response.data.data as FinancialTransaction;
+  },
+
+  // Clôture de caisse : les transactions sortent de la caisse du jour (restent en historique).
+  async closeTransactions(module: string, transactionIds: number[]) {
+    const response = await api.post('/api/finance/transactions/close', { module, transaction_ids: transactionIds });
+    return response.data.data as { closed_transactions: number };
   },
 
   // ==================== CLIENT STATEMENTS ====================

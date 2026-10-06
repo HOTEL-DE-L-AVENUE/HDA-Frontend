@@ -1,478 +1,454 @@
+// src/components/StockManager.tsx
 import React, { useState, useEffect } from 'react';
-import { useHDA } from '../context/HDAContext';
-import { ModuleType, StockItem } from '../types';
-import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from '../components/UI';
+import { Plus, Edit2, Trash2, Search, AlertCircle, Package, Loader2, DollarSign, RefreshCw, Printer, LockKeyhole } from 'lucide-react';
+import api from '../lib/api';
+import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from './UI';
 import BarTransactionsCard from './Bar/BarTransactionsCard';
 import { formatCurrency } from '../utils/data';
-import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
-import api from '../lib/api';
-import { Plus, Package, Edit2, Trash2, Search, Loader2, AlertCircle, DollarSign, RefreshCw, Printer, LockKeyhole } from 'lucide-react';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
+import { useHDA } from '../context/HDAContext';
+import { ModuleType } from '../types';
+import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import barService from '../services/bar.service';
 import type { BarSession } from '../types/bar.type';
+import { escapeHtml, printThermal, thermalHeader } from '../utils/thermalPrint';
 
-interface StockManagerProps {
-  module: ModuleType;
-  categories: string[];
-}
-
-interface BackendStockItem {
+interface StockItem {
   id: number;
   product_id: number;
-  product_nom?: string | null;
-  product_unite?: string | null;
-  quantite: number | null;
-  seuil_minimum: number | null;
-  unite: string | null;
-  nom: string | null;
-  categorie: string | null;
-  prix: number | null;
-  type_produit?: string | null;
-  etat?: string | null;
+  nom: string;
+  categorie: string;
+  quantite: number;
+  unite: string;
+  prix: number;
+  seuil_minimum: number;
 }
 
-export const StockManager: React.FC<StockManagerProps> = ({ module, categories }) => {
-  const { state, dispatch, getModuleStock, addNotification } = useHDA();
+interface StockManagerProps {
+  module: 'hotel' | 'bar' | 'restaurant';
+  categories: string[];
+  refreshTrigger?: number;
+}
+
+export const StockManager: React.FC<StockManagerProps> = ({ module, categories, refreshTrigger }) => {
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [pendingDeleteItem, setPendingDeleteItem] = useState<StockItem | null>(null);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [hotelSection, setHotelSection] = useState<'CONSOMMABLE' | 'NON_CONSOMMABLE'>('CONSOMMABLE');
-  const [form, setForm] = useState<{
-    nom: string;
-    categorie: string;
-    quantite: number;
-    unite: string;
-    prixUnitaire: number;
-    seuilMinimum: number;
-    fournisseur: string;
-    typeProduit: 'CONSOMMABLE' | 'NON_CONSOMMABLE';
-    etat: 'DISPONIBLE' | 'EN_LAVAGE' | 'USE' | 'ENDOMMAGE' | 'REBUT' | 'PERDU';
-  }>({
-    nom: '', categorie: categories[0], quantite: 0, unite: '',
-    prixUnitaire: 0, seuilMinimum: 0, fournisseur: ''
-    , typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE'
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [backendStock, setBackendStock] = useState<BackendStockItem[]>([]);
-  const apiBase = module === 'bar'
-    ? '/api/bar/stock'
-    : module === 'hotel'
-      ? '/api/stock/stocks/with-products?location_id=5'
-      // : '/api/hebergement/stock'; // COMMENTED OUT
-      : '/api/stock/stocks/with-products?location_id=5'; // Fallback for disabled hebergement
+  
+  const currentUser = AuthService.getCurrentUser();
+  const userIsAdmin = isAdmin(currentUser);
 
-  const isBar = module === 'bar';
-  // const isHebergement = module === 'hebergement'; // COMMENTED OUT
-  const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
-  const useBackend = isBar || isHebergement || isHotel;
+  const isBar = module === 'bar';
+  const isRestaurant = module === 'restaurant';
 
-  const getErrorMessage = (err: unknown) => {
-    if (typeof err === 'object' && err !== null && 'response' in err) {
-      const response = (err as { response?: { data?: { message?: string; error?: { message?: string } } } }).response;
-      return response?.data?.message || response?.data?.error?.message || 'Erreur réseau';
-    }
-    return err instanceof Error ? err.message : 'Erreur de connexion';
-  };
+  // Form state
+  const [form, setForm] = useState({
+    product_name: '',
+    categorie: categories[0],
+    prix: 0,
+    quantite: 0,
+    unite: 'unités',
+    seuil_minimum: 5,
+  });
 
-  const handleDeleteItem = async () => {
-    if (!pendingDeleteItem) return;
+  const uniteOptions = [
+    { value: 'unités', label: 'Unités' },
+    { value: 'bouteilles', label: 'Bouteilles' },
+    { value: 'litres', label: 'Litres' },
+    { value: 'cl', label: 'Cl' },
+    { value: 'ml', label: 'Ml' },
+    { value: 'pièces', label: 'Pièces' },
+  ];
 
-    const item = pendingDeleteItem;
+  const locationId = isHotel ? 5 : isBar ? 3 : 2;
+
+  const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      if (useBackend) {
-        if (isHotel) {
-          const backendItem = backendStock.find((entry) => String(entry.id) === String(item.id));
-          if (backendItem) await api.delete(`/api/stock/stocks/${backendItem.id}`);
-        } else {
-          await api.delete(`${apiBase}/${item.id}`);
-        }
-        await refetchStock();
-        if (editItem?.id === item.id) {
-          setShowModal(false);
-          setEditItem(null);
-        }
-      } else {
-        dispatch({ type: 'DELETE_STOCK_ITEM', payload: item.id });
-      }
-      setPendingDeleteItem(null);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const refetchStock = async () => {
-    if (!useBackend) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.get(apiBase);
+      const response = await api.get('/api/stock/stocks/with-products', {
+        params: { location_id: locationId }
+      });
       const payload = response.data?.data ?? response.data;
-      setBackendStock(Array.isArray(payload) ? payload : []);
+      const mappedItems = (Array.isArray(payload) ? payload : []).map((p: any) => ({
+        id: p.id,
+        product_id: p.product_id,
+        nom: p.product_nom || p.nom,
+        categorie: p.category_name || (p.category_id ? `Catégorie ${p.category_id}` : 'Stock'),
+        quantite: p.quantite || 0,
+        unite: p.product_unite || p.unite || 'unités',
+        prix: p.prix_vente || 0,
+        seuil_minimum: p.seuil_minimum ?? 5,
+      }));
+      setStockItems(mappedItems);
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError('Erreur lors du chargement des données');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (useBackend) {
-      void refetchStock();
-    } else {
-      setBackendStock([]);
-      setError(null);
-    }
-  }, [useBackend, module]);
-
-  const contextItems = getModuleStock(module);
-
-  const items = useBackend
-    ? backendStock.map((bs) => ({
-        id: String(bs.id),
-        nom: bs.nom || bs.product_nom || '',
-        categorie: bs.categorie || (isBar ? 'Bar' : 'Hôtel'),
-        quantite: bs.quantite ?? 0,
-        unite: bs.unite || bs.product_unite || 'unités',
-        prixUnitaire: bs.prix ?? 0,
-        seuilMinimum: bs.seuil_minimum ?? 0,
-        typeProduit: bs.type_produit === 'NON_CONSOMMABLE' ? 'NON_CONSOMMABLE' : 'CONSOMMABLE',
-        etat: bs.etat || 'DISPONIBLE',
-        fournisseur: '',
-        status: (bs.quantite ?? 0) === 0 ? 'epuise' : (bs.quantite ?? 0) <= (bs.seuil_minimum ?? 5) ? 'faible' : 'disponible',
-        module: isBar ? 'bar' : isHotel ? 'hotel' : 'restaurant' as ModuleType, // Changed hebergement to restaurant as fallback
-        createdAt: '',
-        updatedAt: '',
-      })) as unknown as StockItem[]
-    : contextItems;
-
-  const filtered = items.filter(item => {
-    const matchSearch = item.nom.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchHotelSection = !isHotel || item.typeProduit === hotelSection;
-    return matchSearch && matchStatus && matchHotelSection;
-  });
-
-  const computeStatus = (qty: number, seuil: number) => {
-    if (qty === 0) return 'epuise';
-    if (qty <= seuil) return 'faible';
-    return 'disponible';
-  };
-
-  const notifyStockLevel = (nom: string, quantite: number, unite: string) => {
-    const source = module === 'bar' ? 'Bar' : module === 'restaurant' ? 'Restaurant' : module;
-    const actionUrl = `/${module}?tab=stock`;
-
-    if (quantite <= 3) {
-      addNotification('error', `Stock critique: ${nom} (${quantite} ${unite})`, source, actionUrl);
-    } else if (quantite <= 5) {
-      addNotification('warning', `Stock faible: ${nom} (${quantite} ${unite})`, source, actionUrl);
-    }
-  };
+    fetchData();
+  }, [module, refreshTrigger]);
 
   const handleSubmit = async () => {
-    const nom = form.nom.trim();
+    const productName = form.product_name.trim();
     const quantite = Number(form.quantite);
-    const prixUnitaire = Number(form.prixUnitaire);
-    const seuilMinimum = Number(form.seuilMinimum);
+    const prix = Number(form.prix);
+    const seuilMinimum = Number(form.seuil_minimum);
 
-    if (!nom) {
+    if (!productName) {
       setError('Le nom du produit est requis.');
       return;
     }
-    if (!Number.isFinite(quantite) || quantite < 0 || !Number.isFinite(prixUnitaire) || prixUnitaire < 0 || !Number.isFinite(seuilMinimum) || seuilMinimum < 0) {
+    if ((isHotel && !Number.isInteger(quantite)) || quantite < 0 || prix < 0 || !Number.isInteger(seuilMinimum) || seuilMinimum < 0) {
       setError('La quantité, le prix et le seuil doivent être des nombres positifs.');
       return;
     }
-    const status = computeStatus(quantite, seuilMinimum);
 
-    if (useBackend) {
-      setLoading(true);
-      setError(null);
-      try {
-        const payload = {
-          nom,
-          categorie: form.categorie || (isBar ? 'Bar' : 'Hébergement'),
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (editItem) {
+        const updates = {
+          nom: productName,
+          categorie: form.categorie,
+          prix: prix,
+          unite: form.unite,
           quantite,
-          prix: prixUnitaire,
-          prixUnitaire,
-          price: prixUnitaire,
-          unite: form.unite.trim() || 'unités',
           seuil_minimum: seuilMinimum,
-          seuilMinimum,
-          ...(isBar && { ingredients: '', alcool: true }),
         };
-
         if (isHotel) {
-          const productPayload = {
-            nom,
-            unite: form.unite.trim() || 'unités',
-            prix_achat: prixUnitaire,
-            prix_vente: prixUnitaire,
-            type_produit: form.typeProduit,
-            actif: 1,
-          };
-          if (editItem && editItem.id) {
-            const backendItem = backendStock.find((item) => String(item.id) === String(editItem.id));
-            if (!backendItem) throw new Error('Article de stock introuvable');
-            await api.put(`/api/stock/products/${backendItem.product_id}`, productPayload);
-            await api.put(`/api/stock/stocks/${backendItem.id}`, {
-              product_id: backendItem.product_id,
-              location_id: 5,
-              quantite,
-              seuil_minimum: seuilMinimum,
-              etat: form.etat,
-            });
-          } else {
-            const productResponse = await api.post('/api/stock/products', productPayload);
-            const product = productResponse.data?.data;
-            await api.post('/api/stock/stocks', {
-              product_id: product.id,
-              location_id: 5,
-              quantite,
-              seuil_minimum: seuilMinimum,
-              etat: form.etat,
-            });
-          }
-        } else if (editItem && editItem.id) {
-          await api.put(`${apiBase}/${editItem.id}`, payload);
+          await api.put(`/api/hebergement/stock/${editItem.id}`, updates);
         } else {
-          await api.post(apiBase, payload);
+          await api.put(`/api/stock/stocks/${editItem.id}`, {
+            quantite,
+            seuil_minimum: seuilMinimum,
+          });
         }
-
-        await refetchStock();
-        
-        notifyStockLevel(nom, quantite, form.unite);
-        
-        setShowModal(false);
-        setEditItem(null);
-        setForm({ nom: '', categorie: categories[0] || (isBar ? 'Bar' : 'Hébergement'), quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
+      } else {
+        await api.post('/api/stock/products-with-stock', {
+          nom: productName,
+          categorie: form.categorie || categories[0] || 'Hôtel',
+          code: `${module.toUpperCase()}-${Date.now()}`,
+          unite: form.unite,
+          prix_vente: prix,
+          quantite,
+          seuil_minimum: seuilMinimum,
+          location_id: locationId,
+          source_module: module.toUpperCase(),
+        });
       }
-      return;
-    }
 
-    if (editItem) {
-      dispatch({ type: 'UPDATE_STOCK_ITEM', payload: {
-        ...editItem, ...form, status, updatedAt: new Date().toISOString()
-      }});
-      
-      notifyStockLevel(nom, quantite, form.unite);
-    } else {
-      dispatch({ type: 'ADD_STOCK_ITEM', payload: { ...form, status, module } });
-      
-      notifyStockLevel(nom, quantite, form.unite);
+      await fetchData();
+      setShowModal(false);
+      resetForm();
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data?.error || 'Erreur lors de la sauvegarde du stock');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-
-    setShowModal(false);
-    setEditItem(null);
-    setForm({ nom: '', categorie: categories[0], quantite: 0, unite: '', prixUnitaire: 0, seuilMinimum: 0, fournisseur: '', typeProduit: 'CONSOMMABLE', etat: 'DISPONIBLE' });
   };
 
-  const openEdit = async (item: StockItem) => {
-    const adminPassword = window.prompt('Mot de passe administrateur requis pour modifier le stock :');
-    if (!adminPassword) return;
+  const handleDelete = async (item: StockItem) => {
+    const productName = item.nom || `l'article #${item.product_id}`;
+    if (!confirm(`Voulez-vous vraiment supprimer ${productName} du stock ?`)) return;
+    
+    setLoading(true);
+    setError(null);
     try {
-      await api.post('/api/auth/verify-admin-password', { password: adminPassword });
+      await api.delete(`/api/stock/stocks/${item.id}`);
+      await fetchData();
     } catch (err) {
-      setError(getErrorMessage(err));
-      return;
+      setError('Erreur lors de la suppression');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    setEditItem(item);
-    setForm({ nom: item.nom || '', categorie: item.categorie || categories[0], quantite: item.quantite ?? 0, unite: item.unite || '', prixUnitaire: item.prixUnitaire ?? 0, seuilMinimum: item.seuilMinimum ?? 0, fournisseur: item.fournisseur || '', typeProduit: (item as any).typeProduit || 'CONSOMMABLE', etat: (item as any).etat || 'DISPONIBLE' });
+  };
+
+  const resetForm = () => {
+    setForm({
+      product_name: '',
+      categorie: categories[0],
+      prix: 0,
+      quantite: 0,
+      unite: 'unités',
+      seuil_minimum: 5,
+    });
+    setEditItem(null);
+  };
+
+  const openCreateModal = () => {
+    resetForm();
     setShowModal(true);
   };
 
-  const currentUser = AuthService.getCurrentUser();
-  const userIsAdmin = isAdmin(currentUser);
+  const openEditModal = (item: StockItem) => {
+    setEditItem(item);
+    setForm({
+      product_name: item.nom,
+      categorie: item.categorie,
+      prix: item.prix,
+      quantite: item.quantite,
+      unite: item.unite,
+      seuil_minimum: item.seuil_minimum,
+    });
+    setShowModal(true);
+  };
 
-  const totalValue = items.reduce((sum, i) => sum + (i.quantite * i.prixUnitaire), 0);
-  const alerts = items.filter(i => i.status !== 'disponible').length;
+  // Calcul du statut
+  const getStatus = (item: StockItem) => {
+    const quantite = item.quantite || 0;
+    const seuil = item.seuil_minimum || 5;
+    if (quantite === 0) return 'epuise';
+    if (quantite <= seuil) return 'faible';
+    return 'disponible';
+  };
 
-  const baseColumns = [
-    { key: 'nom', label: 'Produit', render: (item: StockItem) => (
-      <div>
-        <p className="text-white font-medium">{item.nom}</p>
-        <p className="text-slate-500 text-xs">{item.categorie}</p>
-      </div>
-    )},
-    { key: 'quantite', label: 'Stock', render: (item: StockItem) => (
-      <div>
-        <p className="text-white font-semibold">{item.quantite} {item.unite}</p>
-        <p className="text-slate-600 text-xs">Min: {item.seuilMinimum}</p>
-      </div>
-    )},
-    { key: 'prixUnitaire', label: 'Prix Unit.', render: (item: StockItem) => (
-      <span className="text-white">{formatCurrency(item.prixUnitaire)}</span>
-    )},
-    { key: 'valeur', label: 'Valeur', render: (item: StockItem) => (
-      <span className="text-amber-400 font-semibold">{formatCurrency(item.quantite * item.prixUnitaire)}</span>
-    )},
-    { key: 'status', label: 'Statut', render: (item: StockItem) => (
-      <Badge variant={item.status}>
-        {item.status === 'disponible' ? 'Disponible' : item.status === 'faible' ? 'Faible' : 'Épuisé'}
-      </Badge>
-    )},
-    ...(isHotel ? [{ key: 'etat', label: 'État', render: (item: StockItem) => {
-      const etat = (item as StockItem & { etat?: string }).etat || 'DISPONIBLE';
-      const labels: Record<string, string> = {
-        DISPONIBLE: 'Disponible', EN_LAVAGE: 'En lavage', USE: 'Usé',
-        ENDOMMAGE: 'Endommagé', REBUT: 'Au rebut', PERDU: 'Perdu',
-      };
-      return <span className="text-slate-300 text-sm">{labels[etat] || etat}</span>;
-    }}] : []),
+  // Filtrer les articles
+  const filteredItems = stockItems.filter(item => {
+    const matchSearch = (item.nom || '').toLowerCase().includes(search.toLowerCase());
+    const status = getStatus(item);
+    const matchStatus = filterStatus === 'all' || status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  // Statistiques
+  const totalValue = stockItems.reduce((sum, item) => sum + (item.quantite || 0) * (item.prix || 0), 0);
+  const alerts = stockItems.filter(item => getStatus(item) !== 'disponible').length;
+  const outOfStock = stockItems.filter(item => (item.quantite || 0) === 0).length;
+
+  // Colonnes pour le DataTable
+  const columns = [
+    {
+      key: 'product',
+      label: 'Produit',
+      render: (item: any) => (
+        <div>
+          <p className="text-white font-medium">{item.nom}</p>
+          <p className="text-slate-500 text-xs">{item.categorie}</p>
+        </div>
+      )
+    },
+    {
+      key: 'quantite',
+      label: 'Stock',
+      render: (item: StockItem) => (
+        <div>
+          <p className="text-white font-semibold">{item.quantite || 0} {item.unite || 'unités'}</p>
+          <p className="text-slate-600 text-xs">Min: {item.seuil_minimum || 5}</p>
+        </div>
+      )
+    },
+    {
+      key: 'prix',
+      label: 'Prix Unit.',
+      render: (item: any) => (
+        <span className="text-white">{formatCurrency(item.prix || 0)}</span>
+      )
+    },
+    {
+      key: 'valeur',
+      label: 'Valeur',
+      render: (item: any) => (
+        <span className="text-amber-400 font-semibold">
+          {formatCurrency((item.quantite || 0) * (item.prix || 0))}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Statut',
+      render: (item: StockItem) => {
+        const status = getStatus(item);
+        return (
+          <Badge variant={status}>
+            {status === 'disponible' ? 'Disponible' : status === 'faible' ? 'Faible' : 'Épuisé'}
+          </Badge>
+        );
+      }
+    },
+    ...(userIsAdmin ? [{
+      key: 'actions',
+      label: '',
+      render: (item: StockItem) => (
+        <div className="flex gap-2">
+          <button 
+            onClick={() => openEditModal(item)} 
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+            title="Modifier la quantité"
+          >
+            <Edit2 size={14} />
+          </button>
+          <button 
+            onClick={() => handleDelete(item)} 
+            className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all"
+            title="Supprimer"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )
+    }] : [])
   ];
 
-  const columns = userIsAdmin ? [
-    ...baseColumns,
-    { key: 'actions', label: '', render: (item: StockItem) => (
-      <div className="flex gap-2">
-        <button onClick={() => openEdit(item)} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Modifier l'article">
-          <Edit2 size={14} />
-        </button>
-        <button onClick={async () => {
-          setPendingDeleteItem(item);
-        }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all" title="Supprimer l'article">
-          <Trash2 size={14} />
-        </button>
+  if (loading && stockItems.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
+        <span className="text-slate-400 text-sm">Chargement du stock...</span>
       </div>
-    )},
-  ] : baseColumns;
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <Modal
-        isOpen={pendingDeleteItem !== null}
-        onClose={() => { if (!loading) setPendingDeleteItem(null); }}
-        title="Supprimer l’article"
-        size="sm"
-      >
-        <div className="space-y-5">
-          <div className="flex gap-3 rounded-xl border border-red-400/30 bg-red-500/10 p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300">
-              <Trash2 size={20} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-primary">Supprimer cet article ?</p>
-              <p className="mt-1 break-words text-sm leading-relaxed text-secondary">
-                « {pendingDeleteItem?.nom} » sera définitivement retiré du menu et du stock.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted">Cette action est irréversible.</p>
-            </div>
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 text-sm flex items-center gap-2">
+          <AlertCircle size={16} />
+          {error}
+        </div>
+      )}
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Produits', value: stockItems.length, color: 'text-white', sub: 'articles total' },
+          { label: 'Valeur Totale', value: formatCurrency(totalValue), color: 'text-amber-400', sub: 'en stock' },
+          { label: 'Alertes', value: alerts, color: alerts > 0 ? 'text-amber-400' : 'text-emerald-400', sub: 'à surveiller' },
+          { label: 'Épuisés', value: outOfStock, color: 'text-red-400', sub: 'rupture de stock' },
+        ].map(stat => (
+          <div key={stat.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-4">
+            <p className="text-slate-500 text-xs font-medium mb-1">{stat.label}</p>
+            <p className={`${stat.color} font-bold text-xl`}>{stat.value}</p>
+            <p className="text-slate-600 text-xs">{stat.sub}</p>
           </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" onClick={() => setPendingDeleteItem(null)} disabled={loading} className="w-full sm:w-auto">
+        ))}
+      </div>
+
+      {/* Tableau du stock */}
+      <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
+          <h3 className="text-white font-semibold flex items-center gap-2">
+            <Package size={18} className="text-amber-400" />
+            Inventaire {isHotel ? 'Hôtel' : isBar ? 'Bar & Lounge' : 'Restaurant'}
+          </h3>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input 
+                value={search} 
+                onChange={e => setSearch(e.target.value)} 
+                placeholder="Rechercher..." 
+                className="w-full sm:w-48 h-9 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50" 
+              />
+            </div>
+            <select 
+              value={filterStatus} 
+              onChange={e => setFilterStatus(e.target.value)} 
+              className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none"
+            >
+              <option value="all">Tous</option>
+              <option value="disponible">Disponible</option>
+              <option value="faible">Faible</option>
+              <option value="epuise">Épuisé</option>
+            </select>
+            {userIsAdmin && (
+              <Button icon={<Plus size={16} />} onClick={openCreateModal}>
+                Ajouter
+              </Button>
+            )}
+          </div>
+        </div>
+        <DataTable data={filteredItems} columns={columns} />
+      </div>
+
+      {/* Modal de création/modification */}
+      <Modal
+        isOpen={showModal} 
+        onClose={() => { setShowModal(false); resetForm(); }} 
+        title={editItem ? 'Modifier le produit et le stock' : 'Ajouter un produit au stock'}
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nom du produit"
+            value={form.product_name}
+            onChange={e => setForm({...form, product_name: e.target.value})}
+            disabled={Boolean(editItem && !isHotel)}
+            placeholder="Ex: Serviette, Savon, Produit..."
+          />
+          <Select
+            label="Catégorie"
+            value={form.categorie}
+            onChange={e => setForm({...form, categorie: e.target.value})}
+            disabled={Boolean(editItem && !isHotel)}
+            options={[...new Set([...categories, ...(form.categorie ? [form.categorie] : [])])].map(c => ({ value: c, label: c }))}
+          />
+          <Input
+            label="Prix unitaire (MGA)"
+            type="number"
+            min="0"
+            step="1"
+            value={form.prix}
+            onChange={e => setForm({...form, prix: Number(e.target.value) || 0})}
+            disabled={Boolean(editItem && !isHotel)}
+            placeholder="0"
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input 
+              label="Quantité" 
+              type="number" 
+              min="0"
+              step={isHotel ? '1' : 'any'}
+              value={form.quantite} 
+              onChange={e => setForm({...form, quantite: isHotel ? Math.max(0, Math.floor(Number(e.target.value) || 0)) : Number(e.target.value) || 0})}
+              placeholder="0" 
+            />
+            <Select 
+              label="Unité" 
+              value={form.unite} 
+              onChange={e => setForm({...form, unite: e.target.value})} 
+              disabled={Boolean(editItem && !isHotel)}
+              options={uniteOptions} 
+            />
+          </div>
+
+          <Input 
+            label="Seuil minimum d'alerte" 
+            type="number" 
+            min="0"
+            step="1"
+            value={form.seuil_minimum} 
+            onChange={e => setForm({...form, seuil_minimum: Math.max(0, Math.floor(Number(e.target.value) || 0))})}
+            disabled={Boolean(editItem && !isHotel)}
+            placeholder="5" 
+          />
+          {editItem && !isHotel && (
+            <p className="text-xs text-slate-400">Dans ce module, seule la quantité de stock est modifiée.</p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1">
               Annuler
             </Button>
-            <Button type="button" variant="danger" onClick={() => void handleDeleteItem()} disabled={loading} className="w-full sm:w-auto">
-              <Trash2 size={16} />
-              {loading ? 'Suppression...' : 'Supprimer'}
+            <Button onClick={handleSubmit} className="flex-1" disabled={loading}>
+              {loading ? 'Enregistrement...' : (editItem ? 'Mettre à jour' : 'Ajouter')}
             </Button>
           </div>
         </div>
       </Modal>
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin text-amber-400 mr-2" size={20} />
-          <span className="text-slate-400 text-sm">Chargement du stock...</span>
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 text-sm flex items-center gap-2">
-          <AlertCircle size={16} />
-          {error} — Affichage des données en cache.
-        </div>
-      )}
-
-      {!loading && !error && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Produits', value: items.length, color: 'text-white', sub: 'articles total' },
-              { label: 'Valeur Totale', value: formatCurrency(totalValue), color: 'text-amber-400', sub: 'en stock' },
-              { label: 'Alertes', value: alerts, color: alerts > 0 ? 'text-amber-400' : 'text-emerald-400', sub: 'à surveiller' },
-              { label: 'Épuisés', value: items.filter(i => i.status === 'epuise').length, color: 'text-red-400', sub: 'rupture de stock' },
-            ].map(stat => (
-              <div key={stat.label} className="bg-slate-900 border border-slate-800/50 rounded-2xl p-4">
-                <p className="text-slate-500 text-xs font-medium mb-1">{stat.label}</p>
-                <p className={`${stat.color} font-bold text-xl`}>{stat.value}</p>
-                <p className="text-slate-600 text-xs">{stat.sub}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-4 border-b border-slate-800/50">
-              <h3 className="text-white font-semibold flex items-center gap-2">
-                <Package size={18} className="text-amber-400" />
-                Inventaire
-              </h3>
-              {isHotel && (
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button onClick={() => setHotelSection('CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Consommables</button>
-                  <button onClick={() => setHotelSection('NON_CONSOMMABLE')} className={`px-3 py-2 rounded-lg text-sm ${hotelSection === 'NON_CONSOMMABLE' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300'}`}>Non consommables</button>
-                </div>
-              )}
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="relative flex-1 sm:flex-none">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." className="w-full sm:w-48 h-9 pl-9 pr-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500/50" />
-                </div>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-sm focus:outline-none">
-                  <option value="all">Tous</option>
-                  <option value="disponible">Disponible</option>
-                  <option value="faible">Faible</option>
-                  <option value="epuise">Épuisé</option>
-                </select>
-                {userIsAdmin && (
-                  <Button icon={<Plus size={16} />} onClick={() => { setEditItem(null); setShowModal(true); }}>
-                    Ajouter
-                  </Button>
-                )}
-              </div>
-            </div>
-            <DataTable data={filtered} columns={columns} />
-          </div>
-
-          <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? 'Modifier l\'article' : 'Ajouter un article'}>
-            <div className="space-y-4">
-              <Input label="Nom du produit" value={form.nom} onChange={e => setForm({...form, nom: e.target.value})} placeholder="Ex: Filet de Boeuf" />
-              <Select label="Catégorie" value={form.categorie} onChange={e => setForm({...form, categorie: e.target.value})} options={categories.map(c => ({ value: c, label: c }))} />
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Quantité" type="number" value={form.quantite} onChange={e => setForm({...form, quantite: Number(e.target.value)})} />
-                <Input label="Unité" value={form.unite} onChange={e => setForm({...form, unite: e.target.value})} placeholder="kg, pièce, litre..." />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Prix unitaire (MGA)" type="number" value={form.prixUnitaire} onChange={e => setForm({...form, prixUnitaire: Number(e.target.value)})} />
-                <Input label="Seuil minimum" type="number" value={form.seuilMinimum} onChange={e => setForm({...form, seuilMinimum: Number(e.target.value)})} />
-              </div>
-              <Input label="Fournisseur (optionnel)" value={form.fournisseur} onChange={e => setForm({...form, fournisseur: e.target.value})} />
-              {isHotel && (
-                <>
-                  <Select label="Catégorie de stock" value={form.typeProduit} onChange={e => setForm({...form, typeProduit: e.target.value as 'CONSOMMABLE' | 'NON_CONSOMMABLE'})} options={[{ value: 'CONSOMMABLE', label: 'Consommable - entretien' }, { value: 'NON_CONSOMMABLE', label: 'Non consommable - linge' }]} />
-                  {form.typeProduit === 'NON_CONSOMMABLE' && <Select label="État du linge" value={form.etat} onChange={e => setForm({...form, etat: e.target.value as typeof form.etat})} options={[{value:'DISPONIBLE',label:'Disponible'},{value:'EN_LAVAGE',label:'En lavage'},{value:'USE',label:'Usé'},{value:'ENDOMMAGE',label:'Endommagé'},{value:'REBUT',label:'Au rebut'},{value:'PERDU',label:'Perdu'}]} />}
-                </>
-              )}
-              <div className="flex gap-3 pt-2">
-                <Button variant="secondary" onClick={() => { setShowModal(false); setEditItem(null); }} className="flex-1">Annuler</Button>
-                <Button onClick={handleSubmit} className="flex-1">{editItem ? 'Mettre à jour' : 'Ajouter'}</Button>
-              </div>
-            </div>
-          </Modal>
-         </>
-       )}
     </div>
   );
 };
@@ -507,17 +483,46 @@ interface CaisseManagerProps {
   onRefresh?: () => Promise<void> | void;
 }
 
+const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
+  const isClosedTransaction = (transaction: FinancialTransaction) =>
+    transaction.cloturee === true || Number(transaction.cloturee) === 1;
+  const openTransactions = transactions.filter((transaction) => !isClosedTransaction(transaction));
+  if (openTransactions.length > 0) {
+    return { transactions: openTransactions, isClosed: false };
+  }
+
+  const closedTransactions = transactions.filter(isClosedTransaction);
+  if (closedTransactions.length === 0) {
+    return { transactions: [], isClosed: false };
+  }
+
+  const latestCloseTime = Math.max(...closedTransactions.map((transaction) => {
+    const closeTime = transaction.cloture_at ? new Date(transaction.cloture_at).getTime() : 0;
+    return Number.isNaN(closeTime) ? 0 : closeTime;
+  }));
+  const latestCloseBatch = closedTransactions.filter((transaction) => {
+    const closeTime = transaction.cloture_at ? new Date(transaction.cloture_at).getTime() : 0;
+    return (Number.isNaN(closeTime) ? 0 : closeTime) === latestCloseTime;
+  });
+
+  return { transactions: latestCloseBatch, isClosed: true };
+};
+
 export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onCloseAllOrders, onRefresh }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
   const [backendTransactions, setBackendTransactions] = useState<FinancialTransaction[]>([]);
+  const [hotelLedgerTransactions, setHotelLedgerTransactions] = useState<FinancialTransaction[]>([]);
+  const [hotelTransactionsAreClosed, setHotelTransactionsAreClosed] = useState(false);
   const [moduleStockSummary, setModuleStockSummary] = useState<{ entrees: number; sorties: number; solde: number } | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [currentBarSession, setCurrentBarSession] = useState<BarSession | null>(null);
   const [isClosingBarSession, setIsClosingBarSession] = useState(false);
   const [showCloseOrdersModal, setShowCloseOrdersModal] = useState(false);
   const [isClosingOrders, setIsClosingOrders] = useState(false);
+  const [showCloseHotelModal, setShowCloseHotelModal] = useState(false);
+  const [isClosingHotel, setIsClosingHotel] = useState(false);
   const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
 
   const isBar = module === 'bar';
@@ -540,17 +545,24 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     if (!isBackendCaisse) return;
 
     Promise.all([
-      financeService.getTransactions({ module: module.toUpperCase() }),
+      financeService.getTransactions({ module: module.toUpperCase(), include_closed: isHotel }),
       financeService.getFinancialStats(),
     ])
       .then(([transactions, stats]) => {
-        setBackendTransactions(transactions);
+        if (isHotel) {
+          const snapshot = getHotelCashRegisterSnapshot(transactions);
+          setHotelLedgerTransactions(transactions);
+          setBackendTransactions(snapshot.transactions);
+          setHotelTransactionsAreClosed(snapshot.isClosed);
+        } else {
+          setBackendTransactions(transactions);
+        }
         const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
         setModuleStockSummary(summary || null);
         setBackendError(null);
       })
       .catch(() => setBackendError('Impossible de charger les données de la caisse.'));
-  }, [isBackendCaisse, module]);
+  }, [isBackendCaisse, isHotel, module]);
 
   useEffect(() => {
     if (!isBar) return;
@@ -572,13 +584,23 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const backendSorties = backendTransactions
     .filter((transaction) => isFinancialOutflow(transaction.type_flux))
     .reduce((total, transaction) => total + Number(transaction.montant), 0);
+  const hotelTotalEntrees = hotelLedgerTransactions
+    .filter((transaction) => isFinancialInflow(transaction.type_flux))
+    .reduce((total, transaction) => total + Number(transaction.montant || 0), 0);
+  const hotelTotalSorties = hotelLedgerTransactions
+    .filter((transaction) => isFinancialOutflow(transaction.type_flux))
+    .reduce((total, transaction) => total + Number(transaction.montant || 0), 0);
   const localCaisse = getModuleCaisseSolde(module);
-  const sortiesStock = moduleStockSummary ? Number(moduleStockSummary.sorties) : backendSorties;
-  const solde = isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
+  // Hôtel : la carte reflète la caisse ouverte (transactions non clôturées) ; le résumé
+  // global /finance/summary inclut aussi les opérations déjà clôturées.
+  const sortiesStock = moduleStockSummary && !isHotel ? Number(moduleStockSummary.sorties) : backendSorties;
+  const solde = isHotel
+    ? hotelTotalEntrees - hotelTotalSorties
+    : isBackendCaisse ? backendEntrees - sortiesStock : localCaisse.solde;
   const entrees = isBackendCaisse
-    ? Math.max(Number(moduleStockSummary?.entrees || 0), backendEntrees)
+    ? (isHotel ? hotelTotalEntrees : Math.max(Number(moduleStockSummary?.entrees || 0), backendEntrees))
     : localCaisse.entrees;
-  const sorties = isBackendCaisse ? sortiesStock : localCaisse.sorties;
+  const sorties = isHotel ? hotelTotalSorties : isBackendCaisse ? sortiesStock : localCaisse.sorties;
 
   // Récupération des commandes payées avec extraction sécurisée du montant
   const restaurantOrders = (state.orders || state.commandes || []).filter(
@@ -619,10 +641,17 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
           description: `${form.categorie} - ${form.description}`,
         });
         const [transactions, stats] = await Promise.all([
-          financeService.getTransactions({ module: module.toUpperCase() }),
+          financeService.getTransactions({ module: module.toUpperCase(), include_closed: isHotel }),
           financeService.getFinancialStats(),
         ]);
-        setBackendTransactions(transactions.length ? transactions : [transaction]);
+        if (isHotel) {
+          setHotelLedgerTransactions(transactions);
+          const snapshot = getHotelCashRegisterSnapshot(transactions);
+          setBackendTransactions(snapshot.transactions.length ? snapshot.transactions : [transaction]);
+          setHotelTransactionsAreClosed(snapshot.isClosed);
+        } else {
+          setBackendTransactions(transactions.length ? transactions : [transaction]);
+        }
         const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
         setModuleStockSummary(summary || null);
         setBackendError(null);
@@ -941,6 +970,74 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     }
   };
 
+  // --- Caisse hôtel : impression globale et clôture des encaissements du jour ---
+  const hotelPaymentLabels: Record<string, string> = {
+    ESPECES: 'Espèces', TPE: 'TPE', MVOLA: 'MVola', ORANGE_MONEY: 'Orange Money',
+    CARTE: 'Carte bancaire', VIREMENT: 'Virement', CREDIT: 'Crédit', GRATUIT: 'Gratuit',
+  };
+
+  const handlePrintHotelReport = (titleText = 'Rapport de caisse Hôtel') => {
+    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
+    const sorted = [...backendTransactions].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const inflows = sorted.filter((transaction) => isFinancialInflow(transaction.type_flux));
+    const outflows = sorted.filter((transaction) => isFinancialOutflow(transaction.type_flux));
+    const totalIn = inflows.reduce((sum, transaction) => sum + Number(transaction.montant || 0), 0);
+    const totalOut = outflows.reduce((sum, transaction) => sum + Number(transaction.montant || 0), 0);
+    const paymentTotals = new Map<string, number>();
+    inflows.forEach((transaction) => {
+      const payment = transaction.moyen_paiement || transaction.reservation_moyen_paiement || 'ESPECES';
+      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(transaction.montant || 0));
+    });
+    const formatTime = (value: string) => (value ? new Date(value).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-');
+    const transactionRow = (transaction: FinancialTransaction) => {
+      const client = [transaction.reservation_client_prenom, transaction.reservation_client_nom].filter(Boolean).join(' ');
+      const room = transaction.reservation_room_numero ? `Ch. ${transaction.reservation_room_numero}` : '';
+      const payment = transaction.moyen_paiement || transaction.reservation_moyen_paiement;
+      const detail = [formatTime(transaction.created_at), room, client, payment ? hotelPaymentLabels[payment] || payment : ''].filter(Boolean).join(' · ');
+      return `<div class="row line"><span>${escapeHtml(transaction.description)}<br><span class="muted">${escapeHtml(detail)}</span></span><span>${formatCurrency(Number(transaction.montant || 0))}</span></div>`;
+    };
+    const startDate = sorted[0]?.created_at ? new Date(sorted[0].created_at).toLocaleString('fr-FR') : '-';
+
+    const body = `
+      ${thermalHeader(titleText, [`Caissier : ${connectedCashier}`, `Du ${startDate}`])}
+      <h2>Encaissements (${inflows.length})</h2>
+      ${inflows.map(transactionRow).join('') || '<p class="center">Aucun encaissement.</p>'}
+      <div class="row total"><span>Total encaissé</span><span>${formatCurrency(totalIn)}</span></div>
+      <h2>Par mode de paiement</h2>
+      ${Array.from(paymentTotals.entries()).map(([payment, amount]) => `<div class="row"><span>${escapeHtml(hotelPaymentLabels[payment] || payment)}</span><span>${formatCurrency(amount)}</span></div>`).join('') || '<p class="center">-</p>'}
+      ${outflows.length ? `<h2>Sorties (${outflows.length})</h2>${outflows.map(transactionRow).join('')}<div class="row total"><span>Total sorties</span><span>${formatCurrency(totalOut)}</span></div>` : ''}
+      <div class="box row"><span>Solde</span><span>${formatCurrency(totalIn - totalOut)}</span></div>
+      <div class="footer"><p>Opérations : ${sorted.length}</p><p>Signature caissier</p><br><br></div>`;
+    return printThermal(titleText, body);
+  };
+
+  const confirmCloseHotelCaisse = async () => {
+    if (backendTransactions.length === 0) return;
+    const ids = backendTransactions.map((transaction) => transaction.id);
+    // Impression avant l'appel réseau : une fenêtre ouverte après un await est bloquée.
+    handlePrintHotelReport('Clôture de caisse Hôtel');
+    setIsClosingHotel(true);
+    try {
+      await financeService.closeTransactions('HOTEL', ids);
+      const [transactions, stats] = await Promise.all([
+        financeService.getTransactions({ module: 'HOTEL', include_closed: true }),
+        financeService.getFinancialStats(),
+      ]);
+      const snapshot = getHotelCashRegisterSnapshot(transactions);
+      setHotelLedgerTransactions(transactions);
+      setBackendTransactions(snapshot.transactions);
+      setHotelTransactionsAreClosed(snapshot.isClosed);
+      setModuleStockSummary(stats.modules.find((item) => item.module.toLowerCase() === 'hotel') || null);
+      setTransactionsRefreshTrigger((value) => value + 1);
+      setBackendError(null);
+      setShowCloseHotelModal(false);
+    } catch (error: any) {
+      setBackendError(error?.response?.data?.message || 'Impossible de clôturer la caisse hôtel.');
+    } finally {
+      setIsClosingHotel(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Modal
@@ -986,9 +1083,41 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
           </div>
         </div>
       </Modal>
+      <Modal
+        isOpen={showCloseHotelModal}
+        onClose={() => { if (!isClosingHotel) setShowCloseHotelModal(false); }}
+        title="Clôturer la caisse Hôtel"
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="flex gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-amber-300">
+              <AlertCircle size={21} />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
+              <p className="mt-1 text-sm leading-relaxed text-secondary">
+                Les <strong>{backendTransactions.length} opération{backendTransactions.length > 1 ? 's' : ''}</strong> ({formatCurrency(solde)}) seront retirées de la caisse du jour.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                Elles restent enregistrées dans les finances et l’historique.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="secondary" onClick={() => setShowCloseHotelModal(false)} disabled={isClosingHotel} className="w-full sm:w-auto">
+              Annuler
+            </Button>
+            <Button type="button" onClick={() => void confirmCloseHotelCaisse()} disabled={isClosingHotel} className="w-full sm:w-auto">
+              <Printer size={16} />
+              {isClosingHotel ? 'Clôture...' : 'Imprimer et clôturer'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
       <div className="flex justify-end">
         <div className="flex flex-wrap justify-end gap-2">
-          {!isBar && (
+          {!isBar && !isHotel && (
             <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
               Nouvelle transaction
             </Button>
@@ -996,7 +1125,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         </div>
       </div>
 
-      <div className={isOrderRegister ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
+      <div className={isOrderRegister || isHotel ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
         {/* Caisse Card */}
         {canViewBarBalance && (
           <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
@@ -1031,6 +1160,35 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
               <div>
                 <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || '')).length}</p>
                 <p className="text-[11px] text-muted">Encaissées</p>
+              </div>
+            </div>
+          </section>
+        )}
+        {isHotel && (
+          <section className="rounded-2xl border border-accent/30 bg-surface p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-primary">Caisse du jour</h3>
+                <p className="mt-1 text-xs text-muted">Impression et clôture des encaissements</p>
+              </div>
+              <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{backendTransactions.length}</span>
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintHotelReport()} disabled={backendTransactions.length === 0} className="justify-center">
+                Imprimer tout
+              </Button>
+              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => setShowCloseHotelModal(true)} disabled={backendTransactions.length === 0 || hotelTransactionsAreClosed} className="justify-center">
+                Clôturer la caisse
+              </Button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base pt-4 text-center">
+              <div>
+                <p className="text-lg font-semibold text-emerald-400">{backendTransactions.filter((transaction) => isFinancialInflow(transaction.type_flux)).length}</p>
+                <p className="text-[11px] text-muted">Encaissements</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-primary">{backendTransactions.filter((transaction) => isFinancialOutflow(transaction.type_flux)).length}</p>
+                <p className="text-[11px] text-muted">Sorties</p>
               </div>
             </div>
           </section>
@@ -1078,7 +1236,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       </div>
 
       {/* Transactions adaptées au module */}
-      {isBar ? (
+      {!isHotel || !hotelTransactionsAreClosed ? (isBar ? (
         <BarTransactionsCard title={transactionTitle} refreshTrigger={transactionsRefreshTrigger} />
       ) : (
         <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
@@ -1150,7 +1308,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
             )}
           </div>
         </div>
-      )}
+      )) : null}
 
       {/* Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nouvelle Transaction">

@@ -30,6 +30,7 @@ import { IdentityDocumentsCapture, identityDocumentUrl } from '../components/Cli
 import { signatureService } from '../services/signature.service';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
+import { printThermal } from '../utils/thermalPrint';
 
 const ClientsPage: React.FC = () => {
   const { 
@@ -475,8 +476,12 @@ const ClientsPage: React.FC = () => {
     
     setIsProcessing(true);
     try {
-      await deleteClient(clientToDelete.id);
-      toast.success('Client supprimé avec succès');
+      const result = await deleteClient(clientToDelete.id);
+      // Client avec historique (séjours, commandes, casino, paiements…) : retiré de la
+      // liste sans changer son statut, historique conservé. Sinon : effacé.
+      toast.success(result?.archived
+        ? `Client supprimé de la liste. Son historique (${result.relatedCount ?? 'plusieurs'} enregistrement(s)) est conservé.`
+        : 'Client supprimé définitivement');
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
     } catch (error: any) {
@@ -747,28 +752,11 @@ const ClientsPage: React.FC = () => {
     const card = await renderClientCard(selectedClient, qrCodeData);
     const dataUrl = card.toDataURL('image/png');
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Carte Client</title>
-          <style>
-            @page { size: ${CARD_WIDTH_MM}mm ${CARD_HEIGHT_MM}mm; margin: 0; }
-            html, body { margin: 0; padding: 0; }
-            img { width: ${CARD_WIDTH_MM}mm; height: ${CARD_HEIGHT_MM}mm; display: block; }
-          </style>
-        </head>
-        <body>
-          <img src="${dataUrl}" />
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    // On attend le chargement complet (image incluse) avant de déclencher l'impression,
-    // pour ne pas imprimer une page encore vide.
-    printWindow.onload = () => printWindow.print();
+    // La carte (89 mm) est réduite à la largeur imprimable du rouleau thermique (72 mm) ;
+    // l'impression attend le chargement de l'image.
+    printThermal('Carte Client', `<img class="card" src="${dataUrl}" alt="Carte client" />`, {
+      css: `body { padding: 2mm 0 6mm; } img.card { display: block; width: 100%; height: auto; filter: none; }`,
+    });
   };
 
   const getStatusBadge = (status: string = 'ACTIF'): JSX.Element => {
@@ -1809,7 +1797,7 @@ const ClientsPage: React.FC = () => {
                 Êtes-vous sûr de vouloir supprimer le client <strong>{clientToDelete.nom} {clientToDelete.prenom || ''}</strong> ?
               </p>
               <p className="text-sm text-danger mb-6">
-                ⚠️ Cette action est irréversible et supprimera définitivement le client.
+                ⚠️ Le client sera retiré de la liste et des recherches. S’il a un historique (séjours, commandes, casino, paiements…), cet historique est conservé.
               </p>
               <div className="flex justify-end gap-3">
                 <button

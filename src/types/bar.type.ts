@@ -1,3 +1,13 @@
+export interface BarEquipment {
+  id: number;
+  nom: string;
+  categorie: string;
+  description: string;
+  quantite: number;
+  etat: 'EN_SERVICE' | 'A_REPARER' | 'HORS_SERVICE';
+  created_at?: string;
+  updated_at?: string;
+}
 // ─── Métier (aligné sur la BDD) ──────────────────────────────
 
 /** Correspond à products (type_produit = PRODUIT_FINI, source_module = BAR) */
@@ -89,4 +99,23 @@ export interface BarStockItem {
   product_nom: string;
   product_categorie: string;
   location_nom: string;
+}
+
+// ==================== HISTORIQUE PRODUITS ====================
+
+export interface ProductHistoryItem {
+  date_vente: string;      // 'YYYY-MM-DD'
+  product_id: number;
+  produit: string;
+  categorie: string;
+  quantite_totale: number;
+  montant_total: number;
+  nb_commandes: number;
+}
+
+export interface ProductHistoryGroup {
+  date: string;
+  totalArticles: number;
+  totalMontant: number;
+  items: ProductHistoryItem[];
 }

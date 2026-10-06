@@ -49,6 +49,9 @@ export const CasinoPage: React.FC = () => {
   const [tablesError, setTablesError] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerLine[]>(createInitialPlayers);
   const playersRef = useRef<PlayerLine[]>(players);
+  // Dernière version enregistrée des fiches joueurs : le calcul final ne
+  // reflète les modifications qu'après l'enregistrement de la fiche joueur.
+  const [savedPlayers, setSavedPlayers] = useState<PlayerLine[]>(players);
   const resultPaymentOverridesRef = useRef<Record<string, string>>({});
   const [restaurantPayments, setRestaurantPayments] = useState({ especes: false, tpe: false });
   const [cashingPaymentMethod, setCashingPaymentMethod] = useState('');
@@ -117,7 +120,9 @@ export const CasinoPage: React.FC = () => {
     if (value === date) return;
     sheetLoadedRef.current = false;
     setSaveState('idle');
-    setPlayers(createInitialPlayers());
+    const initialPlayers = createInitialPlayers();
+    setPlayers(initialPlayers);
+    setSavedPlayers(initialPlayers);
     setSelectedFinalPlayerId(0);
     setChips(CHIP_VALUES.map((chipValue) => ({ value: chipValue, previous: '', opening: '', closing: '', withdrawn: '' })));
     setRackChecks(createInitialRackChecks());
@@ -211,6 +216,7 @@ export const CasinoPage: React.FC = () => {
       if (sheet) {
         const loadedPlayers = setFirstPlayerTimeIfMissing(sheet.players);
         setPlayers(loadedPlayers);
+        setSavedPlayers(loadedPlayers);
         if (loadedPlayers.some((player) => Boolean(player.casinoPlayerId || player.name.trim()))) {
           setView('players');
         }
@@ -232,7 +238,9 @@ export const CasinoPage: React.FC = () => {
         setIsGameFinished(Boolean(sheet.isFinished));
         setGameFinishedAt(sheet.finishedAt || '');
       } else {
-        setPlayers(createInitialPlayers());
+        const initialPlayers = createInitialPlayers();
+        setPlayers(initialPlayers);
+        setSavedPlayers(initialPlayers);
         setChips(CHIP_VALUES.map((value) => ({ value, previous: '', opening: '', closing: '', withdrawn: '' })));
         setRackChecks(createInitialRackChecks());
         setRestaurantPayments({ especes: false, tpe: false });
@@ -446,6 +454,7 @@ export const CasinoPage: React.FC = () => {
       const saved = await playerSheetApi.save({ date, table_name: table, players: playersWithAccumulatedCaves, chips, rackChecks: rackChecksRef.current, restaurantPayments, finals: finalsToSave, endGameTime, cashingPaymentMethod, isFinished: isGameFinished, finishedAt: gameFinishedAt });
       finalsByPlayerRef.current = finalsToSave;
       resultPaymentOverridesRef.current = {};
+      setSavedPlayers(playersWithAccumulatedCaves);
       setRegisteredPlayers((current) => current.map((registeredPlayer) => {
         const savedPlayer = playersWithAccumulatedCaves.find((player) => player.casinoPlayerId === registeredPlayer.id);
         return savedPlayer

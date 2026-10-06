@@ -201,8 +201,8 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
     return tabs;
   }
 
-  // Historique Bar réservé uniquement à l'admin.
-  const visibleTabs = tabs.filter(t => t.id !== 'historique');
+  // Historique Bar et Inventaire réservés uniquement à l'admin.
+  const visibleTabs = tabs.filter(t => t.id !== 'historique' && t.id !== 'historique-produits' && t.id !== 'inventory');
 
   // 2. Barman : UNIQUEMENT l'onglet commandes
   if (role === 'water' || role === 'barman' || role === 'hotesse') {
@@ -216,7 +216,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   // 3. Si non-admin : exclure systématiquement les onglets de caisse
   const nonCaisseTabs = visibleTabs.filter(t => t.id !== 'caisse' && !t.id.includes('caisse'));
 
-  // 4. Stock Manager : restreindre uniquement au stock
+  // 4. Stock Manager : restreindre uniquement au stock (pas d'inventaire)
   if (role === 'stock_manager') {
     const stockTabs = nonCaisseTabs.filter(t => t.id === 'stock' || t.id.includes('stock'));
     return stockTabs.length > 0 ? stockTabs : nonCaisseTabs;

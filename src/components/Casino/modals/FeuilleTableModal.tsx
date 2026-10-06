@@ -7,6 +7,7 @@ import { chipTypesApi } from '../../../services/casino.service'; // AJOUT v1.2 :
 import type { TableJeu, FeuilleTable } from '../../../types/casinoTablesJeu.types';
 import type { ChipType } from '../../../types/casino.types';
 import { TYPE_JEU_LABELS } from '../../../types/casinoTablesJeu.types';
+import { escapeHtml, printThermal, thermalHeader } from '../../../utils/thermalPrint';
 
 interface FeuilleTableModalProps {
   table: TableJeu;
@@ -115,6 +116,70 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
     }
   };
 
+  // Impression sur l'imprimante thermique 80 mm : la fiche A4 est remise en liste verticale
+  // (une entrée par cave / prolongation) ; les cases à remplir à la main restent vierges.
+  const handlePrint = () => {
+    if (!feuille) return;
+    const paid = (statut: string, moyen?: string | null) => (statut === 'PAYE' ? moyen || 'Payé' : 'Non payé');
+    const signature = (value?: string | null) => (value ? `<img class="signature" src="${escapeHtml(value)}" alt="Signature" />` : '');
+    const row = (label: string, value: string) => `<div class="row line"><span>${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`;
+    const blankRow = (label: string) => `<div class="row line blank"><span>${escapeHtml(label)}</span><span></span></div>`;
+    const caves = feuille.lignes.map((l) => `
+      <div class="line">
+        <div class="row"><strong>${escapeHtml(l.joueur)}</strong><span>Cave n°${escapeHtml(l.numero_cave)}</span></div>
+        <div class="sub">Adh. ${escapeHtml(l.numero_adherent || '—')} · arrivée ${escapeHtml(l.heure_arrivee || '—')} · ${escapeHtml(l.heure || '—')}</div>
+        <div class="row"><span>Montant cave</span><span>${escapeHtml(formatAriary(l.montant_cave))}</span></div>
+        <div class="row"><span>Total joueur</span><span>${escapeHtml(formatAriary(l.montant_total_joueur))}</span></div>
+        <div class="sub">${escapeHtml(paid(l.statut_paiement, l.moyen_paiement))}</div>
+        ${signature(l.signature_data)}
+      </div>`).join('');
+    const prolongations = feuille.prolongations.map((p) => `
+      <div class="line">
+        <div class="row"><strong>${escapeHtml(p.joueur)}</strong><span>${escapeHtml(formatAriary(p.montant))}</span></div>
+        <div class="sub">${escapeHtml(formatDateTime(p.heure))} · ${escapeHtml(paid(p.statut_paiement, p.moyen_paiement))}</div>
+        ${signature(p.signature_data)}
+      </div>`).join('');
+    const chipRows = (cells: number) => chipTypes.map((ct) => `<tr><td>(${escapeHtml(ct.nom)}) ${escapeHtml(ct.valeur_nominale.toLocaleString('fr-FR'))}</td>${'<td></td>'.repeat(cells)}</tr>`).join('');
+
+    printThermal(`Feuille de table ${feuille.table.numero}`, `
+      ${thermalHeader(`Fiche de table — ${feuille.table.numero}`, [`${TYPE_JEU_LABELS[feuille.table.type_jeu]} · Salle ${feuille.table.salle}`])}
+      ${row('Date', feuille.date)}
+      ${row('Cave minimum', formatAriary(feuille.table.cave_minimum))}
+      ${row('Durée jeu simple', `${feuille.table.duree_jeu_simple_minutes} min`)}
+      ${row('Durée prolongation', `${feuille.table.duree_prolongation_minutes} min`)}
+      <h2>CAVES / RECAVES</h2>
+      ${caves || '<p>Aucune cave enregistrée.</p>'}
+      <h2>PROLONGATIONS</h2>
+      ${prolongations || '<p>Aucune prolongation.</p>'}
+      <h2>POURBOIRES</h2>
+      ${row('Jetons', formatAriary(feuille.pourboires.total_jetons))}
+      ${row('Espèces', formatAriary(feuille.pourboires.total_especes))}
+      <div class="row total"><span>TOTAL POURBOIRES</span><span>${escapeHtml(formatAriary(feuille.pourboires.total))}</span></div>
+      <h2>TOTAUX</h2>
+      ${row('Total cashing en jetons', formatAriary(feuille.totaux.total_cashing_jetons))}
+      ${row('Total caves cavées', formatAriary(feuille.totaux.total_caves_encaissees))}
+      ${row('Payé — Espèces', formatAriary(feuille.totaux.montant_paye_especes))}
+      ${row('Payé — TPE', formatAriary(feuille.totaux.montant_paye_tpe))}
+      ${row('Reste à payer', formatAriary(feuille.totaux.montant_non_paye))}
+      ${row('Total prolongation', formatAriary(feuille.totaux.total_prolongation))}
+      ${blankRow('Total bon restaurant')}
+      ${blankRow('Total offert')}
+      <p class="sign-line">Signature croupier</p>
+      <p class="sign-line">Signature responsable</p>
+      ${chipTypes.length ? `
+        <h2>FICHE POKER NIGHT KAMOULA</h2>
+        <table class="chips"><thead><tr><th>Jetons</th><th>Veille</th><th>Valeur</th><th>Départ</th><th>Ferm.</th></tr></thead><tbody>${chipRows(4)}<tr><td colspan="5"><strong>TOTAL</strong></td></tr></tbody></table>
+        <p class="center"><strong>TOTAL DES PRÉLÈVEMENTS</strong></p>
+        <table class="chips"><thead><tr><th>Jetons</th><th>Nombre</th><th>Valeur totale</th></tr></thead><tbody>${chipRows(2)}<tr><td><strong>TOTAL</strong></td><td></td><td></td></tr></tbody></table>` : ''}
+    `, {
+      css: `
+        .blank span:last-child { min-width: 30mm; }
+        .sign-line { margin-top: 14mm; border-top: 1px solid #000; padding-top: 2px; font-size: 11px; }
+        table.chips th, table.chips td { border: 1px solid #000; font-size: 10px; height: 20px; }
+      `,
+    });
+  };
+
   return (
     <Modal
       title={`Feuille de table — ${table.numero}`}
@@ -137,7 +202,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
           >
             {generatingPdf ? 'Génération…' : 'Enregistrer PDF'}
           </Button>
-          <Button icon={<Printer size={16} />} onClick={() => window.print()} disabled={!feuille}>
+          <Button icon={<Printer size={16} />} onClick={handlePrint} disabled={!feuille}>
             Imprimer
           </Button>
         </>

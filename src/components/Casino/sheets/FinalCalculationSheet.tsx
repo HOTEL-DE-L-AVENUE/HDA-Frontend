@@ -20,18 +20,14 @@ interface FinalCalculationSheetProps {
 }
 
 export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ players, selectedPlayerId, values, withdrawnTotal, depositResults, creditResults, calculationRevision = 0, saveState = 'idle', onPlayerChange, onUpdate, onSave, showIdentityVerifications = true, identityVerifications = {} }) => {
+  // Les champs automatiques suivent toujours les fiches joueurs ; seule une saisie
+  // manuelle faite pendant cette session (ref à true) les remplace.
   const bonusManualOverrideRef = useRef(false);
-  const lastAutoBonusRef = useRef('');
   const mobileManualOverrideRef = useRef(false);
-  const lastAutoMobileRef = useRef('');
   const mobileReturnManualOverrideRef = useRef(false);
-  const lastAutoMobileReturnRef = useRef('');
   const depositManualOverrideRef = useRef(false);
-  const lastAutoDepositRef = useRef('');
   const depositPaidManualOverrideRef = useRef(false);
-  const lastAutoDepositPaidRef = useRef('');
   const creditPaidManualOverrideRef = useRef(false);
-  const lastAutoCreditPaidRef = useRef('');
   const tpeManualOverrideRef = useRef(false);
   const creditManualOverrideRef = useRef(false);
   const offertManualOverrideRef = useRef(false);
@@ -48,12 +44,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     creditManualOverrideRef.current = false;
     offertManualOverrideRef.current = false;
     otherCavePaymentsManualOverrideRef.current = false;
-    lastAutoBonusRef.current = '';
-    lastAutoMobileRef.current = '';
-    lastAutoMobileReturnRef.current = '';
-    lastAutoDepositRef.current = '';
-    lastAutoDepositPaidRef.current = '';
-    lastAutoCreditPaidRef.current = '';
   }, [calculationRevision]);
   const activePlayers = players.filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
@@ -104,151 +94,18 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     })
     .join('\n');
 
-  useEffect(() => {
-    const currentStoredBonus = String(values.bonus ?? '').trim();
-    const currentAutoBonus = String(bonusResults ?? '').trim();
-
-    if (currentStoredBonus && currentStoredBonus !== currentAutoBonus && currentStoredBonus !== lastAutoBonusRef.current) {
-      bonusManualOverrideRef.current = true;
-    }
-
-    if (currentStoredBonus === currentAutoBonus) {
-      bonusManualOverrideRef.current = false;
-      lastAutoBonusRef.current = currentAutoBonus;
-      return;
-    }
-
-    if (!bonusManualOverrideRef.current && (!currentStoredBonus || currentStoredBonus === lastAutoBonusRef.current || currentStoredBonus === '')) {
-      onUpdate('bonus', currentAutoBonus);
-    }
-
-    lastAutoBonusRef.current = currentAutoBonus;
-  }, [bonusResults, values.bonus, onUpdate]);
-
-  useEffect(() => {
-    const currentStoredMobile = String(values.mobiles ?? '').trim();
-    const currentAutoMobile = String(mobilePaymentResults ?? '').trim();
-
-    if (currentStoredMobile && currentStoredMobile !== currentAutoMobile && currentStoredMobile !== lastAutoMobileRef.current) {
-      mobileManualOverrideRef.current = true;
-    }
-
-    if (currentStoredMobile === currentAutoMobile) {
-      mobileManualOverrideRef.current = false;
-      lastAutoMobileRef.current = currentAutoMobile;
-      return;
-    }
-
-    if (!mobileManualOverrideRef.current && (!currentStoredMobile || currentStoredMobile === lastAutoMobileRef.current || currentStoredMobile === '')) {
-      onUpdate('mobiles', currentAutoMobile);
-    }
-
-    lastAutoMobileRef.current = currentAutoMobile;
-  }, [mobilePaymentResults, values.mobiles, onUpdate]);
-
-  useEffect(() => {
-    const currentStoredMobileReturn = String(values.retourMobile ?? '').trim();
-    const currentAutoMobileReturn = String(mobileReturnResults ?? '').trim();
-
-    if (currentStoredMobileReturn && currentStoredMobileReturn !== currentAutoMobileReturn && currentStoredMobileReturn !== lastAutoMobileReturnRef.current) {
-      mobileReturnManualOverrideRef.current = true;
-    }
-
-    if (currentStoredMobileReturn === currentAutoMobileReturn) {
-      mobileReturnManualOverrideRef.current = false;
-      lastAutoMobileReturnRef.current = currentAutoMobileReturn;
-      return;
-    }
-
-    if (!mobileReturnManualOverrideRef.current && (!currentStoredMobileReturn || currentStoredMobileReturn === lastAutoMobileReturnRef.current || currentStoredMobileReturn === '')) {
-      onUpdate('retourMobile', currentAutoMobileReturn);
-    }
-
-    lastAutoMobileReturnRef.current = currentAutoMobileReturn;
-  }, [mobileReturnResults, values.retourMobile, onUpdate]);
-
-  useEffect(() => {
-    const currentStoredDeposit = String(values.depot ?? '').trim();
-    const currentAutoDeposit = String(depositPaymentResults || depositResults || '').trim();
-
-    if (currentStoredDeposit === currentAutoDeposit) {
-      depositManualOverrideRef.current = false;
-      lastAutoDepositRef.current = currentAutoDeposit;
-      return;
-    }
-
-    if (!depositManualOverrideRef.current && (!currentStoredDeposit || currentStoredDeposit === lastAutoDepositRef.current || currentStoredDeposit === '')) {
-      onUpdate('depot', currentAutoDeposit);
-    }
-
-    lastAutoDepositRef.current = currentAutoDeposit;
-  }, [depositPaymentResults, depositResults, values.depot, onUpdate]);
-
-  useEffect(() => {
-    const currentStoredDepositPaid = String(values.depotPaye ?? '').trim();
-    const currentAutoDepositPaid = String(depositPaidResults ?? '').trim();
-
-    if (currentStoredDepositPaid && currentStoredDepositPaid !== currentAutoDepositPaid && currentStoredDepositPaid !== lastAutoDepositPaidRef.current) {
-      depositPaidManualOverrideRef.current = true;
-    }
-
-    if (currentStoredDepositPaid === currentAutoDepositPaid) {
-      depositPaidManualOverrideRef.current = false;
-      lastAutoDepositPaidRef.current = currentAutoDepositPaid;
-      return;
-    }
-
-    if (!depositPaidManualOverrideRef.current && (!currentStoredDepositPaid || currentStoredDepositPaid === lastAutoDepositPaidRef.current || currentStoredDepositPaid === '')) {
-      onUpdate('depotPaye', currentAutoDepositPaid);
-    }
-
-    lastAutoDepositPaidRef.current = currentAutoDepositPaid;
-  }, [depositPaidResults, values.depotPaye, onUpdate]);
-
-  useEffect(() => {
-    const currentStoredCreditPaid = String(values.creditPaye ?? '').trim();
-    const currentAutoCreditPaid = String(creditPaidResults ?? '').trim();
-
-    if (currentStoredCreditPaid && currentStoredCreditPaid !== currentAutoCreditPaid && currentStoredCreditPaid !== lastAutoCreditPaidRef.current) {
-      creditPaidManualOverrideRef.current = true;
-    }
-
-    if (currentStoredCreditPaid === currentAutoCreditPaid) {
-      creditPaidManualOverrideRef.current = false;
-      lastAutoCreditPaidRef.current = currentAutoCreditPaid;
-      return;
-    }
-
-    if (!creditPaidManualOverrideRef.current && (!currentStoredCreditPaid || currentStoredCreditPaid === lastAutoCreditPaidRef.current || currentStoredCreditPaid === '')) {
-      onUpdate('creditPaye', currentAutoCreditPaid);
-    }
-
-    lastAutoCreditPaidRef.current = currentAutoCreditPaid;
-  }, [creditPaidResults, values.creditPaye, onUpdate]);
-
-  const hasManualMobileValue = mobileManualOverrideRef.current || String(values.mobiles ?? '').trim().length > 0;
-  const manualBonusValue = String(values.bonus ?? '').trim();
-  const hasManualBonusValue = bonusManualOverrideRef.current || manualBonusValue.length > 0;
-  const bonusFieldValue = hasManualBonusValue ? values.bonus : bonusResults;
+  const bonusFieldValue = bonusManualOverrideRef.current ? values.bonus : bonusResults;
   const mobileReturnTotal = getPositivePaymentTotal(players, 'MVola', 'Orange Money');
-  const hasManualMobileReturnValue = String(values.retourMobile ?? '').trim().length > 0;
-  const mobileReturnFieldValue = hasManualMobileReturnValue ? values.retourMobile : mobileReturnResults;
+  const mobileReturnFieldValue = mobileReturnManualOverrideRef.current ? values.retourMobile : mobileReturnResults;
   const creditPaidTotal = getPositivePaymentTotal(players, 'Crédit payé');
   const depositAutoDisplay = depositPaymentResults || depositResults;
-  const hasManualDepositValue = depositManualOverrideRef.current || String(values.depot ?? '').trim().length > 0;
-  const depositFieldValue = hasManualDepositValue ? values.depot : depositAutoDisplay;
+  const depositFieldValue = depositManualOverrideRef.current ? values.depot : depositAutoDisplay;
   const tpeResults = buildNegativePaymentResults(players, 'TPE');
-  const depositPaidAutoDisplay = depositPaidResults;
-  const hasManualDepositPaidValue = depositPaidManualOverrideRef.current || String(values.depotPaye ?? '').trim().length > 0;
-  const depositPaidFieldValue = hasManualDepositPaidValue ? values.depotPaye : depositPaidAutoDisplay;
-  const creditPaidAutoDisplay = creditPaidResults;
-  const hasManualCreditPaidValue = creditPaidManualOverrideRef.current || String(values.creditPaye ?? '').trim().length > 0;
-  const creditPaidFieldValue = hasManualCreditPaidValue ? values.creditPaye : creditPaidAutoDisplay;
+  const depositPaidFieldValue = depositPaidManualOverrideRef.current ? values.depotPaye : depositPaidResults;
+  const creditPaidFieldValue = creditPaidManualOverrideRef.current ? values.creditPaye : creditPaidResults;
   const tpePaymentsTotal = getNegativePaymentTotal(players, 'TPE');
-  const hasManualTpeValue = tpeManualOverrideRef.current;
   const mobilePaymentsTotal = getNegativePaymentTotal(players, 'MVola', 'Orange Money');
   const depositPaidTotal = getNegativePaymentTotal(players, 'Dépôt payé');
-  const creditPaymentsTotal = getNegativePaymentTotal(players, 'Crédit');
   const paidCaveTpeResults = buildPaidCavePaymentResults(players, ['TPE']);
   const paidCaveMobileResults = buildPaidCavePaymentResults(players, ['MVola', 'Orange Money']);
   const paidCaveCreditResults = buildPaidCavePaymentResults(players, ['Crédit', 'Credit']);
@@ -261,28 +118,28 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const paidCaveOtherTotal = getPaidCavePaymentTotal(players, ['Euro', 'Dollar', 'Chèque', 'Cheque', 'Virement']);
   const tpeDisplay = [tpeResults, paidCaveTpeResults].filter(Boolean).join('\n');
   const tpeFieldValue = tpeManualOverrideRef.current ? values.tpe : tpeDisplay;
-  const mobileDisplayValue = hasManualMobileValue ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
+  const mobileDisplayValue = mobileManualOverrideRef.current ? values.mobiles : [mobilePaymentResults, paidCaveMobileResults].filter(Boolean).join('\n');
   const creditAutoDisplay = buildCreditResults(players);
-  const hasCreditResultPayment = players.some((player) => parsePaymentOptions(player.resultPaymentOptions).some((payment) => payment.option === 'Crédit'));
   const creditDisplay = creditManualOverrideRef.current ? values.credit : creditAutoDisplay;
-  const bonusAutoDisplay = bonusResults;
   const offertDisplay = uniqueDisplayLines([
     offertManualOverrideRef.current ? values.offert : offertPaymentResults,
   ].filter(Boolean).join('\n'));
   const otherCavePaymentsDisplay = otherCavePaymentsManualOverrideRef.current
     ? values.autresPaiementsCaves || ''
     : paidCaveOtherResults;
-  const mobileManualTotal = parseCasinoAmount(values.mobiles);
-  const mobileCalculatedTotal = mobilePaymentResults ? mobilePaymentsTotal + mobileManualTotal : mobileManualTotal;
-  const tpeEntryTotal = hasManualTpeValue
+  // Valeurs automatiques : on additionne les montants calculés plutôt que de relire
+  // le texte affiché (un chiffre dans le nom du joueur fausserait le total).
+  const tpeEntryTotal = tpeManualOverrideRef.current
     ? parseCasinoAmount(values.tpe)
     : tpePaymentsTotal + paidCaveTpeTotal;
-  const bonusEntryTotal = parseCasinoAmount(hasManualBonusValue ? String(values.bonus ?? '').trim() || '0' : String(bonusResults ?? '').trim() || '0');
-  const creditEntryTotal = parseCasinoAmount(creditDisplay);
-  const depositEntryTotal = hasManualDepositValue ? parseCasinoAmount(values.depot) : depositPaymentTotal;
-  const mobileReturnEntryTotal = hasManualMobileReturnValue ? parseCasinoAmount(values.retourMobile) : mobileReturnTotal;
-  const depositPaidEntryTotal = hasManualDepositPaidValue ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
-  const creditPaidEntryTotal = hasManualCreditPaidValue ? parseCasinoAmount(values.creditPaye) : creditPaidTotal;
+  const mobileEntryTotal = mobileManualOverrideRef.current
+    ? parseCasinoAmount(values.mobiles)
+    : mobilePaymentsTotal + paidCaveMobileTotal;
+  const bonusEntryTotal = bonusManualOverrideRef.current ? parseCasinoAmount(values.bonus) : bonusTotal;
+  const depositEntryTotal = depositManualOverrideRef.current ? parseCasinoAmount(values.depot) : depositPaymentTotal;
+  const mobileReturnEntryTotal = mobileReturnManualOverrideRef.current ? parseCasinoAmount(values.retourMobile) : mobileReturnTotal;
+  const depositPaidEntryTotal = depositPaidManualOverrideRef.current ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
+  const creditPaidEntryTotal = creditPaidManualOverrideRef.current ? parseCasinoAmount(values.creditPaye) : creditPaidTotal;
   const cashPaymentTotal = getCashPaymentTotal(players);
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
@@ -293,17 +150,21 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     + depositEntryTotal
     + mobileReturnEntryTotal
     + creditPaidEntryTotal;
-  const automaticTotal2 = parseCasinoAmount(tpeFieldValue)
-    + parseCasinoAmount(mobileDisplayValue)
-    + parseCasinoAmount(bonusFieldValue)
+  const automaticTotal2 = tpeEntryTotal
+    + mobileEntryTotal
+    + bonusEntryTotal
     + parseCasinoAmount(creditDisplay)
-    + parseCasinoAmount(depositPaidFieldValue)
+    + depositPaidEntryTotal
     + parseCasinoAmount(offertDisplay)
     + parseCasinoAmount(otherCavePaymentsDisplay);
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = cashPaymentTotal;
+  // Retraits autres départements : caisse espèces négative → on ajoute, positive → on soustrait.
+  const otherDepartmentWithdrawalTotal = parseCasinoAmount(values.autres);
+  const totalEspeces = cashPaymentTotal < 0
+    ? cashPaymentTotal + otherDepartmentWithdrawalTotal
+    : cashPaymentTotal - otherDepartmentWithdrawalTotal;
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
@@ -1070,12 +931,19 @@ const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players
   const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
   const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
   const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-  const result = Math.abs(cashing - totalCaves);
-  const cashPayments = parsePaymentOptions(player.resultPaymentOptions).filter((payment) => isCashPaymentOption(payment.option));
+  const result = cashing - totalCaves;
+  if (result === 0) return total;
+  const payments = parsePaymentOptions(player.resultPaymentOptions);
+  const cashPayments = payments.filter((payment) => isCashPaymentOption(payment.option));
   if (!cashPayments.length) return total;
-  const explicitAmount = cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
-  const amount = explicitAmount > 0 ? explicitAmount : cashPayments.length === 1 ? result : 0;
-  return total + amount;
+  // Espèce seule : tout le résultat passe en caisse.
+  // Plusieurs règlements (ex. Espèce + TPE) : seul le montant saisi en Espèce compte.
+  const amount = payments.length === 1
+    ? Math.abs(result)
+    : cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
+  // Résultat négatif : le joueur paie, la caisse augmente.
+  // Résultat positif : le casino paie le joueur, la caisse diminue.
+  return result < 0 ? total + amount : total - amount;
 }, 0);
 
 const isPaidCave = (payment?: string) => {

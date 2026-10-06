@@ -3,6 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { RoomMaintenance, Room, Equipment, MaintenanceWorker } from '../../../types/hotel.types';
 import { X, Loader, AlertCircle } from 'lucide-react';
 import { Modal } from '../../Modal';
+import { StockProductPicker } from '../StockProductPicker';
+
+interface SelectedProduct {
+  product_id: number;
+  nom: string;
+  unite: string;
+  available_quantity: number;
+  quantity: number;
+}
 
 interface MaintenanceFormModalProps {
   isOpen: boolean;
@@ -41,6 +50,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
     labor_cost: 0,
     other_intervention_description: '',
   });
+  const [materialsUsed, setMaterialsUsed] = useState<SelectedProduct[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -62,6 +72,17 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
         labor_cost: initialData.labor_cost || 0,
         other_intervention_description: '',
       });
+      let savedProducts: any = initialData.materials_used || [];
+      if (typeof savedProducts === 'string') {
+        try { savedProducts = JSON.parse(savedProducts); } catch { savedProducts = []; }
+      }
+      setMaterialsUsed(Array.isArray(savedProducts) ? savedProducts.map((item: any) => ({
+        product_id: Number(item.product_id),
+        nom: item.nom || `Produit #${item.product_id}`,
+        unite: item.unite || 'unités',
+        available_quantity: Number(item.available_quantity || item.quantity || 0),
+        quantity: Number(item.quantity || 1),
+      })) : []);
     } else {
       setFormData({
         room_id: defaultRoomId || 0,
@@ -74,6 +95,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
         execution_date: '', finish_date: '', materials_cost: 0, labor_cost: 0,
         other_intervention_description: '',
       });
+      setMaterialsUsed([]);
     }
     setErrors({});
   }, [initialData, isOpen, defaultRoomId]);
@@ -81,6 +103,9 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.location.trim()) newErrors.location = 'Veuillez saisir le lieu de l’intervention';
+    if (formData.type_intervention === 'AUTRE' && !formData.other_intervention_description.trim()) {
+      newErrors.other_intervention_description = 'Veuillez préciser le type d’intervention';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -91,7 +116,17 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSave(formData);
+      const submitData = {
+        ...formData,
+        description: formData.type_intervention === 'AUTRE' && formData.other_intervention_description.trim()
+          ? `${formData.other_intervention_description.trim()}${formData.description.trim() ? ` — ${formData.description.trim()}` : ''}`
+          : formData.description,
+        materials_used: materialsUsed.map(m => ({
+          product_id: m.product_id,
+          quantity: m.quantity
+        }))
+      };
+      await onSave(submitData);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -191,6 +226,7 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
                 placeholder="Spécifiez le type d'intervention..."
                 disabled={isSubmitting}
               />
+              {errors.other_intervention_description && <p className="text-red-400 text-xs mt-1">{errors.other_intervention_description}</p>}
             </div>
           )}
 
@@ -233,6 +269,18 @@ export const MaintenanceFormModal: React.FC<MaintenanceFormModalProps> = ({
               rows={3}
               placeholder="Décrivez l'intervention..."
               disabled={isSubmitting}
+            />
+          </div>
+
+          {/* Matériaux utilisés */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Matériaux/produits utilisés
+            </label>
+            <StockProductPicker
+              onChange={setMaterialsUsed}
+              initialProducts={materialsUsed}
+              locationId={5}
             />
           </div>
 

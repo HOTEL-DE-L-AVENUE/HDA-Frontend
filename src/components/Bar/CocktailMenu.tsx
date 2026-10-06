@@ -7,6 +7,39 @@ import barService from '../../services/bar.service';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../utils/data';
 
+// Normalise un nom d'article pour détecter les doublons :
+// "J&B (70 cl)" et "JB 70cl" donnent la même clé, "Gordon's" et "Gordons" aussi.
+const FORMAT_REGEX = /(\d+(?:[.,]\d+)?)\s*(cl|ml|l)\b|\b(pm|gm)\b/g;
+
+const normalizeName = (value: string) => value
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[̀-ͯ]/g, '')
+  .replace(/(\d)[.,](\d)/g, '$1§$2') // protège les décimales (1,5 L = 1.5L)
+  .replace(/[&'’`´.\-_/()[\]]/g, ' ')
+  .replace(/§/g, '.')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const getNameParts = (value: string) => {
+  const normalized = normalizeName(value);
+  const formats = new Set<string>();
+  const base = normalized.replace(FORMAT_REGEX, (_match, qty, unit, size) => {
+    formats.add(size ? size : `${String(qty).replace(',', '.')}${unit}`);
+    return ' ';
+  }).replace(/\s+/g, '');
+  return { base, formats };
+};
+
+// Même nom de base et formats compatibles (identiques, ou l'un des deux sans format précisé)
+const isSimilarName = (a: string, b: string) => {
+  const pa = getNameParts(a);
+  const pb = getNameParts(b);
+  if (!pa.base || pa.base !== pb.base) return false;
+  if (pa.formats.size === 0 || pb.formats.size === 0) return true;
+  return [...pa.formats].some((format) => pb.formats.has(format));
+};
+
 interface Props {
   cocktails: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string; seuil_minimum?: number }>;
@@ -45,6 +78,9 @@ export const CocktailMenu: React.FC<Props> = ({
   const [seuilMinimum, setSeuilMinimum] = useState('5');
   const [unite, setUnite] = useState('unités');
   const [alcool, setAlcool] = useState(true);
+
+  // Articles similaires détectés avant l'ajout
+  const [duplicateMatches, setDuplicateMatches] = useState<BarProduct[]>([]);
 
   // États du formulaire de modification
   const [editingProduct, setEditingProduct] = useState<BarProduct | null>(null);
@@ -94,6 +130,17 @@ export const CocktailMenu: React.FC<Props> = ({
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    await createProduct(false);
+  };
+
+  // Ouvre la modification de l'article déjà inscrit à la place d'un nouvel ajout
+  const handleEditExisting = (product: BarProduct) => {
+    setDuplicateMatches([]);
+    setIsModalOpen(false);
+    handleOpenEditModal(product);
+  };
+
+  const createProduct = async (force: boolean) => {
     const trimmedNom = nom.trim();
     const parsedPrix = Number(prix.toString().replace(',', '.'));
     const parsedQuantite = Number(quantite);
@@ -109,8 +156,17 @@ export const CocktailMenu: React.FC<Props> = ({
       return;
     }
 
+    if (!force) {
+      const matches = cocktails.filter((product) => isSimilarName(product.nom || '', trimmedNom));
+      if (matches.length > 0) {
+        setDuplicateMatches(matches);
+        return;
+      }
+    }
+
     try {
       setIsSaving(true);
+      setDuplicateMatches([]);
       const payload = {
         nom: trimmedNom,
         categorie: sousCategorie ? `${categorie} > ${sousCategorie}` : categorie,
@@ -237,6 +293,7 @@ export const CocktailMenu: React.FC<Props> = ({
   const selectCategory = (category: string) => {
     setSelectedCategory(category);
     setSelectedSubcategory('Toutes');
+    setSearchTerm('');
   };
 
   const handleAddArticle = async (cocktail: BarProduct) => {
@@ -339,7 +396,7 @@ export const CocktailMenu: React.FC<Props> = ({
                       </div>
                     )}
                     {userIsAdmin && (
-                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex" onClick={(event) => event.stopPropagation()}>
+                      <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex group-focus-within:flex [@media(hover:none)]:flex" onClick={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
                         <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>
                       </div>
@@ -361,17 +418,20 @@ export const CocktailMenu: React.FC<Props> = ({
             onChange={(e) => setNom(e.target.value)}
             placeholder="Ex: Mojito, Whisky..."
           />
-          <Select
-            label="Catégorie"
-            value={categorie}
-            onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
-            options={[
-              { value: 'Alcools', label: 'Alcools' },
-              { value: 'Bières & Soft', label: 'Bières & Soft' },
-              { value: 'Cocktails', label: 'Cocktails' },
-              { value: 'Sans alcool', label: 'Sans alcool' },
-            ]}
-          />
+          <>
+            <Input
+              label="Catégorie"
+              value={categorie}
+              onChange={(e) => { setCategorie(e.target.value); setSousCategorie(''); }}
+              placeholder="Saisir ou rechercher une catégorie"
+              list="bar-product-categories"
+            />
+            <datalist id="bar-product-categories">
+              {categoryNames.filter((category) => category !== 'Toutes').map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+          </>
           {getSubcategories(categorie).length > 0 && (
             <Select
               label="Sous-catégorie"
@@ -433,6 +493,45 @@ export const CocktailMenu: React.FC<Props> = ({
         </form>
       </Modal>
 
+      {/* Avertissement : article déjà inscrit */}
+      <Modal isOpen={duplicateMatches.length > 0} onClose={() => setDuplicateMatches([])} title="Article déjà inscrit" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-secondary">
+            « <span className="font-semibold text-primary">{nom.trim()}</span> » ressemble à {duplicateMatches.length > 1 ? 'des articles déjà inscrits' : 'un article déjà inscrit'}.
+            Voulez-vous modifier l'article existant plutôt que d'en créer un nouveau ?
+          </p>
+
+          <div className="space-y-2">
+            {duplicateMatches.map((product) => {
+              const stock = stockMap?.[product.id];
+              return (
+                <div key={product.id} className="flex items-center justify-between gap-3 rounded-lg border border-base bg-surface-2 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-primary">{product.nom}</p>
+                    <p className="text-xs text-muted">
+                      {product.categorie || 'Sans catégorie'} · {formatCurrency(product.prix)}
+                      {stock ? ` · Stock : ${stock.quantite} ${stock.unite}` : ''}
+                    </p>
+                  </div>
+                  <Button type="button" icon={<Edit3 size={14} />} onClick={() => handleEditExisting(product)} className="shrink-0">
+                    Modifier
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setDuplicateMatches([])} className="flex-1">
+              Annuler
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => void createProduct(true)} className="flex-1" disabled={isSaving}>
+              {isSaving ? 'Enregistrement...' : 'Ajouter quand même'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Modal de modification de boisson */}
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Modifier la boisson" size="md">
         <form onSubmit={handleUpdateProduct} className="space-y-4">
@@ -442,17 +541,20 @@ export const CocktailMenu: React.FC<Props> = ({
             onChange={(e) => setEditNom(e.target.value)}
             placeholder="Ex: Mojito, Whisky..."
           />
-          <Select
-            label="Catégorie"
-            value={editCategorie}
-            onChange={(e) => { setEditCategorie(e.target.value); setEditSousCategorie(''); }}
-            options={[
-              { value: 'Alcools', label: 'Alcools' },
-              { value: 'Bières & Soft', label: 'Bières & Soft' },
-              { value: 'Cocktails', label: 'Cocktails' },
-              { value: 'Sans alcool', label: 'Sans alcool' },
-            ]}
-          />
+          <>
+            <Input
+              label="Catégorie"
+              value={editCategorie}
+              onChange={(e) => { setEditCategorie(e.target.value); setEditSousCategorie(''); }}
+              placeholder="Saisir ou rechercher une catégorie"
+              list="bar-product-edit-categories"
+            />
+            <datalist id="bar-product-edit-categories">
+              {categoryNames.filter((category) => category !== 'Toutes').map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+          </>
           {getSubcategories(editCategorie).length > 0 && (
             <Select
               label="Sous-catégorie"

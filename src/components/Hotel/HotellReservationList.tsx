@@ -1,6 +1,6 @@
 // components/Hotel/ReservationList.tsx
 import React, { useState, useEffect } from 'react';
-import { Reservation } from '../../types/hotel.types';
+import { Reservation, ReservationPayment } from '../../types/hotel.types';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/data';
 import {
   Calendar,
@@ -37,9 +37,10 @@ interface ReservationListProps {
   onDelete?: (reservationId: number) => void;
   refreshTrigger?: number;
   paymentCancelledTrigger?: number;
+  view?: 'active' | 'history';
 }
 
-export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger, paymentCancelledTrigger }) => {
+export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEncaisser, onCheckIn, refreshTrigger, paymentCancelledTrigger, view = 'active' }) => {
   const {
     reservations,
     loading: reservationsLoading,
@@ -60,13 +61,28 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedPayments, setExpandedPayments] = useState<ReservationPayment[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [enrichedReservations, setEnrichedReservations] = useState<Reservation[]>([]);
   const [barSpendByReservation, setBarSpendByReservation] = useState<Record<number, number>>({});
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [historyFromDate, setHistoryFromDate] = useState('');
   const [historyToDate, setHistoryToDate] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const isDirection = ['admin', 'manager'].includes(String(AuthService.getCurrentUser()?.role || '').toLowerCase());
+
+  useEffect(() => {
+    if (expandedId === null) {
+      setExpandedPayments([]);
+      return;
+    }
+    let cancelled = false;
+    setPaymentsLoading(true);
+    reservationService.getReservationPayments(expandedId)
+      .then((rows) => { if (!cancelled) setExpandedPayments(rows); })
+      .catch(() => { if (!cancelled) setExpandedPayments([]); })
+      .finally(() => { if (!cancelled) setPaymentsLoading(false); });
+    return () => { cancelled = true; };
+  }, [expandedId]);
 
   // 🟢 État local pour stocker les IDs des réservations déjà encaissées
   const [encaissedIds, setEncaissedIds] = useState<number[]>([]);
@@ -169,13 +185,13 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       res.room?.numero?.includes(searchTerm);
 
     // Filter by tab (active vs history)
-    const matchesTab = activeTab === 'active'
+    const matchesTab = view === 'active'
       ? !['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut)
       : ['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut);
 
     // Filter by date range in history tab
     let matchesDateRange = true;
-    if (activeTab === 'history') {
+    if (view === 'history') {
       if (historyFromDate) {
         matchesDateRange = matchesDateRange && new Date(res.date_arrivee) >= new Date(historyFromDate);
       }
@@ -186,7 +202,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
     // Filter by user name in history tab
     let matchesUser = true;
-    if (activeTab === 'history' && userSearchTerm) {
+    if (view === 'history' && userSearchTerm) {
       const userSearchLower = userSearchTerm.toLowerCase();
       const creatorName = `${res.created_by_prenom || ''} ${res.created_by_nom || ''}`.toLowerCase();
       const modifierName = `${res.modified_by_prenom || ''} ${res.modified_by_nom || ''}`.toLowerCase();
@@ -195,13 +211,17 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
     return matchesStatus && matchesSearch && matchesTab && matchesDateRange && matchesUser;
   });
+  const filteredReservationsTotal = filteredReservations.reduce(
+    (total, reservation) => total + (Number(reservation.montant_total) || 0),
+    0
+  );
 
   const isLoading = reservationsLoading || clientsLoading || roomsLoading;
 
   // Ticket 80 mm de la réservation (prestations + historique des paiements)
   const handlePrintTicket = async (res: Reservation) => {
     try {
-      const payments = Number(res.montant_paye || 0) > 0 ? await reservationService.getReservationPayments(res.id) : [];
+      const payments = await reservationService.getReservationPayments(res.id);
       printReservationTicket(receiptDataFromReservation(res, payments));
     } catch {
       toast.error("Impossible de préparer le ticket d'impression");
@@ -339,22 +359,6 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
       {/* Filtres */}
       <div className="flex gap-2">
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('active')}
-            className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'active' ? 'bg-accent text-black' : 'bg-gray-900 text-gray-400'}`}
-          >
-            Actives
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`px-3 py-2 rounded-lg text-sm ${activeTab === 'history' ? 'bg-accent text-black' : 'bg-gray-900 text-gray-400'}`}
-          >
-            Historique
-          </button>
-        </div>
         <input
           type="text"
           placeholder="Rechercher..."
@@ -368,7 +372,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
         >
           <option value="TOUS">Tous</option>
-          {activeTab === 'active' ? (
+          {view === 'active' ? (
             <>
               <option value="CONFIRMEE">Confirmées</option>
               <option value="CHECKED_IN">Check-in</option>
@@ -392,7 +396,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       </div>
 
       {/* History date filters */}
-      {activeTab === 'history' && (
+      {view === 'history' && (
         <div className="flex gap-2 flex-wrap">
           <input
             type="text"
@@ -428,8 +432,15 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
       {/* Liste */}
       <div className="space-y-2">
-        <div className="flex justify-between text-xs text-gray-500 px-1">
-          <span>{filteredReservations.length} réservation{filteredReservations.length > 1 ? 's' : ''}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2">
+          <span className="text-xs text-gray-400">
+            {filteredReservations.length} réservation{filteredReservations.length > 1 ? 's' : ''}
+          </span>
+          {view === 'history' && (
+            <span className="text-sm font-semibold text-accent">
+              Valeur totale listée : {formatCurrency(filteredReservationsTotal)}
+            </span>
+          )}
         </div>
 
         {filteredReservations.length === 0 ? (
@@ -484,15 +495,19 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                           <span className="text-sky-300">Paiement : {res.moyen_paiement.replace('_', ' ')}</span>
                         )}
                         <span className="text-accent font-medium">{formatCurrency(res.montant_total || 0)}</span>
+                        {Number(res.montant_encaisse || 0) > 0 && <span className="text-emerald-300">Encaissé {formatCurrency(res.montant_encaisse || 0)}</span>}
+                        {Number(res.montant_gratuit || 0) > 0 && <span className="text-violet-300">Gratuit {formatCurrency(res.montant_gratuit || 0)}</span>}
+                        {Number(res.montant_credit || 0) > 0 && <span className="text-orange-300">Crédit {formatCurrency(res.montant_credit || 0)}</span>}
                         {(() => {
                           const paid = Number(res.montant_paye || 0);
                           const due = Number(res.montant_total || 0) - paid;
-                          if (paid <= 0) return null;
-                          return due > 0 ? (
-                            <span className="text-orange-300 font-medium">Payé {formatCurrency(paid)} · Rectification à payer {formatCurrency(due)}</span>
-                          ) : (
-                            <span className="text-emerald-400">✓ Payé {formatCurrency(paid)}</span>
-                          );
+                          if (paid <= 0 && due <= 0) return null;
+                          const statusLabels: Record<string, string> = {
+                            IMPAYE: 'Impayé', PARTIELLEMENT_PAYE: 'Partiellement payé', PAYE: 'Payé', CREDIT: 'Crédit', GRATUIT: 'Gratuit',
+                          };
+                          return <span className={due > 0 ? 'text-orange-300 font-medium' : 'text-emerald-400'}>
+                            {statusLabels[res.statut_paiement || ''] || (due > 0 ? 'Solde restant' : 'Payé')} · Couvert {formatCurrency(paid)} · Reste {formatCurrency(Math.max(0, due))}
+                          </span>;
                         })()}
                         {Number(res.remise_pourcentage || 0) > 0 && (
                           <span className={res.remise_validee_par ? 'text-emerald-400' : 'text-orange-400'}>
@@ -500,7 +515,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
                           </span>
                         )}
                         {/* User tracking information */}
-                        {activeTab === 'history' && (
+                        {view === 'history' && (
                           <>
                             {res.created_by_nom && (
                               <span className="text-green-400">
@@ -608,26 +623,53 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
                 {/* Détails étendus */}
                 {expandedId === res.id && (
-                  <div className="mt-2 pt-2 border-t border-gray-800 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-gray-500">Client</p>
-                      <p className="text-gray-300">{res.client?.prenom} {res.client?.nom}</p>
-                      {res.client?.telephone && (
-                        <p className="text-gray-400 flex items-center gap-1">
-                          <Phone size={12} /> {res.client.telephone}
-                        </p>
-                      )}
-                      {res.client?.email && (
-                        <p className="text-gray-400 flex items-center gap-1 truncate">
-                          <Mail size={12} /> {res.client.email}
-                        </p>
-                      )}
+                  <div className="mt-2 border-t border-gray-800 pt-2 text-xs">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-gray-500">Client</p>
+                        <p className="text-gray-300">{res.client?.prenom} {res.client?.nom}</p>
+                        {res.client?.telephone && <p className="flex items-center gap-1 text-gray-400"><Phone size={12} /> {res.client.telephone}</p>}
+                        {res.client?.email && <p className="flex items-center gap-1 truncate text-gray-400"><Mail size={12} /> {res.client.email}</p>}
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Chambre</p>
+                        <p className="text-gray-300">N° {res.room?.numero || 'N/A'}</p>
+                        <p className="text-gray-400">{res.room?.room_type?.nom || 'Standard'}</p>
+                        <p className="text-gray-400">{res.room?.capacite || 0} pers.</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-500">Chambre</p>
-                      <p className="text-gray-300">N° {res.room?.numero || 'N/A'}</p>
-                      <p className="text-gray-400">{res.room?.room_type?.nom || 'Standard'}</p>
-                      <p className="text-gray-400">{res.room?.capacite || 0} pers.</p>
+                    <div className="mt-3 border-t border-gray-800 pt-2">
+                      <p className="mb-2 font-semibold text-gray-300">Historique des encaissements</p>
+                      {paymentsLoading ? <p className="text-gray-500">Chargement…</p> : expandedPayments.length === 0 ? (
+                        <p className="text-gray-500">Aucun encaissement enregistré.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {expandedPayments.map((payment, index) => {
+                            const modes = payment.details?.modes_paiement;
+                            return (
+                              <div key={payment.id} className="rounded-lg bg-gray-900/60 p-2.5">
+                                <div className="flex flex-wrap justify-between gap-2 text-gray-300">
+                                  <strong>Encaissement {index + 1} · {formatDateTime(payment.created_at)}</strong>
+                                  <strong>{formatCurrency(payment.montant)}</strong>
+                                </div>
+                                <div className="mt-1 space-y-0.5 text-gray-400">
+                                  {modes?.length ? modes.map((mode, modeIndex) => (
+                                    <div key={`${payment.id}-${modeIndex}`} className="flex justify-between">
+                                      <span>{mode.moyen_paiement.replace('_', ' ')}</span><span>{formatCurrency(mode.montant)}</span>
+                                    </div>
+                                  )) : <div>{payment.moyen_paiement || 'Mode historique'} · {formatCurrency(payment.montant)}</div>}
+                                  <div className="flex flex-wrap justify-between gap-2 border-t border-gray-800 pt-1">
+                                    <span>Reçu {formatCurrency(payment.montant_encaisse ?? payment.montant)}</span>
+                                    {Number(payment.montant_credit || 0) > 0 && <span>Crédit {formatCurrency(payment.montant_credit || 0)}</span>}
+                                    {Number(payment.montant_gratuit || 0) > 0 && <span>Gratuit {formatCurrency(payment.montant_gratuit || 0)}</span>}
+                                  </div>
+                                  <div>Effectué par {`${payment.created_by_prenom || ''} ${payment.created_by_nom || ''}`.trim() || 'Utilisateur inconnu'}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

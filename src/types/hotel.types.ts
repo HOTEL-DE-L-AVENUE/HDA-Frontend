@@ -59,12 +59,19 @@ export interface ReservationPayment {
   id: number;
   reservation_id: number;
   montant: number;
+  montant_encaisse?: number;
+  montant_credit?: number;
+  montant_gratuit?: number;
   moyen_paiement: string | null;
+  statut?: string;
   // Ce qui était facturé au moment du paiement (sert à calculer les rectifications)
   details: {
     montant_total: number;
     laundry_price: number;
     services_extras: ReservationExtraService[];
+    modes_paiement?: Array<{ moyen_paiement: string; montant: number }>;
+    montant_cible?: number;
+    statut_paiement_apres_operation?: string;
   } | null;
   created_by_nom?: string | null;
   created_by_prenom?: string | null;
@@ -96,6 +103,11 @@ export interface Reservation {
   services_extras_total?: number | null;
   // Somme déjà encaissée ; reste à payer = montant_total - montant_paye
   montant_paye?: number | null;
+  montant_encaisse?: number | null;
+  montant_credit?: number | null;
+  montant_gratuit?: number | null;
+  montant_restant?: number | null;
+  statut_paiement?: 'IMPAYE' | 'PARTIELLEMENT_PAYE' | 'PAYE' | 'CREDIT' | 'GRATUIT';
   est_payee?: boolean | number;
   client?: Client;
   room?: Room;
@@ -174,6 +186,10 @@ export interface RoomMaintenance {
   materials_cost?: number;
   labor_cost?: number;
   total_cost?: number;
+  materials_used?: Array<{ product_id: number; quantity: number }>;
+  materials_cost?: number;
+  labor_cost?: number;
+  total_cost?: number;
 }
 
 export interface MaintenanceWorker {
@@ -206,10 +222,12 @@ export interface HousekeepingTask {
   commentaire: string | null;
   planned_at: string | null;
   completed_at: string | null;
+  exceptional_details?: string | null;
   room?: Room;
   assigned_user?: User;
   created_at?: string;
   updated_at?: string;
+  products_used?: Array<{ product_id: number; quantity: number }>;
 }
 
 // ============================================
@@ -533,6 +551,92 @@ export interface MinibarReport {
   montant_total: number;
   facturee: boolean;
   consumed_at: string;
+}
+
+// --- Rapport journalier : « Situation du chambre durant la Nuité » ---
+
+/** Codes du bas de page du rapport manuscrit (CP, CN, NP, BK...). */
+export type HotelDailyReportRoomState =
+  | 'LIBRE'
+  | 'OCCUPEE'
+  | 'BK'
+  | 'CP'
+  | 'CN'
+  | 'NP'
+  | 'GRATUIT'
+  | 'MAINTENANCE';
+
+/**
+ * Une ligne du rapport, pour une chambre. Les montants et dates restent des
+ * chaînes libres : la réception saisit aussi bien « 69,30€ », « 210.000ar » que
+ * « ND » (non défini), comme sur le modèle papier.
+ */
+export interface HotelDailyReportRoomLine {
+  room_id: number | null;
+  numero: string;
+  etat: HotelDailyReportRoomState;
+  /** Nom de l'occupant, ou « libre » / « CP » quand la chambre n'est pas occupée. */
+  occupant: string;
+  /** Mention accolée au nom : « Booking », « (Chambre gratuit) »... */
+  note: string;
+  /** DA — date d'arrivée */
+  da: string;
+  /** DD — date de départ */
+  dd: string;
+  /** MT — montant */
+  mt: string;
+  /** P — paiement (moyen, encaisseur, date) */
+  p: string;
+  /** CN — crédit non payé */
+  cn: string;
+  /** E — emprunté */
+  e: string;
+  /** AC — autre crédit */
+  ac: string;
+}
+
+export interface HotelDailyReportMetrics {
+  chambres_total: number;
+  chambres_occupees: number;
+  chambres_libres: number;
+  total_paye: number;
+  total_credit: number;
+  /** TE — total emprunté (somme des lignes E). */
+  total_emprunte: number;
+}
+
+/**
+ * Ce que la génération automatique ne peut pas redéduire des chambres et des
+ * réservations, et qu'il faut donc conserver pour ne pas écraser le travail de la
+ * réception à la régénération suivante.
+ */
+export interface HotelDailyReportAutoState {
+  /** Corrections manuelles, par numéro de chambre puis par champ. */
+  overrides: Record<string, Partial<HotelDailyReportRoomLine>>;
+  /** Chambres retirées du rapport malgré leur présence en base. */
+  removed: string[];
+  /** Chambres ajoutées à la main (hors référentiel des chambres). */
+  extra: HotelDailyReportRoomLine[];
+  /** Heures saisies par la réception : elles ne sont plus rafraîchies. */
+  heureDebutManuelle: boolean;
+  heureFinManuelle: boolean;
+}
+
+export interface HotelDailyReport {
+  id?: number;
+  reportDate: string;
+  /** Heure de début de la nuitée, ex. « 17h08 ». */
+  heureDebut: string;
+  /** Heure de fin de la nuitée, ex. « 5h51 ». */
+  heureFin: string;
+  receptionniste: string;
+  rooms: HotelDailyReportRoomLine[];
+  observations: string;
+  metrics?: Partial<HotelDailyReportMetrics>;
+  autoState?: HotelDailyReportAutoState | null;
+  createdBy?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ============================================

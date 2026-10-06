@@ -1,9 +1,19 @@
 // components/Hotel/Modal/HousekeepingFormModal.tsx
 import React, { useState, useEffect } from 'react';
 import { HousekeepingTask, Room } from '../../../types/hotel.types';
-import { X, Loader, AlertCircle } from 'lucide-react';
+import { X, Loader, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../../Modal';
 import { TYPE_TACHE_LABELS } from '../../../constants/housekeeping';
+import { StockProductPicker } from '../StockProductPicker';
+import api from '../../../lib/api';
+
+interface SelectedProduct {
+  product_id: number;
+  nom: string;
+  unite: string;
+  available_quantity: number;
+  quantity: number;
+}
 
 interface HousekeepingFormModalProps {
   isOpen: boolean;
@@ -30,6 +40,7 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
     planned_at: '',
     exceptional_details: '',
   });
+  const [productsUsed, setProductsUsed] = useState<SelectedProduct[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -41,8 +52,19 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
         statut: initialData.statut,
         commentaire: initialData.commentaire || '',
         planned_at: initialData.planned_at?.split('T')[0] || '',
-        exceptional_details: '',
+        exceptional_details: initialData.exceptional_details || '',
       });
+      let savedProducts: any = initialData.products_used || [];
+      if (typeof savedProducts === 'string') {
+        try { savedProducts = JSON.parse(savedProducts); } catch { savedProducts = []; }
+      }
+      setProductsUsed(Array.isArray(savedProducts) ? savedProducts.map((item: any) => ({
+        product_id: Number(item.product_id),
+        nom: item.nom || `Produit #${item.product_id}`,
+        unite: item.unite || 'unités',
+        available_quantity: Number(item.available_quantity || item.quantity || 0),
+        quantity: Number(item.quantity || 1),
+      })) : []);
     } else {
       setFormData({
         room_id: defaultRoomId || 0,
@@ -52,6 +74,7 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
         planned_at: new Date().toISOString().split('T')[0],
         exceptional_details: '',
       });
+      setProductsUsed([]);
     }
     setErrors({});
   }, [initialData, isOpen, defaultRoomId]);
@@ -71,7 +94,14 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSave(formData);
+      const submitData = {
+        ...formData,
+        products_used: formData.statut === 'TERMINE' ? productsUsed.map(p => ({
+          product_id: p.product_id,
+          quantity: p.quantity
+        })) : undefined
+      };
+      await onSave(submitData);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -148,6 +178,18 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
               />
             </div>
           )}
+
+          {/* Produits utilisés - always visible */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Produits utilisés {formData.statut === 'TERMINE' ? '(seront déduits du stock)' : '(seront déduits quand terminé)'}
+            </label>
+            <StockProductPicker
+              onChange={setProductsUsed}
+              initialProducts={productsUsed}
+              locationId={5}
+            />
+          </div>
 
           {/* Statut */}
           <div>

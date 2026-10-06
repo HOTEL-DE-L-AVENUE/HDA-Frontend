@@ -76,7 +76,12 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSave(formData);
+      // If creating a new category, use the search term as the category value
+      const submitData = { ...formData };
+      if (formData.categorie === 'new' && categorySearchTerm.trim()) {
+        submitData.categorie = categorySearchTerm.trim();
+      }
+      await onSave(submitData);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -171,7 +176,6 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
                   value={categorySearchTerm}
                   onChange={(e) => {
                     setCategorySearchTerm(e.target.value);
-                    setFormData({ ...formData, categorie: e.target.value });
                   }}
                   className="w-full mt-2 px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
                   placeholder="Nom de la nouvelle catégorie"
@@ -217,7 +221,7 @@ export const EquipmentFormModal: React.FC<EquipmentFormModalProps> = ({
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              {formData.is_consumable ? 'Sera ajouté automatiquement au stock' : 'Ne sera pas ajouté au stock'}
+              Sera ajouté au stock de l'hôtel
             </p>
           </div>
 

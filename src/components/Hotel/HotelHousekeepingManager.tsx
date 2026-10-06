@@ -38,7 +38,7 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
     deleteTask
   } = useHousekeeping();
 
-  const { rooms, loadRooms, updateRoomStatus } = useRooms();
+  const { rooms, loadRooms } = useRooms();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<HousekeepingTask | null>(null);
@@ -92,20 +92,14 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
   };
 
   // Gestion du statut
-  const handleStatusChange = async (id: number, statut: string) => {
+  const handleStatusChange = async (id: number, statut: string, productsUsed?: any[]) => {
     try {
       const task = tasks.find((item) => item.id === id);
       if (!task) return;
 
-      await updateStatus(id, statut);
+      await updateStatus(id, statut, productsUsed);
       
-      // Change room status based on task status
-      if (statut === 'EN_COURS') {
-        await updateRoomStatus(task.room_id, 'NETTOYAGE');
-      } else if (statut === 'TERMINE') {
-        await updateRoomStatus(task.room_id, 'LIBRE');
-        onTaskCompleted?.();
-      }
+      if (statut === 'TERMINE') onTaskCompleted?.();
       
       toast.success(`Statut mis à jour: ${statut}`);
       await loadAll();
@@ -121,13 +115,8 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
         await updateTask(selectedTask.id, data);
         toast.success('Tâche modifiée avec succès');
       } else {
-        const newTask = await createTask(data);
+        await createTask(data);
         toast.success('Tâche créée avec succès');
-        
-        // If task is created with EN_COURS status, update room status
-        if (data.statut === 'EN_COURS') {
-          await updateRoomStatus(data.room_id, 'NETTOYAGE');
-        }
       }
       setIsModalOpen(false);
       setSelectedTask(null);
@@ -320,7 +309,7 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
                     )}
                     {task.statut === 'EN_COURS' && (
                       <button
-                        onClick={() => handleStatusChange(task.id, 'TERMINE')}
+                        onClick={() => handleStatusChange(task.id, 'TERMINE', task.products_used)}
                         className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium transition"
                       >
                         Terminer

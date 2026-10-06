@@ -71,10 +71,10 @@ export const useHousekeeping = () => {
   }, []);
 
   // Mettre à jour le statut
-  const updateStatus = useCallback(async (id: number, statut: string) => {
+  const updateStatus = useCallback(async (id: number, statut: string, productsUsed?: any[]) => {
     try {
       setError(null);
-      const updated = await housekeepingService.updateTaskStatus(id, statut);
+      const updated = await housekeepingService.updateTaskStatus(id, statut, productsUsed);
       if (updated) setTasks(prev => prev.map(t => t.id === id ? updated : t));
       return updated;
     } catch (err: any) {
