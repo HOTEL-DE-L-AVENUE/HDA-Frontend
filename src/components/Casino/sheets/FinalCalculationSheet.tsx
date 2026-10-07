@@ -183,6 +183,8 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
     totalEspecesCaisse: casinoCurrency.format(totalEspeces),
     difference: casinoCurrency.format(difference),
     resultatFinal: casinoCurrency.format(resultatFinal),
+    // Valeur brute (non formatée) reprise par le rapport financier du module Finance.
+    resultatFinalValue: String(resultatFinal),
   };
 
   const updateManualValue = (key: string, value: string, overrideRef: React.MutableRefObject<boolean>) => {

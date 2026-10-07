@@ -442,12 +442,20 @@ export const CasinoPage: React.FC = () => {
         return { ...player, resultPaymentOptions, total: String(lineTotal), accumulated: String(accumulatedTotals[ficheId]) };
       });
       const currentFinals = finalsByPlayerRef.current;
+      // Le dernier résultat final enregistré est aussi copié dans `_global` : c'est
+      // la valeur de la fiche (date + table) reprise par le rapport financier.
       const finalsToSave = finalValues
         ? {
             ...currentFinals,
             [String(selectedFinalPlayerId)]: {
               ...(currentFinals[String(selectedFinalPlayerId)] || {}),
               ...finalValues,
+            },
+            _global: {
+              ...(currentFinals._global || {}),
+              ...(finalValues.resultatFinalValue !== undefined
+                ? { resultatFinal: finalValues.resultatFinal, resultatFinalValue: finalValues.resultatFinalValue }
+                : {}),
             },
           }
         : currentFinals;
