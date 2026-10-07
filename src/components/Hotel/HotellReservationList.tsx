@@ -57,6 +57,8 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
   const [selectedStatus, setSelectedStatus] = useState<string>('TOUS');
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterFromDate, setFilterFromDate] = useState('');
+  const [filterToDate, setFilterToDate] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -177,7 +179,6 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
 
   // Filtrer
   const filteredReservations = enrichedReservations.filter(res => {
-    const matchesStatus = selectedStatus === 'TOUS' || res.statut === selectedStatus;
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch =
       res.client?.nom?.toLowerCase().includes(searchLower) ||
@@ -189,14 +190,47 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       ? !['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut)
       : ['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut);
 
-    // Filter by date range in history tab
+    // Custom status filtering based on user's requirements
+    let matchesStatus = true;
+    if (selectedStatus === 'TOUS') {
+      matchesStatus = true;
+    } else if (selectedStatus === 'CHECKED_IN') {
+      matchesStatus = res.statut === 'CHECKED_IN';
+    } else if (selectedStatus === 'ARRIVAL') {
+      // Upcoming reservations: date_arrivee >= today, not checked in yet
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const arrivalDate = new Date(res.date_arrivee);
+      arrivalDate.setHours(0, 0, 0, 0);
+      matchesStatus = res.statut === 'CONFIRMEE' && arrivalDate >= today;
+    } else if (selectedStatus === 'DEPARTURE') {
+      // Completed reservations: based on checkout date (date_depart)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const departureDate = new Date(res.date_depart);
+      departureDate.setHours(0, 0, 0, 0);
+      matchesStatus = res.statut === 'TERMINEE' && departureDate <= today;
+    } else {
+      matchesStatus = res.statut === selectedStatus;
+    }
+
+    // Filter by date range
     let matchesDateRange = true;
+    if (filterFromDate) {
+      matchesDateRange = matchesDateRange && new Date(res.date_arrivee) >= new Date(filterFromDate);
+    }
+    if (filterToDate) {
+      matchesDateRange = matchesDateRange && new Date(res.date_depart) <= new Date(filterToDate);
+    }
+
+    // Filter by date range in history tab (for user search)
+    let matchesHistoryDateRange = true;
     if (view === 'history') {
       if (historyFromDate) {
-        matchesDateRange = matchesDateRange && new Date(res.date_arrivee) >= new Date(historyFromDate);
+        matchesHistoryDateRange = matchesHistoryDateRange && new Date(res.date_arrivee) >= new Date(historyFromDate);
       }
       if (historyToDate) {
-        matchesDateRange = matchesDateRange && new Date(res.date_depart) <= new Date(historyToDate);
+        matchesHistoryDateRange = matchesHistoryDateRange && new Date(res.date_depart) <= new Date(historyToDate);
       }
     }
 
@@ -209,7 +243,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       matchesUser = creatorName.includes(userSearchLower) || modifierName.includes(userSearchLower);
     }
 
-    return matchesStatus && matchesSearch && matchesTab && matchesDateRange && matchesUser;
+    return matchesSearch && matchesTab && matchesStatus && matchesDateRange && matchesHistoryDateRange && matchesUser;
   });
   const filteredReservationsTotal = filteredReservations.reduce(
     (total, reservation) => total + (Number(reservation.montant_total) || 0),
@@ -358,13 +392,27 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       )}
 
       {/* Filtres */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           type="text"
           placeholder="Rechercher..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-accent"
+          className="flex-1 min-w-[200px] px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-accent"
+        />
+        <input
+          type="date"
+          value={filterFromDate}
+          onChange={(e) => setFilterFromDate(e.target.value)}
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
+          placeholder="Du"
+        />
+        <input
+          type="date"
+          value={filterToDate}
+          onChange={(e) => setFilterToDate(e.target.value)}
+          className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
+          placeholder="Au"
         />
         <select
           value={selectedStatus}
@@ -372,19 +420,9 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
         >
           <option value="TOUS">Tous</option>
-          {view === 'active' ? (
-            <>
-              <option value="CONFIRMEE">Confirmées</option>
-              <option value="CHECKED_IN">Check-in</option>
-              <option value="EN_COURS">En cours</option>
-            </>
-          ) : (
-            <>
-              <option value="TERMINEE">Terminées</option>
-              <option value="ANNULEE">Annulées</option>
-              <option value="NO_SHOW">No Show</option>
-            </>
-          )}
+          <option value="CHECKED_IN">Check-in</option>
+          <option value="ARRIVAL">Arrivée</option>
+          <option value="DEPARTURE">Départ</option>
         </select>
         <button
           type="button"

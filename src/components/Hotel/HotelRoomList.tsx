@@ -1,6 +1,6 @@
 // hotel/RoomList.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { HousekeepingTask, Room, RoomMaintenance, RoomType } from '../../types/hotel.types';
+import { HousekeepingTask, Room, RoomMaintenance, RoomType, Reservation } from '../../types/hotel.types';
 import {
   DoorOpen,
   Edit,
@@ -17,11 +17,13 @@ import {
   XCircle,
   Settings,
   Wrench,
-  Brush
+  Brush,
+  Calendar
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/data';
 import { RoomStatusModal } from './Modal/RoomStatusModal';
 import { useRooms } from '../../hooks/useRooms';
+import { useReservations } from '../../hooks/useReservations';
 import { roomTypeService } from '../../services/room.service';
 import { housekeepingService } from '../../services/housekeeping.service';
 import { maintenanceService } from '../../services/maintenance.service';
@@ -47,6 +49,8 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     deleteRoom,
     refresh
   } = useRooms();
+
+  const { reservations, loading: reservationsLoading } = useReservations();
 
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [activeHousekeepingTasks, setActiveHousekeepingTasks] = useState<HousekeepingTask[]>([]);
@@ -92,6 +96,36 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     .filter(task => task.room_id === roomId)
     .sort((a, b) => Number(b.statut === 'EN_COURS') - Number(a.statut === 'EN_COURS'))[0];
 
+  // Get current or upcoming reservation for a room
+  const getRoomReservation = (roomId: number): Reservation | null => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Find reservations for this room that are active or upcoming
+    const roomReservations = reservations.filter(res => 
+      res.room_id === roomId && 
+      !['ANNULEE', 'NO_SHOW'].includes(res.statut) &&
+      new Date(res.date_depart) >= today
+    ).sort((a, b) => new Date(a.date_arrivee).getTime() - new Date(b.date_arrivee).getTime());
+    
+    return roomReservations.length > 0 ? roomReservations[0] : null;
+  };
+
+  // Format date range for display (e.g., "Oct 8 to Oct 15")
+  const formatDateRange = (startDate: string, endDate: string): string => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const startMonth = months[start.getMonth()];
+    const startDay = start.getDate();
+    const endMonth = months[end.getMonth()];
+    const endDay = end.getDate();
+    
+    return `${startMonth} ${startDay} to ${endMonth} ${endDay}`;
+  };
+
   const getPrimaryRoomStatus = (room: Room): Room['statut'] => {
     // These statuses are operational overlays; the room itself remains available.
     if (room.statut === 'MAINTENANCE' && activeMaintenanceByRoom.has(room.id)) return 'LIBRE';
@@ -127,6 +161,13 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     return type?.nom || 'Type non défini';
   };
 
+  // Charger les réservations pour afficher les dates dans les chambres réservées
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      refresh();
+    }
+  }, [refresh, refreshTrigger]);
+
   // Filtrer les chambres
   const filteredRooms = rooms.filter(room => {
     // Recherche par numéro ou type
@@ -151,12 +192,6 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     reservee: rooms.filter(r => getPrimaryRoomStatus(r) === 'RESERVEE').length,
     maintenance: rooms.filter(r => getPrimaryRoomStatus(r) === 'MAINTENANCE').length,
   };
-
-  useEffect(() => {
-    if (refreshTrigger !== undefined) {
-      refresh();
-    }
-  }, [refresh, refreshTrigger]);
 
   // Gestion du changement de statut
   const handleStatusChange = async (roomId: number, newStatus: string) => {
@@ -392,6 +427,7 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
               const isProcessing = processingId === room.id;
               const primaryStatus = getPrimaryRoomStatus(room);
               const housekeepingTask = getHousekeepingTask(room.id);
+              const roomReservation = getRoomReservation(room.id);
 
               return (
                 <div
@@ -416,6 +452,12 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                         {typeName}
                         {room.capacite && ` • ${room.capacite} pers.`}
                       </p>
+                      {roomReservation && primaryStatus === 'RESERVEE' && (
+                        <p className="text-accent text-xs mt-1 flex items-center gap-1">
+                          <Calendar size={12} />
+                          {formatDateRange(roomReservation.date_arrivee, roomReservation.date_depart)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[primaryStatus] || ''}`}>

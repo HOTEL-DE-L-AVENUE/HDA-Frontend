@@ -323,6 +323,11 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   };
 
   const calculateTotal = (room: Room | null, arrivee?: string, depart?: string) => {
+    if (formData.type_reservation === 'GRATUIT') {
+      setFormData(prev => ({ ...prev, montant_total: 0 }));
+      return;
+    }
+
     if (arrivee && depart && room?.prix_nuit) {
       const days = Math.ceil(
         (new Date(depart).getTime() - new Date(arrivee).getTime()) / 
@@ -682,7 +687,18 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 <Calendar size={14} className="inline mr-1.5" />
                 Type de réservation *
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type_reservation: 'GRATUIT' }));
+                    calculateTotal(selectedRoom, formData.date_arrivee, formData.date_depart);
+                  }}
+                  className={`p-2 rounded-lg border ${formData.type_reservation === 'GRATUIT' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-base text-muted'}`}
+                  disabled={isSubmitting}
+                >
+                  Gratuit
+                </button>
                 <button
                   type="button"
                   onClick={() => {
