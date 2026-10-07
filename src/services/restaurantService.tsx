@@ -6,6 +6,7 @@ import type {
   Order,
   Cashier,
   RestaurantStats,
+  RestaurantHistoryPayment,
   ApiResponse,
 } from '../types/restaurant';
 
@@ -59,7 +60,11 @@ export const getOrderById = (id: number) =>
   api.get<ApiResponse<Order>>(`/api/restaurant/orders/${id}`).then(res => res.data);
 
 export const getHistoryTotal = (dateDebut: string, dateFin: string) =>
-  api.get<ApiResponse<{ total_payments: number; total_collected: number }>>('/api/restaurant/orders/history-total', {
+  api.get<ApiResponse<{
+    total_payments: number;
+    total_collected: number;
+    paid_orders: RestaurantHistoryPayment[];
+  }>>('/api/restaurant/orders/history-total', {
     params: { date_debut: dateDebut, date_fin: dateFin },
   }).then(res => res.data);
 
