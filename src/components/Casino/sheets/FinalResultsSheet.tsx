@@ -54,7 +54,12 @@ export const FinalResultsSheet: React.FC<FinalResultsSheetProps> = ({ range, onR
     setError(null);
     playerSheetApi.finalResults(dateFrom, dateTo)
       .then((data) => { if (!cancelled) setRows(Array.isArray(data) ? data : []); })
-      .catch(() => { if (!cancelled) setError('Impossible de charger les résultats finaux.'); })
+      .catch((err) => {
+        if (cancelled) return;
+        const diag = err?.response?.data?.diagnostic;
+        const detail = diag?.sqlMessage || diag?.message || err?.response?.data?.error?.message || err?.response?.data?.message;
+        setError(`Impossible de charger les résultats finaux.${detail ? ` (${detail})` : ''}`);
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [dateFrom, dateTo, refreshKey, refreshTrigger]);
