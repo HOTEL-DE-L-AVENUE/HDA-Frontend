@@ -392,6 +392,23 @@ export const RestaurantPage: React.FC = () => {
     }
   };
 
+  const handleCreateRestaurantCategory = async (name: string): Promise<Category> => {
+    const existingCategory = categories.find(
+      (category) => category.nom.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()
+    );
+    if (existingCategory) return existingCategory;
+
+    const response = await restaurantService.createCategory({ nom: name });
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Création de la catégorie impossible.');
+    }
+    const createdCategory = response.data as Category;
+    setCategories((current) => current.some((category) => category.id === createdCategory.id)
+      ? current
+      : [...current, createdCategory]);
+    return createdCategory;
+  };
+
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
     setShowProductModal(true);
@@ -709,6 +726,7 @@ export const RestaurantPage: React.FC = () => {
           setEditingProduct(null);
         }}
         onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
+        onCreateCategory={handleCreateRestaurantCategory}
         categories={categories}
         products={products}
         editingProduct={editingProduct}
