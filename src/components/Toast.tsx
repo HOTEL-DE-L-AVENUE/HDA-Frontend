@@ -1,5 +1,6 @@
 // src/components/Toast.tsx (Version avec animation améliorée - TOASTS AU CENTRE)
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -77,7 +78,8 @@ const Toast: React.FC<ToastProps> = ({
       className={`transform transition-all duration-300 ease-out ${getAnimationClass()}`}
     >
       <div
-        className={`flex items-start gap-3 p-4 rounded-xl border ${getBackgroundColor()} backdrop-blur-xl bg-surface/90 shadow-2xl min-w-[320px] max-w-md`}
+        className={`flex items-start gap-3 p-3 rounded-xl border ${getBackgroundColor()} shadow-2xl min-w-[280px] max-w-sm`}
+        style={{ backgroundColor: 'var(--color-surface)' }}
       >
         {/* Icône */}
         <div className="flex-shrink-0 mt-0.5">
@@ -120,11 +122,9 @@ interface ToastContainerProps {
 }
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove }) => {
-  return (
-    // Position: au centre de l'écran, devant les modals
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex flex-col items-center gap-3 max-w-md w-full">
-        {/* Nouveaux toasts en haut (ordre inversé) */}
+  return createPortal(
+    <div className="fixed bottom-4 right-4 z-[10000] flex w-[calc(100%-2rem)] justify-end pointer-events-none sm:w-auto">
+      <div className="pointer-events-auto flex w-full flex-col items-end gap-3 sm:w-auto">
         {[...toasts].reverse().map((toast) => (
           <Toast
             key={toast.id}
@@ -135,7 +135,8 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove
           />
         ))}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
