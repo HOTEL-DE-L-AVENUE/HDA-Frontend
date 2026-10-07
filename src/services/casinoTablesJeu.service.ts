@@ -148,9 +148,20 @@ export interface IdentityVerification {
   created_at?: string;
 }
 
+export interface CasinoFinalResultRow {
+  sheet_id: number;
+  date: string;
+  table_name: string;
+  updated_at: string;
+  /** Montant repris par le rapport financier (null : calcul final jamais enregistré). */
+  montant_rapport: number | null;
+}
+
 export const playerSheetApi = {
   get: (date: string, tableName: string) =>
     get<PlayerSheetData | null>(`/player-sheets${qs({ date, table_name: tableName })}`),
+  finalResults: (dateFrom: string, dateTo: string) =>
+    get<CasinoFinalResultRow[]>(`/player-sheets/final-results${qs({ date_from: dateFrom, date_to: dateTo })}`),
   save: (payload: PlayerSheetData) => put<PlayerSheetData>('/player-sheets', payload),
   finish: (date: string, tableName: string) =>
     post<{ finishedAt: string; playerIds: number[] }>('/player-sheets/finish', { date, table_name: tableName }),

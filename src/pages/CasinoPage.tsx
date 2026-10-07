@@ -6,6 +6,7 @@ import { ChipsSheet } from '../components/Casino/sheets/ChipsSheet';
 import { FinalCalculationSheet } from '../components/Casino/sheets/FinalCalculationSheet';
 import { IdentityVerificationsManagement } from '../components/Casino/sheets/IdentityVerificationsManagement';
 import { DailyReportSheet } from '../components/Casino/sheets/DailyReportSheet';
+import { FinalResultsSheet, defaultFinalResultsRange, type FinalResultsRange } from '../components/Casino/sheets/FinalResultsSheet';
 import { CHIP_VALUES, CasinoView, ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, createPlayerLine, parseCasinoAmount } from '../components/Casino/sheets/types';
 import { casinoPlayersApi, CasinoRegisteredPlayer, playerSheetApi, identityVerificationApi, tablesJeuApi } from '../services/casinoTablesJeu.service';
 import type { TableJeu } from '../types/casinoTablesJeu.types';
@@ -41,6 +42,10 @@ export const CasinoPage: React.FC = () => {
   const userRole = currentUser?.role?.toLowerCase() || '';
   const userIsAdmin = isAdmin(currentUser);
   const canManageCasino = userIsAdmin || ['croupier', 'manager', 'caisse', 'caissier'].includes(userRole);
+  // Vérification des résultats finaux : mêmes rôles que l'API (pas les croupiers).
+  const canViewFinalResults = userIsAdmin || ['manager', 'caisse', 'caissier'].includes(userRole);
+  const [finalResultsRange, setFinalResultsRange] = useState<FinalResultsRange>(defaultFinalResultsRange);
+  const [sheetSaveCount, setSheetSaveCount] = useState(0);
   const [view, setView] = useState<CasinoView>('table');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [table, setTable] = useState(() => window.localStorage.getItem(LAST_CASINO_TABLE_KEY) || '');
@@ -442,12 +447,20 @@ export const CasinoPage: React.FC = () => {
         return { ...player, resultPaymentOptions, total: String(lineTotal), accumulated: String(accumulatedTotals[ficheId]) };
       });
       const currentFinals = finalsByPlayerRef.current;
+      // Le dernier résultat final enregistré est aussi copié dans `_global` : c'est
+      // la valeur de la fiche (date + table) reprise par le rapport financier.
       const finalsToSave = finalValues
         ? {
             ...currentFinals,
             [String(selectedFinalPlayerId)]: {
               ...(currentFinals[String(selectedFinalPlayerId)] || {}),
               ...finalValues,
+            },
+            _global: {
+              ...(currentFinals._global || {}),
+              ...(finalValues.resultatFinalValue !== undefined
+                ? { resultatFinal: finalValues.resultatFinal, resultatFinalValue: finalValues.resultatFinalValue }
+                : {}),
             },
           }
         : currentFinals;
@@ -462,6 +475,7 @@ export const CasinoPage: React.FC = () => {
           : registeredPlayer;
       }));
       setSaveState('saved');
+      setSheetSaveCount((count) => count + 1);
       // Les vérifications d'identité sont liées à la fiche, mais leur échec
       // ne doit pas bloquer l'enregistrement principal de la fiche.
       const sheetId = saved.id;
@@ -566,13 +580,18 @@ export const CasinoPage: React.FC = () => {
     { id: 'final', label: '5. Calcul final', help: 'Clôture de caisse', icon: <Calculator size={18} /> },
     { id: 'management', label: '6. Vérifications', help: 'Gérer les identités', icon: <Shield size={18} /> },
     { id: 'report', label: '7. Rapport', help: 'Générer le rapport de la table', icon: <FileText size={18} /> },
+    ...(canViewFinalResults
+      ? [{ id: 'results' as CasinoView, label: '8. Résultats finaux', help: 'Vérifier les montants du rapport financier', icon: <WalletCards size={18} /> }]
+      : []),
   ];
+  // Sections consultables sans table sélectionnée.
+  const viewsWithoutTable: CasinoView[] = ['table', 'results'];
 
   return <div className="flex flex-col gap-5 w-full">
     <header className="rounded-3xl p-5 md:p-7 print:hidden" style={{ background: 'linear-gradient(120deg, var(--color-surface) 0%, #201a10 100%)', ...casinoBorder }}>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-5"><div><p className="text-accent text-xs font-bold uppercase tracking-[.18em]">Poker Night</p><h1 className="text-primary text-3xl font-bold mt-2" style={{ fontFamily: 'Playfair Display, serif' }}>Gestion casino</h1><p className="text-muted text-sm mt-2">Nouvelle interface locale basée sur les trois fiches papier.</p></div><div className="flex gap-2"><button type="button" onClick={() => window.print()} className="action secondary"><Printer size={15} /> Imprimer</button><button type="button" disabled={!hasSelectedTable} onClick={() => setView('report')} className="action disabled:opacity-50 disabled:cursor-not-allowed"><Download size={15} /> Rapport</button></div></div>
     </header>
-    <nav className="grid gap-2 md:grid-cols-4 print:hidden">{navigation.map((item) => <button type="button" key={item.id} disabled={item.id !== 'table' && !hasSelectedTable} onClick={() => setView(item.id)} className="casino-nav-button flex gap-3 items-center rounded-2xl p-4 text-left disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: view === item.id ? '#6b7280' : 'var(--color-surface)', color: view === item.id ? '#000' : undefined, ...casinoBorder }}>{item.icon}<span><b className="block text-sm">{item.label}</b><small className="opacity-70">{item.help}</small></span></button>)}</nav>
+    <nav className="grid gap-2 md:grid-cols-4 print:hidden">{navigation.map((item) => <button type="button" key={item.id} disabled={!viewsWithoutTable.includes(item.id) && !hasSelectedTable} onClick={() => setView(item.id)} className="casino-nav-button flex gap-3 items-center rounded-2xl p-4 text-left disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: view === item.id ? '#6b7280' : 'var(--color-surface)', color: view === item.id ? '#000' : undefined, ...casinoBorder }}>{item.icon}<span><b className="block text-sm">{item.label}</b><small className="opacity-70">{item.help}</small></span></button>)}</nav>
     <main className="rounded-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', ...casinoBorder }}>
       <div className="p-4 md:p-5 flex flex-col sm:flex-row gap-3 justify-between print:hidden" style={{ borderBottom: '1px solid var(--color-border)' }}><div className="flex flex-col sm:flex-row gap-3"><label className="field">Table sélectionnée<input value={table || 'Aucune table sélectionnée'} readOnly /></label><label className="field">Date<input type="date" value={date} onChange={(event) => changeGameDate(event.target.value)} /></label></div><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-xs font-semibold cursor-pointer"><input type="checkbox" checked={showIdentityVerifications} onChange={(event) => setShowIdentityVerifications(event.target.checked)} /> Vérifications identité</label><p className="text-muted text-xs self-end">Fiche enregistrée dans la base de données.</p></div></div>
       <div className="p-4 md:p-5"><div className="hidden print:block text-center mb-5"><h1>{table}</h1><p>Date : {date}</p></div>
@@ -582,6 +601,7 @@ export const CasinoPage: React.FC = () => {
         {view === 'chips' && <ChipsSheet date={date} chips={chips} players={players} rackChecks={rackChecks} endGameTime={endGameTime} openingTotal={openingTotal} closingTotal={closingTotal} saveState={saveState} onUpdate={(value, key, content) => { setSaveState('idle'); setChips((lines) => lines.map((line) => line.value === value ? { ...line, [key]: content } : line)); }} onRackChecksChange={(checks) => { setSaveState('idle'); rackChecksRef.current = checks; setRackChecks(checks); }} onEndGameTimeChange={(value) => { setSaveState('idle'); setEndGameTime(value); }} onSave={savePlayerSheet} />}
         {view === 'final' && <FinalCalculationSheet players={players} selectedPlayerId={selectedFinalPlayerId} calculationRevision={calculationRevision} values={{ ...(finalsByPlayer[String(selectedFinalPlayerId)] || {}), signature: finalsByPlayer._global?.signature || finalsByPlayer[String(selectedFinalPlayerId)]?.signature || '' }} withdrawnTotal={withdrawnTotal} depositResults={depositResults} creditResults={creditResults} saveState={saveState} onPlayerChange={setSelectedFinalPlayerId} onUpdate={updateFinalCalculationValue} onSave={saveFinalCalculation} showIdentityVerifications={showIdentityVerifications} identityVerifications={identityVerifications} />} 
         {view === 'management' && <IdentityVerificationsManagement verifications={Object.entries(identityVerifications).map(([ficheId, v]) => ({ ...v, fiche_id: Number(ficheId) }))} onUpdate={(updated) => { const map: Record<number, any> = {}; for (const v of updated) { map[v.fiche_id ?? 0] = v; } setIdentityVerifications(map); }} />}
+        {view === 'results' && canViewFinalResults && <FinalResultsSheet range={finalResultsRange} onRangeChange={setFinalResultsRange} refreshTrigger={sheetSaveCount} onOpenSheet={(sheetDate, sheetTable) => { setTable(sheetTable); changeGameDate(sheetDate); setView('final'); }} />}
         {view === 'report' && <DailyReportSheet date={date} table={table} players={players} chips={chips} rackChecks={rackChecks} restaurantPayments={restaurantPayments} finals={finalsByPlayer} registeredPlayers={registeredPlayers} />}
       </div>
     </main>

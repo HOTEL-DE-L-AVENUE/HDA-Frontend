@@ -115,6 +115,7 @@ export const FinancesPage: React.FC = () => {
             existing.ca += row.ca;
             existing.charges += row.charges;
             existing.solde += row.solde;
+            existing.resultat_final = (existing.resultat_final || 0) + (row.resultat_final || 0);
           } else {
             merged.set(key, { ...row, department });
           }
@@ -167,6 +168,7 @@ export const FinancesPage: React.FC = () => {
             existing.ca += row.ca;
             existing.charges += row.charges;
             existing.solde += row.solde;
+            existing.resultat_final = (existing.resultat_final || 0) + (row.resultat_final || 0);
           } else {
             merged.set(key, { ...row, department });
           }
@@ -384,9 +386,8 @@ export const FinancesPage: React.FC = () => {
   );
   const monthlyTableRows = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
-    return monthlyRowsByMonth.get(month) || { department: monthlyDepartment, year: monthlyYear, month, ca: 0, charges: 0, solde: 0 };
-  });
-  const visibleMonthlyRows = monthlyMonthFilter === 0
+    return monthlyRowsByMonth.get(month) || { department: monthlyDepartment, year: monthlyYear, month, ca: 0, charges: 0, solde: 0, resultat_final: 0 };
+  });  const visibleMonthlyRows = monthlyMonthFilter === 0
     ? monthlyTableRows
     : monthlyTableRows.filter(row => row.month === monthlyMonthFilter);
   const selectedMonthRow = monthlyMonthFilter === 0 ? null : monthlyTableRows[monthlyMonthFilter - 1];
@@ -394,12 +395,14 @@ export const FinancesPage: React.FC = () => {
     ca: totals.ca + row.ca,
     charges: totals.charges + row.charges,
     solde: totals.solde + row.solde,
-  }), { ca: 0, charges: 0, solde: 0 });
+    resultat_final: totals.resultat_final + (row.resultat_final || 0),
+  }), { ca: 0, charges: 0, solde: 0, resultat_final: 0 });
   const monthlyTotals = visibleMonthlyRows.reduce((totals, row) => ({
     ca: totals.ca + row.ca,
     charges: totals.charges + row.charges,
     solde: totals.solde + row.solde,
-  }), { ca: 0, charges: 0, solde: 0 });
+    resultat_final: totals.resultat_final + (row.resultat_final || 0),
+  }), { ca: 0, charges: 0, solde: 0, resultat_final: 0 });
 
   const handleExportReportPdf = async () => {
     try {
@@ -410,8 +413,8 @@ export const FinancesPage: React.FC = () => {
       const reportTitle = reportPeriod === 'daily' ? 'Rapport journalier'
         : reportPeriod === 'weekly' ? 'Rapport hebdomadaire' : 'Rapport mensuel';
       let periodLabel: string;
-      let rows: Array<{ label: string; ca: number; charges: number; solde: number }>;
-      let totals: { ca: number; charges: number; solde: number };
+      let rows: Array<{ label: string; ca: number; charges: number; solde: number; resultat_final?: number }>;
+      let totals: { ca: number; charges: number; solde: number; resultat_final: number };
 
       if (reportPeriod === 'monthly') {
         periodLabel = monthlyMonthFilter === 0
@@ -422,6 +425,7 @@ export const FinancesPage: React.FC = () => {
           ca: row.ca,
           charges: row.charges,
           solde: row.solde,
+          resultat_final: row.resultat_final || 0,
         }));
         totals = monthlyTotals;
       } else {
@@ -441,6 +445,7 @@ export const FinancesPage: React.FC = () => {
           ca: row.ca,
           charges: row.charges,
           solde: row.solde,
+          resultat_final: row.resultat_final || 0,
         }));
         totals = periodTotals;
       }
@@ -777,6 +782,16 @@ export const FinancesPage: React.FC = () => {
                   </tr>
                 ))}
               </tbody>
+              {visibleMonthlyRows.length > 1 && (
+                <tfoot>
+                  <tr className="border-t border-base font-semibold">
+                    <td className="px-6 py-3 text-primary">Total</td>
+                    <td className="px-6 py-3 text-right text-success">{formatCurrency(monthlyTotals.ca)}</td>
+                    <td className="px-6 py-3 text-right text-danger">{formatCurrency(monthlyTotals.charges)}</td>
+                    <td className={`px-6 py-3 text-right ${monthlyTotals.solde >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(monthlyTotals.solde)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           )}
         </div>
