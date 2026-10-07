@@ -30,6 +30,17 @@ export interface Stay {
   } | null;
 }
 
+export interface HotelReservationCollectionReport {
+  startDate: string;
+  endDate: string;
+  totalCollected: number;
+  paymentMethods: Record<HotelPaymentMethod, number>;
+}
+
+export interface SavedHotelReservationReportInput extends HotelReservationCollectionReport {
+  reservations: Reservation[];
+}
+
 const BASE_URL = '/api/hebergement/reservations';
 
 interface ApiResponse<T> {
@@ -169,5 +180,36 @@ export const reservationService = {
       console.error('❌ Erreur getReservationStats:', error);
       throw error;
     }
-  }
+  },
+
+  getHotelReservationCollectionReport: async (
+    startDate: string,
+    endDate: string
+  ): Promise<HotelReservationCollectionReport> => {
+    try {
+      const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+      const response = await api.get<ApiResponse<HotelReservationCollectionReport>>(
+        `${BASE_URL}/reports/collections?${params.toString()}`
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur getHotelReservationCollectionReport:', error);
+      throw error;
+    }
+  },
+
+  saveHotelReservationCollectionReport: async (
+    report: SavedHotelReservationReportInput
+  ): Promise<{ startDate: string; endDate: string; reservationCount: number }> => {
+    try {
+      const response = await api.post<ApiResponse<{ startDate: string; endDate: string; reservationCount: number }>>(
+        `${BASE_URL}/reports/collections`,
+        report
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('❌ Erreur saveHotelReservationCollectionReport:', error);
+      throw error;
+    }
+  },
 };

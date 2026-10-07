@@ -36,6 +36,7 @@ import { ReservationList } from '../components/Hotel/HotellReservationList';
 import { EquipmentManager } from '../components/Hotel/HotelEquipmentManager';
 import { MaintenanceManager } from '../components/Hotel/HotelMaintenanceManager';
 import { HousekeepingManager } from '../components/Hotel/HotelHousekeepingManager';
+import { HotelReservationCollectionReport } from '../components/Hotel/HotelReservationCollectionReport';
 import { ClientSearch } from '../components/Hotel/ClientSearch';
 import { RoomFormModal } from '../components/Hotel/Modal/RoomFormModal';
 import { ReservationFormModal } from '../components/Hotel/Modal/ReservationFormModal';
@@ -64,6 +65,7 @@ const tabs: Tab[] = [
   { id: 'maintenance', label: 'Maintenance', icon: Hammer, mobileLabel: 'Mainten.' },
   { id: 'housekeeping', label: 'Ménage', icon: Brush, mobileLabel: 'Ménage' },
   { id: 'stock', label: 'Stock', icon: Package, mobileLabel: 'Stock' },
+  { id: 'rapports', label: 'Rapports', icon: ClipboardList, mobileLabel: 'Rapport' },
   { id: 'caisse', label: 'Finances', icon: BarChart3, mobileLabel: 'Finance' },
 ];
 
@@ -451,6 +453,13 @@ const HotelPage: React.FC = () => {
               categories={['Mini-bar', 'Entretien', 'Linge', 'Fournitures', 'Autre']}
             />
           </div>
+        )}
+        {activeTab === 'rapports' && (
+          <HotelReservationCollectionReport
+            reservations={reservationsData}
+            rooms={roomsData}
+            refreshTrigger={dataRefreshKey}
+          />
         )}
         {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
           <div className="overflow-x-auto">
