@@ -1,14 +1,13 @@
 // src/components/Restaurant/Modals/ProductModal.tsx
 import React, { useState, useEffect } from 'react';
-import { Edit3 } from 'lucide-react';
 import { Modal, Input, Select, Button } from '../../UI';
+import { useToast } from '../../../context/ToastContext';
 import type { Category, Product } from '../types';
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
-  onEditExisting?: (product: Product) => void;
   categories: Category[];
   products: Product[];
   editingProduct?: Product | null;
@@ -31,11 +30,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  onEditExisting,
   categories,
   products,
   editingProduct
 }) => {
+  const { showToast } = useToast();
   const [form, setForm] = useState({
     nom: '',
     code: '',
@@ -49,6 +48,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   });
 
   useEffect(() => {
+    setSubmissionError(null);
     if (editingProduct) {
       setForm({
         nom: editingProduct.nom || '',
@@ -76,9 +76,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
   }, [editingProduct, categories]);
 
-  const [duplicateMatches, setDuplicateMatches] = useState<Product[]>([]);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.nom || !form.category_id) return;
 
     if (!editingProduct) {
@@ -86,10 +86,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         isSimilarProductName(product.nom, form.nom)
       );
       if (matches.length > 0) {
-        setDuplicateMatches(matches);
+        showToast(`Le produit « ${form.nom.trim()} » est déjà enregistré et ne peut pas être ajouté une deuxième fois.`, 'error');
         return;
       }
     }
+    setSubmissionError(null);
 
     // Prépare l'objet à envoyer en incluant l'ID si on est en mode édition
     const payload: any = {
@@ -108,16 +109,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       payload.id = editingProduct.id; // Indispensable pour la modification !
     }
 
-    onSubmit(payload);
-    onClose();
+    try {
+      await onSubmit(payload);
+      onClose();
+    } catch (error) {
+      const apiError = error as { response?: { status?: number; data?: { message?: string } } };
+      if (apiError.response?.status === 409) {
+        showToast(apiError.response.data?.message || `Le produit « ${form.nom.trim()} » est déjà enregistré et ne peut pas être ajouté une deuxième fois.`, 'error');
+        return;
+      }
+      setSubmissionError(error instanceof Error ? error.message : 'Impossible d’ajouter ce produit. Veuillez réessayer.');
+    }
   };
-
-  const handleEditExisting = (product: Product) => {
-    setDuplicateMatches([]);
-    onEditExisting?.(product);
-  };
-
-  const closeDuplicateAlert = () => setDuplicateMatches([]);
 
   return (
     <>
@@ -126,9 +129,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         <Input
           label="Nom du plat"
           value={form.nom}
-          onChange={(e) => setForm({ ...form, nom: e.target.value })}
+          onChange={(e) => {
+            setForm({ ...form, nom: e.target.value });
+            setSubmissionError(null);
+          }}
           placeholder="Ex: Burger Deluxe"
         />
+        {submissionError && (
+          <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {submissionError}
+          </p>
+        )}
 
         <Input
           label="Code du plat (optionnel)"
@@ -238,59 +249,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           </Button>
         </div>
       </div>
-      </Modal>
-
-      <Modal
-        isOpen={duplicateMatches.length > 0}
-        onClose={closeDuplicateAlert}
-        title="Plat déjà inscrit"
-        size="md"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-secondary">
-            « <span className="font-semibold text-primary">{form.nom.trim()}</span> » ressemble à {duplicateMatches.length > 1 ? 'des plats déjà inscrits' : 'un plat déjà inscrit'}.
-            Voulez-vous modifier le plat existant plutôt que d’en créer un nouveau ?
-          </p>
-
-          <div className="space-y-2">
-            {duplicateMatches.map((product) => (
-              <div key={product.id} className="flex items-center justify-between gap-3 rounded-lg border border-base bg-surface-2 p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-primary">{product.nom}</p>
-                  <p className="text-xs text-muted">
-                    {product.category?.nom || 'Sans catégorie'} · {product.prix_vente} MGA
-                  </p>
-                </div>
-                <Button type="button" icon={<Edit3 size={14} />} onClick={() => handleEditExisting(product)}>
-                  Modifier
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={closeDuplicateAlert} className="flex-1">
-              Annuler
-            </Button>
-            <Button variant="secondary" type="button" onClick={() => {
-              setDuplicateMatches([]);
-              onSubmit({
-                nom: form.nom,
-                code: form.code,
-                category_id: form.category_id,
-                prix_vente: form.prix_vente,
-                prix_achat: form.prix_achat,
-                unite: form.unite,
-                type_produit: form.type_produit,
-                actif: form.actif,
-                couleur: form.couleur,
-              });
-              onClose();
-            }} className="flex-1">
-              Ajouter quand même
-            </Button>
-          </div>
-        </div>
       </Modal>
     </>
   );
