@@ -39,6 +39,7 @@ export const HotelReservationCollectionReport: React.FC<Props> = ({ reservations
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -51,6 +52,7 @@ export const HotelReservationCollectionReport: React.FC<Props> = ({ reservations
 
     setLoading(true);
     setMessage(null);
+    setCopied(false);
     void reservationService.getHotelReservationCollectionReport(startDate, endDate)
       .then((data) => { if (active) setReport(data); })
       .catch((error) => {
@@ -71,7 +73,7 @@ export const HotelReservationCollectionReport: React.FC<Props> = ({ reservations
       && String(reservation.date_depart).slice(0, 10) > startDate)
     .sort((left, right) => String(left.date_arrivee).localeCompare(String(right.date_arrivee))), [reservations, startDate, endDate]);
 
-  const reportText = () => [
+  const reportText = useMemo(() => [
     'RAPPORT DES ENCAISSEMENTS — HÔTEL',
     `Période : du ${displayDate(startDate)} au ${displayDate(endDate)}`,
     `Total encaissé : ${formatCurrency(report?.totalCollected || 0)}`,
@@ -89,7 +91,7 @@ export const HotelReservationCollectionReport: React.FC<Props> = ({ reservations
       const channel = reservation.type_reservation === 'BOOKING' ? 'Booking' : 'Sur place';
       return `Chambre ${roomNumber} — ${guest} — ${displayDate(String(reservation.date_arrivee).slice(0, 10))} au ${displayDate(String(reservation.date_depart).slice(0, 10))} — ${channel}`;
     }),
-  ].join('\n');
+  ].join('\n'), [startDate, endDate, report, reservationsForPeriod, rooms]);
 
   const saveReport = async () => {
     if (!report) return;
@@ -111,10 +113,11 @@ export const HotelReservationCollectionReport: React.FC<Props> = ({ reservations
 
   const copyReport = async () => {
     try {
-      await navigator.clipboard.writeText(reportText());
-      setMessage('Rapport copié. Vous pouvez le coller dans WhatsApp.');
+      await navigator.clipboard.writeText(reportText);
+      setCopied(true);
     } catch (error) {
       console.error('Erreur copie du rapport des encaissements hôtel:', error);
+      setCopied(false);
       setMessage('La copie a échoué. Vérifiez les autorisations du navigateur.');
     }
   };
@@ -198,20 +201,39 @@ export const HotelReservationCollectionReport: React.FC<Props> = ({ reservations
         <div className="flex flex-col gap-3 border-t border-base pt-4 print:hidden sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-primary">Actions du rapport</p>
-            <p className="text-xs text-muted">Enregistrez-le, copiez-le pour WhatsApp ou imprimez-le.</p>
+            <p className="text-xs text-muted">Enregistrez vos modifications ou préparez une version papier.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={() => void saveReport()} disabled={saving || loading || !report} className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black disabled:opacity-50">
+            <button type="button" onClick={() => void saveReport()} disabled={saving || loading || !report} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-black shadow-lg shadow-accent/20 transition-all hover:-translate-y-0.5 hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0">
               <Save size={16} /> {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
-            <button type="button" onClick={() => void copyReport()} disabled={loading || !report} className="inline-flex items-center justify-center gap-2 rounded-lg border border-base px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50">
-              <Clipboard size={16} /> Copier le rapport
-            </button>
-            <button type="button" onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 rounded-lg border border-base px-4 py-2 text-sm font-semibold text-primary">
+            <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-base bg-surface-2 px-4 py-2.5 text-sm font-semibold text-primary transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-accent/10">
               <Printer size={16} /> Imprimer
             </button>
           </div>
         </div>
+
+        {report && !loading && (
+          <div className="space-y-2 print:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-semibold text-primary">Rapport texte copiable</h4>
+              <button
+                type="button"
+                onClick={() => void copyReport()}
+                aria-label="Copier le rapport Hôtel pour WhatsApp"
+                className="inline-flex items-center gap-2 rounded-lg border border-base bg-surface-2 px-3 py-2 text-sm font-medium text-primary transition-colors hover:border-accent hover:text-accent"
+              >
+                <Clipboard size={16} aria-hidden="true" /> {copied ? 'Copié' : 'Copier'}
+              </button>
+            </div>
+            <textarea
+              readOnly
+              value={reportText}
+              aria-label="Rapport Hôtel généré"
+              className="min-h-[420px] w-full resize-y rounded-xl border border-base bg-surface-2 p-4 text-sm leading-6 text-primary outline-none"
+            />
+          </div>
+        )}
       </div>
     </section>
   );
