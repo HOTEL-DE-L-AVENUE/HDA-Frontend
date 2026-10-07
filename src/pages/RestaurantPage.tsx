@@ -387,19 +387,14 @@ export const RestaurantPage: React.FC = () => {
       setShowProductModal(false);
     } catch (error) {
       console.error('Erreur création produit', error);
-      alert('Impossible d’ajouter ce plat. Veuillez réessayer.');
+      const apiError = error as { response?: { data?: { message?: string } } };
+      throw new Error(apiError.response?.data?.message || 'Impossible d’ajouter ce plat. Veuillez réessayer.');
     }
   };
 
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
     setShowProductModal(true);
-  };
-
-  const handleEditExistingProduct = (product: Product) => {
-    setShowProductModal(false);
-    setEditingProduct(product);
-    requestAnimationFrame(() => setShowProductModal(true));
   };
 
   const handleUpdateProduct = async (formData: any) => {
@@ -714,7 +709,6 @@ export const RestaurantPage: React.FC = () => {
           setEditingProduct(null);
         }}
         onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
-        onEditExisting={handleEditExistingProduct}
         categories={categories}
         products={products}
         editingProduct={editingProduct}
