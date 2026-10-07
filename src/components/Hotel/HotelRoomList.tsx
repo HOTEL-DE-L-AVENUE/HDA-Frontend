@@ -68,6 +68,8 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('TOUS');
   const [filterType, setFilterType] = useState<string>('TOUS');
+  const [filterFromDate, setFilterFromDate] = useState('');
+  const [filterToDate, setFilterToDate] = useState('');
 
   const loadOperationalStatuses = useCallback(async () => {
     try {
@@ -181,7 +183,24 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     // Filtre par type
     const matchesType = filterType === 'TOUS' || room.room_type_id === Number(filterType);
 
-    return matchesSearch && matchesStatus && matchesType;
+    // Filtre par date de réservation
+    let matchesDateRange = true;
+    if (filterFromDate || filterToDate) {
+      const roomReservation = getRoomReservation(room.id);
+      if (roomReservation) {
+        if (filterFromDate) {
+          matchesDateRange = matchesDateRange && new Date(roomReservation.date_arrivee) >= new Date(filterFromDate);
+        }
+        if (filterToDate) {
+          matchesDateRange = matchesDateRange && new Date(roomReservation.date_depart) <= new Date(filterToDate);
+        }
+      } else {
+        // If no reservation and date filter is set, exclude this room
+        matchesDateRange = false;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesType && matchesDateRange;
   });
 
   // Statistiques des chambres
@@ -258,6 +277,8 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     setSearchTerm('');
     setFilterStatus('TOUS');
     setFilterType('TOUS');
+    setFilterFromDate('');
+    setFilterToDate('');
   };
 
   // Gestion du clic sur une chambre - ouvrir le modal de navigation
@@ -375,7 +396,23 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
           ))}
         </select>
 
-        {(searchTerm || filterStatus !== 'TOUS' || filterType !== 'TOUS') && (
+        <input
+          type="date"
+          value={filterFromDate}
+          onChange={(e) => setFilterFromDate(e.target.value)}
+          className="px-4 py-2.5 rounded-lg border border-base bg-surface text-primary focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
+          placeholder="Date début"
+        />
+
+        <input
+          type="date"
+          value={filterToDate}
+          onChange={(e) => setFilterToDate(e.target.value)}
+          className="px-4 py-2.5 rounded-lg border border-base bg-surface text-primary focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
+          placeholder="Date fin"
+        />
+
+        {(searchTerm || filterStatus !== 'TOUS' || filterType !== 'TOUS' || filterFromDate || filterToDate) && (
           <button
             onClick={resetFilters}
             className="px-4 py-2.5 rounded-lg border border-base hover:bg-surface-2 transition-colors flex items-center gap-2"
@@ -411,7 +448,7 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
           <div className="text-center py-12 bg-surface rounded-lg border border-base">
             <Home size={48} className="mx-auto text-muted/30 mb-3" />
             <p className="text-muted">Aucune chambre trouvée</p>
-            {(searchTerm || filterStatus !== 'TOUS' || filterType !== 'TOUS') && (
+            {(searchTerm || filterStatus !== 'TOUS' || filterType !== 'TOUS' || filterFromDate || filterToDate) && (
               <button
                 onClick={resetFilters}
                 className="mt-2 text-accent text-sm underline hover:no-underline"
