@@ -104,6 +104,9 @@ export interface CasinoRegisteredPlayer {
   prenom?: string | null;
   surnom?: string | null;
   whatsapp?: string | null;
+  whatsapp_fiche_consent?: boolean | number;
+  whatsapp_fiche_consent_signature?: string | null;
+  whatsapp_fiche_consent_at?: string | null;
   identite_type?: string | null;
   identite_numero?: string | null;
   identite_nom_complet?: string | null;
@@ -165,6 +168,11 @@ export const playerSheetApi = {
   save: (payload: PlayerSheetData) => put<PlayerSheetData>('/player-sheets', payload),
   finish: (date: string, tableName: string) =>
     post<{ finishedAt: string; playerIds: number[] }>('/player-sheets/finish', { date, table_name: tableName }),
+  // Le serveur envoie la capture (data URL PNG/JPEG) au WhatsApp du joueur.
+  sendWhatsapp: (payload: { image: string; casino_player_id?: number; numero?: string; caption?: string; filename?: string }) =>
+    post<{ ok: boolean; numero: string }>('/player-sheets/whatsapp', payload),
+  openWhatsappDesktop: (payload: { image: string; casino_player_id?: number; numero?: string }) =>
+    post<{ ok: boolean; numero: string }>('/player-sheets/whatsapp-desktop', payload),
 };
 
 export const casinoPlayersApi = {

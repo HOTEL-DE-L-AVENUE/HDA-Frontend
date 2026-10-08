@@ -67,7 +67,7 @@ export const FeuilleTableModal: React.FC<FeuilleTableModalProps> = ({ table, dat
     setGeneratingPdf(true);
     try {
       const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
+        import('html2canvas-pro'),
         import('jspdf'),
       ]);
 

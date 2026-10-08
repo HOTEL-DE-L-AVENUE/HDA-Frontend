@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Copy, Loader2, MessageCircle, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, casinoCurrency, parseCasinoAmount, IDENTITY_VERIFICATION_THRESHOLD, IdentityVerificationData } from './types';
 import { IdentityVerificationModal } from './IdentityVerificationModal';
-import { identityVerificationApi } from '../../../services/casinoTablesJeu.service';
+import { identityVerificationApi, playerSheetApi } from '../../../services/casinoTablesJeu.service';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 import { escapeHtml, printThermal, thermalHeader } from '../../../utils/thermalPrint';
+import { useToast } from '../../../context/ToastContext';
 
 interface PlayersSheetProps {
   date: string;
@@ -102,6 +103,7 @@ const parseResultPayments = (value?: string): ResultPayment[] => {
 };
 
 export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, registeredPlayers = [], restaurantPayments, saveState = 'idle', onUpdate, onDateChange, onPaymentChange, onSave, onAdd, onDuplicate, onGoToRegisteredPlayers, onRemove, onIdentityVerified, showIdentityVerifications = true, identityVerifications = {}, isAdmin = false, canDeletePlayerLine = isAdmin }) => {
+  const { showToast } = useToast();
   const activePlayers = players.filter((player, index, lines) => Boolean(player.casinoPlayerId) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => activePlayers[0] ? (activePlayers[0].ficheId ?? activePlayers[0].id) : 0);
   const resultPaymentBackups = useRef<Record<number, string>>({});
@@ -121,6 +123,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const getPlayerDisplayName = (player?: PlayerLine) => player?.surnom?.trim() || player?.name?.trim() || `Joueur ${player?.ficheId ?? player?.id ?? selectedPlayerId}`;
   const selectedPlayer = activePlayers.find((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerName = getPlayerDisplayName(selectedPlayer);
+  const selectedRegisteredPlayer = registeredPlayers.find((player) => player.id === selectedPlayer?.casinoPlayerId);
+  // Accord signé à l'inscription : rappeler au caissier d'envoyer la fiche par WhatsApp.
+  const wantsWhatsappFiche = Boolean(Number(selectedRegisteredPlayer?.whatsapp_fiche_consent));
+  const [whatsappReminderOpen, setWhatsappReminderOpen] = useState(false);
   const selectedPlayerLines = players.filter((player) => (player.ficheId ?? player.id) === selectedPlayerId);
   const selectedPlayerTotal = selectedPlayerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
   const selectedPlayerCaveToVerify = selectedPlayerTotal;
@@ -181,6 +187,9 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
   const confirmSignaturesAndSave = () => {
     if (confirmedSignatures.length !== signatureConfirmationItems.length || isSignatureConfirmationSaving) return;
     setIsSignatureConfirmationSaving(true);
+    // La fiche est clôturée dès que le départ, le cashing ou la signature finale est saisi.
+    const isClosingFiche = Boolean(selectedPlayer && (selectedPlayer.finalSignature || selectedPlayer.departure || parseCasinoAmount(selectedPlayer.cashing) > 0));
+    const shouldRemindWhatsapp = wantsWhatsappFiche && isClosingFiche;
     try {
       if (selectedPlayer && selectedResultPayments.length) {
         const paymentsToApply = selectedResultPayments.length === 1 && selectedResultPayments[0].amount <= 0
@@ -193,6 +202,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       window.setTimeout(() => {
         setIsSignatureConfirmationSaving(false);
         setSignatureConfirmationOpen(false);
+        if (shouldRemindWhatsapp) setWhatsappReminderOpen(true);
       }, 350);
     }
   };
@@ -241,10 +251,10 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     `);
   };
 
+  // Même priorité que le serveur : le WhatsApp de la fiche d'inscription du joueur fait foi.
   const getPlayerContactNumber = () => {
-    if (selectedPlayer?.whatsapp?.trim()) return selectedPlayer.whatsapp.trim();
     const registeredPlayer = registeredPlayers.find((player) => player.id === selectedPlayer?.casinoPlayerId);
-    return registeredPlayer?.whatsapp?.trim() || registeredPlayer?.telephone?.trim() || '';
+    return registeredPlayer?.whatsapp?.trim() || selectedPlayer?.whatsapp?.trim() || registeredPlayer?.telephone?.trim() || '';
   };
 
   const normalizeContactNumber = (value: string) => {
@@ -270,14 +280,12 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     ].filter(Boolean).join('\n');
   };
 
-  const createPlayerPdf = async () => {
+  const capturePlayerSheet = async () => {
     const printArea = document.querySelector<HTMLElement>('.player-sheet-print');
     if (!printArea) throw new Error('Fiche joueur introuvable');
-    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf'),
-    ]);
-    const canvas = await html2canvas(printArea, {
+    // html2canvas-pro : comprend les couleurs oklch() de Tailwind v4, que html2canvas ne sait pas lire.
+    const { default: html2canvas } = await import('html2canvas-pro');
+    return html2canvas(printArea, {
       backgroundColor: '#161616',
       scale: Math.min(window.devicePixelRatio || 1, 2),
       useCORS: true,
@@ -287,6 +295,22 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
         });
       },
     });
+  };
+
+  // Capture JPEG de la fiche : nette et assez légère pour l'envoi (limite serveur 5 Mo).
+  const createPlayerImage = async (canvas?: HTMLCanvasElement) => {
+    if (!canvas) canvas = await capturePlayerSheet();
+    let quality = 0.9;
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+    while (dataUrl.length > 4_000_000 && quality > 0.4) {
+      quality -= 0.15;
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+    return dataUrl;
+  };
+
+  const createPlayerPdf = async () => {
+    const [canvas, { jsPDF }] = await Promise.all([capturePlayerSheet(), import('jspdf')]);
     const pdf = new jsPDF('l', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -302,6 +326,95 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     return pdf.output('blob');
   };
 
+  const downloadImage = (image: string, fileName: string) => {
+    const downloadLink = document.createElement('a');
+    downloadLink.href = image;
+    downloadLink.download = fileName;
+    downloadLink.click();
+  };
+
+  // Secours quand l'envoi serveur échoue : la capture part dans WhatsApp depuis cet appareil.
+  // Mobile : feuille de partage avec l'image jointe. Ordinateur : l'image est copiée dans le
+  // presse-papiers et WhatsApp s'ouvre sur la discussion du joueur (il reste Ctrl+V puis Entrée).
+  const openPlayerSheetInWhatsApp = async (canvas: HTMLCanvasElement, image: string, fileName: string, number: string) => {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      try {
+        const file = new File([await (await fetch(image)).blob()], fileName, { type: 'image/jpeg' });
+        if (typeof navigator.share === 'function' && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+          await navigator.share({ title: `Fiche joueur - ${selectedPlayerName}`, files: [file] });
+          return 'Choisissez la discussion du joueur dans WhatsApp pour envoyer la fiche.';
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return '';
+      }
+      downloadImage(image, fileName);
+      window.location.assign(`https://wa.me/${number}`);
+      return 'Fiche enregistrée : joignez l’image dans la discussion WhatsApp ouverte.';
+    }
+    // Sur le PC du serveur : la capture est collée directement dans la discussion du joueur.
+    try {
+      const opened = await playerSheetApi.openWhatsappDesktop({ image, casino_player_id: selectedPlayer?.casinoPlayerId, numero: number });
+      return `Fiche prête dans la discussion WhatsApp du +${opened.numero} : appuyez sur Entrée pour l’envoyer.`;
+    } catch (error) {
+      console.warn('Collage automatique dans WhatsApp Desktop impossible :', error);
+    }
+    let copied = false;
+    try {
+      // Le presse-papiers n'accepte que le PNG.
+      const pngBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Capture vide'))), 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      copied = true;
+    } catch (error) {
+      console.warn('Copie de la fiche dans le presse-papiers impossible :', error);
+      downloadImage(image, fileName);
+    }
+    window.location.assign(`whatsapp://send?phone=${number}`);
+    return copied
+      ? `Discussion WhatsApp du +${number} ouverte : faites Ctrl+V puis Entrée pour envoyer la fiche.`
+      : `Fiche enregistrée : joignez l’image dans la discussion WhatsApp du +${number}.`;
+  };
+
+  // Envoi automatique : la fiche est capturée en image JPEG et le serveur l'envoie
+  // directement au numéro WhatsApp du joueur, depuis le compte WhatsApp rattaché
+  // (QR code, onglet Rapport de l'hôtel). En cas d'échec, WhatsApp s'ouvre sur cet appareil.
+  const [isSendingWhatsapp, setIsSendingWhatsapp] = useState(false);
+  const sendPlayerSheetOnWhatsApp = async (number: string) => {
+    if (!selectedPlayer || isSendingWhatsapp) return;
+    setSignatureError('');
+    setIsSendingWhatsapp(true);
+    const fileName = `fiche-${selectedPlayerName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${date}.jpg`;
+    let image = '';
+    let canvas: HTMLCanvasElement | null = null;
+    try {
+      canvas = await capturePlayerSheet();
+      image = await createPlayerImage(canvas);
+      const result = await playerSheetApi.sendWhatsapp({
+        image,
+        casino_player_id: selectedPlayer.casinoPlayerId,
+        numero: number,
+        caption: `Fiche joueur — ${selectedPlayerName} — ${date}`,
+        filename: fileName,
+      });
+      showToast(`Fiche envoyée par WhatsApp au +${result.numero}.`, 'success');
+    } catch (error) {
+      console.error('Erreur lors de l’envoi WhatsApp de la fiche joueur :', error);
+      const apiError = error as { response?: { data?: { error?: { message?: string } | string; message?: string } } };
+      const responseError = apiError.response?.data?.error;
+      const message = (typeof responseError === 'string' ? responseError : responseError?.message) || apiError.response?.data?.message || 'Impossible d’envoyer la fiche par WhatsApp.';
+      if (canvas && image) {
+        const instructions = await openPlayerSheetInWhatsApp(canvas, image, fileName, number);
+        if (instructions) showToast(instructions, 'info', 10000);
+        console.warn('Envoi automatique WhatsApp échoué :', message);
+      } else {
+        setSignatureError(message);
+        showToast(message, 'error', 10000);
+      }
+    } finally {
+      setIsSendingWhatsapp(false);
+    }
+  };
+
   const sharePlayerSheet = async (channel: 'whatsapp' | 'viber') => {
     if (!selectedPlayer) return;
     const number = normalizeContactNumber(getPlayerContactNumber());
@@ -309,22 +422,11 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
       setSignatureError('Ajoutez d’abord un numéro WhatsApp ou Viber pour ce joueur.');
       return;
     }
-    const message = buildShareMessage();
     if (channel === 'whatsapp') {
-      const encodedMessage = encodeURIComponent(message);
-      const isMobileDevice = /Android|iPhone|iPad|iPod|webOS|Mobile/i.test(navigator.userAgent);
-      if (isMobileDevice) {
-        const appUrl = `whatsapp://send?phone=${number}&text=${encodedMessage}`;
-        const webFallback = `https://wa.me/${number}?text=${encodedMessage}`;
-        window.location.href = appUrl;
-        window.setTimeout(() => {
-          if (!document.hidden) window.location.href = webFallback;
-        }, 1200);
-      } else {
-        window.location.assign(`https://web.whatsapp.com/send?phone=${number}&text=${encodedMessage}`);
-      }
+      await sendPlayerSheetOnWhatsApp(number);
       return;
     }
+    const message = buildShareMessage();
     try {
       const pdfBlob = await createPlayerPdf();
       const file = new File([pdfBlob], `fiche-${selectedPlayerName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${date}.pdf`, { type: 'application/pdf' });
@@ -507,7 +609,8 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
         {isAdmin && <button type="button" className={sheetActionSecondary} onClick={onGoToRegisteredPlayers}>Ajouter un joueur</button>}
         {isAdmin && <button type="button" className={sheetActionSecondary} onClick={addPlayerLine} disabled={!selectedPlayer}>Ajouter une ligne</button>}
         <button type="button" className={sheetActionSecondary} onClick={printPlayerSheet} disabled={!selectedPlayer}>Imprimer la fiche</button>
-        <button type="button" className={sheetActionSecondary} onClick={() => void sharePlayerSheet('whatsapp')} disabled={!selectedPlayer}><MessageCircle size={15} /> WhatsApp</button>
+        {wantsWhatsappFiche && <span className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-green-400 bg-green-500/10 px-3 text-[11px] font-semibold text-green-300" title="Accord signé à l’inscription"><MessageCircle size={14} /> Joueur souhaite un envoi de fiche par WhatsApp</span>}
+        <button type="button" className={sheetActionSecondary} onClick={() => void sharePlayerSheet('whatsapp')} disabled={!selectedPlayer || isSendingWhatsapp} style={wantsWhatsappFiche ? { backgroundColor: '#25D366', borderColor: '#25D366', color: '#fff' } : undefined}>{isSendingWhatsapp ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />} {isSendingWhatsapp ? 'Envoi en cours…' : wantsWhatsappFiche ? 'Envoi par WhatsApp' : 'WhatsApp'}</button>
         <button type="button" className={sheetActionSecondary} onClick={() => void sharePlayerSheet('viber')} disabled={!selectedPlayer}><MessageCircle size={15} /> Viber</button>
       </div>
     </div>
@@ -672,6 +775,7 @@ export const PlayersSheet: React.FC<PlayersSheetProps> = ({ date, players, regis
     </div>
     {pendingBonus && <BonusRouletteModal bonus={pendingBonus} rotation={rouletteRotation} result={rouletteResult} number={rouletteNumber} isSpinning={isSpinning} onSpin={spinRoulette} onConfirm={confirmBonusResult} onClose={() => !isSpinning && setPendingBonus(null)} />}
     {signatureConfirmationOpen && <SignatureConfirmationModal items={signatureConfirmationItems} confirmedKeys={confirmedSignatures} isSubmitting={isSignatureConfirmationSaving} onToggle={(key, checked) => setConfirmedSignatures((current) => checked ? [...current, key] : current.filter((item) => item !== key))} onClose={() => setSignatureConfirmationOpen(false)} onConfirm={confirmSignaturesAndSave} />}
+    {whatsappReminderOpen && <WhatsappReminderModal playerName={selectedPlayerName} contactNumber={getPlayerContactNumber()} onClose={() => setWhatsappReminderOpen(false)} onSend={() => { setWhatsappReminderOpen(false); void sharePlayerSheet('whatsapp'); }} />}
     {lineSignatureModal && <LineSignatureModal playerName={lineSignatureModal.name} value={lineSignatureModal.value} onClose={() => setLineSignatureModal(null)} onValidate={(value) => { onUpdate(lineSignatureModal.id, lineSignatureModal.field, value); setLineSignatureModal(null); }} />}
     <IdentityVerificationModal
       open={identityModal.open}
@@ -708,6 +812,20 @@ const SignatureConfirmationModal: React.FC<{
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSubmitting ? 'Enregistrement...' : 'Confirmer et enregistrer'}
         </button>
+      </div>
+    </div>
+  </div>
+);
+
+const WhatsappReminderModal: React.FC<{ playerName: string; contactNumber: string; onClose: () => void; onSend: () => void }> = ({ playerName, contactNumber, onClose, onSend }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 print:hidden" role="dialog" aria-modal="true" aria-labelledby="whatsapp-reminder-title">
+    <div className="w-full max-w-md rounded-2xl border border-green-400 p-5 text-white shadow-2xl" style={{ backgroundColor: 'var(--color-surface)' }}>
+      <h2 id="whatsapp-reminder-title" className="inline-flex items-center gap-2 text-lg font-bold text-green-300"><MessageCircle size={20} /> Rappel WhatsApp</h2>
+      <p className="mt-3 text-sm">Le joueur <strong>{playerName}</strong> souhaite un envoi de fiche par WhatsApp.</p>
+      <p className="mt-1 text-xs text-muted">Numéro : {contactNumber || 'aucun numéro enregistré'}</p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="action secondary" onClick={onClose}>Plus tard</button>
+        <button type="button" className="action inline-flex items-center gap-2" style={{ backgroundColor: '#25D366', borderColor: '#25D366', color: '#fff' }} onClick={onSend}><MessageCircle size={15} /> Envoi par WhatsApp</button>
       </div>
     </div>
   </div>
