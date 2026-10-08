@@ -1085,8 +1085,8 @@ export const BarCommandeView: React.FC<Props> = ({
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
               <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-40 text-xs" />
             </div>
-            <div className="grid h-[480px] grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)]">
-              <nav className="space-y-1 border-r border-base bg-[#171b1c] p-2 overflow-y-auto">
+            <div className="grid h-[min(480px,60dvh)] min-h-[280px] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:h-[480px] lg:grid-cols-[128px_minmax(0,1fr)] lg:grid-rows-1">
+              <nav className="flex gap-1 overflow-x-auto border-b border-base bg-[#171b1c] p-2 touch-pan-x overscroll-contain lg:block lg:space-y-1 lg:overflow-y-auto lg:overflow-x-hidden lg:border-b-0 lg:border-r">
                 {menuCategories.map((category) => (
                   <button
                     key={category}
@@ -1096,19 +1096,19 @@ export const BarCommandeView: React.FC<Props> = ({
                       setMenuSubcategory('Toutes');
                       setSearchTerm('');
                     }}
-                    className={`w-full rounded-md px-2 py-3 text-left text-[11px] font-semibold transition ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}
+                    className={`w-max shrink-0 rounded-md px-3 py-3 text-left text-[11px] font-semibold transition lg:w-full lg:px-2 ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}
                   >
                     {category}
                   </button>
                 ))}
               </nav>
-              <div className="min-w-0 p-2 sm:p-3 flex flex-col h-full min-h-0">
+              <div className="flex h-full min-h-0 min-w-0 flex-col p-2 sm:p-3">
                 {menuSubcategories.length > 1 && (
                   <div className="mb-2 flex gap-1 overflow-x-auto border-b border-base pb-2 shrink-0">
                     {menuSubcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => setMenuSubcategory(subcategory)} className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold ${menuSubcategory === subcategory ? 'bg-sky-500 text-white' : 'bg-surface-2 text-muted'}`}>{subcategory}</button>)}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-2 overflow-y-auto xl:grid-cols-3 flex-1 content-start pr-1 min-h-0">
+                <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-2 overflow-y-auto overscroll-contain pr-1 touch-pan-y xl:grid-cols-3">
                   {menuItems.map((cocktail) => {
                     const isSpecialBillardItem = cocktail.id <= 0;
                     const stock = stockMap[cocktail.id];
