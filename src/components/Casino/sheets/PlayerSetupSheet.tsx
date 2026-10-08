@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Edit2, Eye, Play, Search, Trash2 } from 'lucide-react';
+import { Edit2, Eye, MessageCircle, Play, Search, Trash2 } from 'lucide-react';
 import { PlayerLine, casinoBorder, parseCasinoAmount } from './types';
 import { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 import { Modal } from '../common';
+import SignaturePad from '../../SignaturePad';
 import uploadService from '../../../services/upload.service';
 import { useToast } from '../../../context/ToastContext';
 
@@ -16,7 +17,7 @@ interface PlayerSetupSheetProps {
   onRemove: (ficheId: number) => void;
   onSave: () => void;
   registeredPlayers: CasinoRegisteredPlayer[];
-  onRegister: (player: { nom: string; prenom: string; surnom: string; whatsapp: string; telephone: string; identite_type: string; identite_numero: string; identite_nom_complet: string; identite_date_emission: string; identite_verifiee: boolean; identite_fichiers_urls: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => Promise<void>;
+  onRegister: (player: { nom: string; prenom: string; surnom: string; whatsapp: string; whatsapp_fiche_consent: boolean; whatsapp_fiche_consent_signature: string; telephone: string; identite_type: string; identite_numero: string; identite_nom_complet: string; identite_date_emission: string; identite_verifiee: boolean; identite_fichiers_urls: string; date_inscription: string; depot: string; credit: string; mode_jeu: 'EN_ATTENTE' | 'EN_JEU' }) => Promise<void>;
   onPlay: (player: CasinoRegisteredPlayer, deposit?: string, credit?: string) => Promise<void>;
   onDeleteRegisteredPlayer?: (player: CasinoRegisteredPlayer) => Promise<void>;
   onUpdateRegisteredPlayer: (id: number, player: Partial<CasinoRegisteredPlayer>) => Promise<void>;
@@ -24,10 +25,23 @@ interface PlayerSetupSheetProps {
 
 const inputClass = 'w-full rounded border bg-transparent px-2 py-2 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60';
 
+// Case « envoi des fiches par WhatsApp » : le joueur coche et signe son accord.
+// Chaque clôture de sa fiche rappellera ensuite au caissier de lui envoyer la fiche.
+const WhatsappConsentField: React.FC<{ checked: boolean; signature: string; onCheckedChange: (checked: boolean) => void; onSignatureChange: (signature: string) => void }> = ({ checked, signature, onCheckedChange, onSignatureChange }) => (
+  <div className={`col-span-full rounded-xl border p-3 ${checked ? 'border-green-400 bg-green-400/10' : ''}`} style={checked ? undefined : casinoBorder}>
+    <label className="inline-flex cursor-pointer items-start gap-2 text-sm">
+      <input type="checkbox" className="mt-1" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} />
+      <span><span className="inline-flex items-center gap-1 font-semibold"><MessageCircle size={14} /> Le joueur souhaite recevoir ses fiches par WhatsApp</span><span className="block text-xs text-muted">Un rappel s’affichera au caissier à chaque clôture de fiche de ce joueur.</span></span>
+    </label>
+    {checked && <div className="mt-3"><SignaturePad label="Signature du joueur (accord d’envoi par WhatsApp) *" value={signature || null} onChange={(value) => onSignatureChange(value || '')} height={140} /></div>}
+  </div>
+);
+const hasWhatsappConsent = (player: Pick<CasinoRegisteredPlayer, 'whatsapp_fiche_consent'>) => Boolean(Number(player.whatsapp_fiche_consent));
+
 export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isAdmin, canManageGame, saveState = 'idle', onUpdate, onAdd, onRemove, onSave, registeredPlayers = [], onRegister, onPlay, onDeleteRegisteredPlayer, onUpdateRegisteredPlayer }) => {
   const { showToast } = useToast();
   const playerList = players.filter((player, index, lines) => Boolean(player.casinoPlayerId || player.name.trim()) && lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index);
-  const emptyPlayer = { nom: '', prenom: '', surnom: '', whatsapp: '', telephone: '', identite_type: 'CIN', identite_numero: '', identite_nom_complet: '', identite_date_emission: '', identite_verifiee: false, date_inscription: new Date().toISOString().slice(0, 10), depot: '', credit: '', mode_jeu: 'EN_ATTENTE' as const };
+  const emptyPlayer = { nom: '', prenom: '', surnom: '', whatsapp: '', whatsapp_fiche_consent: false, whatsapp_fiche_consent_signature: '', telephone: '', identite_type: 'CIN', identite_numero: '', identite_nom_complet: '', identite_date_emission: '', identite_verifiee: false, date_inscription: new Date().toISOString().slice(0, 10), depot: '', credit: '', mode_jeu: 'EN_ATTENTE' as 'EN_ATTENTE' | 'EN_JEU' };
   const [newPlayer, setNewPlayer] = useState(emptyPlayer);
   const [amounts, setAmounts] = useState<Record<number, { deposit: string; credit: string }>>({});
   const [identityFiles, setIdentityFiles] = useState<File[]>([]);
@@ -79,6 +93,10 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       showToast('L’identité complète, la confirmation et au moins 1 fichier sont obligatoires.', 'error');
       return;
     }
+    if (newPlayer.whatsapp_fiche_consent && (!newPlayer.whatsapp.trim() || !newPlayer.whatsapp_fiche_consent_signature)) {
+      showToast('Pour l’envoi des fiches par WhatsApp, renseignez le numéro WhatsApp et validez la signature du joueur.', 'error');
+      return;
+    }
     try {
       setUploadingIdentity(true);
       const uploadedFiles = await Promise.all(selectedFiles.map((file) => uploadService.uploadFile(file)));
@@ -110,6 +128,10 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
       }
       if (!updatedPlayer.identite_nom_complet?.trim() || !updatedPlayer.identite_numero?.trim() || !updatedPlayer.identite_date_emission || !updatedPlayer.identite_verifiee) {
         showToast('Les informations d’identité et la confirmation sont obligatoires.', 'error');
+        return;
+      }
+      if (hasWhatsappConsent(updatedPlayer) && (!updatedPlayer.whatsapp?.trim() || !updatedPlayer.whatsapp_fiche_consent_signature)) {
+        showToast('Pour l’envoi des fiches par WhatsApp, renseignez le numéro WhatsApp et validez la signature du joueur.', 'error');
         return;
       }
       await onUpdateRegisteredPlayer(editingPlayer.id, updatedPlayer);
@@ -151,7 +173,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
           deposit: playerInGame ? playerInGame.initialDeposit : String(player.depot || ''),
           credit: playerInGame ? playerInGame.initialCredit : String(player.credit || ''),
         };
-        return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.surnom || '—'}</td><td className="border p-2" style={casinoBorder}>{player.whatsapp || '—'}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-cyan-300 hover:text-cyan-200" title="Voir les informations et l'identité" aria-label={`Voir ${player.nom}`} onClick={() => setViewingPlayer(player)}><Eye size={16} /></button><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => { setEditingIdentityFiles([]); setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' }); }}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
+        return <tr key={player.id}><td className="border p-2" style={casinoBorder}>{player.nom} {player.prenom || ''}</td><td className="border p-2" style={casinoBorder}>{player.surnom || '—'}</td><td className="border p-2" style={casinoBorder}>{player.whatsapp || '—'}{hasWhatsappConsent(player) && <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-green-400 px-2 py-0.5 text-[10px] font-semibold text-green-400" title="Le joueur a signé son accord pour recevoir ses fiches par WhatsApp"><MessageCircle size={11} /> Fiches</span>}</td><td className="border p-2" style={casinoBorder}>{player.date_inscription ? new Date(player.date_inscription).toLocaleDateString('fr-FR') : '—'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.deposit || '0'}</td><td className="border p-2 text-right" style={casinoBorder}>{amount.credit || '0'}</td>{isAdmin && <td className="border p-1 text-center" style={casinoBorder}><div className="flex items-center justify-center gap-2"><span className="text-xs text-muted">{alreadyPlaying ? 'En jeu' : 'En attente'}</span><button type="button" className="rounded p-2 text-cyan-300 hover:text-cyan-200" title="Voir les informations et l'identité" aria-label={`Voir ${player.nom}`} onClick={() => setViewingPlayer(player)}><Eye size={16} /></button><button type="button" className="rounded p-2 text-yellow-300 hover:text-yellow-200" title="Modifier le joueur" onClick={() => { setEditingIdentityFiles([]); setEditingPlayer({ ...player, date_inscription: player.date_inscription?.slice(0, 10) || '' }); }}><Edit2 size={16} /></button><button type="button" className="rounded p-2 text-red-400 hover:text-red-300" title="Supprimer le joueur" aria-label={`Supprimer ${player.nom}`} onClick={() => window.confirm(`Supprimer ${player.nom} ${player.prenom || ''} ?`) && void onDeleteRegisteredPlayer?.(player)}><Trash2 size={16} /></button>{!alreadyPlaying && <button type="button" className="rounded p-2 text-green-400 hover:text-green-300" title="Faire jouer le joueur en attente" aria-label={`Faire jouer ${player.nom}`} onClick={() => play(player)}><Play size={16} /></button>}</div></td>}</tr>;
       })}</tbody></table>
     </div>
     {canManageGame && !isAdmin && registeredPlayers.some((player) => !playerList.some((line) => line.casinoPlayerId === player.id)) && <div className="mb-5 flex flex-wrap gap-2"><span className="self-center text-xs text-muted">Ajouter à la partie :</span>{registeredPlayers.filter((player) => !playerList.some((line) => line.casinoPlayerId === player.id)).map((player) => <button key={player.id} type="button" className="action secondary text-xs" onClick={() => play(player)}><Play size={14} /> {player.nom} {player.prenom || ''}</button>)}</div>}
@@ -214,6 +236,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
           <p className={`mt-2 text-xs ${identityFiles.filter(Boolean).length >= 1 ? 'text-green-400' : 'text-yellow-300'}`}>{identityFiles.filter(Boolean).length}/3 fichier(s) — au moins 1 requis</p>
         </div>
         <label className="col-span-full inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={newPlayer.identite_verifiee} onChange={(event) => setNewPlayer((current) => ({ ...current, identite_verifiee: event.target.checked }))} /> J’ai vérifié la pièce originale et confirmé l’identité du joueur *</label>
+        <WhatsappConsentField checked={newPlayer.whatsapp_fiche_consent} signature={newPlayer.whatsapp_fiche_consent_signature} onCheckedChange={(checked) => setNewPlayer((current) => ({ ...current, whatsapp_fiche_consent: checked, whatsapp_fiche_consent_signature: checked ? current.whatsapp_fiche_consent_signature : '' }))} onSignatureChange={(signature) => setNewPlayer((current) => ({ ...current, whatsapp_fiche_consent_signature: signature }))} />
         <input className={inputClass} type="date" value={newPlayer.date_inscription} onChange={(event) => setNewPlayer((current: any) => ({ ...current, date_inscription: event.target.value }))} aria-label="Date d'inscription" />
         <input className={inputClass} inputMode="decimal" value={newPlayer.depot} onChange={(event) => setNewPlayer((current: any) => ({ ...current, depot: event.target.value }))} placeholder="Dépôt initial (Ar)" />
         <input className={inputClass} inputMode="decimal" value={newPlayer.credit} onChange={(event) => setNewPlayer((current: any) => ({ ...current, credit: event.target.value }))} placeholder="Crédit initial (Ar)" />
@@ -239,6 +262,7 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
           <div className="grid gap-3 md:grid-cols-3">{['Pièce 1 — Recto', 'Pièce 2 — Verso', 'Pièce 3 — Justificatif'].map((label, index) => <label key={label} className={`flex min-h-24 cursor-pointer flex-col justify-between rounded-lg border p-3 ${editingIdentityFiles[index] ? 'border-green-400 bg-green-400/10' : 'border-dashed border-yellow-300/60'}`}><span className="text-xs font-semibold">{label}</span><span className="my-2 truncate text-[11px] text-muted">{editingIdentityFiles[index]?.name || (identityFileUrls(editingPlayer)[index] ? 'Document existant' : 'Cliquer pour choisir')}</span><input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setEditingIdentityFiles((current) => { const next = [...current]; const file = event.target.files?.[0]; if (file) next[index] = file; return next; })} /></label>)}</div>
         </div>
         <label className="col-span-full inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(editingPlayer.identite_verifiee)} onChange={(event) => setEditingPlayer((current) => current ? { ...current, identite_verifiee: event.target.checked } : current)} /> Identité vérifiée *</label>
+        <WhatsappConsentField checked={hasWhatsappConsent(editingPlayer)} signature={editingPlayer.whatsapp_fiche_consent_signature || ''} onCheckedChange={(checked) => setEditingPlayer((current) => current ? { ...current, whatsapp_fiche_consent: checked, whatsapp_fiche_consent_signature: checked ? current.whatsapp_fiche_consent_signature : null } : current)} onSignatureChange={(signature) => setEditingPlayer((current) => current ? { ...current, whatsapp_fiche_consent_signature: signature || null } : current)} />
         <input className={inputClass} type="date" value={editingPlayer.date_inscription || ''} onChange={(event) => setEditingPlayer((current) => current ? { ...current, date_inscription: event.target.value } : current)} />
         <input className={inputClass} inputMode="decimal" value={String(editingPlayer.depot || '')} onChange={(event) => setEditingPlayer((current) => current ? { ...current, depot: event.target.value } : current)} placeholder="Dépôt (Ar)" />
         <input className={inputClass} inputMode="decimal" value={String(editingPlayer.credit || '')} onChange={(event) => setEditingPlayer((current) => current ? { ...current, credit: event.target.value } : current)} placeholder="Crédit (Ar)" />
@@ -250,6 +274,8 @@ export const PlayerSetupSheet: React.FC<PlayerSetupSheetProps> = ({ players, isA
         <p><span className="text-muted">Surnom :</span> {viewingPlayer.surnom || '—'}</p>
         <p><span className="text-muted">WhatsApp :</span> {viewingPlayer.whatsapp || '—'}</p>
         <p><span className="text-muted">Téléphone :</span> {viewingPlayer.telephone || '—'}</p>
+        <p className="sm:col-span-2"><span className="text-muted">Fiches par WhatsApp :</span> {hasWhatsappConsent(viewingPlayer) ? `Oui — accord signé${viewingPlayer.whatsapp_fiche_consent_at ? ` le ${new Date(viewingPlayer.whatsapp_fiche_consent_at).toLocaleDateString('fr-FR')}` : ''}` : 'Non'}</p>
+        {hasWhatsappConsent(viewingPlayer) && viewingPlayer.whatsapp_fiche_consent_signature && <div className="sm:col-span-2 flex h-20 items-center justify-center rounded border bg-white p-1" style={casinoBorder}><img src={viewingPlayer.whatsapp_fiche_consent_signature} alt="Signature de l’accord WhatsApp" className="max-h-full" /></div>}
         <p><span className="text-muted">Dépôt :</span> {viewingPlayer.depot || 0} Ar</p>
         <p><span className="text-muted">Crédit :</span> {viewingPlayer.credit || 0} Ar</p>
       </div>
