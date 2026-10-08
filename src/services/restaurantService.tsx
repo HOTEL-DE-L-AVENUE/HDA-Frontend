@@ -207,6 +207,9 @@ export const createProduct = (data: {
 }) =>
   api.post('/api/restaurant/products', data).then(res => res.data);
 
+export const getNextRestaurantProductCode = () =>
+  api.get<ApiResponse<{ code: string }>>('/api/restaurant/products/next-code').then(res => res.data);
+
 // ==================== PRODUITS ====================
 export const updateProduct = (id: number, data: Partial<{
   nom: string; unite: string; prix_achat: number; prix_vente: number;
@@ -252,6 +255,9 @@ export const getProductTypes = () =>
 // ==================== CATÉGORIES ====================
 export const getCategories = () =>
   api.get('/api/restaurant/categories').then(res => res.data);
+
+export const createCategory = (data: { nom: string }) =>
+  api.post<ApiResponse<{ id: number; nom: string }>>('/api/restaurant/categories', data).then(res => res.data);
 
 // ==================== SOUS-CATÉGORIES ====================
 export const getSubcategories = (params?: { category_id?: number }) =>

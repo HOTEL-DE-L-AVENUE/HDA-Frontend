@@ -2,12 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Input, Select, Button } from '../../UI';
 import { useToast } from '../../../context/ToastContext';
+import * as restaurantService from '../../../services/restaurantService';
 import type { Category, Product } from '../types';
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
+  onCreateCategory: (name: string) => Promise<Category>;
   categories: Category[];
   products: Product[];
   editingProduct?: Product | null;
@@ -26,15 +28,25 @@ const isSimilarProductName = (first: string, second: string) => {
   return Boolean(firstName && secondName && firstName === secondName);
 };
 
+const isOtherCategory = (name: string) => {
+  const normalizedName = normalizeProductName(name);
+  return normalizedName === 'autre' || normalizedName === 'autres';
+};
+
 export const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  onCreateCategory,
   categories,
   products,
   editingProduct
 }) => {
   const { showToast } = useToast();
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
+  const [codePreviewError, setCodePreviewError] = useState<string | null>(null);
   const [form, setForm] = useState({
     nom: '',
     code: '',
@@ -48,7 +60,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   });
 
   useEffect(() => {
+    if (!isOpen) return;
     setSubmissionError(null);
+    setIsCustomCategory(false);
+    setCustomCategory('');
     if (editingProduct) {
       setForm({
         nom: editingProduct.nom || '',
@@ -74,12 +89,33 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         couleur: ''
       });
     }
-  }, [editingProduct, categories]);
+    if (editingProduct) {
+      setCodePreviewError(null);
+      return;
+    }
 
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
+    let cancelled = false;
+    setCodePreviewError(null);
+    restaurantService.getNextRestaurantProductCode()
+      .then((response) => {
+        if (!response.success) throw new Error(response.message || 'Aperçu du code produit indisponible.');
+        if (!cancelled) setForm((current) => ({ ...current, code: response.data.code }));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Erreur aperçu code plat Restaurant:', error);
+        setCodePreviewError('Le code sera généré automatiquement à l’enregistrement.');
+      });
+    return () => { cancelled = true; };
+  }, [isOpen, editingProduct]);
 
   const handleSubmit = async () => {
-    if (!form.nom || !form.category_id) return;
+    if (!form.nom.trim()) return;
+    if (isCustomCategory && !customCategory.trim()) {
+      showToast('Saisissez le nom de la catégorie personnalisée.', 'error');
+      return;
+    }
+    if (!isCustomCategory && !form.category_id) return;
 
     if (!editingProduct) {
       const matches = products.filter((product) =>
@@ -92,24 +128,30 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
     setSubmissionError(null);
 
-    // Prépare l'objet à envoyer en incluant l'ID si on est en mode édition
-    const payload: any = {
-      nom: form.nom,
-      code: form.code,
-      category_id: form.category_id,
-      prix_vente: form.prix_vente,
-      prix_achat: form.prix_achat,
-      unite: form.unite,
-      type_produit: form.type_produit,
-      actif: form.actif,
-      couleur: form.couleur // Transmet la couleur choisie
-    };
-
-    if (editingProduct) {
-      payload.id = editingProduct.id; // Indispensable pour la modification !
-    }
-
     try {
+      let categoryId = form.category_id;
+      if (isCustomCategory) {
+        const normalizedCustomName = normalizeProductName(customCategory);
+        const existingCategory = categories.find(
+          (category) => normalizeProductName(category.nom) === normalizedCustomName
+        );
+        const category = existingCategory || await onCreateCategory(customCategory.trim());
+        categoryId = category.id;
+      }
+
+      const payload: any = {
+        nom: form.nom.trim(),
+        code: form.code,
+        category_id: categoryId,
+        prix_vente: form.prix_vente,
+        prix_achat: form.prix_achat,
+        unite: form.unite,
+        type_produit: form.type_produit,
+        actif: form.actif,
+        couleur: form.couleur
+      };
+
+      if (editingProduct) payload.id = editingProduct.id;
       await onSubmit(payload);
       onClose();
     } catch (error) {
@@ -142,21 +184,41 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         )}
 
         <Input
-          label="Code du plat (optionnel)"
+          label="Code du plat"
           value={form.code}
-          onChange={(e) => setForm({ ...form, code: e.target.value })}
-          placeholder="Ex: PLT001"
+          readOnly
+          placeholder="Génération du code..."
         />
+        {codePreviewError && <p className="text-xs text-muted">{codePreviewError}</p>}
 
         <Select
           label="Catégorie"
-          value={form.category_id.toString()}
-          onChange={(e) => setForm({ ...form, category_id: Number(e.target.value) })}
+          value={isCustomCategory ? '__other__' : form.category_id.toString()}
+          onChange={(e) => {
+            const isOther = e.target.value === '__other__';
+            setIsCustomCategory(isOther);
+            if (!isOther) setCustomCategory('');
+            setForm({ ...form, category_id: isOther ? 0 : Number(e.target.value) });
+          }}
           options={[
             { value: '0', label: 'Sélectionner une catégorie' },
-            ...categories.map(c => ({ value: c.id.toString(), label: c.nom }))
+            ...categories
+              .filter((category) => !isOtherCategory(category.nom))
+              .map(c => ({ value: c.id.toString(), label: c.nom })),
+            { value: '__other__', label: 'Autres' }
           ]}
         />
+        {isCustomCategory && (
+          <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
+            <Input
+              autoFocus
+              label="Nouvelle catégorie"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              placeholder="Saisir le nom de la catégorie"
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
@@ -244,7 +306,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <Button variant="secondary" onClick={onClose} className="flex-1">Annuler</Button>
-          <Button onClick={handleSubmit} className="flex-1" disabled={!form.nom || !form.category_id}>
+          <Button onClick={handleSubmit} className="flex-1" disabled={!form.nom.trim() || (isCustomCategory ? !customCategory.trim() : !form.category_id)}>
             {editingProduct ? 'Modifier' : 'Ajouter'}
           </Button>
         </div>
