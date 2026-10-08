@@ -606,30 +606,30 @@ export const FinancesPage: React.FC = () => {
       ) : (
         <>
       {/* Global KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="relative overflow-hidden bg-accent-4 border border-accent/20 rounded-2xl p-6">
-          <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl bg-accent/20" />
-          <p className="text-muted text-sm mb-1">Solde Global</p>
-          <p className="text-primary font-black text-4xl">{formatCurrency(financialStats.soldeGlobal)}</p>
-          <div className="flex items-center gap-1 text-accent text-sm mt-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="relative overflow-hidden bg-accent-4 border border-accent/20 rounded-xl p-4">
+          <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl bg-accent/20" />
+          <p className="text-muted text-xs mb-1">Solde Global</p>
+          <p className="text-primary font-black text-xl sm:text-2xl leading-tight tracking-tight break-words">{formatCurrency(financialStats.soldeGlobal)}</p>
+          <div className="flex items-center gap-1 text-accent text-xs mt-1.5">
             <TrendingUp size={14} />
             <span>+18.4% vs mois dernier</span>
           </div>
         </div>
-        <div className="relative overflow-hidden bg-success-bg border border-success/20 rounded-2xl p-6">
-          <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl bg-success/20" />
-          <p className="text-muted text-sm mb-1">Total Revenus</p>
-          <p className="text-success font-black text-4xl">{formatCurrency(totalEntrees)}</p>
-          <div className="flex items-center gap-1 text-success text-sm mt-2">
+        <div className="relative overflow-hidden bg-success-bg border border-success/20 rounded-xl p-4">
+          <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl bg-success/20" />
+          <p className="text-muted text-xs mb-1">Total Revenus</p>
+          <p className="text-success font-black text-xl sm:text-2xl leading-tight tracking-tight break-words">{formatCurrency(totalEntrees)}</p>
+          <div className="flex items-center gap-1 text-success text-xs mt-1.5">
             <ArrowUpRight size={14} />
             <span>{allTransactions.filter(t => t.type === 'entree').length} transactions</span>
           </div>
         </div>
-        <div className="relative overflow-hidden bg-danger-bg border border-danger/20 rounded-2xl p-6">
-          <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl bg-danger/20" />
-          <p className="text-muted text-sm mb-1">Total Dépenses</p>
-          <p className="text-danger font-black text-4xl">{formatCurrency(totalSorties)}</p>
-          <div className="flex items-center gap-1 text-danger text-sm mt-2">
+        <div className="relative overflow-hidden bg-danger-bg border border-danger/20 rounded-xl p-4">
+          <div className="absolute top-0 right-0 w-16 h-16 rounded-full blur-2xl bg-danger/20" />
+          <p className="text-muted text-xs mb-1">Total Dépenses</p>
+          <p className="text-danger font-black text-xl sm:text-2xl leading-tight tracking-tight break-words">{formatCurrency(totalSorties)}</p>
+          <div className="flex items-center gap-1 text-danger text-xs mt-1.5">
             <ArrowDownRight size={14} />
             <span>{allTransactions.filter(t => t.type === 'sortie').length} transactions</span>
           </div>
@@ -638,28 +638,28 @@ export const FinancesPage: React.FC = () => {
 
       {/* Caisses par Module */}
       <div>
-        <h3 className="text-primary font-semibold mb-4">Caisses par Module</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <h3 className="text-primary font-semibold text-sm mb-2.5">Caisses par Module</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {displayedModulesSoldes.map(m => {
             const config = moduleConfig[m.module] || defaultModuleConfig;
             const pct = totalEntrees > 0 ? (m.entrees / totalEntrees) * 100 : 0;
             return (
-              <div key={m.module} className="bg-surface border border-base rounded-2xl overflow-hidden hover:border-accent transition-all">
-                <div className={`p-4 bg-gradient-to-r ${config.gradient}`}>
+              <div key={m.module} className="bg-surface border border-base rounded-xl overflow-hidden hover:border-accent transition-all">
+                <div className={`p-3 bg-gradient-to-r ${config.gradient}`}>
                   <p className="text-white/80 text-xs font-medium uppercase tracking-wide">{config.label}</p>
-                  <p className="text-white font-black text-2xl mt-1">{formatCurrency(m.solde)}</p>
-                  <p className="text-white/60 text-xs mt-0.5">{pct.toFixed(1)}% du total</p>
+                  <p className="text-white font-black text-[clamp(1rem,1.45vw,1.25rem)] leading-tight tracking-tight break-words mt-1">{formatCurrency(m.solde)}</p>
+                  <p className="text-white/70 text-xs mt-0.5">{pct.toFixed(1)}% du total</p>
                 </div>
-                <div className="p-4 space-y-2">
+                <div className="p-2.5 space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted">Entrées</span>
-                    <span className="text-success font-semibold">{formatCurrency(m.entrees)}</span>
+                    <span className="text-success font-semibold text-right">{formatCurrency(m.entrees)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted">Sorties</span>
-                    <span className="text-danger font-semibold">{formatCurrency(m.sorties)}</span>
+                    <span className="text-danger font-semibold text-right">{formatCurrency(m.sorties)}</span>
                   </div>
-                  <div className="progress-bar h-1.5 mt-2">
+                  <div className="progress-bar h-1 mt-1.5">
                     <div className={`progress-fill h-full bg-gradient-to-r ${config.gradient}`} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
