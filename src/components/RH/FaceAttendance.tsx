@@ -6,6 +6,7 @@ import { AlertTriangle, Camera, Check, Loader2, ScanFace, Trash2, X } from 'luci
 import rhService, { RHEmployee, RHFacePunch } from '../../services/rh.service';
 import { apiMessage } from '../../lib/api';
 import { checkFaceQuality, descriptorDistance, detectFaces, FACE_ISSUE_MESSAGES, faceServerError, loadFaceModels, snapshot, startCamera, trackFaces } from '../../lib/face';
+import { madagascarTime } from '../../lib/timezone';
 
 type Toast = (message: string, type: 'success' | 'error') => void;
 
@@ -20,34 +21,47 @@ const LOADING_TIMEOUT_MS = 60000;
 
 // Démarre la caméra et les modèles ; arrêt automatique à la fermeture de la fenêtre.
 // status décrit l'étape en cours, pour que l'utilisateur sache ce qu'on attend.
-const useCameraAndModels = (videoRef: React.RefObject<HTMLVideoElement>) => {
+type CameraFacingMode = 'user' | 'environment';
+
+const useCameraAndModels = (videoRef: React.RefObject<HTMLVideoElement>, facingMode: CameraFacingMode) => {
   const [cameraOn, setCameraOn] = useState(false);
   const [modelsOn, setModelsOn] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
     let stop: (() => void) | undefined; let cancelled = false; let cameraDone = false; let modelsDone = false;
+    setCameraOn(false); setError('');
     const timer = setTimeout(() => { if (!cancelled && !(cameraDone && modelsDone)) setError('Le chargement prend trop de temps : vérifiez la connexion, puis fermez et rouvrez cette fenêtre.'); }, LOADING_TIMEOUT_MS);
-    startCamera(videoRef.current!)
+    startCamera(videoRef.current!, facingMode)
       .then((stopCamera) => { cameraDone = true; if (cancelled) stopCamera(); else { stop = stopCamera; setCameraOn(true); } })
       .catch((err) => { if (!cancelled) setError(err?.message || 'Impossible de démarrer la caméra.'); });
     loadFaceModels()
       .then(() => { modelsDone = true; if (!cancelled) setModelsOn(true); })
       .catch(() => { if (!cancelled) setError('Chargement du module de reconnaissance impossible : vérifiez la connexion au serveur de l’application.'); });
     return () => { cancelled = true; clearTimeout(timer); stop?.(); };
-  }, [videoRef]);
+  }, [videoRef, facingMode]);
   const ready = cameraOn && modelsOn && !error;
   const status = error ? '' : !cameraOn ? 'Démarrage de la caméra… (autorisez la caméra si le navigateur le demande)' : !modelsOn ? 'Chargement du module de reconnaissance… (la première fois peut prendre une minute)' : '';
   return { ready, error, status };
 };
 
-const CameraFrame = ({ videoRef, tone, children }: { videoRef: React.RefObject<HTMLVideoElement>; tone: 'idle' | 'active' | 'success' | 'error'; children?: React.ReactNode }) => {
+const CameraFrame = ({ videoRef, tone, mirror = true, children }: { videoRef: React.RefObject<HTMLVideoElement>; tone: 'idle' | 'active' | 'success' | 'error'; mirror?: boolean; children?: React.ReactNode }) => {
   const ring = { idle: 'ring-white/30', active: 'ring-amber-400', success: 'ring-emerald-400', error: 'ring-red-500' }[tone];
   return <div className={`relative mx-auto aspect-[4/3] w-full max-w-xl overflow-hidden rounded-2xl bg-black ring-4 ${ring} transition`}>
-    {/* Miroir : plus naturel pour se placer face à la caméra. */}
-    <video ref={videoRef} muted playsInline className="h-full w-full -scale-x-100 object-cover" />
+    <video ref={videoRef} muted playsInline className={`h-full w-full object-cover ${mirror ? '-scale-x-100' : ''}`} />
     {children}
   </div>;
 };
+
+const CameraSelector = ({ facingMode, onChange, disabled = false }: { facingMode: CameraFacingMode; onChange: (mode: CameraFacingMode) => void; disabled?: boolean }) => (
+  <label className="mt-3 flex items-center justify-center gap-2 text-sm text-secondary">
+    <Camera size={16} />
+    <span>Choisir la caméra</span>
+    <select value={facingMode} disabled={disabled} onChange={(event) => onChange(event.target.value === 'environment' ? 'environment' : 'user')} className="rounded-lg border border-base bg-surface px-3 py-2 text-primary disabled:opacity-50">
+      <option value="user">Avant</option>
+      <option value="environment">Arrière</option>
+    </select>
+  </label>
+);
 
 // ─────────────────────────────────────────────
 // Borne de pointage
@@ -69,7 +83,8 @@ const punchMessage = (r: RHFacePunch): KioskResult => {
 
 export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { ready, error, status } = useCameraAndModels(videoRef);
+  const [facingMode, setFacingMode] = useState<CameraFacingMode>('user');
+  const { ready, error, status } = useCameraAndModels(videoRef, facingMode);
   const [hint, setHint] = useState('');
   const [tone, setTone] = useState<'idle' | 'active' | 'success' | 'error'>('idle');
   const [result, setResult] = useState<KioskResult | null>(null);
@@ -130,7 +145,7 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
         }
         if (!running) break;
         setResult(shown); setTone(shown.tone === 'idle' ? 'active' : shown.tone);
-        setHistory((h) => [{ key: Date.now(), time: new Date().toTimeString().slice(0, 5), text: `${shown.title}${shown.detail ? ` — ${shown.detail}` : ''}`, ok: shown.tone === 'success' }, ...h].slice(0, 8));
+        setHistory((h) => [{ key: Date.now(), time: madagascarTime(), text: `${shown.title}${shown.detail ? ` — ${shown.detail}` : ''}`, ok: shown.tone === 'success' }, ...h].slice(0, 8));
         await wait(RESULT_DISPLAY_MS);
       }
     })().catch(() => { if (running) { setTone('error'); setHint('La reconnaissance s’est arrêtée : fermez et rouvrez la borne.'); } });
@@ -142,10 +157,11 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
       <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-xl font-bold"><ScanFace /> Pointage par reconnaissance faciale</h2><button type="button" onClick={close} className="rounded-xl border border-white/30 px-3 py-2 text-sm"><X size={16} className="inline" /> Fermer</button></div>
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         <div>
-          <CameraFrame videoRef={videoRef} tone={tone}>
+          <CameraFrame videoRef={videoRef} tone={tone} mirror={facingMode === 'user'}>
             {!ready && !error && <div className="absolute inset-0 flex items-center justify-center bg-black/60"><Loader2 className="animate-spin" size={36} /></div>}
             {result && <div className={`absolute inset-x-0 bottom-0 p-4 ${result.tone === 'success' ? 'bg-emerald-600/90' : result.tone === 'error' ? 'bg-red-600/90' : 'bg-slate-800/90'}`}><p className="text-2xl font-bold">{result.title}</p>{result.detail && <p className="mt-1">{result.detail}</p>}</div>}
           </CameraFrame>
+          <CameraSelector facingMode={facingMode} onChange={setFacingMode} />
           <p className={`mt-4 text-center text-2xl font-semibold ${error ? 'text-red-400' : ''}`}>{error || status || (result ? '' : hint)}</p>
           <p className="mx-auto mt-4 max-w-xl rounded-xl bg-white/5 p-3 text-center text-sm text-white/70"><strong className="block text-white">Placez-vous face à la caméra</strong>À environ 50 cm, visage bien éclairé. Votre présence sera enregistrée automatiquement dès que votre visage sera détecté.</p>
         </div>
@@ -167,7 +183,8 @@ const ENROLL_SAMPLES = 5;
 type EnrollTarget = Pick<RHEmployee, 'first_name' | 'last_name'> & { id?: number; face_samples?: number };
 export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: { employee: EnrollTarget; close: () => void; saved?: (faceSamples: number) => void; onCaptured?: (descriptors: number[][]) => void; toast: Toast }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { ready, error, status } = useCameraAndModels(videoRef);
+  const [facingMode, setFacingMode] = useState<CameraFacingMode>('user');
+  const { ready, error, status } = useCameraAndModels(videoRef, facingMode);
   const [consent, setConsent] = useState(false);
   const [consentMissing, setConsentMissing] = useState(false);
   const [samples, setSamples] = useState<number[][]>([]);
@@ -227,7 +244,8 @@ export const FaceEnrollModal = ({ employee, close, saved, onCaptured, toast }: {
   return <div className="fixed inset-0 z-[80] overflow-y-auto overscroll-contain bg-black/50 p-4"><div className="mx-auto my-8 max-w-xl rounded-2xl bg-surface p-6">
     <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-xl font-bold text-primary"><ScanFace /> Visage de {`${employee.first_name} ${employee.last_name}`.trim() || 'l’employé'}</h2><button type="button" onClick={close}><X /></button></div>
     {enrolled && <p className="mt-2 text-sm text-secondary">Un visage est déjà enregistré. Une nouvelle capture le remplacera.</p>}
-    <div className="mt-4"><CameraFrame videoRef={videoRef} tone={samples.length === ENROLL_SAMPLES ? 'success' : capturing ? 'active' : 'idle'}>{!ready && !error && <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white"><Loader2 className="animate-spin" size={32} /></div>}</CameraFrame></div>
+    <div className="mt-4"><CameraFrame videoRef={videoRef} tone={samples.length === ENROLL_SAMPLES ? 'success' : capturing ? 'active' : 'idle'} mirror={facingMode === 'user'}>{!ready && !error && <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white"><Loader2 className="animate-spin" size={32} /></div>}</CameraFrame></div>
+    <CameraSelector facingMode={facingMode} onChange={(mode) => { stopRef.current = true; setFacingMode(mode); setSamples([]); setHint(''); setIssue(''); }} disabled={capturing} />
     {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     {status && <p className="mt-3 flex items-center gap-2 text-sm text-secondary"><Loader2 size={14} className="animate-spin" /> {status}</p>}
     <div className="mt-3 flex items-center gap-2">{Array.from({ length: ENROLL_SAMPLES }, (_, i) => <span key={i} className={`h-2 flex-1 rounded ${i < samples.length ? 'bg-[#2b7a78]' : 'bg-surface-2'}`} />)}</div>
