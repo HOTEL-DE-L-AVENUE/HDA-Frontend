@@ -13,13 +13,6 @@ type Toast = (message: string, type: 'success' | 'error') => void;
 const MIN_FACE_WIDTH = 120;
 // Au-delà de cette distance entre deux images, ce n'est plus la même personne devant la caméra.
 const SAME_PERSON_DISTANCE = 0.45;
-const CHALLENGE_TIMEOUT_MS = 10000;
-// Geste de vérification (preuve qu'il ne s'agit pas d'une photo) : tête tournée puis de face,
-// ou yeux fermés environ une seconde puis rouverts.
-const YAW_TURNED = 0.2;
-const YAW_FRONTAL = 0.1;
-const EYES_CLOSED = 0.75; // en proportion de l'ouverture normale de l'œil
-const EYES_OPEN = 0.9;
 const RESULT_DISPLAY_MS = 3500;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,40 +78,35 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
   useEffect(() => {
     if (!ready) return;
     let running = true;
+    let waitingForDeparture = false;
+    let faceAbsentSince: number | null = null;
     const video = videoRef.current!;
-    // Boucle : attendre un visage → geste de vérification (tête tournée puis de face, ou
-    // yeux fermés 1 s) → une seule signature, de face → envoi au serveur → résultat.
+    // Boucle : attendre un visage de face → vérifier sa qualité → envoyer une signature.
     (async () => {
       while (running) {
         setResult(null); setTone('idle');
         const faces = await trackFaces(video);
         if (!running) break;
+        if (waitingForDeparture) {
+          if (faces.length) {
+            faceAbsentSince = null;
+            setHint('Éloignez-vous de la caméra pour le prochain pointage.');
+            await wait(250);
+            continue;
+          }
+          if (faceAbsentSince === null) faceAbsentSince = Date.now();
+          if (Date.now() - faceAbsentSince < 1000) { await wait(100); continue; }
+          waitingForDeparture = false;
+          faceAbsentSince = null;
+          setResult(null); setTone('idle');
+          continue;
+        }
         if (faces.length === 0) { setHint('Placez votre visage devant la caméra'); await wait(100); continue; }
         if (faces.length > 1) { setHint('Une seule personne à la fois'); await wait(300); continue; }
         if (faces[0].width < MIN_FACE_WIDTH) { setHint('Approchez-vous de la caméra'); await wait(100); continue; }
 
-        let previous = faces[0]; let openRatio = faces[0].eyeRatio;
-        let turned = false; let closedSeen = false; let live = false; let misses = 0;
-        const deadline = Date.now() + CHALLENGE_TIMEOUT_MS;
-        setTone('active'); setHint('Tournez la tête à gauche ou à droite, puis revenez de face');
-        while (running && Date.now() < deadline) {
-          const [face, ...others] = await trackFaces(video);
-          // Yeux fermés ou tête très tournée : le détecteur peut rater quelques images.
-          if (!face) { if (++misses > 25) break; continue; }
-          misses = 0;
-          // Une autre personne entre dans le champ : on recommence.
-          if (others.length || Math.hypot(face.cx - previous.cx, face.cy - previous.cy) > face.width * 0.6) break;
-          previous = face;
-          if (!closedSeen) openRatio = Math.max(openRatio, face.eyeRatio);
-          if (face.eyeRatio < openRatio * EYES_CLOSED) closedSeen = true;
-          if (Math.abs(face.yaw) > YAW_TURNED && !turned) { turned = true; setHint('Revenez de face'); }
-          if ((turned && Math.abs(face.yaw) < YAW_FRONTAL) || (closedSeen && face.eyeRatio > openRatio * EYES_OPEN)) { live = true; break; }
-        }
-        if (!running) break;
-        if (!live) { setTone('error'); setHint('Mouvement non détecté : tournez nettement la tête d’un côté, puis revenez de face'); await wait(2500); continue; }
-
-        // Signature calculée une seule fois, sur une image de face.
-        setHint('Vérification…');
+        setTone('active'); setHint('Visage détecté : vérification en cours…');
+        // La signature n'est prise que si le visage est déjà de face et que l'image est exploitable.
         let accepted: Awaited<ReturnType<typeof detectFaces>>[number] | null = null;
         let lastIssue: keyof typeof FACE_ISSUE_MESSAGES | null = null;
         for (let attempt = 0; attempt < 5 && running && !accepted; attempt += 1) {
@@ -135,6 +123,7 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
           const response = await rhService.facePunch(accepted.descriptor, snapshot(video));
           shown = punchMessage(response);
           if (response.action === 'CHECK_IN' || response.action === 'CHECK_OUT') onPunch();
+          if (['CHECK_IN', 'CHECK_OUT', 'TOO_SOON', 'ALREADY_DONE'].includes(response.action)) waitingForDeparture = true;
         } catch (err: any) {
           const problem = faceServerError(err, 'Pointage impossible.');
           shown = { tone: 'error', title: problem.title, detail: problem.detail };
@@ -158,11 +147,7 @@ export const FaceKioskModal = ({ close, onPunch }: { close: () => void; onPunch:
             {result && <div className={`absolute inset-x-0 bottom-0 p-4 ${result.tone === 'success' ? 'bg-emerald-600/90' : result.tone === 'error' ? 'bg-red-600/90' : 'bg-slate-800/90'}`}><p className="text-2xl font-bold">{result.title}</p>{result.detail && <p className="mt-1">{result.detail}</p>}</div>}
           </CameraFrame>
           <p className={`mt-4 text-center text-2xl font-semibold ${error ? 'text-red-400' : ''}`}>{error || status || (result ? '' : hint)}</p>
-          <ol className="mx-auto mt-4 grid max-w-xl gap-2 text-sm text-white/70 sm:grid-cols-3">
-            <li className="rounded-xl bg-white/5 p-3"><strong className="block text-white">1. Face à la caméra</strong>À environ 50 cm, visage bien éclairé.</li>
-            <li className="rounded-xl bg-white/5 p-3"><strong className="block text-white">2. Tournez la tête</strong>Nettement à gauche ou à droite…</li>
-            <li className="rounded-xl bg-white/5 p-3"><strong className="block text-white">3. Revenez de face</strong>Le pointage s’enregistre.</li>
-          </ol>
+          <p className="mx-auto mt-4 max-w-xl rounded-xl bg-white/5 p-3 text-center text-sm text-white/70"><strong className="block text-white">Placez-vous face à la caméra</strong>À environ 50 cm, visage bien éclairé. Votre présence sera enregistrée automatiquement dès que votre visage sera détecté.</p>
         </div>
         <aside className="rounded-2xl bg-white/5 p-4"><h3 className="text-sm font-semibold text-white/70">Derniers passages</h3><ul className="mt-3 space-y-2 text-sm">{history.map((h) => <li key={h.key} className={h.ok ? 'text-emerald-300' : 'text-white/70'}><span className="text-white/50">{h.time}</span> {h.text}</li>)}{!history.length && <li className="text-white/50">Aucun passage pour l’instant.</li>}</ul></aside>
       </div>
