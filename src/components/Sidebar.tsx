@@ -7,7 +7,7 @@ import { canAccessModule } from '../utils/permissions';
 import {
   LayoutDashboard, BedDouble, Hotel, UtensilsCrossed,
   Wine, Dices, DollarSign, X, MoreHorizontal,
-  UserCog, UserRoundPlus, Martini, UsersRound, CalendarDays
+  UserCog, UserRoundPlus, Martini, UsersRound, CalendarDays, Package
 } from 'lucide-react';
 import logo from '../assets/logo_s.png';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
   { id: 'bar', label: 'Bar & Lounge', icon: <Wine size={20} />, iconColor: '#39ff14', gradient: 'from-accent to-accent-2', path: "/bar", roles: ['admin', 'manager', 'water', 'barman', 'hotesse', 'receptioniste', 'caissier', 'caisse', 'stock_manager'] },
   // { id: 'alcool', label: 'Alcool', icon: <Martini size={20} />, gradient: 'from-amber-500 to-orange-500', path: "/alcool", roles: ['admin', 'manager', 'water', 'caissier', 'caisse', 'stock_manager'] },
   { id: 'casino', label: 'Casino', icon: <Dices size={20} />, iconColor: '#00e5ff', gradient: 'from-accent to-accent-2', path: "/casino", roles: ['admin', 'manager', 'caisse', 'caissier', 'croupier'] },
+  { id: 'stock', label: 'Stock', icon: <Package size={20} />, iconColor: '#ff7a45', gradient: 'from-accent to-accent-2', path: "/stock", roles: ['admin', 'manager', 'stock_manager'] },
   { id: 'finances', label: 'Finances', icon: <DollarSign size={20} />, iconColor: '#faff00', gradient: 'from-accent to-accent-2', path: "/finances", roles: ['admin', 'manager', 'caisse', 'caissier'] },
   { id: 'rh', label: 'Ressources humaines', icon: <UsersRound size={20} />, iconColor: '#ff35d1', gradient: 'from-accent to-accent-2', path: "/rh", roles: ['admin', 'manager', 'receptioniste', 'housekeeping', 'caisse', 'caissier', 'water', 'barman', 'croupier'] },
   { id: 'planning', label: 'Planning', icon: <CalendarDays size={20} />, iconColor: '#4d7dff', gradient: 'from-accent to-accent-2', path: "/planning", roles: ['admin', 'manager'] },

@@ -41,6 +41,8 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
     exceptional_details: '',
   });
   const [productsUsed, setProductsUsed] = useState<SelectedProduct[]>([]);
+  // Produits déjà sortis du stock pour cette tâche (modification d'une tâche existante)
+  const [reservedQuantities, setReservedQuantities] = useState<Record<number, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -58,14 +60,23 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
       if (typeof savedProducts === 'string') {
         try { savedProducts = JSON.parse(savedProducts); } catch { savedProducts = []; }
       }
-      setProductsUsed(Array.isArray(savedProducts) ? savedProducts.map((item: any) => ({
+      const items = Array.isArray(savedProducts) ? savedProducts : [];
+      setProductsUsed(items.map((item: any) => ({
         product_id: Number(item.product_id),
         nom: item.nom || `Produit #${item.product_id}`,
         unite: item.unite || 'unités',
         available_quantity: Number(item.available_quantity || item.quantity || 0),
         quantity: Number(item.quantity || 1),
-      })) : []);
+      })));
+      const reserved: Record<number, number> = {};
+      if ((initialData as any).stock_deducted_at) {
+        items.forEach((item: any) => {
+          reserved[Number(item.product_id)] = (reserved[Number(item.product_id)] || 0) + Number(item.quantity || 0);
+        });
+      }
+      setReservedQuantities(reserved);
     } else {
+      setReservedQuantities({});
       setFormData({
         room_id: defaultRoomId || 0,
         type_tache: 'POST_OCCUPANCY',
@@ -94,12 +105,13 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      // Les produits sortent du stock de l'hôtel dès l'enregistrement de la tâche ;
+      // en modification, le backend n'applique que l'écart avec la saisie précédente.
       const submitData = {
         ...formData,
-        products_used: formData.statut === 'TERMINE' ? productsUsed.map(p => ({
-          product_id: p.product_id,
-          quantity: p.quantity
-        })) : undefined
+        products_used: productsUsed
+          .filter(p => p.quantity > 0)
+          .map(p => ({ product_id: p.product_id, quantity: p.quantity })),
       };
       await onSave(submitData);
     } catch (error) {
@@ -182,12 +194,13 @@ export const HousekeepingFormModal: React.FC<HousekeepingFormModalProps> = ({
           {/* Produits utilisés - always visible */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Produits utilisés {formData.statut === 'TERMINE' ? '(seront déduits du stock)' : '(seront déduits quand terminé)'}
+              Produits utilisés (déduits du stock de l'hôtel à l'enregistrement)
             </label>
             <StockProductPicker
               onChange={setProductsUsed}
               initialProducts={productsUsed}
               locationId={5}
+              reservedQuantities={reservedQuantities}
             />
           </div>
 

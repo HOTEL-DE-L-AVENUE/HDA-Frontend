@@ -18,6 +18,7 @@ import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import { RHPage } from "./pages/RHPage";
 import PlanningPage from "./pages/PlanningPage";
+import StockPage from "./pages/StockPage";
 
 function App() {
   return (
@@ -108,6 +109,10 @@ function App() {
                 }
               >
                 <Route path="/casino" element={<CasinoPage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute moduleId="stock" allowedRoles={['admin', 'manager', 'stock_manager']} />}>
+                <Route path="/stock" element={<StockPage />} />
               </Route>
 
               <Route
