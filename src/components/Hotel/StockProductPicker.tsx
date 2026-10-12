@@ -23,12 +23,16 @@ interface StockProductPickerProps {
   onChange: (products: SelectedProduct[]) => void;
   initialProducts?: SelectedProduct[];
   locationId?: number;
+  // Quantités déjà sorties du stock pour l'élément modifié (par produit) :
+  // elles restent disponibles pour lui en plus du stock actuel.
+  reservedQuantities?: Record<number, number>;
 }
 
 export const StockProductPicker: React.FC<StockProductPickerProps> = ({
   onChange,
   initialProducts = [],
-  locationId = 5
+  locationId = 5,
+  reservedQuantities = {}
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -55,7 +59,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
         ...selected,
         nom: product.nom || selected.nom,
         unite: product.unite || selected.unite,
-        available_quantity: product.quantite,
+        available_quantity: Number(product.quantite || 0) + (reservedQuantities[selected.product_id] || 0),
       } : selected;
     }));
   }, [products]);
@@ -114,7 +118,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
       product_id: product.product_id,
       nom: product.nom || 'Produit sans nom',
       unite: product.unite || 'unité',
-      available_quantity: product.quantite || 0,
+      available_quantity: Number(product.quantite || 0) + (reservedQuantities[product.product_id] || 0),
       quantity: 1
     }]);
     setSearch('');
@@ -129,7 +133,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
     setSelectedProducts(selectedProducts.map(sp => {
       if (sp.product_id === product_id) {
         const maxQuantity = sp.available_quantity;
-        const validQuantity = Math.min(Math.max(quantity, 0), maxQuantity);
+        const validQuantity = Math.min(Math.max(quantity, 1), maxQuantity);
         return { ...sp, quantity: validQuantity };
       }
       return sp;
@@ -171,6 +175,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
           />
           {search && (
             <button
+              type="button"
               onClick={() => { setSearch(''); setDropdownOpen(true); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
             >
@@ -178,6 +183,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
             </button>
           )}
           <button
+            type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
           >
@@ -209,9 +215,10 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
               const isSelected = selectedProducts.find(sp => sp.product_id === product.product_id);
               return (
                 <button
+                  type="button"
                   key={product.id}
                   onClick={() => !isSelected && addProduct(product)}
-                  disabled={isSelected || !product.quantite || product.quantite <= 0}
+                  disabled={!!isSelected || !product.quantite || product.quantite <= 0}
                   className={`w-full flex items-center justify-between px-3 py-2 text-left transition-all ${
                     index === highlightedIndex ? 'bg-slate-700' : 'hover:bg-slate-700'
                   } ${isSelected
@@ -266,6 +273,7 @@ export const StockProductPicker: React.FC<StockProductPickerProps> = ({
                   />
                   <span className="text-slate-400 text-sm">{sp.unite}</span>
                   <button
+                    type="button"
                     onClick={() => removeProduct(sp.product_id)}
                     className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors"
                   >

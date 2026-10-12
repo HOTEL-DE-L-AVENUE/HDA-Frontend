@@ -20,6 +20,14 @@ import { HousekeepingFormModal } from './Modal/HousekeepingFormModal';
 import { toast } from 'react-hot-toast';
 import { TYPE_TACHE_LABELS } from '../../constants/housekeeping';
 
+const hasUsedProducts = (value: unknown) => {
+  let items = value;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items || '[]'); } catch { items = []; }
+  }
+  return Array.isArray(items) && items.length > 0;
+};
+
 interface HousekeepingManagerProps {
   initialRoomId?: number | null;
   onTaskCompleted?: () => void;
@@ -309,7 +317,16 @@ export const HousekeepingManager: React.FC<HousekeepingManagerProps> = ({ initia
                     )}
                     {task.statut === 'EN_COURS' && (
                       <button
-                        onClick={() => handleStatusChange(task.id, 'TERMINE', task.products_used)}
+                        onClick={() => {
+                          // Sans produits enregistrés, on ouvre le formulaire pour saisir ce qui a
+                          // été utilisé (savon, shampoing…) : ils sont déduits du stock à la clôture.
+                          if (!hasUsedProducts(task.products_used)) {
+                            setSelectedTask({ ...task, statut: 'TERMINE' });
+                            setIsModalOpen(true);
+                            return;
+                          }
+                          handleStatusChange(task.id, 'TERMINE', task.products_used);
+                        }}
                         className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium transition"
                       >
                         Terminer

@@ -20,7 +20,61 @@ export interface StockItem {
   location?: StockLocation;
 }
 
+// Ligne de la vue consolidée du stock (tous modules confondus)
+export interface StockOverviewItem {
+  cle: string;
+  module: string;
+  emplacement: string;
+  product_id: number;
+  nom: string;
+  code: string | null;
+  categorie: string | null;
+  quantite: number;
+  seuil_minimum: number;
+  unite: string | null;
+  updated_at: string | null;
+}
+
+export interface StockItemDetails {
+  item: StockOverviewItem & {
+    prix_vente: number | null;
+    prix_achat: number | null;
+    type_produit: string | null;
+  };
+  history: Array<{
+    id: number;
+    created_at: string;
+    type_mouvement: 'ENTREE' | 'SORTIE' | 'AJUSTEMENT';
+    quantite: number;
+    stock_after: number | null;
+    motif: string | null;
+    user_nom: string | null;
+  }>;
+}
+
 export const stockService = {
+  // Tous les articles du bar, du restaurant et de l'hôtel avec leur quantité restante
+  async getOverview(): Promise<StockOverviewItem[]> {
+    const response = await api.get('/api/stock/overview');
+    return response.data?.data || response.data || [];
+  },
+
+  // Détail d'un article de la vue consolidée et ses derniers mouvements
+  async getOverviewItem(cle: string): Promise<StockItemDetails> {
+    const response = await api.get(`/api/stock/overview/${cle}`);
+    return response.data?.data || response.data;
+  },
+
+  async updateOverviewItem(cle: string, data: { quantite: number; seuil_minimum: number; unite?: string }) {
+    const response = await api.put(`/api/stock/overview/${cle}`, data);
+    return response.data?.data || response.data;
+  },
+
+  async deleteOverviewItem(cle: string) {
+    const response = await api.delete(`/api/stock/overview/${cle}`);
+    return response.data?.data || response.data;
+  },
+
   // Get all stock locations
   async getLocations(): Promise<StockLocation[]> {
     const response = await api.get('/api/stock/locations');
