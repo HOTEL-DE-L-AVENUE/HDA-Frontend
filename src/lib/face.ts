@@ -169,18 +169,19 @@ export const snapshot = (video: HTMLVideoElement, width = 480) => {
 };
 
 // Caméra frontale. La caméra n'est autorisée par le navigateur qu'en HTTPS ou sur localhost.
-export const startCamera = async (video: HTMLVideoElement) => {
+export const startCamera = async (video: HTMLVideoElement, facingMode: 'user' | 'environment' = 'user') => {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('La caméra nécessite une connexion sécurisée (HTTPS) ou localhost.');
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
     video.srcObject = stream;
     await video.play();
     return () => stream.getTracks().forEach((track) => track.stop());
   } catch (err: any) {
     if (err?.name === 'NotAllowedError') throw new Error('Accès à la caméra refusé : autorisez la caméra pour ce site dans le navigateur.');
     if (err?.name === 'NotFoundError') throw new Error('Aucune caméra détectée sur cet appareil.');
+    if (err?.name === 'NotReadableError') throw new Error('La caméra est déjà utilisée par une autre application. Fermez-la puis réessayez.');
     throw new Error('Impossible de démarrer la caméra.');
   }
 };

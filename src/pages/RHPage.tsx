@@ -5,6 +5,7 @@ import { apiMessage } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import AuthService from '../services/authService';
 import rhService, { RHAttendance, RHDashboard, RHDepartmentBudget, RHDocument, RHDocumentType, RHEmployee, RHEmployeeMeta, RHEvaluation, RHLeave, RHPayroll } from '../services/rh.service';
+import { madagascarDate } from '../lib/timezone';
 
 type RHView = 'overview' | 'employees' | 'attendance' | 'payroll' | 'evaluations';
 type Toast = (message: string, type: 'success' | 'error') => void;
@@ -21,9 +22,7 @@ const statusLabels: Record<string, string> = { ACTIF: 'Actif', EN_CONGE: 'En con
 const filterStatuses = ['ACTIF', 'SUSPENDU', 'EN_CONGE', 'RETRAITE', 'RENVOYE', 'DEMISSIONNE'];
 const documentTypes: Array<[RHDocumentType, string]> = [['CIN', 'CIN'], ['RESIDENCE', 'Justificatif de résidence'], ['CV', 'CV'], ['CONTRAT', 'Contrat de travail']];
 const documentLabel = (type: string) => documentTypes.find(([id]) => id === type)?.[1] || type;
-// Date du jour selon l'horloge de l'ordinateur (et non en UTC comme toISOString, qui
-// donnerait encore la veille entre minuit et 3 h à Madagascar).
-const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const localDate = () => madagascarDate();
 const emptyEmployee = { first_name: '', last_name: '', department: 'Administration', position: '', contract_type: 'CDI', status: 'ACTIF', joined_at: localDate(), salary: '', prime: '', pourboire: '', irsa: '', phone: '', address: '', email: '', birth_date: '', identification_number: '', contract_end_date: '', departure_reason: '', qualification: '', cnaps_number: '', dependents: '0' };
 const formatMoney = (value: number) => `${new Intl.NumberFormat('fr-FR').format(Number(value || 0))} Ar`;
 // Nombre de semaines d'un mois = nombre de lundis (même règle que le serveur, utils/hr.js).
@@ -43,7 +42,7 @@ const useLockPageScroll = (locked: boolean) => {
   }, [locked]);
 };
 const monthStart = () => `${localDate().slice(0, 7)}-01`;
-const monthEnd = () => { const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 0)).toISOString().slice(0, 10); };
+const monthEnd = () => { const [year, month] = localDate().slice(0, 7).split('-').map(Number); return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10); };
 const initials = (e: { first_name: string; last_name: string }) => `${e.first_name[0] || ''}${e.last_name[0] || ''}`.toUpperCase();
 
 export const RHPage: React.FC = () => {
