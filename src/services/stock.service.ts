@@ -25,10 +25,14 @@ export interface StockOverviewItem {
   cle: string;
   module: string;
   emplacement: string;
-  product_id: number;
+  product_id: number | null;
+  ingredient_id?: number | null;
+  item_type?: 'PRODUCT' | 'INGREDIENT';
+  location_id?: number | null;
   nom: string;
   code: string | null;
   categorie: string | null;
+  prix_achat?: number | null;
   quantite: number;
   seuil_minimum: number;
   unite: string | null;
@@ -65,12 +69,39 @@ export const stockService = {
     return response.data?.data || response.data;
   },
 
-  async updateOverviewItem(cle: string, data: { quantite: number; seuil_minimum: number; unite?: string }) {
+  async updateOverviewItem(cle: string, data: {
+    quantite: number;
+    seuil_minimum?: number;
+    unite?: string;
+    nom?: string;
+    prix_achat?: number;
+  }) {
+    const ingredientMatch = /^ING-(\d+)-(\d+)$/.exec(cle);
+    if (ingredientMatch) {
+      const response = await api.put(`/api/restaurant/ingredients/${ingredientMatch[1]}`, {
+        nom: data.nom,
+        unite: data.unite,
+        prix_achat: data.prix_achat,
+        quantite: data.quantite,
+        location_id: Number(ingredientMatch[2]),
+      });
+      return response.data?.data || response.data;
+    }
     const response = await api.put(`/api/stock/overview/${cle}`, data);
     return response.data?.data || response.data;
   },
 
   async deleteOverviewItem(cle: string) {
+    const ingredientMatch = /^ING-(\d+)-(\d+)$/.exec(cle);
+    if (ingredientMatch) {
+      const response = await api.delete('/api/restaurant/stock', {
+        params: {
+          ingredient_id: Number(ingredientMatch[1]),
+          location_id: Number(ingredientMatch[2]),
+        },
+      });
+      return response.data?.data || response.data;
+    }
     const response = await api.delete(`/api/stock/overview/${cle}`);
     return response.data?.data || response.data;
   },
