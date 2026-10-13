@@ -43,7 +43,46 @@ export const getProducts = (params?: Record<string, any>) => {
 export const getProductById = (id: number) =>
   api.get<ApiResponse<Product>>(`/api/restaurant/products/${id}`).then(res => res.data);
 
-// Recettes endpoints removed
+export interface RestaurantIngredient {
+  id: number;
+  nom: string;
+  code: string | null;
+  unite: string;
+  prix_achat: number;
+}
+
+export interface RestaurantRecipeIngredient {
+  ingredient_id?: number;
+  quantite: number;
+  nom?: string;
+  unite?: string;
+}
+
+export const getRestaurantIngredients = () =>
+  api.get<ApiResponse<RestaurantIngredient[]>>('/api/restaurant/ingredients').then(res => res.data);
+
+export const createRestaurantIngredient = (data: {
+  nom: string;
+  unite: string;
+  prix_achat: number;
+  quantite: number;
+  location_id?: number;
+}) =>
+  api.post<ApiResponse<{ message: string }>>('/api/restaurant/ingredients', data).then(res => res.data);
+
+export const getProductRecipe = (productId: number) =>
+  api.get<ApiResponse<Array<{
+    ingredient_id: number;
+    quantite: number;
+    unite: string;
+    ingredient_nom: string;
+    ingredient_code?: string;
+    ingredient_unite: string;
+  }>>>(`/api/restaurant/products/${productId}/recipe`).then(res => res.data);
+
+export const saveProductRecipe = (productId: number, ingredients: RestaurantRecipeIngredient[]) =>
+  api.put<ApiResponse<{ message: string }>>(`/api/restaurant/products/${productId}/recipe`, { ingredients })
+    .then(res => res.data);
 
 // ==================== COMMANDES ====================
 
@@ -159,7 +198,8 @@ export const getStockMovements = (params?: Record<string, any>) =>
   api.get('/api/restaurant/stock/movements', { params }).then(res => res.data);
 
 export const adjustStock = (data: {
-  product_id: number;
+  product_id?: number;
+  ingredient_id?: number;
   location_id: number;
   type_mouvement: 'ENTREE' | 'SORTIE';
   quantite: number;
@@ -178,7 +218,7 @@ export const consumePortion = (data: {
 }) =>
   api.post('/api/restaurant/stock/consume-portion', data).then(res => res.data);
 
-export const deleteStockItem = (stockIdOrFilter: number | { product_id?: number; location_id?: number }) => {
+export const deleteStockItem = (stockIdOrFilter: number | { product_id?: number; ingredient_id?: number; location_id?: number }) => {
   // Use the restaurant-scoped delete endpoint which supports deletion by id
   // or by product_id + location_id pair (convenient for the restaurant UI).
   if (typeof stockIdOrFilter === 'number') {
@@ -187,8 +227,8 @@ export const deleteStockItem = (stockIdOrFilter: number | { product_id?: number;
       return res.data || { success: true };
     });
   }
-  const { product_id, location_id } = stockIdOrFilter || {};
-  return api.delete('/api/restaurant/stock', { params: { product_id, location_id } }).then(res => {
+  const { product_id, ingredient_id, location_id } = stockIdOrFilter || {};
+  return api.delete('/api/restaurant/stock', { params: { product_id, ingredient_id, location_id } }).then(res => {
     if (res.status === 204) return { success: true };
     return res.data || { success: true };
   });
@@ -204,6 +244,7 @@ export const createProduct = (data: {
   subcategory_id?: number;
   portion_size?: number;
   portion_unite?: string;
+  ingredients?: RestaurantRecipeIngredient[];
 }) =>
   api.post('/api/restaurant/products', data).then(res => res.data);
 
@@ -242,11 +283,18 @@ export const createPurchase = (data: {
 }) =>
   api.post('/api/restaurant/purchases', data).then(res => res.data);
 
-// Recettes endpoints removed
-
 // ==================== UNITÉS ====================
+export interface RestaurantUnit {
+  id: number;
+  code: string;
+  nom: string;
+}
+
 export const getUnits = () =>
-  api.get('/api/restaurant/units').then(res => res.data);
+  api.get<ApiResponse<RestaurantUnit[]>>('/api/restaurant/units').then(res => res.data);
+
+export const createUnit = (data: { code: string; nom: string }) =>
+  api.post<ApiResponse<RestaurantUnit>>('/api/restaurant/units', data).then(res => res.data);
 
 // ==================== TYPES DE PRODUITS ====================
 export const getProductTypes = () =>

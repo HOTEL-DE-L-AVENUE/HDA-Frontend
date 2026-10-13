@@ -5,8 +5,8 @@ import { filterTabsByRole } from '../../../utils/permissions';
 
 const TABS = [
   { id: 'commandes', label: 'Commandes', icon: <ShoppingCart size={16} /> },
-  { id: 'menu', label: 'Menu', icon: <UtensilsCrossed size={16} /> },
-  { id: 'stock', label: 'Stock', icon: <Package size={16} /> },
+  { id: 'menu', label: 'Quintana Sky', icon: <UtensilsCrossed size={16} /> },
+  { id: 'stock', label: 'Cuisine', icon: <Package size={16} /> },
   { id: 'caisse', label: 'Caisse', icon: <DollarSign size={16} /> },
   { id: 'historique', label: 'Historique', icon: <History size={16} /> },
   { id: 'rapports', label: 'Rapports', icon: <FileText size={16} /> },
