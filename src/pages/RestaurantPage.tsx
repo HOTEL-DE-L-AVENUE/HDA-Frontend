@@ -88,6 +88,7 @@ export const RestaurantPage: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [pendingDeleteProduct, setPendingDeleteProduct] = useState<Product | null>(null);
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [deleteProductError, setDeleteProductError] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<Order | null>(null);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
@@ -381,14 +382,25 @@ export const RestaurantPage: React.FC = () => {
   // Produits (mock)
   const handleAddProduct = async (formData: any) => {
     try {
-      const res = await restaurantService.createProduct({ ...formData, prix_achat: 0 });
+      const { ingredients = [], ...productData } = formData;
+      const res = await restaurantService.createProduct({
+        ...productData,
+        prix_achat: 0,
+        ingredients,
+      });
       if (!res.success) throw new Error(res.message || 'Création du produit impossible.');
       setProducts(prev => [...prev, res.data as Product]);
       setShowProductModal(false);
     } catch (error) {
       console.error('Erreur création produit', error);
-      const apiError = error as { response?: { data?: { message?: string } } };
-      throw new Error(apiError.response?.data?.message || 'Impossible d’ajouter ce plat. Veuillez réessayer.');
+      const apiError = error as {
+        response?: { data?: { message?: string; error?: { message?: string } } };
+      };
+      throw new Error(
+        apiError.response?.data?.message
+        || apiError.response?.data?.error?.message
+        || 'Impossible d’ajouter ce plat. Veuillez réessayer.'
+      );
     }
   };
 
@@ -417,20 +429,26 @@ export const RestaurantPage: React.FC = () => {
   const handleUpdateProduct = async (formData: any) => {
     if (!editingProduct) return;
     try {
-      const res = await restaurantService.updateProduct(editingProduct.id, formData);
+      const { ingredients = [], ...productData } = formData;
+      const res = await restaurantService.updateProduct(editingProduct.id, productData);
       if (!res.success) throw new Error(res.message || 'Modification du produit impossible.');
+      await restaurantService.saveProductRecipe(editingProduct.id, ingredients);
       setProducts(prev => prev.map(p => p.id === editingProduct.id ? res.data as Product : p));
       setEditingProduct(null);
       setShowProductModal(false);
     } catch (error) {
       console.error('Erreur modification produit', error);
-      alert('Impossible de modifier ce plat. Veuillez réessayer.');
+      const apiError = error as { response?: { data?: { message?: string } } };
+      throw new Error(apiError.response?.data?.message || (error instanceof Error ? error.message : 'Impossible de modifier ce plat. Veuillez réessayer.'));
     }
   };
 
   const handleDeleteProduct = async (id: number) => {
     const product = products.find((item) => item.id === id);
-    if (product) setPendingDeleteProduct(product);
+    if (product) {
+      setDeleteProductError(null);
+      setPendingDeleteProduct(product);
+    }
   };
 
   const confirmDeleteProduct = async () => {
@@ -441,9 +459,17 @@ export const RestaurantPage: React.FC = () => {
       await restaurantService.deleteProduct(pendingDeleteProduct.id);
       setProducts(prev => prev.filter(p => p.id !== pendingDeleteProduct.id));
       setPendingDeleteProduct(null);
+      setDeleteProductError(null);
     } catch (error) {
       console.error('Erreur suppression produit', error);
-      alert('Impossible de supprimer ce plat car il est peut-être déjà utilisé.');
+      const apiError = error as {
+        response?: { data?: { message?: string; error?: { message?: string } } };
+      };
+      setDeleteProductError(
+        apiError.response?.data?.message
+        || apiError.response?.data?.error?.message
+        || (error instanceof Error ? error.message : 'Impossible de retirer ce plat du menu.')
+      );
     } finally {
       setIsDeletingProduct(false);
     }
@@ -629,7 +655,12 @@ export const RestaurantPage: React.FC = () => {
 
       <Modal
         isOpen={pendingDeleteProduct !== null}
-        onClose={() => { if (!isDeletingProduct) setPendingDeleteProduct(null); }}
+        onClose={() => {
+          if (!isDeletingProduct) {
+            setPendingDeleteProduct(null);
+            setDeleteProductError(null);
+          }
+        }}
         title="Supprimer le produit"
         size="sm"
       >
@@ -643,14 +674,22 @@ export const RestaurantPage: React.FC = () => {
               <p className="mt-1 break-words text-sm leading-relaxed text-secondary">
                 Le produit « {pendingDeleteProduct?.nom} » sera retiré du menu.
               </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted">Cette action est irréversible.</p>
+              <p className="mt-2 text-xs leading-relaxed text-muted">L’historique des ventes et la recette sont conservés.</p>
             </div>
           </div>
+          {deleteProductError && (
+            <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {deleteProductError}
+            </p>
+          )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setPendingDeleteProduct(null)}
+              onClick={() => {
+                setPendingDeleteProduct(null);
+                setDeleteProductError(null);
+              }}
               disabled={isDeletingProduct}
               className="w-full sm:w-auto"
             >
