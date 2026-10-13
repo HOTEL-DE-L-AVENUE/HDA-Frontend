@@ -4,14 +4,12 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Modal, Input, Select, Button } from '../../UI';
 import { useToast } from '../../../context/ToastContext';
 import * as restaurantService from '../../../services/restaurantService';
-import type { Category, Product } from '../types';
+import type { Product } from '../types';
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
-  onCreateCategory: (name: string) => Promise<Category>;
-  categories: Category[];
   products: Product[];
   editingProduct?: Product | null;
 }
@@ -64,15 +62,11 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  onCreateCategory,
-  categories,
   products,
   editingProduct
 }) => {
   const { showToast } = useToast();
   const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [isCustomCategory, setIsCustomCategory] = useState(false);
-  const [customCategory, setCustomCategory] = useState('');
   const [codePreviewError, setCodePreviewError] = useState<string | null>(null);
   const [availableIngredients, setAvailableIngredients] = useState<restaurantService.RestaurantIngredient[]>([]);
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredientDraft[]>([]);
@@ -84,7 +78,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [form, setForm] = useState({
     nom: '',
     code: '',
-    category_id: 0,
     prix_vente: 0,
     prix_achat: 0,
     unite: 'PIECE',
@@ -96,13 +89,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setSubmissionError(null);
-    setIsCustomCategory(false);
-    setCustomCategory('');
     if (editingProduct) {
       setForm({
         nom: editingProduct.nom || '',
         code: editingProduct.code || '',
-        category_id: editingProduct.category_id || 0,
         prix_vente: editingProduct.prix_vente || 0,
         prix_achat: editingProduct.prix_achat || 0,
         unite: editingProduct.unite || 'PIECE',
@@ -114,7 +104,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setForm({
         nom: '',
         code: '',
-        category_id: categories[0]?.id || 0,
         prix_vente: 0,
         prix_achat: 0,
         unite: 'PIECE',
@@ -237,11 +226,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
   const handleSubmit = async () => {
     if (!form.nom.trim()) return;
-    if (!editingProduct && isCustomCategory && !customCategory.trim()) {
-      showToast('Saisissez le nom de la catégorie personnalisée.', 'error');
-      return;
-    }
-    if (!editingProduct && !isCustomCategory && !form.category_id) return;
     if (ingredientsLoading || ingredientsLoadError) return;
     const invalidIngredient = recipeIngredients.some((ingredient) => (
       !(ingredient.quantite > 0)
@@ -265,16 +249,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     setSubmissionError(null);
 
     try {
-      let categoryId = form.category_id;
-      if (!editingProduct && isCustomCategory) {
-        const normalizedCustomName = normalizeProductName(customCategory);
-        const existingCategory = categories.find(
-          (category) => normalizeProductName(category.nom) === normalizedCustomName
-        );
-        const category = existingCategory || await onCreateCategory(customCategory.trim());
-        categoryId = category.id;
-      }
-
       const payload: Record<string, unknown> = {
         nom: form.nom.trim(),
         ingredients: recipeIngredients.map((ingredient) => ({
@@ -287,7 +261,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       if (!editingProduct) {
         Object.assign(payload, {
           code: form.code,
-          category_id: categoryId,
+          category_id: null,
           prix_vente: form.prix_vente,
           prix_achat: 0,
           unite: form.unite,
@@ -346,35 +320,6 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               placeholder="Génération du code..."
             />
             {codePreviewError && <p className="text-xs text-muted">{codePreviewError}</p>}
-
-            <Select
-              label="Catégorie"
-              value={isCustomCategory ? '__other__' : form.category_id.toString()}
-              onChange={(e) => {
-                const isOther = e.target.value === '__other__';
-                setIsCustomCategory(isOther);
-                if (!isOther) setCustomCategory('');
-                setForm({ ...form, category_id: isOther ? 0 : Number(e.target.value) });
-              }}
-              options={[
-                { value: '0', label: 'Sélectionner une catégorie' },
-                ...categories
-                  .filter((category) => !isOtherCategory(category.nom))
-                  .map(c => ({ value: c.id.toString(), label: c.nom })),
-                { value: '__other__', label: 'Autres' }
-              ]}
-            />
-            {isCustomCategory && (
-              <div className="rounded-xl border border-accent/30 bg-accent/5 p-3">
-                <Input
-                  autoFocus
-                  label="Nouvelle catégorie"
-                  value={customCategory}
-                  onChange={(e) => setCustomCategory(e.target.value)}
-                  placeholder="Saisir le nom de la catégorie"
-                />
-              </div>
-            )}
 
             <Input
               label="Prix de vente (MGA)"
@@ -513,7 +458,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <Button variant="secondary" onClick={onClose} className="flex-1">Annuler</Button>
-          <Button onClick={handleSubmit} className="flex-1" disabled={ingredientsLoading || Boolean(ingredientsLoadError) || !form.nom.trim() || (!editingProduct && (isCustomCategory ? !customCategory.trim() : !form.category_id))}>
+          <Button onClick={handleSubmit} className="flex-1" disabled={ingredientsLoading || Boolean(ingredientsLoadError) || !form.nom.trim()}>
             {editingProduct ? 'Modifier' : 'Ajouter'}
           </Button>
         </div>
