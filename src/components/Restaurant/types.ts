@@ -35,7 +35,7 @@ export interface OrderItem {
 
 export interface Product {
   id: number;
-  category_id: number;
+  category_id: number | null;
   code: string;
   nom: string;
   unite: string;

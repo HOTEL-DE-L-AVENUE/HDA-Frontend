@@ -395,9 +395,13 @@ export const RestaurantPage: React.FC = () => {
   // Produits (mock)
   const handleAddProduct = async (formData: any) => {
     try {
-      const { ingredients = [], ...productData } = formData;
+      const { ingredients = [], category_nom, ...productData } = formData;
+      const category = typeof category_nom === 'string' && category_nom.trim()
+        ? await handleCreateRestaurantCategory(category_nom.trim())
+        : null;
       const res = await restaurantService.createProduct({
         ...productData,
+        category_id: category?.id ?? null,
         prix_achat: 0,
         ingredients,
       });

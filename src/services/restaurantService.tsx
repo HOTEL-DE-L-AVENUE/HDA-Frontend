@@ -250,7 +250,7 @@ export const createProduct = (data: {
   type_produit?: string;
   prix_achat?: number;
   prix_vente?: number;
-  category_id?: number;
+  category_id?: number | null;
   subcategory_id?: number;
   portion_size?: number;
   portion_unite?: string;

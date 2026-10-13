@@ -82,6 +82,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     prix_achat: 0,
     unite: 'PIECE',
     type_produit: 'PRODUIT_FINI' as const,
+    category_nom: '',
     actif: true,
     couleur: ''
   });
@@ -97,6 +98,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         prix_achat: editingProduct.prix_achat || 0,
         unite: editingProduct.unite || 'PIECE',
         type_produit: (editingProduct.type_produit || 'PRODUIT_FINI') as any,
+        category_nom: '',
         actif: editingProduct.actif ?? true,
         couleur: editingProduct.couleur || ''
       });
@@ -108,6 +110,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         prix_achat: 0,
         unite: 'PIECE',
         type_produit: 'PRODUIT_FINI',
+        category_nom: '',
         actif: true,
         couleur: ''
       });
@@ -261,7 +264,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       if (!editingProduct) {
         Object.assign(payload, {
           code: form.code,
-          category_id: null,
+          category_nom: form.category_nom.trim(),
           prix_vente: form.prix_vente,
           prix_achat: 0,
           unite: form.unite,
@@ -329,6 +332,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               placeholder="0"
               min={0}
               step={1000}
+            />
+            <Input
+              label="Catégorie (facultatif)"
+              value={form.category_nom}
+              onChange={(event) => setForm({ ...form, category_nom: event.target.value })}
+              placeholder="Ex: Pizza"
             />
           </>
         )}
