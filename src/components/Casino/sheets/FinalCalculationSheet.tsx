@@ -140,7 +140,6 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const mobileReturnEntryTotal = mobileReturnManualOverrideRef.current ? parseCasinoAmount(values.retourMobile) : mobileReturnTotal;
   const depositPaidEntryTotal = depositPaidManualOverrideRef.current ? parseCasinoAmount(values.depotPaye) : depositPaidTotal;
   const creditPaidEntryTotal = creditPaidManualOverrideRef.current ? parseCasinoAmount(values.creditPaye) : creditPaidTotal;
-  const cashPaymentTotal = getCashPaymentTotal(players);
   const automaticTotal1 = withdrawnTotal
     + parseCasinoAmount(values.pourboires)
     + parseCasinoAmount(values.autres)
@@ -160,11 +159,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  // Retraits autres départements : caisse espèces négative → on ajoute, positive → on soustrait.
-  const otherDepartmentWithdrawalTotal = parseCasinoAmount(values.autres);
-  const totalEspeces = cashPaymentTotal < 0
-    ? cashPaymentTotal + otherDepartmentWithdrawalTotal
-    : cashPaymentTotal - otherDepartmentWithdrawalTotal;
+  const totalEspeces = computeTotalEspecesCaisse(players, parseCasinoAmount(values.autres));
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
@@ -947,6 +942,15 @@ const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players
   // Résultat positif : le casino paie le joueur, la caisse diminue.
   return result < 0 ? total + amount : total - amount;
 }, 0);
+
+// TOTAL ESPECES CAISSE du calcul final, repris tel quel par le rapport journalier.
+// Retraits autres départements : caisse espèces négative → on ajoute, positive → on soustrait.
+export const computeTotalEspecesCaisse = (players: PlayerLine[], otherDepartmentWithdrawalTotal: number) => {
+  const cashPaymentTotal = getCashPaymentTotal(players);
+  return cashPaymentTotal < 0
+    ? cashPaymentTotal + otherDepartmentWithdrawalTotal
+    : cashPaymentTotal - otherDepartmentWithdrawalTotal;
+};
 
 const isPaidCave = (payment?: string) => {
   const normalized = String(payment || '')

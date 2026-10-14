@@ -3,6 +3,7 @@ import { Clipboard, Download, MessageCircle, Printer } from 'lucide-react';
 import { ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 import { printThermalText } from '../../../utils/thermalPrint';
+import { computeTotalEspecesCaisse } from './FinalCalculationSheet';
 
 // Destinataire du bouton WhatsApp : 0388337122 au format international (Madagascar, +261).
 const REPORT_WHATSAPP_NUMBER = '261388337122';
@@ -134,10 +135,20 @@ const readFinalCategoryValue = (finals: Record<string, Record<string, string>>, 
 export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
   const reportPlayers = uniquePlayers(players).filter((player) => player.surnom?.trim() || player.name.trim() || playerAmount(player, players) > 0);
   const listedPlayers = reportPlayers.filter((player) => !playerHasFinalSignature(player, players));
-  const totalCaves = listedPlayers.reduce((total, player) => total + playerAmount(player, players), 0);
   const playersOut = reportPlayers
     .filter((player) => playerHasFinalSignature(player, players) && playerResult(player, players) < 0)
     .map((player) => `${formatAmount(Math.abs(playerResult(player, players)))} (${playerDisplayName(player)})`);
+  // Gagnants : dès que le cashing est saisi, on affiche le résultat de la fiche
+  // (cashing − total des caves, même calcul que la fiche joueur), pas le cashing.
+  const playersWinning = uniquePlayers(players)
+    .map((player) => {
+      const ficheLines = players.filter((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id));
+      const cashing = parseCasinoAmount(player.cashing);
+      const totalCaves = ficheLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      return { player, cashing, result: cashing - totalCaves };
+    })
+    .filter(({ cashing, result }) => cashing > 0 && result > 0)
+    .map(({ player, result }) => `${playerDisplayName(player)} : ${formatAmount(result)}`);
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
   const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
   const rackChecksReport = rackChecks.filter((check) => check.type.startsWith('Rack check') || check.type === 'Retour croupier' || check.type === 'Sortie croupier');
@@ -193,6 +204,8 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
   const prolongationReportTotal = readFinalCategoryValue(finals, 'prolongation', 0);
   const pourboiresReportTotal = readFinalCategoryValue(finals, 'pourboires', 0);
   const otherRetraitTotal = readFinalCategoryValue(finals, 'autres', withdrawn);
+  // Même valeur que « TOTAL ESPECES CAISSE » du calcul final (et non le total des caves / cashing).
+  const totalEspecesCaisse = computeTotalEspecesCaisse(players, readFinalCategoryValue(finals, 'autres', 0));
   const finalCategoryLines = [
     `# Mobile : ${formatAmount(mobileReportTotal)}`,
     `# TPE : ${formatAmount(tpeReportTotal)}`,
@@ -210,7 +223,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     `# Retrait : ${formatAmount(otherRetraitTotal)}`,
     `# Bureau : ${formatAmount(otherRetraitTotal)}`,
     `# Devis : ${formatAmount(readFinalCategoryValue(finals, 'devis', 0))}`,
-    `# Espece : ${formatAmount(readFinalCategoryValue(finals, 'especes', totalCaves))}`,
+    `# Espece : ${formatAmount(totalEspecesCaisse)}`,
     ''
   ];
   const lines = [
@@ -229,6 +242,9 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     '',
     '# Joueur sortie :',
     ...(playersOut.length ? playersOut : ['']),
+    '',
+    '# Joueur gagnant :',
+    ...(playersWinning.length ? playersWinning : ['']),
     '',
     '# Joueurs en attente :',
     '',
