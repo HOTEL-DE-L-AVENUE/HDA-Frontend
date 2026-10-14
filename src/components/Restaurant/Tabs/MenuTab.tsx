@@ -58,6 +58,27 @@ export const MenuTab: React.FC<MenuTabProps> = ({
     return matchesCategory && matchesSearch;
   });
 
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    if (!value) {
+      setSelectedCategory('tous');
+      return;
+    }
+
+    const normalizedSearch = value.toLowerCase();
+    const matchingProduct = menuProducts.find(p =>
+      p.nom.toLowerCase().includes(normalizedSearch) ||
+      (p.code && p.code.toLowerCase().includes(normalizedSearch))
+    );
+    const matchingCategory = matchingProduct?.category_id;
+
+    setSelectedCategory(
+      matchingCategory != null && categories.some(category => category.id === matchingCategory)
+        ? matchingCategory
+        : 'tous'
+    );
+  };
+
   const handleViewRecipe = async (product: Product) => {
     setViewingProduct(product);
     setRecipeIngredients([]);
@@ -106,7 +127,7 @@ export const MenuTab: React.FC<MenuTabProps> = ({
               type="text"
               placeholder="Rechercher un plat..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full h-10 pl-9 pr-4 rounded-xl text-sm transition-all"
               style={{
                 backgroundColor: 'var(--color-surface-2)',
