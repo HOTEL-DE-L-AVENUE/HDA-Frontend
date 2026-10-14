@@ -51,7 +51,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const bonusEntries = players
     .filter((player, index, lines) => lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index)
     .map((player) => {
-      const bonuses = parseBonuses(player.bonuses).filter((bonus) => bonus !== '7 et 2');
+      const bonuses = parseBonuses(player.bonuses);
       const bonusAmounts = parseBonusResults(player.bonusResults);
       const playerId = player.ficheId ?? player.id;
       const total = bonuses.reduce((sum, bonus) => sum + (bonusAmounts[bonus] || 0), 0);
