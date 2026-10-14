@@ -92,6 +92,7 @@ export const RestaurantPage: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<Order | null>(null);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [deleteOrderError, setDeleteOrderError] = useState<string | null>(null);
 
   // ---------- Chargement initial ----------
   const fetchOrders = async () => {
@@ -324,18 +325,30 @@ export const RestaurantPage: React.FC = () => {
 
   const handleRequestDeleteOrder = (orderId: number | string) => {
     const order = orders.find((candidate) => Number(candidate.id) === Number(orderId));
-    if (order) setPendingDeleteOrder(order);
+    if (order) {
+      setDeleteOrderError(null);
+      setPendingDeleteOrder(order);
+    }
   };
 
   const handleDeleteOrder = async () => {
-    if (!pendingDeleteOrder) return;
+    if (!pendingDeleteOrder || isDeletingOrder) return;
     try {
       setIsDeletingOrder(true);
       await restaurantService.deleteOrder(Number(pendingDeleteOrder.id));
       setOrders(prev => prev.filter(order => order.id !== Number(pendingDeleteOrder.id)));
       setPendingDeleteOrder(null);
+      setDeleteOrderError(null);
     } catch (error) {
       console.error('Erreur suppression commande', error);
+      const apiError = error as {
+        response?: { data?: { message?: string; error?: { message?: string } } };
+      };
+      setDeleteOrderError(
+        apiError.response?.data?.message
+        || apiError.response?.data?.error?.message
+        || (error instanceof Error ? error.message : 'Impossible de supprimer cette commande. Veuillez réessayer.')
+      );
     } finally {
       setIsDeletingOrder(false);
     }
@@ -629,11 +642,20 @@ export const RestaurantPage: React.FC = () => {
             </div>
           </div>
 
+          {deleteOrderError && (
+            <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {deleteOrderError}
+            </p>
+          )}
+
           <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setPendingDeleteOrder(null)}
+              onClick={() => {
+                setPendingDeleteOrder(null);
+                setDeleteOrderError(null);
+              }}
               disabled={isDeletingOrder}
               className="w-full sm:w-auto"
             >
@@ -765,8 +787,6 @@ export const RestaurantPage: React.FC = () => {
           setEditingProduct(null);
         }}
         onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
-        onCreateCategory={handleCreateRestaurantCategory}
-        categories={categories}
         products={products}
         editingProduct={editingProduct}
       />
