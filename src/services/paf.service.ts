@@ -73,5 +73,7 @@ export const getPafClosures = () =>
 export const getPafHistory = () =>
   api.get<ApiResponse<PafClosure[]>>('/api/paf/history').then((response) => response.data.data);
 
+export const deletePafHistory = () => api.delete('/api/paf/history');
+
 export const getPafClosure = (id: number) =>
   api.get<ApiResponse<PafClosure>>(`/api/paf/closures/${id}`).then((response) => response.data.data);

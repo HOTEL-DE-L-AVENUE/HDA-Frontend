@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, History, Search, WalletCards } from 'lucide-react';
+import { CalendarDays, History, Search, WalletCards, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { getBarHistory } from '../../services/bar.service';
-import { getPafHistory, type PafClosure } from '../../services/paf.service';
+import { deletePafHistory, getPafHistory, type PafClosure } from '../../services/paf.service';
 import { formatCurrency } from '../../utils/data';
 
 type HistoryTab = 'paf' | 'caisse';
@@ -89,6 +89,23 @@ export const BarHistory: React.FC = () => {
   const [roomCharges, setRoomCharges] = useState<RoomChargeHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pafLoadError, setPafLoadError] = useState(false);
+  const [clearingPaf, setClearingPaf] = useState(false);
+
+  const clearPafHistory = async () => {
+    if (!pafClosures.length || !window.confirm('Supprimer tout l\'historique PAF ? Cette action est definitive.')) return;
+    setClearingPaf(true);
+    setError(null);
+    try {
+      await deletePafHistory();
+      setPafClosures([]);
+    } catch (clearError) {
+      console.error('Erreur suppression historique PAF:', clearError);
+      setError("L'historique PAF n'a pas pu etre supprime.");
+    } finally {
+      setClearingPaf(false);
+    }
+  };
 
   const loadRoomCharges = async (): Promise<RoomChargeHistory[]> => {
     const [reservationsResponse, consumptionsResponse, barOrdersResponse] = await Promise.all([
@@ -223,6 +240,8 @@ export const BarHistory: React.FC = () => {
 
         if (pafResult.status === 'fulfilled') {
           setPafClosures(pafResult.value);
+        } else {
+          setPafLoadError(true);
         }
         if (caisseResult.status === 'fulfilled') {
           setCashOrders(caisseResult.value as CashHistoryOrder[]);
@@ -231,15 +250,7 @@ export const BarHistory: React.FC = () => {
           setRoomCharges(roomResult.value);
         }
 
-        const hasAnyData = (
-          pafResult.status === 'fulfilled' && Array.isArray(pafResult.value) && pafResult.value.length > 0
-        ) || (
-          caisseResult.status === 'fulfilled' && Array.isArray(caisseResult.value) && caisseResult.value.length > 0
-        ) || (
-          roomResult.status === 'fulfilled' && Array.isArray(roomResult.value) && roomResult.value.length > 0
-        );
-
-        if (!hasAnyData) {
+        if ([pafResult, caisseResult, roomResult].every((result) => result.status === 'rejected')) {
           setError("L'historique n'a pas pu être chargé.");
         }
       } catch (loadError) {
@@ -290,12 +301,21 @@ export const BarHistory: React.FC = () => {
 
       {!loading && !error && tab === 'paf' && (
         <div className="space-y-3">
-          {filteredPaf.length === 0 ? <EmptyHistory label="Aucune clôture PAF ne correspond à cette recherche." /> : filteredPaf.map((closure) => (
+          {pafLoadError ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">L'historique PAF n'a pas pu etre charge.</div>
+          ) : <>
+          <div className="flex justify-end">
+            <button type="button" onClick={() => void clearPafHistory()} disabled={!pafClosures.length || clearingPaf} className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50">
+              <Trash2 size={16} />{clearingPaf ? 'Suppression...' : "Supprimer l'historique PAF"}
+            </button>
+          </div>
+          {filteredPaf.length === 0 ? <EmptyHistory label={pafClosures.length === 0 ? 'Aucun historique PAF pour le moment.' : 'Aucune clôture PAF ne correspond à cette recherche.'} /> : filteredPaf.map((closure) => (
             <article key={closure.id} className="rounded-xl border border-base bg-surface p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-primary">{closure.reference}</p><p className="mt-1 flex items-center gap-1 text-xs text-muted"><CalendarDays size={13} /> Session du {closure.date} · clôturée le {formatDate(closure.dateCloture)}</p></div><strong className="text-lg text-accent">{formatCurrency(closure.summary.totalAmount)}</strong></div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><Stat label="Tickets" value={closure.summary.totalTickets} /><Stat label="Hommes" value={closure.summary.homme} /><Stat label="Femmes" value={closure.summary.femme} /></div>
             </article>
           ))}
+          </>}
         </div>
       )}
 
