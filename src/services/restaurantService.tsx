@@ -264,7 +264,7 @@ export const getNextRestaurantProductCode = () =>
 // ==================== PRODUITS ====================
 export const updateProduct = (id: number, data: Partial<{
   nom: string; unite: string; prix_achat: number; prix_vente: number;
-  actif: boolean; type_produit: string; category_id: number;
+  actif: boolean; type_produit: string; category_id: number | null;
 }>) =>
   api.put(`/api/restaurant/products/${id}`, data).then(res => res.data);
 
