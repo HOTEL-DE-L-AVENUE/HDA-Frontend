@@ -151,6 +151,7 @@ const StockPanel: React.FC = () => {
   const [showPortionModal, setShowPortionModal] = useState(false);
   const [showAddIngredientModal, setShowAddIngredientModal] = useState(false);
   const [editItem, setEditItem] = useState<StockItem | null>(null);
+  const [editingIngredient, setEditingIngredient] = useState<StockItem | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<StockItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StockItem | null>(null);
   const [portionTarget, setPortionTarget] = useState<StockItem | null>(null);
@@ -306,13 +307,14 @@ const StockPanel: React.FC = () => {
   };
 
   const handleAdjust = async () => {
-    if (!adjustTarget || !selectedLoc || adjQty <= 0) { setAdjErr('Quantité invalide.'); return; }
+    if (!adjustTarget || adjustTarget.item_type !== 'PRODUCT' || !selectedLoc || adjQty <= 0) {
+      setAdjErr('Quantité invalide.');
+      return;
+    }
     setAdjLoading(true); setAdjErr('');
     try {
       const res = await restaurantService.adjustStock({
-        ...(adjustTarget.item_type === 'INGREDIENT'
-          ? { ingredient_id: adjustTarget.ingredient_id! }
-          : { product_id: adjustTarget.product_id! }),
+        product_id: adjustTarget.product_id!,
         location_id: selectedLoc,
         type_mouvement: adjType,
         quantite: adjQty,
@@ -344,6 +346,49 @@ const StockPanel: React.FC = () => {
       portion_unite: item.portion_unite || 'g',
     });
     setShowEditModal(true);
+  };
+
+  const openEditIngredient = (item: StockItem) => {
+    setEditingIngredient(item);
+    setIngredientForm({
+      nom: item.product_nom || '',
+      unite: item.unite || '',
+      prix_achat: Number(item.prix_achat || 0),
+      quantite: Number(item.quantite || 0),
+    });
+    setIngredientFormErr('');
+  };
+
+  const handleUpdateIngredient = async () => {
+    if (!editingIngredient?.ingredient_id) return;
+    if (!ingredientForm.nom.trim()) { setIngredientFormErr('Nom requis.'); return; }
+    if (!ingredientForm.unite.trim()) { setIngredientFormErr('Unité requise.'); return; }
+    if (!Number.isFinite(ingredientForm.quantite) || ingredientForm.quantite < 0) {
+      setIngredientFormErr('La quantité doit être positive ou nulle.');
+      return;
+    }
+    if (!Number.isFinite(ingredientForm.prix_achat) || ingredientForm.prix_achat < 0) {
+      setIngredientFormErr('Le prix d’achat doit être positif ou nul.');
+      return;
+    }
+    setIngredientFormLoading(true);
+    setIngredientFormErr('');
+    try {
+      await restaurantService.updateRestaurantIngredient(editingIngredient.ingredient_id, {
+        nom: ingredientForm.nom.trim(),
+        unite: ingredientForm.unite.trim(),
+        prix_achat: ingredientForm.prix_achat,
+        quantite: ingredientForm.quantite,
+        location_id: editingIngredient.location_id,
+      });
+      await loadStocks();
+      setEditingIngredient(null);
+      addNotification('success', `Ingrédient ${ingredientForm.nom.trim()} modifié`, 'Restaurant');
+    } catch (error) {
+      setIngredientFormErr(getErrorMessage(error));
+    } finally {
+      setIngredientFormLoading(false);
+    }
   };
 
   const handleDeleteStock = async () => {
@@ -495,9 +540,20 @@ const StockPanel: React.FC = () => {
             <Edit2 size={14} />
           </button>
         )}
-        <button onClick={() => { setAdjustTarget(item); setAdjType('ENTREE'); setAdjQty(0); setAdjErr(''); setShowAdjustModal(true); }} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Ajuster le stock">
-          <RefreshCw size={14} />
-        </button>
+        {item.item_type === 'INGREDIENT' ? (
+          <button
+            onClick={() => openEditIngredient(item)}
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+            title="Modifier l'ingrédient"
+            aria-label={`Modifier ${item.product_nom}`}
+          >
+            <Edit2 size={14} />
+          </button>
+        ) : (
+          <button onClick={() => { setAdjustTarget(item); setAdjType('ENTREE'); setAdjQty(0); setAdjErr(''); setShowAdjustModal(true); }} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all" title="Ajuster le stock">
+            <RefreshCw size={14} />
+          </button>
+        )}
         <button onClick={() => { setDeleteTarget(item); setShowDeleteModal(true); }} className="w-8 h-8 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-red-400 transition-all" title="Supprimer l'article">
           <Trash2 size={14} />
         </button>
@@ -812,6 +868,70 @@ const StockPanel: React.FC = () => {
               <div className="flex gap-3 pt-2">
                 <Button variant="secondary" onClick={() => { setShowAddIngredientModal(false); setIngredientForm({ nom: '', unite: '', prix_achat: 0, quantite: 0 }); }} className="flex-1">Annuler</Button>
                 <Button onClick={handleAddIngredient} className="flex-1" disabled={ingredientFormLoading}>{ingredientFormLoading ? 'Ajout...' : 'Ajouter'}</Button>
+              </div>
+            </div>
+          </Modal>
+
+          <Modal
+            isOpen={editingIngredient !== null}
+            onClose={() => {
+              if (!ingredientFormLoading) {
+                setEditingIngredient(null);
+                setIngredientFormErr('');
+              }
+            }}
+            title="Modifier l’ingrédient"
+          >
+            <div className="space-y-4">
+              <Input
+                label="Nom de l’ingrédient"
+                value={ingredientForm.nom}
+                onChange={event => setIngredientForm({ ...ingredientForm, nom: event.target.value })}
+              />
+              <Select
+                label="Unité"
+                value={ingredientForm.unite}
+                onChange={event => setIngredientForm({ ...ingredientForm, unite: event.target.value })}
+                options={[
+                  ...(!units.some(unit => unit.code === ingredientForm.unite)
+                    ? [{ value: ingredientForm.unite, label: ingredientForm.unite }]
+                    : []),
+                  ...units.map(unit => ({ value: unit.code, label: unit.nom })),
+                ]}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Prix d’achat (MGA)"
+                  type="number"
+                  min={0}
+                  value={ingredientForm.prix_achat}
+                  onChange={event => setIngredientForm({ ...ingredientForm, prix_achat: Number(event.target.value) })}
+                />
+                <Input
+                  label="Quantité en stock"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={ingredientForm.quantite}
+                  onChange={event => setIngredientForm({ ...ingredientForm, quantite: Number(event.target.value) })}
+                />
+              </div>
+              {ingredientFormErr && <p role="alert" className="text-red-400 text-sm">{ingredientFormErr}</p>}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setEditingIngredient(null);
+                    setIngredientFormErr('');
+                  }}
+                  disabled={ingredientFormLoading}
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+                <Button onClick={handleUpdateIngredient} disabled={ingredientFormLoading} className="flex-1">
+                  {ingredientFormLoading ? 'Enregistrement...' : 'Enregistrer'}
+                </Button>
               </div>
             </div>
           </Modal>

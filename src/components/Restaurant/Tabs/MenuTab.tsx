@@ -1,8 +1,9 @@
 // src/components/Restaurant/Tabs/MenuTab.tsx
 import React, { useState, useEffect } from 'react';
-import { Badge, Button } from '../../UI';
+import { Badge, Button, Modal } from '../../UI';
 import { formatCurrency } from '../../../utils/data';
-import { Plus, Edit, Trash2, Search, UtensilsCrossed } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, UtensilsCrossed, Eye } from 'lucide-react';
+import * as restaurantService from '../../../services/restaurantService';
 import type { Product, Category } from '../types';
 
 interface MenuTabProps {
@@ -25,6 +26,15 @@ export const MenuTab: React.FC<MenuTabProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<number | 'tous'>('tous');
   const [searchTerm, setSearchTerm] = useState('');
   const [productColors, setProductColors] = useState<Record<string, string>>({});
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  const [recipeIngredients, setRecipeIngredients] = useState<Array<{
+    ingredient_id: number;
+    ingredient_nom: string;
+    quantite: number;
+    unite: string;
+  }>>([]);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+  const [recipeError, setRecipeError] = useState<string | null>(null);
 
   // Charger les couleurs du localStorage au chargement et à chaque modification
   useEffect(() => {
@@ -47,6 +57,27 @@ export const MenuTab: React.FC<MenuTabProps> = ({
       (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
+
+  const handleViewRecipe = async (product: Product) => {
+    setViewingProduct(product);
+    setRecipeIngredients([]);
+    setRecipeError(null);
+    setRecipeLoading(true);
+    try {
+      const response = await restaurantService.getProductRecipe(product.id);
+      if (!response.success) {
+        throw new Error(response.message || 'Impossible de charger les ingrédients du plat.');
+      }
+      setRecipeIngredients(response.data);
+    } catch (error) {
+      console.error('Erreur chargement des ingrédients du plat:', error);
+      setRecipeError(
+        error instanceof Error ? error.message : 'Impossible de charger les ingrédients du plat.'
+      );
+    } finally {
+      setRecipeLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 w-full">
@@ -224,19 +255,32 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                           </span>
                         </div>
 
-                        {/* Boutons Modifier/Supprimer affichés uniquement si l'utilisateur est admin */}
-                        {userIsAdmin && (
-                          <div className="flex items-center gap-1.5">
-                            <Button size="sm" variant="secondary" onClick={() => onEditProduct(p)} title="Modifier">
-                              <Edit size={14} />
+                        <div className="flex items-center gap-1.5">
+                          {p.type_produit === 'PRODUIT_FINI' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void handleViewRecipe(p)}
+                              title="Voir les ingrédients"
+                              aria-label={`Voir les ingrédients de ${p.nom}`}
+                            >
+                              <Eye size={14} />
                             </Button>
-                            {p.actif && (
-                              <Button size="sm" variant="danger" onClick={() => onDeleteProduct(p.id)} title="Supprimer">
-                                <Trash2 size={14} />
+                          )}
+                          {/* Boutons de gestion affichés uniquement si l'utilisateur est admin */}
+                          {userIsAdmin && (
+                            <>
+                              <Button size="sm" variant="secondary" onClick={() => onEditProduct(p)} title="Modifier">
+                                <Edit size={14} />
                               </Button>
-                            )}
-                          </div>
-                        )}
+                              {p.actif && (
+                                <Button size="sm" variant="danger" onClick={() => onDeleteProduct(p.id)} title="Supprimer">
+                                  <Trash2 size={14} />
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -247,6 +291,37 @@ export const MenuTab: React.FC<MenuTabProps> = ({
 
         </div>
       </div>
+
+      <Modal
+        isOpen={viewingProduct !== null}
+        onClose={() => setViewingProduct(null)}
+        title={`Ingrédients — ${viewingProduct?.nom || ''}`}
+        size="md"
+      >
+        {recipeLoading ? (
+          <p className="text-sm text-secondary">Chargement des ingrédients...</p>
+        ) : recipeError ? (
+          <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {recipeError}
+          </p>
+        ) : recipeIngredients.length === 0 ? (
+          <p className="text-sm text-secondary">Aucun ingrédient n’est associé à ce plat.</p>
+        ) : (
+          <ul className="space-y-2">
+            {recipeIngredients.map((ingredient) => (
+              <li
+                key={ingredient.ingredient_id}
+                className="flex items-center justify-between gap-4 rounded-lg bg-surface-2 px-3 py-2"
+              >
+                <span className="text-sm text-primary">{ingredient.ingredient_nom}</span>
+                <span className="shrink-0 text-sm font-medium text-secondary">
+                  {ingredient.quantite} {ingredient.unite}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
 
     </div>
   );

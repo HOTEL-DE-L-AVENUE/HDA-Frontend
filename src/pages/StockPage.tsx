@@ -64,11 +64,8 @@ const StockDetailsModal: React.FC<{ item: StockOverviewItem | null; onClose: () 
   const fields: Array<[string, React.ReactNode]> = [
     ['Module', moduleLabel(item)],
     ['Catégorie', item.categorie || '—'],
-    ['Code', item.code || '—'],
-    ['Type', info?.type_produit || '—'],
     ['Quantité restante', <span className="font-bold">{formatQty(item.quantite)} {item.unite || ''}</span>],
     ['Seuil minimum', `${formatQty(item.seuil_minimum)} ${item.unite || ''}`],
-    ['Prix de vente', formatMoney(info?.prix_vente ?? null)],
     ['Prix d’achat', formatMoney(info?.prix_achat ?? null)],
   ];
 
@@ -147,25 +144,33 @@ const StockDetailsModal: React.FC<{ item: StockOverviewItem | null; onClose: () 
   );
 };
 
-/* ─── Modification de la quantité et du seuil ─── */
+/* ─── Modification d’un article de stock ou d’un ingrédient ─── */
 const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => void; onSaved: () => void }> = ({ item, onClose, onSaved }) => {
+  const [nom, setNom] = useState('');
   const [quantite, setQuantite] = useState('');
   const [seuil, setSeuil] = useState('');
   const [unite, setUnite] = useState('');
+  const [prixAchat, setPrixAchat] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!item) return;
+    setNom(item.nom);
     setQuantite(String(item.quantite));
     setSeuil(String(item.seuil_minimum));
     setUnite(item.unite || 'unités');
+    setPrixAchat(String(item.prix_achat ?? 0));
   }, [item]);
 
   if (!item) return null;
+  const ingredient = item.item_type === 'INGREDIENT';
   const whole = wholeUnitsOnly(item);
   const qty = Number(quantite);
   const threshold = Number(seuil);
-  const invalid = quantite === '' || seuil === '' || !Number.isFinite(qty) || !Number.isFinite(threshold) || qty < 0 || threshold < 0
+  const purchasePrice = Number(prixAchat);
+  const invalid = quantite === '' || !Number.isFinite(qty) || qty < 0
+    || (ingredient && (!nom.trim() || !unite.trim() || prixAchat === '' || !Number.isFinite(purchasePrice) || purchasePrice < 0))
+    || (!ingredient && (seuil === '' || !Number.isFinite(threshold) || threshold < 0))
     || (whole && (!Number.isInteger(qty) || !Number.isInteger(threshold)));
   const difference = Number.isFinite(qty) ? qty - item.quantite : 0;
 
@@ -176,10 +181,14 @@ const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => 
     try {
       await stockService.updateOverviewItem(item.cle, {
         quantite: qty,
-        seuil_minimum: threshold,
-        ...(item.module === 'BAR' ? { unite: unite.trim() || 'unités' } : {}),
+        ...(ingredient
+          ? { nom: nom.trim(), unite: unite.trim(), prix_achat: purchasePrice }
+          : {
+            seuil_minimum: threshold,
+            ...(item.module === 'BAR' ? { unite: unite.trim() || 'unités' } : {}),
+          }),
       });
-      toast.success(`Stock de « ${item.nom} » mis à jour`);
+      toast.success(ingredient ? `Ingrédient « ${nom.trim()} » mis à jour` : `Stock de « ${item.nom} » mis à jour`);
       onSaved();
     } catch (err) {
       toast.error(apiError(err, 'Erreur lors de la modification'));
@@ -193,15 +202,22 @@ const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => 
       <form onSubmit={save} className="p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-muted text-xs uppercase tracking-wide">Modifier le stock · {moduleLabel(item)}</p>
+            <p className="text-muted text-xs uppercase tracking-wide">{ingredient ? 'Modifier l’ingrédient' : `Modifier le stock · ${moduleLabel(item)}`}</p>
             <h3 className="text-primary text-lg font-bold">{item.nom}</h3>
           </div>
           <button type="button" onClick={onClose} className="text-muted hover:text-primary"><X size={20} /></button>
         </div>
 
+        {ingredient && (
+          <label className="block">
+            <span className="block text-sm text-secondary mb-1.5">Nom de l’ingrédient</span>
+            <input value={nom} onChange={e => setNom(e.target.value)} className={inputClass} autoFocus />
+          </label>
+        )}
+
         <label className="block">
           <span className="block text-sm text-secondary mb-1.5">Quantité restante ({item.unite || 'unités'})</span>
-          <input type="number" min="0" step={whole ? 1 : 0.01} value={quantite} onChange={e => setQuantite(e.target.value)} className={inputClass} autoFocus />
+          <input type="number" min="0" step={whole ? 1 : 0.01} value={quantite} onChange={e => setQuantite(e.target.value)} className={inputClass} autoFocus={!ingredient} />
           {difference !== 0 && Number.isFinite(difference) && (
             <span className={`block text-xs mt-1 ${difference > 0 ? 'text-success' : 'text-danger'}`}>
               {difference > 0 ? 'Entrée' : 'Sortie'} de {formatQty(Math.abs(difference))} {item.unite || ''} par rapport au stock actuel ({formatQty(item.quantite)})
@@ -209,12 +225,27 @@ const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => 
           )}
         </label>
 
-        <label className="block">
+        {ingredient && (
+          <>
+            <label className="block">
+              <span className="block text-sm text-secondary mb-1.5">Prix d’achat (MGA)</span>
+              <input type="number" min="0" step="any" value={prixAchat} onChange={e => setPrixAchat(e.target.value)} className={inputClass} />
+            </label>
+            <label className="block">
+              <span className="block text-sm text-secondary mb-1.5">Unité</span>
+              <input value={unite} onChange={e => setUnite(e.target.value)} className={inputClass} />
+            </label>
+          </>
+        )}
+
+        {!ingredient && (
+          <label className="block">
           <span className="block text-sm text-secondary mb-1.5">Seuil minimum (alerte « stock faible »)</span>
           <input type="number" min="0" step={whole ? 1 : 0.01} value={seuil} onChange={e => setSeuil(e.target.value)} className={inputClass} />
-        </label>
+          </label>
+        )}
 
-        {item.module === 'BAR' && (
+        {!ingredient && item.module === 'BAR' && (
           <label className="block">
             <span className="block text-sm text-secondary mb-1.5">Unité</span>
             <input value={unite} onChange={e => setUnite(e.target.value)} placeholder="bouteilles, canettes…" className={inputClass} />
@@ -263,7 +294,9 @@ const StockDeleteModal: React.FC<{ item: StockOverviewItem | null; onClose: () =
           <strong className="text-primary">{item.nom}</strong> ({moduleLabel(item)}) — {formatQty(item.quantite)} {item.unite || ''} en stock.
         </p>
         <p className="text-muted text-sm">
-          {item.module === 'BAR'
+          {item.item_type === 'INGREDIENT'
+            ? 'L’ingrédient sera désactivé et retiré des recettes. Son stock restant sera enregistré comme une sortie.'
+            : item.module === 'BAR'
             ? 'Le produit sera retiré de la carte du bar. Un produit déjà vendu ne peut pas être supprimé : mettez plutôt sa quantité à 0.'
             : 'La ligne de stock sera supprimée et la quantité restante enregistrée comme sortie. Le produit reste dans le catalogue.'}
         </p>
