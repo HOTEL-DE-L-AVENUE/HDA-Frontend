@@ -446,11 +446,17 @@ export const RestaurantPage: React.FC = () => {
   const handleUpdateProduct = async (formData: any) => {
     if (!editingProduct) return;
     try {
-      const { ingredients = [], ...productData } = formData;
+      const { ingredients = [], category_nom, ...productData } = formData;
+      const category = typeof category_nom === 'string' && category_nom.trim()
+        ? await handleCreateRestaurantCategory(category_nom.trim())
+        : null;
+      productData.category_id = category?.id ?? null;
       const res = await restaurantService.updateProduct(editingProduct.id, productData);
       if (!res.success) throw new Error(res.message || 'Modification du produit impossible.');
       await restaurantService.saveProductRecipe(editingProduct.id, ingredients);
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? res.data as Product : p));
+      setProducts(prev => prev.map(p => p.id === editingProduct.id
+        ? { ...res.data as Product, category_nom: category?.nom || undefined, category: category || undefined }
+        : p));
       setEditingProduct(null);
       setShowProductModal(false);
     } catch (error) {

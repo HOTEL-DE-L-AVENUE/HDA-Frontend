@@ -98,7 +98,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         prix_achat: editingProduct.prix_achat || 0,
         unite: editingProduct.unite || 'PIECE',
         type_produit: (editingProduct.type_produit || 'PRODUIT_FINI') as any,
-        category_nom: '',
+        category_nom: editingProduct.category?.nom || editingProduct.category_nom || '',
         actif: editingProduct.actif ?? true,
         couleur: editingProduct.couleur || ''
       });
@@ -261,7 +261,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         }))
       };
 
-      if (!editingProduct) {
+      if (editingProduct) {
+        Object.assign(payload, {
+          prix_vente: Number(form.prix_vente),
+          category_nom: form.category_nom.trim(),
+        });
+      } else {
         Object.assign(payload, {
           code: form.code,
           category_nom: form.category_nom.trim(),
@@ -312,6 +317,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           <p role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {submissionError}
           </p>
+        )}
+
+        {editingProduct && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label="Prix de vente (MGA)"
+              type="number"
+              value={form.prix_vente}
+              onChange={(e) => setForm({ ...form, prix_vente: Number(e.target.value) })}
+              min={0}
+              step={1000}
+            />
+            <Input
+              label="Catégorie"
+              value={form.category_nom}
+              onChange={(event) => setForm({ ...form, category_nom: event.target.value })}
+              placeholder="Ex: Pizza"
+            />
+          </div>
         )}
 
         {!editingProduct && (
