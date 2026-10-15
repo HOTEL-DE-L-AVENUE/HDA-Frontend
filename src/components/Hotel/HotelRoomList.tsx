@@ -170,6 +170,11 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     }
   }, [refresh, refreshTrigger]);
 
+  useEffect(() => {
+    const timer = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
   // Filtrer les chambres
   const filteredRooms = rooms.filter(room => {
     // Recherche par numéro ou type
@@ -489,7 +494,7 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                         {typeName}
                         {room.capacite && ` • ${room.capacite} pers.`}
                       </p>
-                      {roomReservation && primaryStatus === 'RESERVEE' && (
+                      {roomReservation && ['LIBRE', 'RESERVEE'].includes(primaryStatus) && (
                         <p className="text-accent text-xs mt-1 flex items-center gap-1">
                           <Calendar size={12} />
                           {formatDateRange(roomReservation.date_arrivee, roomReservation.date_depart)}
