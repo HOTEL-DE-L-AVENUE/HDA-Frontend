@@ -149,6 +149,17 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     })
     .filter(({ cashing, result }) => cashing > 0 && result > 0)
     .map(({ player, result }) => `${playerDisplayName(player)} : ${formatAmount(result)}`);
+  // Perdants : fiche clôturée (cashing saisi, même 0, ou signature finale) avec un résultat négatif.
+  const playersLosing = uniquePlayers(players)
+    .map((player) => {
+      const ficheLines = players.filter((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id));
+      const closed = ficheLines.some((line) => line.cashing.trim() || String(line.finalSignature ?? '').trim());
+      const cashing = parseCasinoAmount(ficheLines.find((line) => line.cashing.trim())?.cashing);
+      const totalCaves = ficheLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
+      return { player, closed, result: cashing - totalCaves };
+    })
+    .filter(({ closed, result }) => closed && result < 0)
+    .map(({ player, result }) => `${playerDisplayName(player)} : ${formatAmount(result)}`);
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
   const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
   const rackChecksReport = rackChecks.filter((check) => check.type.startsWith('Rack check') || check.type === 'Retour croupier' || check.type === 'Sortie croupier');
@@ -205,7 +216,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
   const pourboiresReportTotal = readFinalCategoryValue(finals, 'pourboires', 0);
   const otherRetraitTotal = readFinalCategoryValue(finals, 'autres', withdrawn);
   // Même valeur que « TOTAL ESPECES CAISSE » du calcul final (et non le total des caves / cashing).
-  const totalEspecesCaisse = computeTotalEspecesCaisse(players, readFinalCategoryValue(finals, 'autres', 0));
+  const totalEspecesCaisse = computeTotalEspecesCaisse(players);
   const finalCategoryLines = [
     `# Mobile : ${formatAmount(mobileReportTotal)}`,
     `# TPE : ${formatAmount(tpeReportTotal)}`,
@@ -245,6 +256,9 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     '',
     '# Joueur gagnant :',
     ...(playersWinning.length ? playersWinning : ['']),
+    '',
+    '# Joueur perdant :',
+    ...(playersLosing.length ? playersLosing : ['']),
     '',
     '# Joueurs en attente :',
     '',
