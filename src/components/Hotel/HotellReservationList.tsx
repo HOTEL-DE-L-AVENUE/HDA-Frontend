@@ -55,7 +55,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
   const { rooms, loading: roomsLoading, loadRooms } = useRooms();
   const [users, setUsers] = useState<any[]>([]);
 
-  const [selectedStatus, setSelectedStatus] = useState<string>('TOUS');
+  const [selectedDateType, setSelectedDateType] = useState<'TOUS' | 'ARRIVAL' | 'DEPARTURE'>('TOUS');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterFromDate, setFilterFromDate] = useState('');
   const [filterToDate, setFilterToDate] = useState('');
@@ -190,38 +190,17 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       ? !['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut)
       : ['TERMINEE', 'ANNULEE', 'NO_SHOW'].includes(res.statut);
 
-    // Custom status filtering based on user's requirements
-    let matchesStatus = true;
-    if (selectedStatus === 'TOUS') {
-      matchesStatus = true;
-    } else if (selectedStatus === 'CHECKED_IN') {
-      matchesStatus = res.statut === 'CHECKED_IN';
-    } else if (selectedStatus === 'ARRIVAL') {
-      // Upcoming reservations: date_arrivee >= today, not checked in yet
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const arrivalDate = new Date(res.date_arrivee);
-      arrivalDate.setHours(0, 0, 0, 0);
-      matchesStatus = res.statut === 'CONFIRMEE' && arrivalDate >= today;
-    } else if (selectedStatus === 'DEPARTURE') {
-      // Completed reservations: based on checkout date (date_depart)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const departureDate = new Date(res.date_depart);
-      departureDate.setHours(0, 0, 0, 0);
-      matchesStatus = res.statut === 'TERMINEE' && departureDate <= today;
-    } else {
-      matchesStatus = res.statut === selectedStatus;
-    }
-
-    // Filter by date range
-    let matchesDateRange = true;
-    if (filterFromDate) {
-      matchesDateRange = matchesDateRange && new Date(res.date_arrivee) >= new Date(filterFromDate);
-    }
-    if (filterToDate) {
-      matchesDateRange = matchesDateRange && new Date(res.date_depart) <= new Date(filterToDate);
-    }
+    const reservationDate = selectedDateType === 'ARRIVAL'
+      ? res.date_arrivee
+      : selectedDateType === 'DEPARTURE'
+        ? res.date_depart
+        : null;
+    const matchesSelectedDate = selectedDateType === 'TOUS'
+      || (!filterFromDate && !filterToDate)
+      || (filterFromDate && filterToDate
+        ? String(reservationDate || '').slice(0, 10) >= filterFromDate
+          && String(reservationDate || '').slice(0, 10) <= filterToDate
+        : String(reservationDate || '').slice(0, 10) === (filterFromDate || filterToDate));
 
     // Filter by date range in history tab (for user search)
     let matchesHistoryDateRange = true;
@@ -243,7 +222,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
       matchesUser = creatorName.includes(userSearchLower) || modifierName.includes(userSearchLower);
     }
 
-    return matchesSearch && matchesTab && matchesStatus && matchesDateRange && matchesHistoryDateRange && matchesUser;
+    return matchesSearch && matchesTab && matchesSelectedDate && matchesHistoryDateRange && matchesUser;
   });
   const filteredReservationsTotal = filteredReservations.reduce(
     (total, reservation) => total + (Number(reservation.montant_total) || 0),
@@ -404,25 +383,28 @@ export const ReservationList: React.FC<ReservationListProps> = ({ onEdit, onEnca
           type="date"
           value={filterFromDate}
           onChange={(e) => setFilterFromDate(e.target.value)}
+          disabled={selectedDateType === 'TOUS'}
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
-          placeholder="Du"
+          aria-label={filterToDate ? 'Date de début' : 'Date unique ou début de période'}
+          title={filterToDate ? 'Date de début' : 'Date unique ou début de période'}
         />
         <input
           type="date"
           value={filterToDate}
           onChange={(e) => setFilterToDate(e.target.value)}
+          disabled={selectedDateType === 'TOUS'}
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
-          placeholder="Au"
+          aria-label={filterFromDate ? 'Date de fin facultative' : 'Date unique ou fin de période'}
+          title={filterFromDate ? 'Date de fin facultative' : 'Date unique ou fin de période'}
         />
         <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
+          value={selectedDateType}
+          onChange={(e) => setSelectedDateType(e.target.value as 'TOUS' | 'ARRIVAL' | 'DEPARTURE')}
           className="px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-accent"
         >
-          <option value="TOUS">Tous</option>
-          <option value="CHECKED_IN">Check-in</option>
           <option value="ARRIVAL">Arrivée</option>
           <option value="DEPARTURE">Départ</option>
+          <option value="TOUS">Tous</option>
         </select>
         <button
           type="button"

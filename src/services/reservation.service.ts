@@ -19,6 +19,19 @@ export interface ReservationFormData {
   montant_total: number;
   remise_pourcentage?: number;
   statut?: 'CONFIRMEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE';
+  type_reservation?: 'BOOKING' | 'ON_SITE' | 'GRATUIT';
+  laundry_included?: boolean;
+  laundry_price?: number;
+  manual_price?: number;
+  exchange_rate?: number;
+  services_extras?: Array<{
+    type: 'TRANSFERT' | 'EXCURSION';
+    description: string;
+    date?: string;
+    heure?: string;
+    personnes?: number;
+    prix: number;
+  }>;
 }
 
 export interface Stay {
