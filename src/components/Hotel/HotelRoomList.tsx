@@ -17,8 +17,7 @@ import {
   XCircle,
   Settings,
   Wrench,
-  Brush,
-  Calendar
+  Brush
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/data';
 import { RoomStatusModal } from './Modal/RoomStatusModal';
@@ -111,21 +110,6 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
     ).sort((a, b) => new Date(a.date_arrivee).getTime() - new Date(b.date_arrivee).getTime());
     
     return roomReservations.length > 0 ? roomReservations[0] : null;
-  };
-
-  // Format date range for display (e.g., "Oct 8 to Oct 15")
-  const formatDateRange = (startDate: string, endDate: string): string => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    const startMonth = months[start.getMonth()];
-    const startDay = start.getDate();
-    const endMonth = months[end.getMonth()];
-    const endDay = end.getDate();
-    
-    return `${startMonth} ${startDay} to ${endMonth} ${endDay}`;
   };
 
   const getPrimaryRoomStatus = (room: Room): Room['statut'] => {
@@ -469,7 +453,6 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
               const isProcessing = processingId === room.id;
               const primaryStatus = getPrimaryRoomStatus(room);
               const housekeepingTask = getHousekeepingTask(room.id);
-              const roomReservation = getRoomReservation(room.id);
 
               return (
                 <div
@@ -494,12 +477,6 @@ export const RoomList: React.FC<RoomListProps> = ({ onEdit, onDelete, refreshTri
                         {typeName}
                         {room.capacite && ` • ${room.capacite} pers.`}
                       </p>
-                      {roomReservation && ['LIBRE', 'RESERVEE'].includes(primaryStatus) && (
-                        <p className="text-accent text-xs mt-1 flex items-center gap-1">
-                          <Calendar size={12} />
-                          {formatDateRange(roomReservation.date_arrivee, roomReservation.date_depart)}
-                        </p>
-                      )}
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[primaryStatus] || ''}`}>
