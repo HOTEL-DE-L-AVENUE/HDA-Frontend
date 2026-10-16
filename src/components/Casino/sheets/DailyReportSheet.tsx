@@ -205,7 +205,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
   const pourboiresReportTotal = readFinalCategoryValue(finals, 'pourboires', 0);
   const otherRetraitTotal = readFinalCategoryValue(finals, 'autres', withdrawn);
   // Même valeur que « TOTAL ESPECES CAISSE » du calcul final (et non le total des caves / cashing).
-  const totalEspecesCaisse = computeTotalEspecesCaisse(players, readFinalCategoryValue(finals, 'autres', 0));
+  const totalEspecesCaisse = computeTotalEspecesCaisse(players);
   const finalCategoryLines = [
     `# Mobile : ${formatAmount(mobileReportTotal)}`,
     `# TPE : ${formatAmount(tpeReportTotal)}`,
