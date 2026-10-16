@@ -159,7 +159,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = computeTotalEspecesCaisse(players);
+  const totalEspeces = computeTotalEspecesCaisse(players, parseCasinoAmount(values.autres));
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
@@ -944,8 +944,9 @@ const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players
 }, 0);
 
 // TOTAL ESPECES CAISSE du calcul final, repris tel quel par le rapport journalier.
-// Indépendant du TOTAL RETRAIT AUTRES DEPARTEMENT.
-export const computeTotalEspecesCaisse = (players: PlayerLine[]) => getCashPaymentTotal(players);
+// TOTAL ESPECES CAISSE = espèces des joueurs + TOTAL RETRAIT AUTRES DEPARTEMENT.
+export const computeTotalEspecesCaisse = (players: PlayerLine[], otherDepartmentWithdrawalTotal: number) =>
+  getCashPaymentTotal(players) + otherDepartmentWithdrawalTotal;
 
 const isPaidCave = (payment?: string) => {
   const normalized = String(payment || '')
