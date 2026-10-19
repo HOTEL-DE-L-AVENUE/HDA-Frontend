@@ -170,6 +170,7 @@ const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => 
   const purchasePrice = Number(prixAchat);
   const invalid = quantite === '' || !Number.isFinite(qty) || qty < 0
     || (ingredient && (!nom.trim() || !unite.trim() || prixAchat === '' || !Number.isFinite(purchasePrice) || purchasePrice < 0))
+    || (item.module === 'BAR' && (prixAchat === '' || !Number.isFinite(purchasePrice) || purchasePrice < 0))
     || (!ingredient && (seuil === '' || !Number.isFinite(threshold) || threshold < 0))
     || (whole && (!Number.isInteger(qty) || !Number.isInteger(threshold)));
   const difference = Number.isFinite(qty) ? qty - item.quantite : 0;
@@ -185,6 +186,7 @@ const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => 
           ? { nom: nom.trim(), unite: unite.trim(), prix_achat: purchasePrice }
           : {
             seuil_minimum: threshold,
+            ...(item.module === 'BAR' ? { prix_achat: purchasePrice } : {}),
             ...(item.module === 'BAR' ? { unite: unite.trim() || 'unités' } : {}),
           }),
       });
@@ -225,12 +227,15 @@ const StockEditModal: React.FC<{ item: StockOverviewItem | null; onClose: () => 
           )}
         </label>
 
+        {(ingredient || item.module === 'BAR') && (
+          <label className="block">
+            <span className="block text-sm text-secondary mb-1.5">Prix d’achat (MGA)</span>
+            <input type="number" min="0" step="any" value={prixAchat} onChange={e => setPrixAchat(e.target.value)} className={inputClass} />
+          </label>
+        )}
+
         {ingredient && (
           <>
-            <label className="block">
-              <span className="block text-sm text-secondary mb-1.5">Prix d’achat (MGA)</span>
-              <input type="number" min="0" step="any" value={prixAchat} onChange={e => setPrixAchat(e.target.value)} className={inputClass} />
-            </label>
             <label className="block">
               <span className="block text-sm text-secondary mb-1.5">Unité</span>
               <input value={unite} onChange={e => setUnite(e.target.value)} className={inputClass} />
