@@ -3,7 +3,6 @@ import { Clipboard, Download, MessageCircle, Printer } from 'lucide-react';
 import { ChipLine, PlayerLine, RackCheck, casinoBorder, casinoCurrency, parseCasinoAmount } from './types';
 import type { CasinoRegisteredPlayer } from '../../../services/casinoTablesJeu.service';
 import { printThermalText } from '../../../utils/thermalPrint';
-import { computeTotalEspecesCaisse } from './FinalCalculationSheet';
 
 // Destinataire du bouton WhatsApp : 0388337122 au format international (Madagascar, +261).
 const REPORT_WHATSAPP_NUMBER = '261388337122';
@@ -215,8 +214,7 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
   const prolongationReportTotal = readFinalCategoryValue(finals, 'prolongation', 0);
   const pourboiresReportTotal = readFinalCategoryValue(finals, 'pourboires', 0);
   const otherRetraitTotal = readFinalCategoryValue(finals, 'autres', withdrawn);
-  // Même valeur que « TOTAL ESPECES CAISSE » du calcul final (et non le total des caves / cashing).
-  const totalEspecesCaisse = computeTotalEspecesCaisse(players, readFinalCategoryValue(finals, 'autres', 0));
+  const totalEspecesCaisse = parseCasinoAmount(finals._global?.totalEspecesCaisseManual);
   const finalCategoryLines = [
     `# Mobile : ${formatAmount(mobileReportTotal)}`,
     `# TPE : ${formatAmount(tpeReportTotal)}`,
