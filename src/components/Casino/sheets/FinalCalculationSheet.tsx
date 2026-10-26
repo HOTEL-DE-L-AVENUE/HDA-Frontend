@@ -159,7 +159,7 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
   const total1 = automaticTotal1;
   const total2 = automaticTotal2;
   const difference = Math.abs(total2 - total1);
-  const totalEspeces = computeTotalEspecesCaisse(players, parseCasinoAmount(values.autres));
+  const totalEspeces = parseCasinoAmount(values.totalEspecesCaisseManual);
   const resultatFinal = totalEspeces - difference;
   const finalValuesToSave: Record<string, string> = {
     ...values,
@@ -548,7 +548,11 @@ export const FinalCalculationSheet: React.FC<FinalCalculationSheetProps> = ({ pl
           <div className="grid grid-cols-[1.35fr_.85fr_1.2fr] border-t" style={casinoBorder}>
             <div className="border-r" style={casinoBorder}>
               <BottomRow label="TOTAL 2 - TOTAL 1" value={casinoCurrency.format(difference)} readOnly />
-              <BottomRow label="TOTAL ESPECES CAISSE" value={casinoCurrency.format(totalEspeces)} readOnly />
+              <BottomRow
+                label="TOTAL ESPECES CAISSE"
+                value={values.totalEspecesCaisseManual ?? ''}
+                onChange={(value) => onUpdate('totalEspecesCaisseManual', value)}
+              />
               <BottomRow label="RESULTAT FINAL" value={casinoCurrency.format(resultatFinal)} readOnly />
             </div>
             <div className="border-r" style={casinoBorder}>
@@ -913,40 +917,6 @@ const parsePaymentOptions = (value?: string): Array<{ option: string; amount: nu
     return [];
   }
 };
-
-const isCashPaymentOption = (option: string) => {
-  const normalized = option.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-  return normalized === 'espece' || normalized === 'especes' || normalized === 'cash';
-};
-
-const uniquePlayerLines = (players: PlayerLine[]) => players.filter((player, index, lines) =>
-  lines.findIndex((line) => (line.ficheId ?? line.id) === (player.ficheId ?? player.id)) === index
-);
-
-const getCashPaymentTotal = (players: PlayerLine[]) => uniquePlayerLines(players).reduce((total, player) => {
-  const playerId = player.ficheId ?? player.id;
-  const playerLines = players.filter((line) => (line.ficheId ?? line.id) === playerId);
-  const totalCaves = playerLines.reduce((sum, line) => sum + parseCasinoAmount(line.caves) * parseCasinoAmount(line.amount), 0);
-  const cashing = parseCasinoAmount(playerLines.find((line) => line.cashing.trim())?.cashing);
-  const result = cashing - totalCaves;
-  if (result === 0) return total;
-  const payments = parsePaymentOptions(player.resultPaymentOptions);
-  const cashPayments = payments.filter((payment) => isCashPaymentOption(payment.option));
-  if (!cashPayments.length) return total;
-  // Espèce seule : tout le résultat passe en caisse.
-  // Plusieurs règlements (ex. Espèce + TPE) : seul le montant saisi en Espèce compte.
-  const amount = payments.length === 1
-    ? Math.abs(result)
-    : cashPayments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0);
-  // Résultat négatif : le joueur paie, la caisse augmente.
-  // Résultat positif : le casino paie le joueur, la caisse diminue.
-  return result < 0 ? total + amount : total - amount;
-}, 0);
-
-// TOTAL ESPECES CAISSE du calcul final, repris tel quel par le rapport journalier.
-// TOTAL ESPECES CAISSE = espèces des joueurs + TOTAL RETRAIT AUTRES DEPARTEMENT.
-export const computeTotalEspecesCaisse = (players: PlayerLine[], otherDepartmentWithdrawalTotal: number) =>
-  getCashPaymentTotal(players) + otherDepartmentWithdrawalTotal;
 
 const isPaidCave = (payment?: string) => {
   const normalized = String(payment || '')
