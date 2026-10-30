@@ -22,6 +22,8 @@ import { Button, Modal } from '../components/UI';
 
 // Services et types
 import * as restaurantService from '../services/restaurantService';
+import barService from '../services/bar.service';
+import type { BarProduct } from '../types/bar.type';
 import type {
   TableRestaurant,
   Order,
@@ -72,6 +74,7 @@ export const RestaurantPage: React.FC = () => {
 
   // Données mockées (produits, commandes, clients) – à migrer plus tard
   const [products, setProducts] = useState<Product[]>([]);
+  const [barDrinks, setBarDrinks] = useState<BarProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -126,6 +129,15 @@ export const RestaurantPage: React.FC = () => {
     };
     fetchTables();
     fetchOrders();
+    barService.getBarProducts()
+      .then((response) => {
+        const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
+        setBarDrinks(Array.isArray(data) ? data : []);
+      })
+      .catch((error) => {
+        console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
+        setBarDrinks([]);
+      });
 
     Promise.all([
       restaurantService.getProducts({ actif: true }),
@@ -606,6 +618,25 @@ export const RestaurantPage: React.FC = () => {
         {activeTab === 'menu' && (
           <MenuTab
             products={products}
+            barDrinks={barDrinks}
+            commandesContent={(
+              <CommandesTab
+                orders={orders}
+                products={products}
+                onUpdateStatus={handleUpdateOrderStatus}
+                onPayment={handlePayment}
+                onCancel={handleCancelOrder}
+                onDelete={handleRequestDeleteOrder}
+                onNewOrder={handleNewOrder}
+                onEditOrder={(order) => {
+                  setEditingOrder(order);
+                  setSelectedOrderTable(String(order.table_id || order.table?.id || 0));
+                  setSelectedOrderLocation(getRestaurantLocationLabel(order.location_type));
+                  setShowOrderModal(true);
+                }}
+                onInvoice={handlePrintInvoice}
+              />
+            )}
             categories={categories}
             userIsAdmin={userIsAdmin}
             onAddProduct={() => {

@@ -2,12 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { Badge, Button, Modal } from '../../UI';
 import { formatCurrency } from '../../../utils/data';
-import { Plus, Edit, Trash2, Search, UtensilsCrossed, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, UtensilsCrossed, Eye, Wine } from 'lucide-react';
 import * as restaurantService from '../../../services/restaurantService';
 import type { Product, Category } from '../types';
+import type { BarProduct } from '../../../types/bar.type';
 
 interface MenuTabProps {
   products: Product[];
+  barDrinks: BarProduct[];
+  commandesContent: React.ReactNode;
   categories: Category[];
   userIsAdmin: boolean;
   onAddProduct: () => void;
@@ -17,12 +20,15 @@ interface MenuTabProps {
 
 export const MenuTab: React.FC<MenuTabProps> = ({
   products,
+  barDrinks,
+  commandesContent,
   categories,
   userIsAdmin,
   onAddProduct,
   onEditProduct,
   onDeleteProduct
 }) => {
+  const [activeRestaurantSection, setActiveRestaurantSection] = useState<'carte' | 'boissons' | 'commandes'>('carte');
   const [selectedCategory, setSelectedCategory] = useState<number | 'tous'>('tous');
   const [searchTerm, setSearchTerm] = useState('');
   const [productColors, setProductColors] = useState<Record<string, string>>({});
@@ -102,6 +108,25 @@ export const MenuTab: React.FC<MenuTabProps> = ({
 
   return (
     <div className="space-y-6 w-full">
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-base bg-surface p-1.5">
+        {([
+          ['carte', 'Carte'],
+          ['boissons', 'Boissons'],
+          ['commandes', 'Commandes'],
+        ] as const).map(([section, label]) => (
+          <button
+            key={section}
+            type="button"
+            onClick={() => setActiveRestaurantSection(section)}
+            aria-pressed={activeRestaurantSection === section}
+            className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${activeRestaurantSection === section ? 'bg-accent text-black' : 'text-muted hover:bg-surface-2 hover:text-primary'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeRestaurantSection === 'carte' && <>
       {/* En-tête */}
       <div
         className="rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm"
@@ -312,6 +337,55 @@ export const MenuTab: React.FC<MenuTabProps> = ({
 
         </div>
       </div>
+
+      </>}
+
+      {activeRestaurantSection === 'boissons' && <section
+        className="rounded-2xl p-4 sm:p-6 shadow-sm space-y-4"
+        style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        aria-labelledby="restaurant-bar-drinks-title"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <span className="text-xs uppercase tracking-wider text-amber-500 font-bold block mb-1">BAR & COCKTAILS</span>
+            <h3 id="restaurant-bar-drinks-title" className="text-primary font-bold text-xl flex items-center gap-2">
+              <Wine className="text-amber-500" size={22} />
+              Boissons
+            </h3>
+            <p className="text-sm text-subtle mt-0.5">Boissons déjà enregistrées dans Bar & Cocktails.</p>
+          </div>
+          <span className="text-xs text-subtle rounded-full px-2.5 py-1 bg-surface-2">{barDrinks.length}</span>
+        </div>
+
+        {barDrinks.length === 0 ? (
+          <p className="text-sm text-subtle rounded-xl bg-surface-2 px-4 py-6 text-center">
+            Aucune boisson enregistrée dans Bar & Cocktails.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {barDrinks.map((drink) => (
+              <article key={drink.id} className="rounded-xl p-4 bg-surface-2 border border-base space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="text-primary font-semibold truncate">{drink.nom}</h4>
+                    <p className="text-xs text-subtle mt-1">{drink.categorie || 'Boisson'}</p>
+                  </div>
+                  <span className="shrink-0 text-xs rounded-full px-2 py-1 bg-surface text-secondary border border-base">
+                    {drink.alcool ? 'Avec alcool' : 'Sans alcool'}
+                  </span>
+                </div>
+                {drink.ingredients && <p className="text-sm text-secondary whitespace-pre-line">{drink.ingredients}</p>}
+                <div className="pt-2 border-t border-base flex items-center justify-between gap-2">
+                  <span className="text-xs text-subtle">Prix de vente</span>
+                  <span className="text-base font-bold text-amber-500">{formatCurrency(drink.prix)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>}
+
+      {activeRestaurantSection === 'commandes' && commandesContent}
 
       <Modal
         isOpen={viewingProduct !== null}
