@@ -102,6 +102,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<BarCommande | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   const resolveReservationClientLabel = (reservation: any) => {
     const firstName = String(reservation?.client?.prenom ?? reservation?.client_prenom ?? reservation?.prenom ?? '').trim();
@@ -460,6 +461,8 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handleAjouterCommande = async (event: React.FormEvent) => {
     event.preventDefault();
+    // Empêche une double soumission (double clic) de créer deux commandes.
+    if (isSubmittingOrder) return;
     const rawPersonName = isNamedLocation ? specialPersonName.trim() : client.trim() || 'Client anonyme';
     const clientNom = selectedLocation?.label === 'Chambre' && rawPersonName
       ? (selectedChamberRoomLabel ? `${rawPersonName} — ${selectedChamberRoomLabel}` : rawPersonName)
@@ -497,6 +500,7 @@ export const BarCommandeView: React.FC<Props> = ({
     }
 
     try {
+      setIsSubmittingOrder(true);
       if (isEditingOrder && editingOrderId !== null) {
         await onUpdateCommande?.({
           id: editingOrderId,
@@ -533,6 +537,8 @@ export const BarCommandeView: React.FC<Props> = ({
         ? "La commande n'a pas pu être modifiée. Vérifiez les données puis réessayez."
         : "La commande n'a pas pu être créée. Vérifiez les données puis réessayez.";
       setFeedback({ type: 'error', message: apiError.response?.data?.error?.message || apiError.message || fallbackMessage });
+    } finally {
+      setIsSubmittingOrder(false);
     }
   };
 
@@ -1125,9 +1131,9 @@ export const BarCommandeView: React.FC<Props> = ({
             <Button variant="secondary" type="button" onClick={handleCloseModal} className="flex-1">
               Annuler
             </Button>
-            <Button type="submit" className="flex-1" disabled={selectedItems.length === 0}>
+            <Button type="submit" className="flex-1" disabled={selectedItems.length === 0 || isSubmittingOrder}>
               <Plus size={16} />
-              Créer la commande
+              {isSubmittingOrder ? 'Enregistrement...' : isEditingOrder ? 'Enregistrer les modifications' : 'Créer la commande'}
             </Button>
           </div>
         </form>

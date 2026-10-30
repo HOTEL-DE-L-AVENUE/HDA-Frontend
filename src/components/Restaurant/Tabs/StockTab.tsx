@@ -634,18 +634,24 @@ const StockPanel: React.FC = () => {
                 <button onClick={loadHistory} className="h-9 px-3 bg-slate-800 border border-slate-700/50 rounded-xl text-slate-400 hover:text-white transition-all flex items-center gap-2">
                   <History size={14} /> Historique
                 </button>
-                {userIsAdmin && (
-                  <Button icon={<Plus size={16} />} onClick={() => { setIngredientFormErr(''); setShowAddIngredientModal(true); }}>
-                    Ajouter Ingrédient
-                  </Button>
-                )}
-
               </div>
             </div>
           </div>
 
           {/* Data Table */}
           <div className="bg-slate-900 border border-slate-800/50 rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-3 border-b border-slate-800/50">
+              <span className="text-slate-500 text-xs font-medium uppercase tracking-wide">Liste des articles</span>
+              {userIsAdmin && (
+                <button
+                  type="button"
+                  onClick={() => { setIngredientFormErr(''); setShowAddIngredientModal(true); }}
+                  className="text-xs text-slate-400 hover:text-white transition-all inline-flex items-center gap-1"
+                >
+                  <Plus size={13} /> Ajouter un ingrédient
+                </button>
+              )}
+            </div>
             <DataTable data={enrichedStocks} columns={columns} />
           </div>
 
