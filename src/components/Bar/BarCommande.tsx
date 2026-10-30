@@ -304,14 +304,18 @@ export const BarCommandeView: React.FC<Props> = ({
   };
 
   const handleAddItem = (cocktail: BarProduct) => {
+    const sourceModule = cocktail.source_module || 'BAR';
+    const productId = cocktail.restaurant_product_id ?? cocktail.id;
     setSelectedItems((prev) => {
-      const existing = prev.find((item) => item.nom === cocktail.nom);
+      const existing = prev.find((item) => item.nom === cocktail.nom
+        && (item.source_module || 'BAR') === sourceModule
+        && Number(item.product_id) === productId);
       if (existing) {
         return prev.map((item) =>
-          item.nom === cocktail.nom ? { ...item, quantite: item.quantite + 1, prix: cocktail.prix } : item
+          item === existing ? { ...item, quantite: item.quantite + 1, prix: cocktail.prix } : item
         );
       }
-      return [...prev, { product_id: cocktail.id, nom: cocktail.nom, quantite: 1, prix: cocktail.prix }];
+      return [...prev, { product_id: productId, source_module: sourceModule, nom: cocktail.nom, quantite: 1, prix: cocktail.prix }];
     });
   };
 
@@ -483,6 +487,7 @@ export const BarCommandeView: React.FC<Props> = ({
     }
 
     const stockIssue = selectedItems.map((item) => {
+      if (item.source_module === 'RESTAURANT') return null;
       const productId = Number(item.product_id ?? 0);
       const stock = productId > 0 ? stockMap[productId] : undefined;
       const available = stock ? Number(stock.quantite) : 0;
@@ -1116,9 +1121,10 @@ export const BarCommandeView: React.FC<Props> = ({
                 )}
                 <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-2 overflow-y-auto overscroll-contain pr-1 touch-pan-y xl:grid-cols-3">
                   {menuItems.map((cocktail) => {
-                    const isSpecialBillardItem = cocktail.id <= 0;
+                    const isRestaurantMenuItem = cocktail.source_module === 'RESTAURANT';
+                    const isSpecialBillardItem = cocktail.id <= 0 && !isRestaurantMenuItem;
                     const stock = stockMap[cocktail.id];
-                    const unavailable = !isSpecialBillardItem && (!stock || stock.quantite <= 0);
+                    const unavailable = !isRestaurantMenuItem && !isSpecialBillardItem && (!stock || stock.quantite <= 0);
                     return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[84px] flex-col items-center justify-center rounded-md border border-emerald-950 bg-emerald-500 px-2 py-2 text-center text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40`}><span className="text-xs font-bold leading-tight">{cocktail.nom}</span><span className="mt-1 text-[10px] font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span></button>;
                   })}
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}

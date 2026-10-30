@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
 import barService from '../services/bar.service';
+import * as restaurantService from '../services/restaurantService';
 import { BarPaymentMethod, BarProduct, BarStockItem } from '../types/bar.type';
+import type { Product as RestaurantProduct } from '../types/restaurant';
 
 // ─── Layout ───────────────────────────────────────────────
 import { BarHeader } from '../components/Bar/BarHeader';
@@ -38,6 +40,7 @@ export const BarPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<BarTabId>('commandes');
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
+  const [restaurantMenuProducts, setRestaurantMenuProducts] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +117,7 @@ export const BarPage: React.FC = () => {
           quantite: Number(item.quantite) || 1,
           prix: Number(item.prix) || 0,
           prix_unitaire: Number(item.prix) || 0,
+          source_module: item.source_module || 'BAR',
         }))
         .filter((item) => item.product_id > 0 && item.nom && item.quantite > 0);
 
@@ -147,6 +151,7 @@ export const BarPage: React.FC = () => {
           quantite: Number(item.quantite) || 1,
           prix: Number(item.prix) || 0,
           prix_unitaire: Number(item.prix) || 0,
+          source_module: item.source_module || 'BAR',
         }))
         .filter((item) => item.product_id > 0 && item.nom && item.quantite > 0);
 
@@ -218,14 +223,35 @@ export const BarPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [cocktailsRes, stockRes] = await Promise.all([
+      const [cocktailsRes, stockRes, restaurantProductsRes] = await Promise.all([
         barService.getBarProducts(),
         barService.getBarStock(),
+        restaurantService.getProducts({ actif: true }).catch((error) => {
+          console.warn('Impossible de charger les menus Pizza et Carte Sélectionner du Restaurant dans les commandes Bar', error);
+          return null;
+        }),
       ]);
       const cocktailsData = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
       const stock = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: BarStockItem[] }).data;
       const baseCocktails = Array.isArray(cocktailsData) ? (cocktailsData as BarProduct[]) : [];
       setCocktails(baseCocktails);
+      const restaurantProducts = restaurantProductsRes?.success && Array.isArray(restaurantProductsRes.data)
+        ? restaurantProductsRes.data as Array<RestaurantProduct & { category_nom?: string }>
+        : [];
+      const selectedCategories = new Set(['pizza', 'carte selectionner', 'carte selectionnee']);
+      const normalizeCategory = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+      setRestaurantMenuProducts(restaurantProducts
+        .filter((product) => selectedCategories.has(normalizeCategory(product.category_nom || '')))
+        .map((product) => ({
+          id: -Number(product.id),
+          restaurant_product_id: Number(product.id),
+          source_module: 'RESTAURANT',
+          nom: product.nom,
+          ingredients: '',
+          prix: Number(product.prix_vente || 0),
+          categorie: product.category_nom || 'Pizza',
+          alcool: false,
+        })));
       if (Array.isArray(stock)) {
         const map: Record<number, { quantite: number; unite: string }> = {};
         (stock as BarStockItem[]).forEach((s) => {
@@ -292,7 +318,7 @@ export const BarPage: React.FC = () => {
           onUpdateCommande={handleUpdateCommande}
           onDeleteCommande={handleDeleteCommande}
           onUpdateStatut={handleUpdateStatut}
-          cocktails={cocktails}
+          cocktails={[...cocktails, ...restaurantMenuProducts]}
           stockMap={stockMap}
         />
       )}

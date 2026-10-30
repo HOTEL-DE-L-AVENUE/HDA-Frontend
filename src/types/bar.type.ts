@@ -18,6 +18,8 @@ export interface BarProduct {
   prix: number;
   categorie: string;
   alcool: boolean;
+  source_module?: 'BAR' | 'RESTAURANT';
+  restaurant_product_id?: number;
 }
 
 export type BarPaymentMethod =
@@ -44,6 +46,7 @@ export interface BestSeller {
 
 export interface BarCommandeItem {
   product_id?: number;
+  source_module?: 'BAR' | 'RESTAURANT';
   nom: string;
   quantite: number;
   prix: number;
