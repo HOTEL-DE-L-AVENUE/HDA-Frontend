@@ -49,8 +49,12 @@ const formatQty = (value: number) => Number(value || 0).toLocaleString('fr-FR', 
 const formatMoney = (value: number | null | undefined) => value == null ? '—' : `${Number(value).toLocaleString('fr-FR')} MGA`;
 const formatDate = (value: string | null | undefined) => value ? new Date(String(value).replace(' ', 'T')).toLocaleDateString('fr-FR') : '—';
 const formatDateTime = (value: string | null | undefined) => value ? new Date(String(value).replace(' ', 'T')).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
-const apiError = (err: any, fallback: string) =>
-  err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || fallback;
+const apiError = (err: any, fallback: string) => {
+  const responseError = err?.response?.data?.error;
+  const message = responseError?.message || err?.response?.data?.message || err?.message || fallback;
+  const details = typeof responseError?.details === 'string' ? responseError.details.trim() : '';
+  return details && !message.includes(details) ? `${message} — Détail SQL : ${details}` : message;
+};
 
 const currentMonth = () => madagascarDate().slice(0, 7);
 const monthLabel = (month: string) => {
