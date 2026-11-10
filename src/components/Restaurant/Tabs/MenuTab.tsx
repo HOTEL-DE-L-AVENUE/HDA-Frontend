@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Badge, Button, Modal } from '../../UI';
 import { formatCurrency } from '../../../utils/data';
-import { Plus, Edit, Trash2, Search, UtensilsCrossed, Eye, Wine } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, UtensilsCrossed, Eye } from 'lucide-react';
 import * as restaurantService from '../../../services/restaurantService';
 import type { Product, Category } from '../types';
 import type { BarProduct } from '../../../types/bar.type';
@@ -10,7 +10,6 @@ import type { BarProduct } from '../../../types/bar.type';
 interface MenuTabProps {
   products: Product[];
   barDrinks: BarProduct[];
-  commandesContent: React.ReactNode;
   categories: Category[];
   userIsAdmin: boolean;
   onAddProduct: () => void;
@@ -21,15 +20,13 @@ interface MenuTabProps {
 export const MenuTab: React.FC<MenuTabProps> = ({
   products,
   barDrinks,
-  commandesContent,
   categories,
   userIsAdmin,
   onAddProduct,
   onEditProduct,
   onDeleteProduct
 }) => {
-  const [activeRestaurantSection, setActiveRestaurantSection] = useState<'carte' | 'boissons' | 'commandes'>('carte');
-  const [selectedCategory, setSelectedCategory] = useState<number | 'tous'>('tous');
+  const [selectedCategory, setSelectedCategory] = useState<number | string>('tous');
   const [searchTerm, setSearchTerm] = useState('');
   const [productColors, setProductColors] = useState<Record<string, string>>({});
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -58,14 +55,17 @@ export const MenuTab: React.FC<MenuTabProps> = ({
   );
 
   const filteredProducts = menuProducts.filter(p => {
-    const matchesCategory = selectedCategory === 'tous' || p.category_id === selectedCategory;
+    const matchesCategory = selectedCategory === 'tous' || (typeof selectedCategory === 'number' && p.category_id === selectedCategory);
     const matchesSearch = p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
   const filteredBarDrinks = barDrinks.filter((drink) => {
-    const matchesCategory = selectedCategory === 'tous';
+    const matchingRestaurantCategory = categories.find((category) => category.nom.trim().toLowerCase() === (drink.categorie || '').trim().toLowerCase());
+    const matchesCategory = selectedCategory === 'tous'
+      || (typeof selectedCategory === 'number' && matchingRestaurantCategory?.id === selectedCategory)
+      || selectedCategory === `bar:${drink.categorie || 'Boisson'}`;
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const matchesSearch = !normalizedSearch ||
       drink.nom.toLowerCase().includes(normalizedSearch) ||
@@ -85,13 +85,20 @@ export const MenuTab: React.FC<MenuTabProps> = ({
       p.nom.toLowerCase().includes(normalizedSearch) ||
       (p.code && p.code.toLowerCase().includes(normalizedSearch))
     );
+    const matchingDrink = barDrinks.find((drink) =>
+      drink.nom.toLowerCase().includes(normalizedSearch) ||
+      (drink.categorie || '').toLowerCase().includes(normalizedSearch)
+    );
     const matchingCategory = matchingProduct?.category_id;
 
-    setSelectedCategory(
-      matchingCategory != null && categories.some(category => category.id === matchingCategory)
-        ? matchingCategory
-        : 'tous'
-    );
+    if (matchingCategory != null && categories.some(category => category.id === matchingCategory)) {
+      setSelectedCategory(matchingCategory);
+    } else if (matchingDrink) {
+      const sharedCategory = categories.find((category) => category.nom.trim().toLowerCase() === (matchingDrink.categorie || '').trim().toLowerCase());
+      setSelectedCategory(sharedCategory?.id ?? `bar:${matchingDrink.categorie || 'Boisson'}`);
+    } else {
+      setSelectedCategory('tous');
+    }
   };
 
   const handleViewRecipe = async (product: Product) => {
@@ -117,25 +124,6 @@ export const MenuTab: React.FC<MenuTabProps> = ({
 
   return (
     <div className="space-y-6 w-full">
-      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-base bg-surface p-1.5">
-        {([
-          ['carte', 'Carte'],
-          ['boissons', 'Boissons'],
-          ['commandes', 'Commandes'],
-        ] as const).map(([section, label]) => (
-          <button
-            key={section}
-            type="button"
-            onClick={() => setActiveRestaurantSection(section)}
-            aria-pressed={activeRestaurantSection === section}
-            className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${activeRestaurantSection === section ? 'bg-accent text-black' : 'text-muted hover:bg-surface-2 hover:text-primary'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {activeRestaurantSection === 'carte' && <>
       {/* En-tête */}
       <div
         className="rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm"
@@ -189,15 +177,11 @@ export const MenuTab: React.FC<MenuTabProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
           {/* Filtres verticaux (Masque les catégories à 0 et garde "Toutes") */}
-          <div className="lg:col-span-1 space-y-2">
+          <aside className="space-y-1 rounded-xl border border-base bg-[#171b1c] p-2 lg:sticky lg:top-4 lg:col-span-1 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
             <button
               onClick={() => setSelectedCategory('tous')}
-              className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex justify-between items-center ${selectedCategory === 'tous' ? 'bg-amber-500 text-white shadow-md' : 'text-primary hover:bg-surface-2'
+              className={`w-full text-left px-3 py-3 rounded-lg text-xs font-semibold transition-all flex justify-between items-center ${selectedCategory === 'tous' ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'text-secondary hover:bg-surface-3'
                 }`}
-              style={{
-                backgroundColor: selectedCategory === 'tous' ? '#f59e0b' : 'var(--color-surface-2)',
-                border: '1px solid var(--color-border)',
-              }}
             >
               <span>Toutes</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{menuProducts.length + barDrinks.length}</span>
@@ -206,7 +190,7 @@ export const MenuTab: React.FC<MenuTabProps> = ({
             {categories
               .map((cat) => ({
                 ...cat,
-                count: menuProducts.filter(p => p.category_id === cat.id).length,
+                count: menuProducts.filter(p => p.category_id === cat.id).length + barDrinks.filter((drink) => (drink.categorie || '').trim().toLowerCase() === cat.nom.trim().toLowerCase()).length,
               }))
               .filter((cat) => cat.count > 0)
               .map((cat) => {
@@ -215,19 +199,33 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex justify-between items-center ${isSelected ? 'bg-amber-500 text-white shadow-md' : 'text-primary hover:bg-surface-2'
+                    className={`w-full text-left px-3 py-3 rounded-lg text-xs font-semibold transition-all flex justify-between items-center ${isSelected ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'text-secondary hover:bg-surface-3'
                       }`}
-                    style={{
-                      backgroundColor: isSelected ? '#f59e0b' : 'var(--color-surface-2)',
-                      border: '1px solid var(--color-border)',
-                    }}
                   >
                     <span>{cat.nom}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{cat.count}</span>
                   </button>
                 );
               })}
-          </div>
+            {Array.from(new Set(barDrinks.map((drink) => drink.categorie?.trim() || 'Boisson')))
+              .filter((drinkCategory) => !categories.some((category) => category.nom.trim().toLowerCase() === drinkCategory.toLowerCase()))
+              .map((drinkCategory) => {
+                const categoryKey = `bar:${drinkCategory}`;
+                const isSelected = selectedCategory === categoryKey;
+                const count = barDrinks.filter((drink) => (drink.categorie?.trim() || 'Boisson') === drinkCategory).length;
+                return (
+                  <button
+                    key={categoryKey}
+                    type="button"
+                    onClick={() => setSelectedCategory(categoryKey)}
+                    className={`w-full text-left px-3 py-3 rounded-lg text-xs font-semibold transition-all flex justify-between items-center ${isSelected ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'text-secondary hover:bg-surface-3'}`}
+                  >
+                    <span>{drinkCategory}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{count}</span>
+                  </button>
+                );
+              })}
+          </aside>
 
           {/* Grille des produits */}
           <div className="lg:col-span-3">
@@ -341,21 +339,10 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                   );
                 })}
                 {filteredBarDrinks.map((drink) => (
-                  <article key={`bar-drink-${drink.id}`} className="group rounded-2xl border border-base bg-surface-2 p-4 flex flex-col justify-between transition-all hover:shadow-lg">
-                    <div>
-                      <div className="flex justify-between items-start gap-2 mb-3">
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg uppercase tracking-wider border border-base bg-surface text-subtle">
-                          {drink.categorie || 'Boisson'}
-                        </span>
-                        <span className="text-xs text-secondary">{drink.alcool ? 'Avec alcool' : 'Sans alcool'}</span>
-                      </div>
-                      <h4 className="font-bold text-base line-clamp-1 text-primary">{drink.nom}</h4>
-                      {drink.ingredients && <p className="mt-1 text-xs text-subtle line-clamp-2">{drink.ingredients}</p>}
-                    </div>
-                    <div className="pt-3 flex items-center justify-between mt-3 border-t border-base">
-                      <span className="text-xs text-subtle">Prix de vente</span>
-                      <span className="text-base sm:text-lg font-bold text-accent">{formatCurrency(drink.prix)}</span>
-                    </div>
+                  <article key={`bar-drink-${drink.id}`} className="group flex min-h-[112px] flex-col items-center justify-center rounded-xl border border-emerald-700/40 bg-[#00bd83] p-3 text-center transition hover:bg-[#00ca8c]">
+                    <h4 className="line-clamp-1 text-sm font-bold text-white">{drink.nom}</h4>
+                    <span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(drink.prix)}</span>
+                    <span className="mt-2 text-[11px] font-medium text-emerald-950">Stock : {drink.quantite ?? 0} {drink.unite || 'unités'}</span>
                   </article>
                 ))}
               </div>
@@ -364,55 +351,6 @@ export const MenuTab: React.FC<MenuTabProps> = ({
 
         </div>
       </div>
-
-      </>}
-
-      {activeRestaurantSection === 'boissons' && <section
-        className="rounded-2xl p-4 sm:p-6 shadow-sm space-y-4"
-        style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        aria-labelledby="restaurant-bar-drinks-title"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <span className="text-xs uppercase tracking-wider text-amber-500 font-bold block mb-1">BAR & COCKTAILS</span>
-            <h3 id="restaurant-bar-drinks-title" className="text-primary font-bold text-xl flex items-center gap-2">
-              <Wine className="text-amber-500" size={22} />
-              Boissons
-            </h3>
-            <p className="text-sm text-subtle mt-0.5">Boissons déjà enregistrées dans Bar & Cocktails.</p>
-          </div>
-          <span className="text-xs text-subtle rounded-full px-2.5 py-1 bg-surface-2">{barDrinks.length}</span>
-        </div>
-
-        {barDrinks.length === 0 ? (
-          <p className="text-sm text-subtle rounded-xl bg-surface-2 px-4 py-6 text-center">
-            Aucune boisson enregistrée dans Bar & Cocktails.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {barDrinks.map((drink) => (
-              <article key={drink.id} className="rounded-xl p-4 bg-surface-2 border border-base space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h4 className="text-primary font-semibold truncate">{drink.nom}</h4>
-                    <p className="text-xs text-subtle mt-1">{drink.categorie || 'Boisson'}</p>
-                  </div>
-                  <span className="shrink-0 text-xs rounded-full px-2 py-1 bg-surface text-secondary border border-base">
-                    {drink.alcool ? 'Avec alcool' : 'Sans alcool'}
-                  </span>
-                </div>
-                {drink.ingredients && <p className="text-sm text-secondary whitespace-pre-line">{drink.ingredients}</p>}
-                <div className="pt-2 border-t border-base flex items-center justify-between gap-2">
-                  <span className="text-xs text-subtle">Prix de vente</span>
-                  <span className="text-base font-bold text-amber-500">{formatCurrency(drink.prix)}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>}
-
-      {activeRestaurantSection === 'commandes' && commandesContent}
 
       <Modal
         isOpen={viewingProduct !== null}
