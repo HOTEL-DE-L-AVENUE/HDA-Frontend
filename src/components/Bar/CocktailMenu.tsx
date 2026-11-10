@@ -1,11 +1,14 @@
 // src/components/Bar/CocktailMenu.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BarProduct } from '../../types/bar.type';
 import { Button, Input, Modal, Select } from '../UI';
 import { Check, Edit3, Plus, Search, Trash2 } from 'lucide-react';
 import barService from '../../services/bar.service';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../utils/data';
+import { ProductModal } from '../Restaurant/Modals/ProductModal';
+import * as restaurantService from '../../services/restaurantService';
+import type { Product as RestaurantProduct, Category } from '../Restaurant/types';
 
 // Normalise un nom d'article pour détecter les doublons :
 // "J&B (70 cl)" et "JB 70cl" donnent la même clé, "Gordon's" et "Gordons" aussi.
@@ -65,9 +68,25 @@ export const CocktailMenu: React.FC<Props> = ({
   const [selectedCategory, setSelectedCategory] = useState('Toutes');
   const [selectedSubcategory, setSelectedSubcategory] = useState('Toutes');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [addItemType, setAddItemType] = useState<'boisson' | 'plat'>('boisson');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [restaurantProducts, setRestaurantProducts] = useState<RestaurantProduct[]>([]);
+  const [restaurantCategories, setRestaurantCategories] = useState<Category[]>([]);
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (!isModalOpen || addItemType !== 'plat') return;
+    let cancelled = false;
+    Promise.all([restaurantService.getProducts(), restaurantService.getCategories()])
+      .then(([productsResponse, categoriesResponse]) => {
+        if (cancelled) return;
+        if (productsResponse.success) setRestaurantProducts(productsResponse.data as RestaurantProduct[]);
+        if (categoriesResponse.success) setRestaurantCategories(categoriesResponse.data as Category[]);
+      })
+      .catch((error) => console.error('Erreur chargement du catalogue Restaurant:', error));
+    return () => { cancelled = true; };
+  }, [isModalOpen, addItemType]);
 
   // États du formulaire d'ajout
   const [nom, setNom] = useState('');
@@ -94,6 +113,7 @@ export const CocktailMenu: React.FC<Props> = ({
   const [editAlcool, setEditAlcool] = useState(true);
 
   const handleOpenModal = () => {
+    setAddItemType('boisson');
     setNom('');
     setCategorie('Alcools');
     setSousCategorie('');
@@ -103,6 +123,31 @@ export const CocktailMenu: React.FC<Props> = ({
     setUnite('unités');
     setAlcool(true);
     setIsModalOpen(true);
+  };
+
+  const handleCreateRestaurantProduct = async (formData: Record<string, any>) => {
+    const { ingredients = [], category_nom, ...productData } = formData;
+    let category: Category | null = null;
+    if (typeof category_nom === 'string' && category_nom.trim()) {
+      category = restaurantCategories.find((item) => item.nom.trim().toLocaleLowerCase() === category_nom.trim().toLocaleLowerCase()) || null;
+      if (!category) {
+        const response = await restaurantService.createCategory({ nom: category_nom.trim() });
+        if (!response.success || !response.data) throw new Error(response.message || 'Création de la catégorie impossible.');
+        category = response.data as Category;
+        setRestaurantCategories((current) => [...current, category as Category]);
+      }
+    }
+
+    const response = await restaurantService.createProduct({
+      ...productData,
+      category_id: category?.id ?? null,
+      prix_achat: 0,
+      ingredients,
+    });
+    if (!response.success) throw new Error(response.message || 'Création du plat impossible.');
+    showToast('Plat ajouté avec succès au menu du Restaurant.', 'success');
+    setIsModalOpen(false);
+    setAddItemType('boisson');
   };
 
   const handleOpenEditModal = (cocktail: BarProduct) => {
@@ -410,8 +455,32 @@ export const CocktailMenu: React.FC<Props> = ({
       )}
 
       {/* Modal d'ajout de boisson */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Ajouter une nouvelle boisson" size="md">
+      <Modal isOpen={isModalOpen && addItemType === 'boisson'} onClose={() => setIsModalOpen(false)} title="Ajouter une nouvelle boisson" size="md">
         <form onSubmit={handleCreateProduct} className="space-y-4">
+          <section className="space-y-2 rounded-xl border border-base bg-surface-2 p-3">
+            <div>
+              <h3 className="text-sm font-semibold text-primary">Type de produit</h3>
+              <p className="text-xs text-muted">Choisissez ce que vous souhaitez ajouter.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { value: 'boisson', label: 'Boisson' },
+                { value: 'plat', label: 'Plat' },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={addItemType === option.value}
+                  onClick={() => setAddItemType(option.value)}
+                  className={`rounded-lg border px-4 py-3 text-sm font-semibold transition ${addItemType === option.value
+                    ? 'border-accent bg-accent/15 text-primary'
+                    : 'border-base bg-surface text-secondary hover:bg-surface-3'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </section>
           <Input
             label="Nom de la boisson"
             value={nom}
@@ -492,6 +561,12 @@ export const CocktailMenu: React.FC<Props> = ({
           </div>
         </form>
       </Modal>
+      <ProductModal
+        isOpen={isModalOpen && addItemType === 'plat'}
+        onClose={() => { setIsModalOpen(false); setAddItemType('boisson'); }}
+        onSubmit={handleCreateRestaurantProduct}
+        products={restaurantProducts}
+      />
 
       {/* Avertissement : article déjà inscrit */}
       <Modal isOpen={duplicateMatches.length > 0} onClose={() => setDuplicateMatches([])} title="Article déjà inscrit" size="md">
