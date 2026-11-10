@@ -619,24 +619,6 @@ export const RestaurantPage: React.FC = () => {
           <MenuTab
             products={products}
             barDrinks={barDrinks}
-            commandesContent={(
-              <CommandesTab
-                orders={orders}
-                products={products}
-                onUpdateStatus={handleUpdateOrderStatus}
-                onPayment={handlePayment}
-                onCancel={handleCancelOrder}
-                onDelete={handleRequestDeleteOrder}
-                onNewOrder={handleNewOrder}
-                onEditOrder={(order) => {
-                  setEditingOrder(order);
-                  setSelectedOrderTable(String(order.table_id || order.table?.id || 0));
-                  setSelectedOrderLocation(getRestaurantLocationLabel(order.location_type));
-                  setShowOrderModal(true);
-                }}
-                onInvoice={handlePrintInvoice}
-              />
-            )}
             categories={categories}
             userIsAdmin={userIsAdmin}
             onAddProduct={() => {
@@ -813,6 +795,7 @@ export const RestaurantPage: React.FC = () => {
         onClose={() => { setShowOrderModal(false); setEditingOrder(null); setSelectedOrderTable(undefined); setSelectedOrderLocation(undefined); }}
         tables={tables}
         products={products}
+        barDrinks={barDrinks}
         categories={categories}
         clients={clients}
         onSubmit={handleAddOrder}

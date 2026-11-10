@@ -18,6 +18,8 @@ export interface BarProduct {
   prix: number;
   categorie: string;
   alcool: boolean;
+  quantite?: number | null;
+  unite?: string | null;
   source_module?: 'BAR' | 'RESTAURANT';
   restaurant_product_id?: number;
 }
