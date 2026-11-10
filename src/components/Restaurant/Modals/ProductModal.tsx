@@ -75,6 +75,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [units, setUnits] = useState<restaurantService.RestaurantUnit[]>([]);
   const [addingUnitKey, setAddingUnitKey] = useState<string | null>(null);
   const [newUnitName, setNewUnitName] = useState('');
+  const [activeIngredientKey, setActiveIngredientKey] = useState<string | null>(null);
+  const [ingredientSearchByKey, setIngredientSearchByKey] = useState<Record<string, string>>({});
+  const [creatingIngredientKey, setCreatingIngredientKey] = useState<string | null>(null);
   const [form, setForm] = useState({
     nom: '',
     code: '',
@@ -215,6 +218,57 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
   };
 
+  const handleCreateIngredient = async (name: string, rowKey: string, rowUnit: string) => {
+    const nom = name.trim();
+    if (!nom) return;
+    const duplicate = availableIngredients.find((ingredient) => (
+      normalizeProductName(ingredient.nom) === normalizeProductName(nom)
+    ));
+    if (duplicate) {
+      showToast(`L’ingrédient « ${duplicate.nom} » existe déjà.`, 'error');
+      return;
+    }
+
+    setCreatingIngredientKey(rowKey);
+    try {
+      const response = await restaurantService.createRestaurantIngredient({
+        nom,
+        unite: rowUnit.trim() || 'PIECE',
+        prix_achat: 0,
+        quantite: 0,
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Impossible de créer cet ingrédient.');
+      }
+
+      const createdIngredient = response.data;
+      setAvailableIngredients((current) => [...current, createdIngredient].sort((a, b) => a.nom.localeCompare(b.nom)));
+      setRecipeIngredients((current) => current.map((row) => row.key === rowKey
+        ? {
+          ...row,
+          ingredient_id: createdIngredient.id,
+          nom: createdIngredient.nom,
+          unite: matchUnitCode(createdIngredient.unite, units),
+        }
+        : row));
+      setIngredientSearchByKey((current) => ({ ...current, [rowKey]: createdIngredient.nom }));
+      setActiveIngredientKey(null);
+      showToast(`Ingrédient « ${createdIngredient.nom} » ajouté à la liste.`, 'success');
+    } catch (error) {
+      const apiError = error as {
+        response?: { status?: number; data?: { message?: string; error?: { message?: string } } };
+      };
+      const message = apiError.response?.data?.message || apiError.response?.data?.error?.message;
+      if (apiError.response?.status === 409) {
+        showToast(message || `L’ingrédient « ${nom} » existe déjà.`, 'error');
+      } else {
+        showToast(message || (error instanceof Error ? error.message : 'Impossible de créer cet ingrédient.'), 'error');
+      }
+    } finally {
+      setCreatingIngredientKey(null);
+    }
+  };
+
   const unitOptionsFor = (currentUnit: string) => {
     const options = units.map((unit) => ({ value: unit.code, label: unit.nom }));
     if (currentUnit && !options.some((option) => option.value === currentUnit)) {
@@ -226,6 +280,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       { value: NEW_UNIT_VALUE, label: '+ Ajouter une unité' },
     ];
   };
+
+  const ingredientQueryFor = (ingredient: RecipeIngredientDraft) => (
+    ingredientSearchByKey[ingredient.key] ?? ingredient.nom
+  );
+  const ingredientMatchesFor = (query: string) => {
+    const normalizedQuery = normalizeProductName(query);
+    return availableIngredients.filter((item) => !normalizedQuery
+      || normalizeProductName(item.nom).includes(normalizedQuery));
+  };
+  const hasExactIngredient = (query: string) => availableIngredients.some((item) => (
+    normalizeProductName(item.nom) === normalizeProductName(query)
+  ));
 
   const handleSubmit = async () => {
     if (!form.nom.trim()) return;
@@ -395,28 +461,79 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           {recipeIngredients.map((ingredient) => (
             <div key={ingredient.key} className="space-y-3 rounded-lg bg-surface-2 p-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_110px_160px_auto]">
-              <Select
-                label="Ingrédient"
-                value={ingredient.ingredient_id?.toString() || ''}
-                onChange={(event) => {
-                  const selectedId = Number(event.target.value);
-                  const selected = availableIngredients.find((item) => item.id === selectedId);
-                  setRecipeIngredients((current) => current.map((row) => (
-                    row.key === ingredient.key
-                      ? {
-                        ...row,
-                        ingredient_id: selectedId,
-                        nom: selected?.nom || '',
-                        unite: selected ? matchUnitCode(selected.unite, units) : '',
-                      }
-                      : row
-                  )));
-                }}
-                options={[
-                  { value: '', label: 'Sélectionner un ingrédient' },
-                  ...availableIngredients.map((item) => ({ value: item.id.toString(), label: item.nom }))
-                ]}
-              />
+              <div className="relative">
+                <Input
+                  label="Ingrédient"
+                  value={ingredientQueryFor(ingredient)}
+                  onFocus={() => setActiveIngredientKey(ingredient.key)}
+                  onBlur={() => window.setTimeout(() => setActiveIngredientKey((current) => (
+                    current === ingredient.key ? null : current
+                  )), 150)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setIngredientSearchByKey((current) => ({ ...current, [ingredient.key]: value }));
+                    setActiveIngredientKey(ingredient.key);
+                    setRecipeIngredients((current) => current.map((row) => (
+                      row.key === ingredient.key ? { ...row, ingredient_id: null, nom: value } : row
+                    )));
+                  }}
+                  placeholder="Rechercher ou saisir un ingrédient"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={activeIngredientKey === ingredient.key}
+                  aria-autocomplete="list"
+                />
+                {activeIngredientKey === ingredient.key && (
+                  <div role="listbox" className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-base bg-surface shadow-xl">
+                    {ingredientMatchesFor(ingredientQueryFor(ingredient)).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="option"
+                        aria-selected={ingredient.ingredient_id === item.id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setRecipeIngredients((current) => current.map((row) => row.key === ingredient.key
+                            ? {
+                              ...row,
+                              ingredient_id: item.id,
+                              nom: item.nom,
+                              unite: matchUnitCode(item.unite, units),
+                            }
+                            : row));
+                          setIngredientSearchByKey((current) => ({ ...current, [ingredient.key]: item.nom }));
+                          setActiveIngredientKey(null);
+                        }}
+                        className="block w-full px-3 py-2 text-left text-sm text-secondary hover:bg-surface-2 hover:text-primary"
+                      >
+                        {item.nom}
+                      </button>
+                    ))}
+                    {ingredientQueryFor(ingredient).trim() && !hasExactIngredient(ingredientQueryFor(ingredient)) && (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected="false"
+                        disabled={creatingIngredientKey === ingredient.key}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => void handleCreateIngredient(
+                          ingredientQueryFor(ingredient),
+                          ingredient.key,
+                          ingredient.unite,
+                        )}
+                        className="block w-full border-t border-base px-3 py-2 text-left text-sm font-semibold text-accent hover:bg-surface-2 disabled:opacity-60"
+                      >
+                        {creatingIngredientKey === ingredient.key
+                          ? 'Ajout en cours...'
+                          : `Ajouter « ${ingredientQueryFor(ingredient).trim()} » comme nouvel ingrédient`}
+                      </button>
+                    )}
+                    {ingredientMatchesFor(ingredientQueryFor(ingredient)).length === 0 && !ingredientQueryFor(ingredient).trim() && (
+                      <p className="px-3 py-2 text-sm text-muted">Aucun ingrédient disponible.</p>
+                    )}
+                  </div>
+                )}
+              </div>
               <Input
                 label="Quantité"
                 type="number"
