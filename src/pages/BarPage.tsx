@@ -283,7 +283,7 @@ export const BarPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <BarHeader />
+      <BarHeader compact={activeTab === 'bar'} />
 
       {error && (
         <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -292,20 +292,37 @@ export const BarPage: React.FC = () => {
         </div>
       )}
 
-      {!userIsBarman && !userIsHostess && <BarStats commandes={commandes} stockMap={stockMap} />}
+      {!userIsBarman && !userIsHostess && (
+        <div>
+          <BarStats commandes={commandes} stockMap={stockMap} compact={activeTab === 'bar'} />
+        </div>
+      )}
 
-      <BarTabs activeTab={userIsBarman || userIsHostess ? 'commandes' : activeTab} onTabChange={setActiveTab} />
+      <div>
+        <BarTabs activeTab={userIsBarman || userIsHostess ? 'commandes' : activeTab} onTabChange={setActiveTab} compact={activeTab === 'bar'} />
+      </div>
 
       {activeTab === 'bar' && (
         <div className="space-y-6">
-          <CocktailMenu
-            cocktails={cocktails}
-            stockMap={stockMap}
-            onStockUpdate={fetchData}
-            onProductAdded={handleProductAdded}
-            userIsAdmin={userIsAdmin}
-          />
-          <BestSellers commandes={commandes} />
+          <div>
+            <CocktailMenu
+              cocktails={cocktails}
+              stockMap={stockMap}
+              onStockUpdate={fetchData}
+              onProductAdded={handleProductAdded}
+              userIsAdmin={userIsAdmin}
+              compact
+            />
+          </div>
+          <div className="lg:hidden">
+            <BestSellers commandes={commandes} />
+          </div>
+          <details className="hidden rounded-xl border border-base bg-surface px-4 py-2 lg:block lg:shrink-0">
+            <summary className="cursor-pointer text-sm font-semibold text-primary">Meilleures ventes</summary>
+            <div className="mt-3 max-h-48 overflow-y-auto">
+              <BestSellers commandes={commandes} showTitle={false} />
+            </div>
+          </details>
         </div>
       )}
 

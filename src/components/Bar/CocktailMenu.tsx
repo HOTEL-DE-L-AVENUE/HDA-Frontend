@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { BarProduct } from '../../types/bar.type';
 import { Button, Input, Modal, Select } from '../UI';
-import { Check, Edit3, Plus, Search, Trash2 } from 'lucide-react';
+import { Edit3, Plus, Search, Trash2 } from 'lucide-react';
 import barService from '../../services/bar.service';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../utils/data';
@@ -52,6 +52,7 @@ interface Props {
   onProductUpdated?: (updatedProduct: BarProduct) => void;
   onProductDeleted?: (productId: number) => void;
   userIsAdmin?: boolean; // Ajout de la prop
+  compact?: boolean;
 }
 
 export const CocktailMenu: React.FC<Props> = ({
@@ -62,7 +63,8 @@ export const CocktailMenu: React.FC<Props> = ({
   onProductAdded,
   onProductUpdated,
   onProductDeleted,
-  userIsAdmin = false
+  userIsAdmin = false,
+  compact = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Toutes');
@@ -367,11 +369,11 @@ export const CocktailMenu: React.FC<Props> = ({
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface border border-base rounded-xl p-4 shadow-sm">
+    <div className="flex flex-col gap-4">
+      <div className={`flex flex-col rounded-xl border border-base bg-surface shadow-sm sm:flex-row sm:items-center sm:justify-between ${compact ? 'gap-2 p-2 sm:gap-3' : 'gap-4 p-4'}`}>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-accent font-semibold">Bar & Lounge</p>
-          <h2 className="text-xl sm:text-2xl font-bold text-primary">Les boissons disponibles</h2>
+          {!compact && <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">Bar & Lounge</p>}
+          <h2 className={`font-bold text-primary ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>Les boissons disponibles</h2>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -388,46 +390,45 @@ export const CocktailMenu: React.FC<Props> = ({
       </div>
 
       {filteredCocktails.length === 0 ? (
-        <div className="rounded-xl border border-base bg-surface text-center py-12 text-slate-500 text-sm">
+        <div className="rounded-xl border border-base bg-surface py-12 text-center text-sm text-slate-500 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           Aucune boisson trouvée.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[190px_minmax(0,1fr)] gap-3 rounded-xl border border-base bg-surface p-3 shadow-sm">
-          <aside className="border-b lg:border-b-0 lg:border-r border-base pb-3 lg:pb-0 lg:pr-3">
-            <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible">
+        <div className="grid grid-cols-1 gap-2 rounded-xl border border-base bg-[#101415] p-2 shadow-md lg:grid-cols-[160px_minmax(0,1fr)]">
+          <aside className="sticky top-0 z-20 self-start border-b border-base bg-[#171b1c] pb-2 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:pb-0">
+            <div className="flex gap-2 overflow-x-auto p-1 lg:flex-col lg:gap-1">
               {categoryNames.map((category) => {
                 const active = selectedCategory === category;
                 return (
-                  <button key={category} type="button" onClick={() => selectCategory(category)} className={`flex shrink-0 items-center justify-between gap-2 rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${active ? 'bg-accent text-black shadow-accent' : 'bg-surface-2 text-secondary hover:bg-surface-3'}`}>
+                  <button key={category} type="button" aria-pressed={active} onClick={() => selectCategory(category)} className={`flex min-h-11 shrink-0 items-center rounded-lg px-3 py-3 text-left text-xs font-semibold transition lg:w-full ${active ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'bg-transparent text-secondary hover:bg-surface-3'}`}>
                     <span>{category}</span>
-                    {active && <Check size={15} />}
                   </button>
                 );
               })}
             </div>
           </aside>
 
-          <section className="min-w-0">
+          <section className="flex min-w-0 flex-col">
             {subcategoryNames.length > 1 && (
-              <div className="mb-3 flex gap-2 overflow-x-auto border-b border-base pb-3">
+              <div className="mb-3 flex shrink-0 gap-2 overflow-x-auto border-b border-base pb-3">
                 {subcategoryNames.map((subcategory) => (
-                  <button key={subcategory} type="button" onClick={() => setSelectedSubcategory(subcategory)} className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition ${selectedSubcategory === subcategory ? 'bg-info text-white' : 'bg-surface-2 text-muted hover:text-primary'}`}>
+                  <button key={subcategory} type="button" aria-pressed={selectedSubcategory === subcategory} onClick={() => setSelectedSubcategory(subcategory)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition ${selectedSubcategory === subcategory ? 'bg-sky-500 text-white' : 'bg-[#30343a] text-muted hover:text-primary'}`}>
                     {subcategory}
                   </button>
                 ))}
               </div>
             )}
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 content-start gap-3 pr-1 lg:grid-cols-4">
               {menuItems.map((cocktail) => {
                 const stock = stockMap?.[cocktail.id];
                 const isOutOfStock = !stock || stock.quantite <= 0;
                 return (
-                  <div key={cocktail.id} className={`group relative min-h-[104px] rounded-lg border border-base bg-emerald-500/90 p-3 text-left transition hover:-translate-y-0.5 hover:bg-emerald-400 ${isOutOfStock ? 'opacity-50 grayscale' : ''}`}>
+                  <div key={cocktail.id} className={`group relative min-h-[112px] rounded-xl border p-3 text-left transition hover:-translate-y-0.5 ${isOutOfStock ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-700/40 bg-[#00bd83] hover:bg-[#00ca8c]'}`}>
                     {onAddToOrder ? (
                       <button type="button" disabled={isOutOfStock} onClick={() => void handleAddArticle(cocktail)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white disabled:cursor-not-allowed">
                         <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
                         <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
-                        <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
+                        <span className={`text-[11px] font-semibold ${isOutOfStock ? 'text-white' : 'text-emerald-950'}`}>
                           Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
                         </span>
                       </button>
@@ -435,7 +436,7 @@ export const CocktailMenu: React.FC<Props> = ({
                       <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white">
                         <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
                         <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
-                        <span className={`text-[10px] font-semibold ${isOutOfStock ? 'text-red-950' : 'text-emerald-950'}`}>
+                        <span className={`text-[11px] font-semibold ${isOutOfStock ? 'text-white' : 'text-emerald-950'}`}>
                           Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
                         </span>
                       </div>

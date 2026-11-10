@@ -5,9 +5,10 @@ import type { BarCommande } from '../../types/bar.type';
 
 interface Props {
   commandes?: BarCommande[];
+  showTitle?: boolean;
 }
 
-export const BestSellers: React.FC<Props> = ({ commandes = [] }) => {
+export const BestSellers: React.FC<Props> = ({ commandes = [], showTitle = true }) => {
   const sellers = useMemo(() => {
     const totals = new Map<string, { ventes: number; montant: number }>();
 
@@ -31,10 +32,12 @@ export const BestSellers: React.FC<Props> = ({ commandes = [] }) => {
 
   return (
     <div className="bg-surface border border-base rounded-2xl p-6">
-      <h3 className="text-primary font-semibold flex items-center gap-2 mb-4">
-        <Star size={16} className="text-accent" />
-        Meilleures Ventes
-      </h3>
+      {showTitle && (
+        <h3 className="text-primary font-semibold flex items-center gap-2 mb-4">
+          <Star size={16} className="text-accent" />
+          Meilleures Ventes
+        </h3>
+      )}
       <div className="space-y-3">
         {sellers.map((item, i) => (
           <div key={item.nom} className="flex items-center gap-4">
