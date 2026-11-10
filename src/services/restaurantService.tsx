@@ -68,7 +68,7 @@ export const createRestaurantIngredient = (data: {
   quantite: number;
   location_id?: number;
 }) =>
-  api.post<ApiResponse<{ message: string }>>('/api/restaurant/ingredients', data).then(res => res.data);
+  api.post<ApiResponse<RestaurantIngredient>>('/api/restaurant/ingredients', data).then(res => res.data);
 
 export const updateRestaurantIngredient = (id: number, data: {
   nom: string;

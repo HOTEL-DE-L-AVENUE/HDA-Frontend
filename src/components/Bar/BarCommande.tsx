@@ -1091,13 +1091,13 @@ export const BarCommandeView: React.FC<Props> = ({
             </div>
           </section>
 
-          <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">
-            <div className="flex items-center justify-between border-b border-base px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
-              <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-40 text-xs" />
+          <div className="overflow-hidden rounded-2xl border-2 border-accent/40 bg-[#0c1112] shadow-[0_0_28px_rgba(245,158,11,0.12)]">
+            <div className="flex items-center justify-between border-b border-accent/25 bg-accent/5 px-4 py-3">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-accent">Menu du bar</p>
+              <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Rechercher" className="w-52 text-sm" />
             </div>
-            <div className="grid h-[min(480px,60dvh)] min-h-[280px] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:h-[480px] lg:grid-cols-[128px_minmax(0,1fr)] lg:grid-rows-1">
-              <nav className="flex gap-1 overflow-x-auto border-b border-base bg-[#171b1c] p-2 touch-pan-x overscroll-contain lg:block lg:space-y-1 lg:overflow-y-auto lg:overflow-x-hidden lg:border-b-0 lg:border-r">
+            <div className="grid h-[min(900px,88dvh)] min-h-[520px] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:h-[min(900px,88dvh)] lg:grid-cols-[176px_minmax(0,1fr)] lg:grid-rows-1">
+              <nav className="flex gap-1 overflow-x-auto border-b border-base bg-[#171b1c] p-2 touch-pan-x overscroll-contain lg:block lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r">
                 {menuCategories.map((category) => (
                   <button
                     key={category}
@@ -1107,7 +1107,7 @@ export const BarCommandeView: React.FC<Props> = ({
                       setMenuSubcategory('Toutes');
                       setSearchTerm('');
                     }}
-                    className={`w-max shrink-0 rounded-md px-3 py-3 text-left text-[11px] font-semibold transition lg:w-full lg:px-2 ${menuCategory === category ? 'bg-red-500 text-white' : 'text-secondary hover:bg-surface-3'}`}
+                    className={`w-max shrink-0 rounded-lg px-3 py-4 text-left text-xs font-semibold transition lg:w-full lg:px-3 ${menuCategory === category ? 'bg-red-500 text-white shadow-lg shadow-red-950/30' : 'text-secondary hover:bg-surface-3'}`}
                   >
                     {category}
                   </button>
@@ -1115,17 +1115,17 @@ export const BarCommandeView: React.FC<Props> = ({
               </nav>
               <div className="flex h-full min-h-0 min-w-0 flex-col p-2 sm:p-3">
                 {menuSubcategories.length > 1 && (
-                  <div className="mb-2 flex gap-1 overflow-x-auto border-b border-base pb-2 shrink-0">
-                    {menuSubcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => setMenuSubcategory(subcategory)} className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold ${menuSubcategory === subcategory ? 'bg-sky-500 text-white' : 'bg-surface-2 text-muted'}`}>{subcategory}</button>)}
+                  <div className="mb-3 flex shrink-0 gap-2 overflow-x-auto border-b border-base pb-3">
+                    {menuSubcategories.map((subcategory) => <button key={subcategory} type="button" onClick={() => setMenuSubcategory(subcategory)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold ${menuSubcategory === subcategory ? 'bg-sky-500 text-white' : 'bg-surface-2 text-muted'}`}>{subcategory}</button>)}
                   </div>
                 )}
-                <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-2 overflow-y-auto overscroll-contain pr-1 touch-pan-y xl:grid-cols-3">
+                <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto overscroll-contain pr-2 touch-pan-y lg:grid-cols-3 2xl:grid-cols-4">
                   {menuItems.map((cocktail) => {
                     const isRestaurantMenuItem = cocktail.source_module === 'RESTAURANT';
                     const isSpecialBillardItem = cocktail.id <= 0 && !isRestaurantMenuItem;
                     const stock = stockMap[cocktail.id];
                     const unavailable = !isRestaurantMenuItem && !isSpecialBillardItem && (!stock || stock.quantite <= 0);
-                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[84px] flex-col items-center justify-center rounded-md border border-emerald-950 bg-emerald-500 px-2 py-2 text-center text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40`}><span className="text-xs font-bold leading-tight">{cocktail.nom}</span><span className="mt-1 text-[10px] font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span></button>;
+                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[112px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed ${unavailable ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-950 bg-emerald-500 hover:bg-emerald-400'}`}><span className="text-sm font-bold leading-tight">{cocktail.nom}</span><span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>{!isRestaurantMenuItem && !isSpecialBillardItem && <span className={`mt-2 text-[11px] font-semibold ${unavailable ? 'text-white' : 'text-emerald-950'}`}>Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}</span>}</button>;
                   })}
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
                 </div>
