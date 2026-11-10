@@ -64,6 +64,15 @@ export const MenuTab: React.FC<MenuTabProps> = ({
     return matchesCategory && matchesSearch;
   });
 
+  const filteredBarDrinks = barDrinks.filter((drink) => {
+    const matchesCategory = selectedCategory === 'tous';
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const matchesSearch = !normalizedSearch ||
+      drink.nom.toLowerCase().includes(normalizedSearch) ||
+      (drink.categorie || '').toLowerCase().includes(normalizedSearch);
+    return matchesCategory && matchesSearch;
+  });
+
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
     if (!value) {
@@ -191,7 +200,7 @@ export const MenuTab: React.FC<MenuTabProps> = ({
               }}
             >
               <span>Toutes</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{menuProducts.length}</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{menuProducts.length + barDrinks.length}</span>
             </button>
 
             {categories
@@ -222,7 +231,7 @@ export const MenuTab: React.FC<MenuTabProps> = ({
 
           {/* Grille des produits */}
           <div className="lg:col-span-3">
-            {filteredProducts.length === 0 ? (
+            {filteredProducts.length === 0 && filteredBarDrinks.length === 0 ? (
               <div
                 className="text-center py-16 rounded-2xl border border-dashed p-8"
                 style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}
@@ -331,6 +340,24 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                     </div>
                   );
                 })}
+                {filteredBarDrinks.map((drink) => (
+                  <article key={`bar-drink-${drink.id}`} className="group rounded-2xl border border-base bg-surface-2 p-4 flex flex-col justify-between transition-all hover:shadow-lg">
+                    <div>
+                      <div className="flex justify-between items-start gap-2 mb-3">
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-lg uppercase tracking-wider border border-base bg-surface text-subtle">
+                          {drink.categorie || 'Boisson'}
+                        </span>
+                        <span className="text-xs text-secondary">{drink.alcool ? 'Avec alcool' : 'Sans alcool'}</span>
+                      </div>
+                      <h4 className="font-bold text-base line-clamp-1 text-primary">{drink.nom}</h4>
+                      {drink.ingredients && <p className="mt-1 text-xs text-subtle line-clamp-2">{drink.ingredients}</p>}
+                    </div>
+                    <div className="pt-3 flex items-center justify-between mt-3 border-t border-base">
+                      <span className="text-xs text-subtle">Prix de vente</span>
+                      <span className="text-base sm:text-lg font-bold text-accent">{formatCurrency(drink.prix)}</span>
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
           </div>
