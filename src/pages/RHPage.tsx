@@ -10,7 +10,7 @@ import { madagascarDate } from '../lib/timezone';
 type RHView = 'overview' | 'employees' | 'attendance' | 'payroll' | 'evaluations';
 type Toast = (message: string, type: 'success' | 'error') => void;
 const departments = ['Administration', 'Réception', 'Restauration', 'Casino', 'Maintenance', 'Hébergement', 'Sécurité'];
-const contractTypes = ['CDI', 'CDD', 'Prestataire', 'Stagiaire'];
+const contractTypes = ['CDI', 'CDD', 'Prestataire', 'Stagiaire', 'En essai'];
 // Contrats soumis aux cotisations CNAPS / OSTIE / IRSA.
 const salariedContracts = ['CDI', 'CDD'];
 // Le prestataire est payé au jour de présence : son salaire est un taux journalier.

@@ -1294,9 +1294,9 @@ const StockPage: React.FC = () => {
                 <th className="text-right p-3 text-muted font-medium text-xs">STOCK MINIMUM</th>
                 <th className="text-right p-3 text-muted font-medium text-xs hidden md:table-cell">STOCK MAXIMUM</th>
                 <th className="text-right p-3 text-muted font-medium text-xs hidden lg:table-cell">STOCK AU 1er</th>
-                <th className="text-right p-3 text-muted font-medium text-xs hidden xl:table-cell">ENTRÉE MENSUEL</th>
-                <th className="text-right p-3 text-muted font-medium text-xs hidden xl:table-cell">SORTIE MENSUEL</th>
-                <th className="text-right p-3 text-muted font-medium text-xs hidden xl:table-cell">VENTE MENSUEL</th>
+                <th className="text-right p-3 text-muted font-medium text-xs hidden xl:table-cell">ENTRÉE </th>
+                <th className="text-right p-3 text-muted font-medium text-xs hidden xl:table-cell">SORTIE </th>
+                <th className="text-right p-3 text-muted font-medium text-xs hidden xl:table-cell">VENTE </th>
                 <th className="text-right p-3 text-muted font-medium text-xs">STOCK RESTANT</th>
                 <th className="text-right p-3 text-muted font-medium text-xs hidden lg:table-cell">STOCK RÉEL</th>
                 <th className="text-right p-3 text-muted font-medium text-xs hidden md:table-cell">ÉCART</th>
