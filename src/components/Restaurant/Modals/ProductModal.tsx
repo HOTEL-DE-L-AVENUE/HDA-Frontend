@@ -87,6 +87,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     type_produit: 'PRODUIT_FINI' as const,
     category_nom: '',
     actif: true,
+    afficher_dans_bar: false,
     couleur: ''
   });
 
@@ -103,6 +104,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         type_produit: (editingProduct.type_produit || 'PRODUIT_FINI') as any,
         category_nom: editingProduct.category?.nom || editingProduct.category_nom || '',
         actif: editingProduct.actif ?? true,
+        afficher_dans_bar: editingProduct.afficher_dans_bar ?? false,
         couleur: editingProduct.couleur || ''
       });
     } else {
@@ -115,6 +117,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         type_produit: 'PRODUIT_FINI',
         category_nom: '',
         actif: true,
+        afficher_dans_bar: false,
         couleur: ''
       });
     }
@@ -331,6 +334,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         Object.assign(payload, {
           prix_vente: Number(form.prix_vente),
           category_nom: form.category_nom.trim(),
+          afficher_dans_bar: form.afficher_dans_bar,
         });
       } else {
         Object.assign(payload, {
@@ -341,6 +345,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           unite: form.unite,
           type_produit: form.type_produit,
           actif: form.actif,
+          afficher_dans_bar: form.afficher_dans_bar,
           couleur: form.couleur,
         });
       }
@@ -605,6 +610,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-secondary text-sm">Produit actif (disponible à la vente)</label>
           </div>
         )}
+
+        <label className="flex items-center gap-3 pt-1 text-sm text-secondary">
+          <input
+            type="checkbox"
+            checked={form.afficher_dans_bar}
+            onChange={(e) => setForm({ ...form, afficher_dans_bar: e.target.checked })}
+            className="w-4 h-4 rounded border-base bg-surface-2 text-accent focus:ring-accent/20"
+          />
+          Afficher ce plat dans Bar &amp; Cocktails
+        </label>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <Button variant="secondary" onClick={onClose} className="flex-1">Annuler</Button>

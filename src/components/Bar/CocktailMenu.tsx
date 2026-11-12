@@ -367,13 +367,16 @@ export const CocktailMenu: React.FC<Props> = ({
     return (selectedCategory === 'Toutes' || parts.category === selectedCategory)
       && (selectedSubcategory === 'Toutes' || parts.subcategory === selectedSubcategory);
   });
+  const hasRestaurantMenuItems = filteredCocktails.some((cocktail) => cocktail.source_module === 'RESTAURANT');
 
   return (
     <div className="flex flex-col gap-4">
       <div className={`flex flex-col rounded-xl border border-base bg-surface shadow-sm sm:flex-row sm:items-center sm:justify-between ${compact ? 'gap-2 p-2 sm:gap-3' : 'gap-4 p-4'}`}>
         <div>
           {!compact && <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">Bar & Lounge</p>}
-          <h2 className={`font-bold text-primary ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>Les boissons disponibles</h2>
+          <h2 className={`font-bold text-primary ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>
+            {hasRestaurantMenuItems ? 'Plats et boissons disponibles' : 'Les boissons disponibles'}
+          </h2>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -421,27 +424,32 @@ export const CocktailMenu: React.FC<Props> = ({
             <div className="grid grid-cols-2 content-start gap-3 pr-1 lg:grid-cols-4">
               {menuItems.map((cocktail) => {
                 const stock = stockMap?.[cocktail.id];
-                const isOutOfStock = !stock || stock.quantite <= 0;
+                const isRestaurantMenuItem = cocktail.source_module === 'RESTAURANT';
+                const isOutOfStock = !isRestaurantMenuItem && (!stock || stock.quantite <= 0);
                 return (
                   <div key={cocktail.id} className={`group relative min-h-[112px] rounded-xl border p-3 text-left transition hover:-translate-y-0.5 ${isOutOfStock ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-700/40 bg-[#00bd83] hover:bg-[#00ca8c]'}`}>
                     {onAddToOrder ? (
                       <button type="button" disabled={isOutOfStock} onClick={() => void handleAddArticle(cocktail)} className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white disabled:cursor-not-allowed">
                         <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
                         <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
-                        <span className={`text-[11px] font-semibold ${isOutOfStock ? 'text-white' : 'text-emerald-950'}`}>
-                          Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
-                        </span>
+                        {!isRestaurantMenuItem && (
+                          <span className={`text-[11px] font-semibold ${isOutOfStock ? 'text-white' : 'text-emerald-950'}`}>
+                            Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
+                          </span>
+                        )}
                       </button>
                     ) : (
                       <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white">
                         <span className="text-sm font-bold leading-tight">{cocktail.nom}</span>
                         <span className="text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>
-                        <span className={`text-[11px] font-semibold ${isOutOfStock ? 'text-white' : 'text-emerald-950'}`}>
-                          Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
-                        </span>
+                        {!isRestaurantMenuItem && (
+                          <span className={`text-[11px] font-semibold ${isOutOfStock ? 'text-white' : 'text-emerald-950'}`}>
+                            Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}
+                          </span>
+                        )}
                       </div>
                     )}
-                    {userIsAdmin && (
+                    {userIsAdmin && !isRestaurantMenuItem && (
                       <div className="absolute right-1.5 top-1.5 hidden gap-1 group-hover:flex group-focus-within:flex [@media(hover:none)]:flex" onClick={(event) => event.stopPropagation()}>
                         <button type="button" onClick={() => handleOpenEditModal(cocktail)} className="rounded bg-black/20 p-1 text-white" title="Modifier"><Edit3 size={13} /></button>
                         <button type="button" onClick={() => void handleDeleteProduct(cocktail.id)} className="rounded bg-black/20 p-1 text-white" title="Supprimer"><Trash2 size={13} /></button>

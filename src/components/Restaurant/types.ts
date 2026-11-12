@@ -43,6 +43,7 @@ export interface Product {
   prix_achat: number;
   prix_vente: number;
   actif: boolean;
+  afficher_dans_bar: boolean;
   type_produit: 'MATIERE_PREMIERE' | 'PRODUIT_FINI' | 'CONSOMMABLE' | 'SERVICE';
   category?: Category;
   couleur?: string; // <-- Propriété de couleur ajoutée ici
