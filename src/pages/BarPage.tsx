@@ -41,6 +41,7 @@ export const BarPage: React.FC = () => {
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [restaurantMenuProducts, setRestaurantMenuProducts] = useState<BarProduct[]>([]);
+  const [restaurantBarProducts, setRestaurantBarProducts] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +239,18 @@ export const BarPage: React.FC = () => {
       const restaurantProducts = restaurantProductsRes?.success && Array.isArray(restaurantProductsRes.data)
         ? restaurantProductsRes.data as Array<RestaurantProduct & { category_nom?: string }>
         : [];
+      setRestaurantBarProducts(restaurantProducts
+        .filter((product) => Boolean(product.afficher_dans_bar))
+        .map((product) => ({
+          id: -Number(product.id),
+          restaurant_product_id: Number(product.id),
+          source_module: 'RESTAURANT',
+          nom: product.nom,
+          ingredients: '',
+          prix: Number(product.prix_vente || 0),
+          categorie: product.category_nom || 'Plats',
+          alcool: false,
+        })));
       const selectedCategories = new Set(['pizza', 'carte selectionner', 'carte selectionnee']);
       const normalizeCategory = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
       setRestaurantMenuProducts(restaurantProducts
@@ -306,7 +319,7 @@ export const BarPage: React.FC = () => {
         <div className="space-y-6">
           <div>
             <CocktailMenu
-              cocktails={cocktails}
+              cocktails={[...cocktails, ...restaurantBarProducts]}
               stockMap={stockMap}
               onStockUpdate={fetchData}
               onProductAdded={handleProductAdded}
