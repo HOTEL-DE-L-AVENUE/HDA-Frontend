@@ -22,6 +22,14 @@ interface RecipeIngredientDraft {
   quantite: number;
 }
 
+interface NewIngredientDraft {
+  rowKey: string;
+  nom: string;
+  unite: string;
+  prix_achat: number;
+  quantite: number;
+}
+
 const normalizeProductName = (value: string) => value
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -78,6 +86,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [activeIngredientKey, setActiveIngredientKey] = useState<string | null>(null);
   const [ingredientSearchByKey, setIngredientSearchByKey] = useState<Record<string, string>>({});
   const [creatingIngredientKey, setCreatingIngredientKey] = useState<string | null>(null);
+  const [newIngredientDraft, setNewIngredientDraft] = useState<NewIngredientDraft | null>(null);
   const [form, setForm] = useState({
     nom: '',
     code: '',
@@ -94,6 +103,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setSubmissionError(null);
+    setNewIngredientDraft(null);
     if (editingProduct) {
       setForm({
         nom: editingProduct.nom || '',
@@ -214,6 +224,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setRecipeIngredients((current) => current.map((row) => (
         row.key === rowKey ? { ...row, unite: unit.code } : row
       )));
+      setNewIngredientDraft((current) => current?.rowKey === rowKey
+        ? { ...current, unite: unit.code }
+        : current);
       setAddingUnitKey(null);
       setNewUnitName('');
     } catch (error) {
@@ -221,9 +234,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     }
   };
 
-  const handleCreateIngredient = async (name: string, rowKey: string, rowUnit: string) => {
-    const nom = name.trim();
-    if (!nom) return;
+  const handleCreateIngredient = async (draft: NewIngredientDraft, recipeQuantity: number) => {
+    const nom = draft.nom.trim();
+    if (!nom) {
+      showToast('Le nom de l’ingrédient est requis.', 'error');
+      return;
+    }
+    if (!draft.unite.trim()) {
+      showToast('Sélectionnez une unité pour le stock de cet ingrédient.', 'error');
+      return;
+    }
+    if (!Number.isFinite(draft.prix_achat) || draft.prix_achat < 0) {
+      showToast('Le prix d’achat doit être positif ou nul.', 'error');
+      return;
+    }
+    if (!Number.isFinite(draft.quantite) || draft.quantite <= 0 || draft.quantite < recipeQuantity) {
+      showToast(`Le stock initial doit couvrir la recette (${recipeQuantity} ${draft.unite}).`, 'error');
+      return;
+    }
     const duplicate = availableIngredients.find((ingredient) => (
       normalizeProductName(ingredient.nom) === normalizeProductName(nom)
     ));
@@ -232,13 +260,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       return;
     }
 
-    setCreatingIngredientKey(rowKey);
+    setCreatingIngredientKey(draft.rowKey);
     try {
       const response = await restaurantService.createRestaurantIngredient({
         nom,
-        unite: rowUnit.trim() || 'PIECE',
-        prix_achat: 0,
-        quantite: 0,
+        unite: draft.unite.trim(),
+        prix_achat: draft.prix_achat,
+        quantite: draft.quantite,
       });
       if (!response.success || !response.data) {
         throw new Error(response.message || 'Impossible de créer cet ingrédient.');
@@ -246,17 +274,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
       const createdIngredient = response.data;
       setAvailableIngredients((current) => [...current, createdIngredient].sort((a, b) => a.nom.localeCompare(b.nom)));
-      setRecipeIngredients((current) => current.map((row) => row.key === rowKey
+      setRecipeIngredients((current) => current.map((row) => row.key === draft.rowKey
         ? {
           ...row,
           ingredient_id: createdIngredient.id,
           nom: createdIngredient.nom,
-          unite: matchUnitCode(createdIngredient.unite, units),
+          unite: row.unite || matchUnitCode(createdIngredient.unite, units),
         }
         : row));
-      setIngredientSearchByKey((current) => ({ ...current, [rowKey]: createdIngredient.nom }));
+      setIngredientSearchByKey((current) => ({ ...current, [draft.rowKey]: createdIngredient.nom }));
       setActiveIngredientKey(null);
-      showToast(`Ingrédient « ${createdIngredient.nom} » ajouté à la liste.`, 'success');
+      setNewIngredientDraft(null);
+      showToast(`Ingrédient « ${createdIngredient.nom} » ajouté avec son stock initial.`, 'success');
     } catch (error) {
       const apiError = error as {
         response?: { status?: number; data?: { message?: string; error?: { message?: string } } };
@@ -519,18 +548,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                         type="button"
                         role="option"
                         aria-selected="false"
-                        disabled={creatingIngredientKey === ingredient.key}
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => void handleCreateIngredient(
-                          ingredientQueryFor(ingredient),
-                          ingredient.key,
-                          ingredient.unite,
-                        )}
+                        onClick={() => {
+                          setNewIngredientDraft({
+                            rowKey: ingredient.key,
+                            nom: ingredientQueryFor(ingredient).trim(),
+                            unite: ingredient.unite,
+                            prix_achat: 0,
+                            quantite: 0,
+                          });
+                          setActiveIngredientKey(null);
+                        }}
                         className="block w-full border-t border-base px-3 py-2 text-left text-sm font-semibold text-accent hover:bg-surface-2 disabled:opacity-60"
                       >
-                        {creatingIngredientKey === ingredient.key
-                          ? 'Ajout en cours...'
-                          : `Ajouter « ${ingredientQueryFor(ingredient).trim()} » comme nouvel ingrédient`}
+                        Créer « {ingredientQueryFor(ingredient).trim()} » avec son stock
                       </button>
                     )}
                     {ingredientMatchesFor(ingredientQueryFor(ingredient)).length === 0 && !ingredientQueryFor(ingredient).trim() && (
@@ -575,6 +606,69 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                 <Trash2 size={17} />
               </button>
             </div>
+            {newIngredientDraft?.rowKey === ingredient.key && (
+              <div className="space-y-3 rounded-lg border border-accent/30 bg-surface p-3">
+                <p className="text-sm font-semibold text-primary">
+                  Nouvel ingrédient : {newIngredientDraft.nom}
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <Select
+                    label="Unité du stock"
+                    value={newIngredientDraft.unite}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === NEW_UNIT_VALUE) {
+                        setAddingUnitKey(ingredient.key);
+                        setNewUnitName('');
+                        return;
+                      }
+                      setNewIngredientDraft((current) => current?.rowKey === ingredient.key
+                        ? { ...current, unite: value }
+                        : current);
+                    }}
+                    options={unitOptionsFor(newIngredientDraft.unite)}
+                  />
+                  <Input
+                    label="Prix d’achat (MGA)"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={newIngredientDraft.prix_achat}
+                    onChange={(event) => setNewIngredientDraft((current) => current?.rowKey === ingredient.key
+                      ? { ...current, prix_achat: Number(event.target.value) }
+                      : current)}
+                  />
+                  <Input
+                    label={`Stock initial (${newIngredientDraft.unite || 'unité'})`}
+                    type="number"
+                    min={Math.max(ingredient.quantite, 0.001)}
+                    step={0.001}
+                    value={newIngredientDraft.quantite}
+                    onChange={(event) => setNewIngredientDraft((current) => current?.rowKey === ingredient.key
+                      ? { ...current, quantite: Number(event.target.value) }
+                      : current)}
+                  />
+                </div>
+                <p className="text-xs text-muted">
+                  Le stock initial doit couvrir la quantité utilisée par ce plat.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setNewIngredientDraft(null)}
+                    disabled={creatingIngredientKey === ingredient.key}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={() => void handleCreateIngredient(newIngredientDraft, ingredient.quantite)}
+                    disabled={creatingIngredientKey === ingredient.key || !newIngredientDraft.unite}
+                  >
+                    {creatingIngredientKey === ingredient.key ? 'Ajout en cours...' : 'Créer et sélectionner'}
+                  </Button>
+                </div>
+              </div>
+            )}
             {addingUnitKey === ingredient.key && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
