@@ -127,7 +127,7 @@ export const getInvoicePdf = (id: number) =>
 export const createOrder = (data: {
   client_id?: number;
   table_id?: number;
-  items: { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[];
+  items: { product_id?: number; source_module?: 'RESTAURANT' | 'BAR'; source_product_id?: number; nom?: string; quantite: number; prix_unitaire: number; cuisson?: string }[];
   notes?: string;
   location_type?: string;
   special_person_name?: string;
@@ -137,7 +137,7 @@ export const createOrder = (data: {
 export const updateOrder = (id: number, data: {
   client_id?: number;
   table_id?: number;
-  items: { product_id: number; quantite: number; prix_unitaire: number; cuisson?: string }[];
+  items: { product_id?: number; source_module?: 'RESTAURANT' | 'BAR'; source_product_id?: number; nom?: string; quantite: number; prix_unitaire: number; cuisson?: string }[];
   notes?: string;
   location_type?: string;
   special_person_name?: string;
