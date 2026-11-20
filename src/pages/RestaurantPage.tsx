@@ -204,6 +204,9 @@ export const RestaurantPage: React.FC = () => {
           table_id: formData.table_id || undefined,
           items: (formData.items || []).map((item: any) => ({
             product_id: item.product_id,
+            source_module: item.source_module,
+            source_product_id: item.source_product_id,
+            nom: item.nom,
             quantite: item.quantite,
             prix_unitaire: item.prix_unitaire,
             cuisson: item.cuisson,
@@ -229,6 +232,9 @@ export const RestaurantPage: React.FC = () => {
         table_id: formData.table_id || undefined,
         items: (formData.items || []).map((item: any) => ({
           product_id: item.product_id,
+          source_module: item.source_module,
+          source_product_id: item.source_product_id,
+          nom: item.nom,
           quantite: item.quantite,
           prix_unitaire: item.prix_unitaire,
           cuisson: item.cuisson,

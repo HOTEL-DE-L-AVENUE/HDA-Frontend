@@ -1123,8 +1123,16 @@ export const BarCommandeView: React.FC<Props> = ({
                   {menuItems.map((cocktail) => {
                     const isRestaurantMenuItem = cocktail.source_module === 'RESTAURANT';
                     const isSpecialBillardItem = cocktail.id <= 0 && !isRestaurantMenuItem;
-                    const stock = stockMap[cocktail.id];
-                    const unavailable = !isRestaurantMenuItem && !isSpecialBillardItem && (!stock || stock.quantite <= 0);
+                    const stock = stockMap[cocktail.id] ?? (cocktail.quantite != null
+                      ? { quantite: Number(cocktail.quantite), unite: cocktail.unite || 'unités' }
+                      : undefined);
+                    // Certains produits arrivent avec la quantité sur le catalogue,
+                    // mais sans entrée correspondante dans stockMap. Ne désactiver
+                    // l'article que si une quantité connue confirme un stock nul.
+                    const unavailable = !isRestaurantMenuItem
+                      && !isSpecialBillardItem
+                      && stock?.quantite != null
+                      && Number(stock.quantite) <= 0;
                     return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[112px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed ${unavailable ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-950 bg-emerald-500 hover:bg-emerald-400'}`}><span className="text-sm font-bold leading-tight">{cocktail.nom}</span><span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>{!isRestaurantMenuItem && !isSpecialBillardItem && <span className={`mt-2 text-[11px] font-semibold ${unavailable ? 'text-white' : 'text-emerald-950'}`}>Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}</span>}</button>;
                   })}
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
