@@ -259,6 +259,9 @@ export function getDefaultRoute(user: { role: string; module?: string[] | any } 
   if (role === 'admin') return '/dashboard';
 
   const modules = parseUserModules(user.module);
+  // Un serveur affecté au Bar doit arriver directement sur son service Bar,
+  // même si Restaurant apparaît avant Bar dans la liste de ses modules.
+  if (role === 'serveur' && modules.includes('bar')) return '/bar';
   if (modules.length > 0) {
     // Rediriger vers le premier module assigné valide
     const firstMod = modules[0];
