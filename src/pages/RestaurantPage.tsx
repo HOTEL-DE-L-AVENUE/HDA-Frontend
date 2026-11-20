@@ -560,7 +560,7 @@ export const RestaurantPage: React.FC = () => {
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-hidden">
       {/* Header avec statistiques */}
-      <RestaurantHeader stats={stats} />
+      <RestaurantHeader stats={userIsServer ? [] : stats} />
 
       {/* Barre de recherche et filtres - Masquée uniquement sur l'onglet menu */}
       {!userIsCashier && activeTab !== 'menu' && (
@@ -636,7 +636,7 @@ export const RestaurantPage: React.FC = () => {
           />
         )}
         {activeTab === 'stock' && <StockTab />}
-        {userIsAdmin && activeTab === 'caisse' && (
+        {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
           <CaisseTab
             orders={orders}
             onPayment={handlePayment}

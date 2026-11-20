@@ -25,7 +25,7 @@ import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
 import AuthService from '../services/authService';
-import { isAdmin, isCashier, isBarman, isHostess } from '../utils/permissions';
+import { getDefaultTabForRole, isAdmin, isCashier, isBarman, isHostess } from '../utils/permissions';
 import { useToast } from '../context/ToastContext';
 
 export const BarPage: React.FC = () => {
@@ -34,10 +34,11 @@ export const BarPage: React.FC = () => {
   const userIsCashier = isCashier(currentUser);
   const userIsBarman = isBarman(currentUser);
   const userIsHostess = isHostess(currentUser);
+  const userIsServer = currentUser?.role === 'serveur';
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
 
-  const [activeTab, setActiveTab] = useState<BarTabId>('commandes');
+  const [activeTab, setActiveTab] = useState<BarTabId>(() => getDefaultTabForRole('commandes', currentUser?.role) as BarTabId);
 
   const [cocktails, setCocktails] = useState<BarProduct[]>([]);
   const [restaurantMenuProducts, setRestaurantMenuProducts] = useState<BarProduct[]>([]);
@@ -305,7 +306,7 @@ export const BarPage: React.FC = () => {
         </div>
       )}
 
-      {!userIsBarman && !userIsHostess && (
+      {!userIsBarman && !userIsHostess && !userIsServer && (
         <div>
           <BarStats commandes={commandes} stockMap={stockMap} compact={activeTab === 'bar'} />
         </div>
@@ -315,7 +316,7 @@ export const BarPage: React.FC = () => {
         <BarTabs activeTab={userIsBarman || userIsHostess ? 'commandes' : activeTab} onTabChange={setActiveTab} compact={activeTab === 'bar'} />
       </div>
 
-      {activeTab === 'bar' && (
+      {!userIsCashier && activeTab === 'bar' && (
         <div className="space-y-6">
           <div>
             <CocktailMenu
@@ -341,7 +342,7 @@ export const BarPage: React.FC = () => {
 
       {userIsAdmin && activeTab === 'equipement' && <BarEquipmentManager />}
 
-      {activeTab === 'commandes' && (
+      {!userIsCashier && activeTab === 'commandes' && (
         <BarCommandeView
           commandes={commandes}
           onCreateCommande={handleCreateCommande}

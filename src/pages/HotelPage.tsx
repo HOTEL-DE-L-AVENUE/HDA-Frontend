@@ -368,7 +368,7 @@ const HotelPage: React.FC = () => {
         </div>
 
         {/* Actions - Mobile Friendly */}
-        <div className="flex flex-wrap items-center gap-2">
+        {!userIsCashier && <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setIsReservationModalOpen(true)}
             className="flex-1 sm:flex-none px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-medium text-black bg-accent hover:bg-accent/90 transition-colors flex items-center justify-center gap-1.5"
@@ -383,7 +383,7 @@ const HotelPage: React.FC = () => {
             <Plus size={14} className="md:w-4 md:h-4" />
             <span>Chambre</span>
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Quick Stats - Responsive Grid */}

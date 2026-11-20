@@ -91,8 +91,8 @@ export function canAccessModule(
   // 2. Modules réservés strictement à l'admin
   if (ADMIN_ONLY_MODULES.includes(moduleId as ModuleType)) return false;
 
-  // Le rôle serveur est créé sans accès métier tant que ses permissions ne sont pas définies.
-  if (role === 'serveur') return moduleId === 'restaurant';
+  // Le serveur accède uniquement aux modules explicitement affectés à son compte.
+  if (role === 'serveur') return parseUserModules(user.module).includes(moduleId);
 
   // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé),
   // y compris le barman — vérifié avant la restriction stricte ci-dessous pour ne
@@ -118,10 +118,7 @@ export function canAccessModule(
   // 5. Caissier : finances ou modules avec encaissement
   if (role === 'caissier' || role === 'caisse') {
     const userModules = parseUserModules(user.module);
-    if (userModules.length > 0) {
-      return userModules.includes(moduleId);
-    }
-    return ['finances', 'restaurant', 'bar', 'alcool', 'casino', 'hebergement'].includes(moduleId);
+    return ['restaurant', 'bar', 'hotel'].includes(moduleId) && userModules.includes(moduleId);
   }
 
   // 6. Stock Manager : uniquement modules de stock (restaurant, bar, hotel, hebergement)
@@ -207,11 +204,13 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   }
 
   if (role === 'serveur') {
-    return tabs.filter(t => t.id === 'commandes' || t.id === 'menu');
+    return tabs.filter(t => t.id === 'commandes' || t.id === 'menu' || t.id === 'bar');
   }
 
-  // Le caissier consulte les chiffres du tableau de bord, sans accéder aux opérations.
-  if (role === 'caisse' || role === 'caissier') return [];
+  // Le caissier consulte les chiffres et l'onglet de caisse pour encaisser.
+  if (role === 'caisse' || role === 'caissier') {
+    return tabs.filter(t => t.id === 'caisse' || t.id.includes('caisse'));
+  }
 
   // Historique Bar et Inventaire réservés uniquement à l'admin.
   const visibleTabs = tabs.filter(t => t.id !== 'historique' && t.id !== 'historique-produits' && t.id !== 'inventory');
