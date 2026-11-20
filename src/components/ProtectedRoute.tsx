@@ -2,7 +2,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import AuthService from '../services/authService';
-import { canAccessModule, getDefaultRoute } from '../utils/permissions';
+import { canAccessModule, getDefaultRoute, parseUserModules } from '../utils/permissions';
 
 // ─────────────────────────────────────────────
 // Page 403 — Accès interdit (inline, pas de fichier séparé)
@@ -142,7 +142,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, moduleId 
   // 2. Vérification du rôle (si allowedRoles est fourni)
   if (allowedRoles && allowedRoles.length > 0) {
     const hasRole = AuthService.hasRole(allowedRoles as any);
-    if (!hasRole) {
+    const hasAssignedServerModule = currentUser?.role === 'serveur'
+      && !!moduleId
+      && parseUserModules(currentUser.module).includes(moduleId);
+    if (!hasRole && !hasAssignedServerModule) {
       const redirectTo = getDefaultRoute(currentUser);
       return <ForbiddenPage redirectTo={redirectTo} />;
     }
