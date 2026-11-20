@@ -25,7 +25,7 @@ import type { BarCommande } from '../types/bar.type';
 import type { BarOrderStatus } from '../services/bar.service';
 
 import AuthService from '../services/authService';
-import { getDefaultTabForRole, isAdmin, isCashier, isBarman, isHostess } from '../utils/permissions';
+import { getDefaultTabForRole, isAdmin, isCashier, isBarman, isHostess, parseUserModules } from '../utils/permissions';
 import { useToast } from '../context/ToastContext';
 
 export const BarPage: React.FC = () => {
@@ -35,6 +35,8 @@ export const BarPage: React.FC = () => {
   const userIsBarman = isBarman(currentUser);
   const userIsHostess = isHostess(currentUser);
   const userIsServer = currentUser?.role === 'serveur';
+  const canLoadRestaurantProducts = !userIsCashier
+    && (!userIsServer || parseUserModules(currentUser?.module).includes('restaurant'));
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
 
@@ -228,10 +230,12 @@ export const BarPage: React.FC = () => {
       const [cocktailsRes, stockRes, restaurantProductsRes] = await Promise.all([
         barService.getBarProducts(),
         barService.getBarStock(),
-        restaurantService.getProducts({ actif: true }).catch((error) => {
+        !canLoadRestaurantProducts
+          ? Promise.resolve(null)
+          : restaurantService.getProducts({ actif: true }).catch((error) => {
           console.warn('Impossible de charger les menus Pizza et Carte Sélectionner du Restaurant dans les commandes Bar', error);
           return null;
-        }),
+          }),
       ]);
       const cocktailsData = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
       const stock = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: BarStockItem[] }).data;
