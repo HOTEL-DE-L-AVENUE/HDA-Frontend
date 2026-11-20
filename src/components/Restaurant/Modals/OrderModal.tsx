@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Button, Input, Select } from '../../UI';
 import { formatCurrency } from '../../../utils/data';
-import { Plus, Search, XCircle } from 'lucide-react';
+import { Plus, Search, XCircle, MapPin } from 'lucide-react';
 import type { TableRestaurant, Product, Client, Category } from '../types';
 import type { BarProduct } from '../../../types/bar.type';
 
@@ -20,12 +20,15 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables,
   const [searchTerm, setSearchTerm] = useState('');
   const [menuCategory, setMenuCategory] = useState('Toutes');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<string | undefined>(initialLocation);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showCookingModal, setShowCookingModal] = useState(false);
   const [selectedProductForCooking, setSelectedProductForCooking] = useState<Product | null>(null);
 
   useEffect(() => {
     const items = orderToEdit?.items || [];
     setTable(String(orderToEdit?.table_id || orderToEdit?.table?.id || initialTableId || ''));
+    setSelectedLocation(initialLocation);
     setClient(String(orderToEdit?.client_id || orderToEdit?.client?.id || ''));
     setNombrePersonnes(String(orderToEdit?.nombre_personnes || 1));
     setMoyenPaiement(orderToEdit?.moyen_paiement || 'ESPECES');
@@ -46,22 +49,28 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables,
   const menuItems = products.filter((product) => product.type_produit === 'PRODUIT_FINI' && product.actif && (menuCategory === 'Toutes' || categories.find((category) => category.id === product.category_id)?.nom === menuCategory) && (!searchTerm.trim() || product.nom.toLowerCase().includes(searchTerm.trim().toLowerCase())));
   const menuBarDrinks = barDrinks.filter((drink) => (menuCategory === 'Toutes' || (drink.categorie || 'Boisson') === menuCategory) && (!searchTerm.trim() || drink.nom.toLowerCase().includes(searchTerm.trim().toLowerCase()) || (drink.categorie || '').toLowerCase().includes(searchTerm.trim().toLowerCase())));
   const menuCategories = ['Toutes', ...new Set([...categories.map((category) => category.nom), ...barDrinks.map((drink) => drink.categorie?.trim() || 'Boisson')])];
-  const locationLabel = initialLocation?.trim().toUpperCase() === 'POCKER GRATUIT' || initialLocation?.trim().toUpperCase() === 'GRATUIT POCKER'
-    ? 'Gratuit Pocker'
-    : initialLocation;
+  const selectedTable = tables.find((restaurantTable) => String(restaurantTable.id) === table);
+  const selectedLocationLabel = selectedLocation || (selectedTable ? `Table ${String(selectedTable.numero).toUpperCase().startsWith('T') ? selectedTable.numero : `T${selectedTable.numero}`}` : 'Choisir une table');
 
-  const handleSubmit = async (event: React.FormEvent) => { event.preventDefault(); if (!table || selectedItems.length === 0) { setFeedback('Sélectionnez une table et au moins un article.'); return; } if (initialLocation && !specialPersonName.trim()) { setFeedback('Saisissez le nom de la personne avant de créer la commande.'); return; } try { await onSubmit({ ...(orderToEdit ? { id: orderToEdit.id } : {}), table_id: Number(table), client_id: client ? Number(client) : 0, special_person_name: specialPersonName.trim() || undefined, location_type: initialLocation, nombre_personnes: Number(nombrePersonnes) || 1, moyen_paiement: moyenPaiement, notes, montant_total: total, items: selectedItems.map((item) => ({ product_id: item.product_id || undefined, source_module: item.source_module, source_product_id: item.source_product_id, nom: item.nom, quantite: item.quantite, prix_unitaire: item.prix, cuisson: item.cuisson })) }); handleClose(); } catch (error) { console.error('Erreur modification commande restaurant:', error); setFeedback('La commande n’a pas pu être enregistrée. Vérifiez les données puis réessayez.'); } };
+  const handleSubmit = async (event: React.FormEvent) => { event.preventDefault(); if (!table || selectedItems.length === 0) { setFeedback('Sélectionnez une table et au moins un article.'); return; } if (selectedLocation && !specialPersonName.trim()) { setFeedback('Saisissez le nom de la personne avant de créer la commande.'); return; } try { await onSubmit({ ...(orderToEdit ? { id: orderToEdit.id } : {}), table_id: Number(table), client_id: client ? Number(client) : 0, special_person_name: specialPersonName.trim() || undefined, location_type: selectedLocation, nombre_personnes: Number(nombrePersonnes) || 1, moyen_paiement: moyenPaiement, notes, montant_total: total, items: selectedItems.map((item) => ({ product_id: item.product_id || undefined, source_module: item.source_module, source_product_id: item.source_product_id, nom: item.nom, quantite: item.quantite, prix_unitaire: item.prix, cuisson: item.cuisson })) }); handleClose(); } catch (error) { console.error('Erreur modification commande restaurant:', error); setFeedback('La commande n’a pas pu être enregistrée. Vérifiez les données puis réessayez.'); } };
 
-  return <Modal isOpen={isOpen} onClose={handleClose} title={<span style={{ fontFamily: '"Comic Sans MS", cursive', fontSize: '20px', fontWeight: 700 }}>{orderToEdit ? 'Modifier la commande · Restaurant' : 'Nouvelle commande · Restaurant'}</span>} headerExtra={locationLabel && <span className="restaurant-location-led mr-6">{locationLabel}</span>} size="full">
+  return <><Modal isOpen={isOpen && !showLocationPicker} onClose={handleClose} title={<span style={{ fontFamily: '"Comic Sans MS", cursive', fontSize: '20px', fontWeight: 700 }}>{orderToEdit ? 'Modifier la commande · Restaurant' : 'Nouvelle commande · Restaurant'}</span>} size="full">
     <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
       {feedback && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{feedback}</div>}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent/5 p-3.5 sm:p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-h-12 min-w-[95px] items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/15 px-3 py-1.5 text-center text-sm font-black text-primary"><MapPin size={16} />{selectedLocationLabel}</div>
+          <div><p className="text-xs font-bold uppercase tracking-wide text-secondary">Emplacement sélectionné</p><p className="mt-1 text-sm font-semibold text-primary">{selectedLocationLabel}</p><p className="mt-0.5 text-xs text-muted">Commande Restaurant</p></div>
+        </div>
+        <Button type="button" variant="secondary" onClick={() => setShowLocationPicker(true)}>Changer d'emplacement</Button>
+      </div>
       <div className="grid grid-cols-1 gap-2 rounded-xl border border-accent/20 bg-accent/5 p-3 sm:grid-cols-2">
         <Input label="Personnes" type="number" min="1" value={nombrePersonnes} onChange={(event) => setNombrePersonnes(event.target.value)} />
         <Select label="Paiement prévu" value={moyenPaiement} onChange={(event) => setMoyenPaiement(event.target.value)} options={[{ value: 'ESPECES', label: 'Espèces' }, { value: 'CREDIT', label: 'Crédit' }, { value: 'TPE', label: 'TPE' }, { value: 'ORANGE_MONEY', label: 'Orange Money' }, { value: 'MVOLA', label: 'MVola' }, { value: 'GRATUIT', label: 'Gratuit' }]} />
       </div>
-      {initialLocation && <div className="rounded-xl border border-accent/20 bg-accent/5 p-3"><Input label="Nom de la personne" value={specialPersonName} onChange={(event) => setSpecialPersonName(event.target.value)} placeholder={initialLocation === 'Chambre' ? 'Ex. Nom du client' : 'Ex. Théophile'} /></div>}
+      {selectedLocation && <div className="rounded-xl border border-accent/20 bg-accent/5 p-3"><Input label="Nom de la personne" value={specialPersonName} onChange={(event) => setSpecialPersonName(event.target.value)} placeholder={selectedLocation === 'Chambre' ? 'Ex. Nom du client' : 'Ex. Théophile'} /></div>}
       <section className="rounded-xl border border-base bg-[#171b1c] p-3 shadow-inner">
-        <div className="mb-3 flex items-center justify-between border-b border-base pb-2"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Ticket</p>{orderToEdit && initialLocation && <p className="mt-1 text-lg font-semibold text-primary">{specialPersonName || 'Nom de la personne'}</p>}</div><span className="text-xs text-muted">{selectedItems.length} article{selectedItems.length > 1 ? 's' : ''}</span></div>
+        <div className="mb-3 flex items-center justify-between border-b border-base pb-2"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Ticket</p>{orderToEdit && selectedLocation && <p className="mt-1 text-lg font-semibold text-primary">{specialPersonName || 'Nom de la personne'}</p>}</div><span className="text-xs text-muted">{selectedItems.length} article{selectedItems.length > 1 ? 's' : ''}</span></div>
         {selectedItems.length === 0 ? <p className="py-4 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.product_id}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base bg-surface-2 px-3 py-2 text-xs"><span className="min-w-0 flex-1 truncate text-secondary">{item.nom}{item.cuisson ? ` (${item.cuisson})` : ''}</span><div className="flex items-center gap-2"><div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="px-1 text-slate-400 hover:text-white">-</button><input type="number" min="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none" /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 hover:text-white">+</button></div><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span><button type="button" onClick={() => setSelectedItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} className="text-red-400"><XCircle size={14} /></button></div></div>)}</div>}
         <div className="mt-3 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(total)}</span></div>
       </section>
@@ -72,6 +81,17 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables,
       <div><label className="mb-1 block text-xs font-semibold text-secondary">Informations complémentaires</label><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex: Allergie aux noix, sans sauce..." className="h-20 w-full resize-none rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-primary" /></div>
       <div className="flex gap-3 pt-2"><Button variant="secondary" type="button" onClick={handleClose} className="flex-1">Annuler</Button><Button type="submit" className="flex-1" disabled={selectedItems.length === 0}><Plus size={16} />{orderToEdit ? 'Modifier la commande' : 'Créer la commande'}</Button></div>
     </form>
+
     {showCookingModal && selectedProductForCooking && <Modal isOpen={showCookingModal} onClose={() => setShowCookingModal(false)} size="md" title="Niveau de cuisson"><div className="space-y-3"><p className="text-sm text-secondary">Sélectionnez le niveau de cuisson pour <strong>{selectedProductForCooking.nom}</strong>:</p><div className="grid grid-cols-2 gap-2">{COOKING_LEVELS.map((level) => <button key={level} type="button" onClick={() => { addProductToOrder(selectedProductForCooking, level); setShowCookingModal(false); setSelectedProductForCooking(null); }} className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-primary hover:bg-accent hover:text-black">{level}</button>)}</div><Button type="button" variant="secondary" onClick={() => setShowCookingModal(false)} className="mt-2 w-full">Annuler</Button></div></Modal>}
-  </Modal>;
+  </Modal>
+  <Modal isOpen={isOpen && showLocationPicker} onClose={() => setShowLocationPicker(false)} size="sm" title="Choisir l'emplacement de la commande">
+    <div className="space-y-4">
+      <p className="text-sm text-secondary">Sélectionnez une table ou un type de réservation.</p>
+      <div className="grid grid-cols-4 gap-2">
+        {tables.map((restaurantTable) => <button key={restaurantTable.id} type="button" onClick={() => { setTable(String(restaurantTable.id)); setSelectedLocation(undefined); setSpecialPersonName(''); setShowLocationPicker(false); }} className="flex min-h-16 items-center justify-center rounded-lg border border-base bg-surface-2 px-2 py-2 text-center text-xs font-semibold text-primary transition hover:border-accent hover:bg-accent/10">{String(restaurantTable.numero).toUpperCase().startsWith('T') ? restaurantTable.numero : `T${restaurantTable.numero}`}</button>)}
+        {['Gratuit', 'Pocker gratuit', 'Chambre'].map((location) => <button key={location} type="button" onClick={() => { setTable('0'); setSelectedLocation(location); setSpecialPersonName(''); setShowLocationPicker(false); }} className="flex min-h-16 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-center text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/20">{location}</button>)}
+      </div>
+      <Button variant="danger" size="sm" type="button" onClick={() => setShowLocationPicker(false)} className="w-auto self-end rounded-md px-3 py-1.5">Annuler</Button>
+    </div>
+  </Modal></>;
 };

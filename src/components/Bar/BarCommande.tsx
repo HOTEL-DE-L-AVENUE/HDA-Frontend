@@ -37,17 +37,6 @@ type OrderLocationOption = {
   tableId: number;
 };
 
-const orderLocationOptions: OrderLocationOption[] = [
-  ...Array.from({ length: 16 }, (_, index) => ({
-    kind: 'table' as const,
-    label: `T${index + 1}`,
-    tableId: index + 1,
-  })),
-  { kind: 'special', label: 'Gratuit', tableId: 0 },
-  { kind: 'special', label: 'Pocker gratuit', tableId: 0 },
-  { kind: 'special', label: 'Chambre', tableId: 0 },
-];
-
 export const BarCommandeView: React.FC<Props> = ({
   commandes,
   onCreateCommande,
@@ -264,7 +253,7 @@ export const BarCommandeView: React.FC<Props> = ({
         ? { kind: 'special' as const, label: 'Chambre', tableId: 0 }
         : isGratuit
           ? { kind: 'special' as const, label: 'Gratuit', tableId: 0 }
-          : { kind: 'table' as const, label: `T${commande.table}`, tableId: commande.table };
+          : { kind: 'table' as const, label: tables.find((tableItem) => tableItem.id === commande.table)?.numero || `T${commande.table}`, tableId: commande.table };
     const chamberGuest = location.label === 'Chambre' ? String(commande.client || '') : '';
     const chamberParts = chamberGuest ? chamberGuest.split(/\s*—\s*/) : ['', ''];
     const chamberName = chamberParts[0]?.trim() || chamberGuest;
@@ -853,6 +842,15 @@ export const BarCommandeView: React.FC<Props> = ({
     const parts = menuParts(cocktail);
     return (menuCategory === 'Toutes' || parts.category === menuCategory) && (menuSubcategory === 'Toutes' || parts.subcategory === menuSubcategory);
   });
+
+  const orderLocationOptions: OrderLocationOption[] = [
+    ...[...tables]
+      .sort((first, second) => first.numero.localeCompare(second.numero, 'fr', { numeric: true }))
+      .map((tableItem) => ({ kind: 'table' as const, label: tableItem.numero, tableId: tableItem.id })),
+    { kind: 'special', label: 'Gratuit', tableId: 0 },
+    { kind: 'special', label: 'Pocker gratuit', tableId: 0 },
+    { kind: 'special', label: 'Chambre', tableId: 0 },
+  ];
 
   const selectedLocationInfo = getSelectedLocationInfo();
 
