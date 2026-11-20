@@ -10,6 +10,7 @@ import type { BarProduct } from '../../../types/bar.type';
 interface MenuTabProps {
   products: Product[];
   barDrinks: BarProduct[];
+  alcoholDrinks: BarProduct[];
   categories: Category[];
   userIsAdmin: boolean;
   onAddProduct: () => void;
@@ -20,6 +21,7 @@ interface MenuTabProps {
 export const MenuTab: React.FC<MenuTabProps> = ({
   products,
   barDrinks,
+  alcoholDrinks,
   categories,
   userIsAdmin,
   onAddProduct,
@@ -61,7 +63,8 @@ export const MenuTab: React.FC<MenuTabProps> = ({
     return matchesCategory && matchesSearch;
   });
 
-  const filteredBarDrinks = barDrinks.filter((drink) => {
+  const allDrinks = [...barDrinks, ...alcoholDrinks];
+  const filteredBarDrinks = allDrinks.filter((drink) => {
     const matchingRestaurantCategory = categories.find((category) => category.nom.trim().toLowerCase() === (drink.categorie || '').trim().toLowerCase());
     const matchesCategory = selectedCategory === 'tous'
       || (typeof selectedCategory === 'number' && matchingRestaurantCategory?.id === selectedCategory)
@@ -85,7 +88,7 @@ export const MenuTab: React.FC<MenuTabProps> = ({
       p.nom.toLowerCase().includes(normalizedSearch) ||
       (p.code && p.code.toLowerCase().includes(normalizedSearch))
     );
-    const matchingDrink = barDrinks.find((drink) =>
+    const matchingDrink = [...barDrinks, ...alcoholDrinks].find((drink) =>
       drink.nom.toLowerCase().includes(normalizedSearch) ||
       (drink.categorie || '').toLowerCase().includes(normalizedSearch)
     );
@@ -184,13 +187,13 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                 }`}
             >
               <span>Toutes</span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{menuProducts.length + barDrinks.length}</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 font-bold">{menuProducts.length + allDrinks.length}</span>
             </button>
 
             {categories
               .map((cat) => ({
                 ...cat,
-                count: menuProducts.filter(p => p.category_id === cat.id).length + barDrinks.filter((drink) => (drink.categorie || '').trim().toLowerCase() === cat.nom.trim().toLowerCase()).length,
+                count: menuProducts.filter(p => p.category_id === cat.id).length + allDrinks.filter((drink) => (drink.categorie || '').trim().toLowerCase() === cat.nom.trim().toLowerCase()).length,
               }))
               .filter((cat) => cat.count > 0)
               .map((cat) => {
@@ -207,12 +210,12 @@ export const MenuTab: React.FC<MenuTabProps> = ({
                   </button>
                 );
               })}
-            {Array.from(new Set(barDrinks.map((drink) => drink.categorie?.trim() || 'Boisson')))
+            {Array.from(new Set(allDrinks.map((drink) => drink.categorie?.trim() || 'Boisson')))
               .filter((drinkCategory) => !categories.some((category) => category.nom.trim().toLowerCase() === drinkCategory.toLowerCase()))
               .map((drinkCategory) => {
                 const categoryKey = `bar:${drinkCategory}`;
                 const isSelected = selectedCategory === categoryKey;
-                const count = barDrinks.filter((drink) => (drink.categorie?.trim() || 'Boisson') === drinkCategory).length;
+                const count = allDrinks.filter((drink) => (drink.categorie?.trim() || 'Boisson') === drinkCategory).length;
                 return (
                   <button
                     key={categoryKey}
