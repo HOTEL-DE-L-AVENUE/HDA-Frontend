@@ -61,6 +61,7 @@ export const RestaurantPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
   const userIsCashier = isCashier(currentUser);
+  const userIsServer = currentUser?.role === 'serveur';
 
   // ---------- États ----------
   const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('commandes', currentUser?.role));
@@ -129,6 +130,7 @@ export const RestaurantPage: React.FC = () => {
     };
     fetchTables();
     fetchOrders();
+    if (userIsCashier) return;
     barService.getBarProducts()
       .then((response) => {
         const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
@@ -139,12 +141,16 @@ export const RestaurantPage: React.FC = () => {
         setBarDrinks([]);
       });
 
-    Promise.all([
-      restaurantService.getProducts({ actif: true }),
-      restaurantService.getCategories(),
-      clientService.getClients(),
-      restaurantService.getStocks(),
-    ])
+    const restaurantDataRequest = userIsServer
+      ? Promise.all([restaurantService.getProducts({ actif: true }), restaurantService.getCategories()])
+          .then(([productsRes, categoriesRes]) => [productsRes, categoriesRes, [], []] as const)
+      : Promise.all([
+          restaurantService.getProducts({ actif: true }),
+          restaurantService.getCategories(),
+          clientService.getClients(),
+          restaurantService.getStocks(),
+        ]);
+    restaurantDataRequest
       .then(([productsRes, categoriesRes, clientsData, stockRes]) => {
         setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
         setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
@@ -557,7 +563,7 @@ export const RestaurantPage: React.FC = () => {
       <RestaurantHeader stats={stats} />
 
       {/* Barre de recherche et filtres - Masquée uniquement sur l'onglet menu */}
-      {activeTab !== 'menu' && (
+      {!userIsCashier && activeTab !== 'menu' && (
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <div className="relative flex-1">
             <input
@@ -630,7 +636,7 @@ export const RestaurantPage: React.FC = () => {
           />
         )}
         {activeTab === 'stock' && <StockTab />}
-        {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
+        {userIsAdmin && activeTab === 'caisse' && (
           <CaisseTab
             orders={orders}
             onPayment={handlePayment}

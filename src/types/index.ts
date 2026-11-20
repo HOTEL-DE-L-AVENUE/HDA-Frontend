@@ -3,7 +3,7 @@
 export type ModuleType = 'hebergement' | 'hotel' | 'restaurant' | 'bar' | 'alcool' | 'casino' | 'finances' | 'utilisateurs' | 'dashboard' | 'clients' | 'rh' | 'planning' | 'stock';
 
 // Valeurs autorisées par l'ENUM `users.role` du backend.
-export type UserRole = 'admin' | 'manager' | 'receptioniste' | 'caisse' | 'water' | 'housekeeping' | 'croupier' | 'hotesse';
+export type UserRole = 'admin' | 'manager' | 'receptioniste' | 'caisse' | 'water' | 'housekeeping' | 'croupier' | 'hotesse' | 'serveur';
 
 export type TransactionType = 'entree' | 'sortie';
 

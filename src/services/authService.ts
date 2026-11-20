@@ -13,6 +13,7 @@ export const UserRole = {
   HOUSEKEEPING: "housekeeping",
   CROUPIER: "croupier",
   HOSTESS: "hotesse",
+  WAITER: "serveur",
 } as const;
 
 export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];

@@ -22,6 +22,7 @@ export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
   hotesse: ['bar'],
   housekeeping: ['hotel', 'hebergement'],
   croupier: ['casino'],
+  serveur: [],
 };
 
 /**
@@ -89,6 +90,9 @@ export function canAccessModule(
 
   // 2. Modules réservés strictement à l'admin
   if (ADMIN_ONLY_MODULES.includes(moduleId as ModuleType)) return false;
+
+  // Le rôle serveur est créé sans accès métier tant que ses permissions ne sont pas définies.
+  if (role === 'serveur') return moduleId === 'restaurant';
 
   // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé),
   // y compris le barman — vérifié avant la restriction stricte ci-dessous pour ne
@@ -188,7 +192,8 @@ export function isManager(userOrRole?: { role?: string } | string | null): boole
 /**
  * Filtre les onglets/sous-sections secondaires au sein d'un module en fonction du rôle :
  * - Barman : UNIQUEMENT l'onglet 'commandes'
- * - Caisse : UNIQUEMENT accessible pour l'administrateur ('admin'). Si l'utilisateur n'est pas admin, l'onglet 'caisse' est totalement exclu.
+ * - Caisse : chiffres uniquement.
+ * - Serveur : produits et commandes.
  * - Stock Manager : UNIQUEMENT l'onglet 'stock'
  * - Autres rôles non-admin : Tous les onglets sauf 'caisse'
  * - Admin : Tous les onglets
@@ -201,16 +206,19 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
     return tabs;
   }
 
+  if (role === 'serveur') {
+    return tabs.filter(t => t.id === 'commandes' || t.id === 'menu');
+  }
+
+  // Le caissier consulte les chiffres du tableau de bord, sans accéder aux opérations.
+  if (role === 'caisse' || role === 'caissier') return [];
+
   // Historique Bar et Inventaire réservés uniquement à l'admin.
   const visibleTabs = tabs.filter(t => t.id !== 'historique' && t.id !== 'historique-produits' && t.id !== 'inventory');
 
   // 2. Barman : UNIQUEMENT l'onglet commandes
   if (role === 'water' || role === 'barman' || role === 'hotesse') {
     return visibleTabs.filter(t => t.id === 'commandes');
-  }
-
-  if (role === 'caisse' || role === 'caissier') {
-    return visibleTabs.filter(t => t.id === 'caisse' || t.id.includes('caisse') || t.id === 'commandes' || t.id === 'rapports');
   }
 
   // 3. Si non-admin : exclure systématiquement les onglets de caisse
@@ -231,6 +239,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
 export function getDefaultTabForRole(defaultTab: string, userRole?: string): string {
   const role = userRole?.toLowerCase() || '';
   if (role === 'water' || role === 'barman' || role === 'hotesse') return 'commandes';
+  if (role === 'serveur') return 'commandes';
   if (role === 'caisse' || role === 'caissier') return 'caisse';
   if (role === 'stock_manager') return 'stock';
   if (role !== 'admin' && (defaultTab === 'caisse' || defaultTab.includes('caisse'))) {
