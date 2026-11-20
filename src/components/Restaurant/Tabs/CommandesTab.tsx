@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Badge, Button, DataTable, Modal, Select } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, Trash2, XCircle, Pencil, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin } from 'lucide-react';
 import type { Order } from '../types';
+import type { TableRestaurant } from '../../../types/restaurant';
 import AuthService from '../../../services/authService';
 import { isAdmin, isCashier } from '../../../utils/permissions';
 
@@ -17,6 +18,7 @@ const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
 
 interface CommandesTabProps {
   orders: Order[];
+  tables: TableRestaurant[];
   products: any[];
   onUpdateStatus: (orderId: number, status: Order['statut']) => void;
   onPayment: (orderId: number, paymentMethod?: string) => void | Promise<void>;
@@ -24,11 +26,13 @@ interface CommandesTabProps {
   onDelete: (orderId: number) => void;
   onNewOrder: () => void;
   onEditOrder: (order: Order) => void;
+  onMoveOrder: (order: Order, tableId: number, locationType?: string) => void | Promise<void>;
   onInvoice?: (orderId: number) => void;
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
   orders,
+  tables,
   products,
   onUpdateStatus,
   onPayment,
@@ -36,12 +40,15 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onDelete,
   onNewOrder,
   onEditOrder,
+  onMoveOrder,
   onInvoice
 }) => {
   const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('ESPECES');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [tableFilter, setTableFilter] = useState('');
+  const [movingOrder, setMovingOrder] = useState<Order | null>(null);
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
   const canDeleteCommande = isAdmin(currentUser);
@@ -103,6 +110,11 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
             <Pencil size={14} />
           </Button>
         )}
+        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
+          <Button size="sm" variant="secondary" onClick={() => setMovingOrder(order)} title="Changer d'emplacement" aria-label="Changer d'emplacement">
+            <MapPin size={14} />
+          </Button>
+        )}
 
         {order.statut === 'EN_ATTENTE' && (
           <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'EN_COURS')}>Démarrer</Button>
@@ -137,7 +149,10 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   ];
 
   // Tri des commandes : les plus récentes (plus grandes dates/IDs) en premier
-  const activeOrders = orders.filter((order) => !['PAYE', 'PAYEE'].includes(order.statut));
+  const activeOrders = orders.filter((order) => {
+    if (['PAYE', 'PAYEE'].includes(order.statut)) return false;
+    return !tableFilter || String(order.table_id ?? order.table?.id ?? 0) === tableFilter;
+  });
   const sortedOrders = [...activeOrders].sort((a, b) => {
     const timeA = new Date(a.created_at || 0).getTime();
     const timeB = new Date(b.created_at || 0).getTime();
@@ -171,9 +186,31 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           Nouvelle commande
         </Button>
       </div>
+      <div className="px-3 sm:px-6 py-3">
+        <Select label="Afficher les commandes de" value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} options={[
+          { value: '', label: 'Toutes les tables' },
+          ...tables.map((table) => ({ value: String(table.id), label: `Table ${String(table.numero).toUpperCase().startsWith('T') ? table.numero : `T${table.numero}`}` })),
+          { value: '0', label: 'Autres emplacements' },
+        ]} />
+      </div>
       <div className="overflow-x-auto">
         <DataTable data={data} columns={columns as any} />
       </div>
+
+      <Modal isOpen={movingOrder !== null} onClose={() => setMovingOrder(null)} title="Changer l'emplacement" size="sm">
+        <div className="grid grid-cols-3 gap-2">
+          {tables.map((table) => (
+            <Button key={table.id} variant="secondary" onClick={async () => { if (movingOrder) await onMoveOrder(movingOrder, table.id); setMovingOrder(null); }}>
+              {String(table.numero).toUpperCase().startsWith('T') ? table.numero : `T${table.numero}`}
+            </Button>
+          ))}
+          {['GRATUIT', 'POCKER GRATUIT', 'CHAMBRE'].map((location) => (
+            <Button key={location} variant="secondary" onClick={async () => { if (movingOrder) await onMoveOrder(movingOrder, 0, location); setMovingOrder(null); }}>
+              {location === 'POCKER GRATUIT' ? 'Pocker gratuit' : location[0] + location.slice(1).toLowerCase()}
+            </Button>
+          ))}
+        </div>
+      </Modal>
 
       <Modal
         isOpen={paymentOrderId !== null}

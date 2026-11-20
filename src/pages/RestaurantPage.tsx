@@ -39,14 +39,15 @@ import { getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 
 const RESTAURANT_TABLE_COUNT = 16;
 
-const normalizeTableNumber = (value: string | number) => String(value).trim().toUpperCase().replace(/^T/, '');
+const normalizeTableNumber = (value: string | number) => String(value).trim().toUpperCase().replace(/^TB?\s*/, '');
 
 const buildRestaurantTables = (apiTables: TableRestaurant[] = []): TableRestaurant[] => (
   Array.from({ length: RESTAURANT_TABLE_COUNT }, (_, index) => {
     const tableNumber = index + 1;
-    const apiTable = apiTables.find((table) => (
-      Number(table.id) === tableNumber || normalizeTableNumber(table.numero) === String(tableNumber)
-    ));
+    const tableAliases = [`TB${tableNumber}`, `T${tableNumber}`, String(tableNumber)];
+    const apiTable = apiTables.find((table) => tableAliases.includes(String(table.numero).trim().toUpperCase()))
+      ?? apiTables.find((table) => normalizeTableNumber(table.numero) === String(tableNumber))
+      ?? apiTables.find((table) => Number(table.id) === tableNumber);
 
     return {
       id: apiTable?.id ?? tableNumber,
@@ -253,6 +254,27 @@ export const RestaurantPage: React.FC = () => {
       console.error('Création commande restaurant échouée:', error);
       throw error;
     }
+  };
+
+  const handleMoveOrder = async (order: Order, tableId: number, locationType?: string) => {
+    const response = await restaurantService.updateOrder(Number(order.id), {
+      client_id: order.client_id || undefined,
+      table_id: tableId || undefined,
+      items: (order.items || []).map((item: any) => ({
+        product_id: item.product_id,
+        source_module: item.source_module || item.sourceModule,
+        source_product_id: item.source_product_id || item.sourceProductId,
+        nom: item.nom || item.product_nom || item.product?.nom,
+        quantite: item.quantite,
+        prix_unitaire: item.prix_unitaire,
+        cuisson: item.cuisson,
+      })),
+      notes: order.notes,
+      location_type: locationType || (tableId ? undefined : order.location_type),
+      special_person_name: order.special_person_name,
+    });
+    if (!response.success) throw new Error(response.message || "Le changement d'emplacement a échoué.");
+    await fetchOrders();
   };
 
   const handleUpdateOrderStatus = async (orderId: number | string, status: Order['statut']) => {
@@ -620,6 +642,7 @@ export const RestaurantPage: React.FC = () => {
         {activeTab === 'commandes' && (
           <CommandesTab
             orders={orders}
+            tables={tables}
             products={products}
             onUpdateStatus={handleUpdateOrderStatus}
             onPayment={handlePayment}
@@ -632,6 +655,7 @@ export const RestaurantPage: React.FC = () => {
               setSelectedOrderLocation(getRestaurantLocationLabel(order.location_type));
               setShowOrderModal(true);
             }}
+            onMoveOrder={handleMoveOrder}
             onInvoice={handlePrintInvoice}
           />
         )}
