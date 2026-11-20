@@ -17,6 +17,7 @@ const roleLabels: Record<string, string> = {
   housekeeping: 'Personnel d’entretien',
   croupier: 'Croupier',
   hotesse: 'Hôtesse',
+  serveur: 'Serveur',
 };
 
 const formRoleLabels: Record<string, string> = {
@@ -27,6 +28,7 @@ const formRoleLabels: Record<string, string> = {
   water: 'Barman',
   croupier: 'Croupier (accès au casino)',
   hotesse: 'Hôtesse (commandes du Bar uniquement)',
+  serveur: 'Serveur (droits à configurer)',
 };
 
 const roleIcons: Record<string, string> = {
@@ -38,6 +40,7 @@ const roleIcons: Record<string, string> = {
   housekeeping: '🧹',
   croupier: '🎲',
   hotesse: '🛎️',
+  serveur: '🍽️',
 };
 
 // Module labels for user interface display
@@ -581,7 +584,7 @@ export const UtilisateursPage: React.FC = () => {
 
           <Select label="Rôle" value={form.role} onChange={e => {
             const role = e.target.value as UserRole;
-            setForm({ ...form, role, module: role === 'caisse' ? cashierModules : role === 'water' || role === 'hotesse' ? ['bar'] : role === 'receptioniste' ? ['hotel', 'bar'] : role === 'croupier' ? ['casino'] : form.module });
+            setForm({ ...form, role, module: role === 'serveur' ? [] : role === 'caisse' ? cashierModules : role === 'water' || role === 'hotesse' ? ['bar'] : role === 'receptioniste' ? ['hotel', 'bar'] : role === 'croupier' ? ['casino'] : form.module });
           }}
             options={Object.entries(formRoleLabels).map(([k, v]) => ({ value: k, label: v }))} />
 
@@ -590,7 +593,7 @@ export const UtilisateursPage: React.FC = () => {
               <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse(s) autorisée(s)' : 'Modules autorisés'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' || form.role === 'hotesse' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel', 'bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'serveur' ? [] : form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' || form.role === 'hotesse' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel', 'bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (
@@ -609,6 +612,7 @@ export const UtilisateursPage: React.FC = () => {
                 );
               })}
             </div>
+            {form.role === 'serveur' && <p className="mt-2 text-xs text-muted">Les pages et actions de ce rôle seront définies ultérieurement.</p>}
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier peut être affecté à : Bar, Restaurant, Hôtel ou Casino.</p>}
             {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
             {form.role === 'hotesse' && <p className="mt-2 text-xs text-muted">L’hôtesse accède uniquement aux commandes du Bar qu’elle a créées.</p>}
