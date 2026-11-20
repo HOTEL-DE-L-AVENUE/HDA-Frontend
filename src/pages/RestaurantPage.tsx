@@ -23,6 +23,7 @@ import { Button, Modal } from '../components/UI';
 // Services et types
 import * as restaurantService from '../services/restaurantService';
 import barService from '../services/bar.service';
+import alcoholService from '../services/alcohol.service';
 import type { BarProduct } from '../types/bar.type';
 import type {
   TableRestaurant,
@@ -76,6 +77,7 @@ export const RestaurantPage: React.FC = () => {
   // Données mockées (produits, commandes, clients) – à migrer plus tard
   const [products, setProducts] = useState<Product[]>([]);
   const [barDrinks, setBarDrinks] = useState<BarProduct[]>([]);
+  const [alcoholDrinks, setAlcoholDrinks] = useState<BarProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -139,6 +141,12 @@ export const RestaurantPage: React.FC = () => {
       .catch((error) => {
         console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
         setBarDrinks([]);
+      });
+    alcoholService.getAlcoholProducts()
+      .then((response) => setAlcoholDrinks(Array.isArray(response) ? response : []))
+      .catch((error) => {
+        console.error('Erreur lors du chargement des boissons alcoolisées', error);
+        setAlcoholDrinks([]);
       });
 
     const restaurantDataRequest = userIsServer
@@ -625,6 +633,7 @@ export const RestaurantPage: React.FC = () => {
           <MenuTab
             products={products}
             barDrinks={barDrinks}
+            alcoholDrinks={alcoholDrinks}
             categories={categories}
             userIsAdmin={userIsAdmin}
             onAddProduct={() => {
