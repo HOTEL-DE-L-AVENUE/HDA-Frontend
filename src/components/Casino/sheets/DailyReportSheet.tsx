@@ -25,16 +25,17 @@ const uniquePlayers = (players: PlayerLine[]) => players.filter((player, index, 
 const playerDisplayName = (player: PlayerLine) => player.surnom?.trim() || player.name.trim() || `Joueur ${player.ficheId ?? player.id}`;
 
 const formatAmount = (value: number) => {
-  const absoluteValue = Math.abs(value);
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const absoluteValue = Math.abs(safeValue);
   if (absoluteValue >= 1_000_000) {
-    const millions = value / 1_000_000;
+    const millions = safeValue / 1_000_000;
     return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M Ar`;
   }
   if (absoluteValue >= 1_000) {
-    const thousands = value / 1_000;
+    const thousands = safeValue / 1_000;
     return `${Number.isInteger(thousands) ? thousands : thousands.toFixed(1)}K Ar`;
   }
-  return `${casinoCurrency.format(value)} Ar`;
+  return `${casinoCurrency.format(safeValue)} Ar`;
 };
 
 const isSamePlayer = (first: PlayerLine, second: PlayerLine) =>
@@ -69,6 +70,32 @@ const parsePaymentOptions = (value?: string): Array<{ option: string; amount: nu
     return [];
   }
 };
+
+const parseBonusDetails = (player: PlayerLine) => {
+  try {
+    const bonuses = JSON.parse(player.bonuses || '[]');
+    const amounts = JSON.parse(player.bonusResults || '{}');
+    if (!Array.isArray(bonuses) || !amounts || typeof amounts !== 'object') return [];
+    return bonuses.flatMap((bonus) => {
+      if (typeof bonus !== 'string') return [];
+      const amount = parseCasinoAmount(amounts[bonus]);
+      return amount > 0 ? [`${bonus} : ${formatAmount(amount)}`] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+const getBonusTotal = (players: PlayerLine[]) => uniquePlayers(players).reduce((total, player) => {
+  try {
+    const bonuses = JSON.parse(player.bonuses || '[]');
+    const amounts = JSON.parse(player.bonusResults || '{}');
+    if (!Array.isArray(bonuses) || !amounts || typeof amounts !== 'object') return total;
+    return total + bonuses.reduce((sum, bonus) => sum + (typeof bonus === 'string' ? parseCasinoAmount(amounts[bonus]) : 0), 0);
+  } catch {
+    return total;
+  }
+}, 0);
 
 const paymentCategory = (option: string) => {
   const normalized = option.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -127,12 +154,17 @@ const getPaidCavePaymentTotal = (players: PlayerLine[], methods?: string[]): num
 const readFinalCategoryValue = (finals: Record<string, Record<string, string>>, key: string, fallback: number) => {
   const explicitValue = Object.values(finals)
     .map((values) => parseCasinoAmount(values?.[key]))
+    .filter((amount) => Number.isFinite(amount))
     .reduce((sum, amount) => sum + amount, 0);
   return explicitValue > 0 ? explicitValue : fallback;
 };
 
 export const buildDailyReport = ({ date, table, players, chips, rackChecks, restaurantPayments, finals, registeredPlayers }: DailyReportSheetProps) => {
-  const reportPlayers = uniquePlayers(players).filter((player) => player.surnom?.trim() || player.name.trim() || playerAmount(player, players) > 0);
+  const reportPlayers = uniquePlayers(players).filter((player) => player.surnom?.trim()
+    || player.name.trim()
+    || playerAmount(player, players) > 0
+    || parseBonusDetails(player).length > 0
+    || parsePaymentOptions(player.resultPaymentOptions).length > 0);
   const listedPlayers = reportPlayers.filter((player) => !playerHasFinalSignature(player, players));
   const playersOut = reportPlayers
     .filter((player) => playerHasFinalSignature(player, players) && playerResult(player, players) < 0)
@@ -162,25 +194,17 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
   const withdrawn = chips.reduce((total, chip) => total + chip.value * parseCasinoAmount(chip.withdrawn), 0);
   const cashChecks = rackChecks.filter((check) => check.type === 'Cash check');
   const rackChecksReport = rackChecks.filter((check) => check.type.startsWith('Rack check') || check.type === 'Retour croupier' || check.type === 'Sortie croupier');
-  const paymentDetails = new Map<string, string[]>();
-  reportPlayers.forEach((player) => {
+  const waitingPlayerDetails = listedPlayers.flatMap((player) => {
+    const details: string[] = [];
+    parseBonusDetails(player).forEach((detail) => details.push(`  Bonus — ${detail}`));
     const result = playerResult(player, players);
     const payments = getPlayerLines(player, players).flatMap((line) => parsePaymentOptions(line.resultPaymentOptions));
-    const uniquePayments = [...new Map(payments.map((payment) => [payment.option, payment])).values()];
-    uniquePayments.forEach((payment) => {
-      const category = paymentCategory(payment.option);
+    [...new Map(payments.map((payment) => [payment.option, payment])).values()].forEach((payment) => {
       const amount = payment.amount > 0 ? payment.amount : Math.abs(result);
-      if (!amount) return;
-      const signedAmount = result < 0 ? -amount : amount;
-      const playerName = playerDisplayName(player);
-      const entries = paymentDetails.get(category) || [];
-      entries.push(`${playerName} : ${formatAmount(signedAmount)}`);
-      paymentDetails.set(category, entries);
+      if (amount > 0) details.push(`  ${paymentCategory(payment.option)} — ${formatAmount(result < 0 ? -amount : amount)}`);
     });
+    return details.length ? [`${playerDisplayName(player)} :`, ...details] : [];
   });
-  const paymentSection = (category: string) => paymentDetails.has(category)
-    ? [`# ${category} :`, ...(paymentDetails.get(category) || [])]
-    : [];
   const finalValues = (key: string) => Object.values(finals)
     .map((values) => ({ values, amount: parseCasinoAmount(values?.[key]) }))
     .filter(({ amount }) => amount > 0)
@@ -202,14 +226,14 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
       return text;
     })
     .filter(Boolean) as string[];
-  const tpeReportTotal = readFinalCategoryValue(finals, 'tpe', getNegativePaymentTotal(players, 'TPE'));
+  const tpeReportTotal = readFinalCategoryValue(finals, 'tpe', getNegativePaymentTotal(players, 'TPE') + getPaidCavePaymentTotal(players, ['TPE']));
   const creditReportTotal = readFinalCategoryValue(finals, 'credit', getNegativePaymentTotal(players, 'Crédit'));
   const creditPaidReportTotal = readFinalCategoryValue(finals, 'creditPaye', getPositivePaymentTotal(players, 'Crédit payé'));
   const depotReportTotal = readFinalCategoryValue(finals, 'depot', getPositivePaymentTotal(players, 'Dépôt'));
   const depotPaidReportTotal = readFinalCategoryValue(finals, 'depotPaye', getNegativePaymentTotal(players, 'Dépôt payé'));
   const offeredReportTotal = readFinalCategoryValue(finals, 'offert', getPaidCavePaymentTotal(players, ['Offert']));
-  const bonusReportTotal = readFinalCategoryValue(finals, 'bonus', 0);
-  const mobileReportTotal = readFinalCategoryValue(finals, 'mobiles', 0);
+  const bonusReportTotal = readFinalCategoryValue(finals, 'bonus', getBonusTotal(players));
+  const mobileReportTotal = readFinalCategoryValue(finals, 'mobiles', getNegativePaymentTotal(players, 'MVola', 'Orange Money') + getPositivePaymentTotal(players, 'MVola', 'Orange Money') + getPaidCavePaymentTotal(players, ['MVola', 'Orange Money']));
   const restaurantReportTotal = readFinalCategoryValue(finals, 'restaurant', 0);
   const prolongationReportTotal = readFinalCategoryValue(finals, 'prolongation', 0);
   const pourboiresReportTotal = readFinalCategoryValue(finals, 'pourboires', 0);
@@ -258,7 +282,8 @@ export const buildDailyReport = ({ date, table, players, chips, rackChecks, rest
     '# Joueur perdant :',
     ...(playersLosing.length ? playersLosing : ['']),
     '',
-    '# Joueurs en attente :',
+    '# Détail des joueurs :',
+    ...(waitingPlayerDetails.length ? waitingPlayerDetails : ['Aucun détail bonus ou paiement.']),
     '',
     ...finalCategoryLines,
     '',
