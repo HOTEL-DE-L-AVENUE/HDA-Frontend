@@ -189,7 +189,10 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
       <div className="px-3 sm:px-6 py-3">
         <Select label="Afficher les commandes de" value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} options={[
           { value: '', label: 'Toutes les tables' },
-          ...tables.map((table) => ({ value: String(table.id), label: `Table ${String(table.numero).toUpperCase().startsWith('T') ? table.numero : `T${table.numero}`}` })),
+          ...Array.from(new Map(tables.map((table) => [String(table.id), {
+            value: String(table.id),
+            label: `Table ${String(table.numero).toUpperCase().startsWith('T') ? table.numero : `T${table.numero}`}`,
+          }])).values()),
           { value: '0', label: 'Autres emplacements' },
         ]} />
       </div>
