@@ -519,6 +519,12 @@ const isPaidOrder = (order: { statut?: string }) => {
   return ['ENCAISSEE', 'PAYE', 'PAYEE', 'CLOTUREE'].includes(status);
 };
 
+const isServedOrder = (order: { statut?: string }) => (order.statut || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toUpperCase() === 'SERVIE';
+
 export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onInvoiceOrder, onCloseAllOrders, onRefresh, onCreateBarOrder }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
@@ -532,6 +538,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [isClosingBarSession, setIsClosingBarSession] = useState(false);
   const [showCloseOrdersModal, setShowCloseOrdersModal] = useState(false);
   const [isClosingOrders, setIsClosingOrders] = useState(false);
+  const [closeOrdersError, setCloseOrdersError] = useState<string | null>(null);
   const [showCloseHotelModal, setShowCloseHotelModal] = useState(false);
   const [isClosingHotel, setIsClosingHotel] = useState(false);
   const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
@@ -544,6 +551,9 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const isRestaurant = module === 'restaurant';
   const isOrderRegister = isBar || isRestaurant;
   const paidOrders = allOrders.filter(isPaidOrder);
+  const unpaidOrders = allOrders.filter((order) => !isPaidOrder(order));
+  const nextUnpaidOrder = unpaidOrders[0];
+  const nextUnpaidOrderCanBePaid = nextUnpaidOrder ? isServedOrder(nextUnpaidOrder) : false;
   // const isHebergement = module === 'hebergement'; // COMMENTED OUT
   const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
@@ -938,21 +948,36 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
-
+    setCloseOrdersError(null);
     setShowCloseOrdersModal(true);
   };
 
+  const startOrderPayment = (orderId: number) => {
+    setCloseOrdersError(null);
+    if (isBar) {
+      setPaymentOrderId(orderId);
+      setOrderPaymentMethod('ESPECES');
+      setOrderPaymentError(null);
+      return;
+    }
+    void handleEncaisserCommande(orderId);
+  };
+
   const confirmCloseAllOrders = async () => {
-    if (!onCloseAllOrders || allOrders.length === 0) return;
+    if (!onCloseAllOrders || paidOrders.length === 0 || unpaidOrders.length > 0) {
+      setCloseOrdersError('Encaissez toutes les commandes une par une avant de clôturer la caisse.');
+      return;
+    }
 
     setIsClosingOrders(true);
     try {
-      handlePrintClosingReport();
-      await onCloseAllOrders(allOrders.map((order) => order.id));
+      handlePrintDailyOrderDetails();
+      await onCloseAllOrders(paidOrders.map((order) => order.id));
       setBackendTransactions([]);
       setTransactionsRefreshTrigger((value) => value + 1);
       await onRefresh?.();
       setShowCloseOrdersModal(false);
+      setCloseOrdersError(null);
     } catch (error) {
       setBackendError(error instanceof Error ? error.message : 'Impossible de clôturer les commandes.');
     } finally {
@@ -1032,7 +1057,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     <div className="space-y-6">
       <Modal
         isOpen={showCloseOrdersModal}
-        onClose={() => { if (!isClosingOrders) setShowCloseOrdersModal(false); }}
+        onClose={() => { if (!isClosingOrders) { setShowCloseOrdersModal(false); setCloseOrdersError(null); } }}
         title="Clôturer les commandes"
         size="sm"
       >
@@ -1042,34 +1067,68 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
               <AlertCircle size={21} />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
-              <p className="mt-1 text-sm leading-relaxed text-secondary">
-                Les <strong>{allOrders.length} commande{allOrders.length > 1 ? 's' : ''}</strong> seront clôturées de la caisse.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted">
-                Elles resteront disponibles dans l’historique administrateur.
-              </p>
+              {unpaidOrders.length > 0 ? (
+                <>
+                  <p className="font-semibold text-primary">Encaissement requis avant la clôture</p>
+                  <p className="mt-1 text-sm leading-relaxed text-secondary">
+                    Il reste <strong>{unpaidOrders.length} commande{unpaidOrders.length > 1 ? 's' : ''}</strong> à encaisser. Traitez-les une par une ; l’impression et la clôture seront disponibles après le dernier encaissement.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
+                  <p className="mt-1 text-sm leading-relaxed text-secondary">
+                    Les <strong>{paidOrders.length} commande{paidOrders.length > 1 ? 's' : ''} encaissée{paidOrders.length > 1 ? 's' : ''}</strong> seront imprimées individuellement puis clôturées.
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">Elles resteront disponibles dans l’historique administrateur.</p>
+                </>
+              )}
             </div>
           </div>
+          {closeOrdersError && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">{closeOrdersError}</p>}
+          {nextUnpaidOrder && (
+            <div className="rounded-xl border border-base bg-surface-2 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-primary">Commande #{nextUnpaidOrder.id} · {nextUnpaidOrder.client || 'Client anonyme'}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {nextUnpaidOrder.table ? `Table ${nextUnpaidOrder.table} · ` : ''}
+                    {nextUnpaidOrder.statut || 'Statut inconnu'} · {formatCurrency(nextUnpaidOrder.total)}
+                  </p>
+                  {!nextUnpaidOrderCanBePaid && (
+                    <p className="mt-2 text-xs text-amber-300">Cette commande doit d’abord être marquée « Servie » par le personnel autorisé.</p>
+                  )}
+                </div>
+                {nextUnpaidOrderCanBePaid && onEncaisserCommande && (
+                  <Button type="button" size="sm" onClick={() => startOrderPayment(nextUnpaidOrder.id)} className="shrink-0">
+                    Encaisser
+                  </Button>
+                )}
+              </div>
+              {unpaidOrders.length > 1 && <p className="mt-3 border-t border-base pt-3 text-xs text-muted">Les commandes restantes seront proposées une par une après cet encaissement.</p>}
+            </div>
+          )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setShowCloseOrdersModal(false)}
+              onClick={() => { setShowCloseOrdersModal(false); setCloseOrdersError(null); }}
               disabled={isClosingOrders}
               className="w-full sm:w-auto"
             >
-              Annuler
+              {unpaidOrders.length > 0 ? 'Fermer' : 'Annuler'}
             </Button>
-            <Button
-              type="button"
-              onClick={() => void confirmCloseAllOrders()}
-              disabled={isClosingOrders}
-              className="w-full sm:w-auto"
-            >
-              <Printer size={16} />
-              {isClosingOrders ? 'Clôture...' : 'Imprimer et clôturer'}
-            </Button>
+            {unpaidOrders.length === 0 && (
+              <Button
+                type="button"
+                onClick={() => void confirmCloseAllOrders()}
+                disabled={isClosingOrders || paidOrders.length === 0}
+                className="w-full sm:w-auto"
+              >
+                <Printer size={16} />
+                {isClosingOrders ? 'Clôture...' : 'Imprimer et clôturer'}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
