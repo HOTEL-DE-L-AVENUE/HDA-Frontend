@@ -74,7 +74,7 @@ const paymentMethodLabels: Record<string, string> = {
   GRATUIT: 'Gratuit',
 };
 
-export const printOrderReceipt = (receipt: ThermalOrderReceipt) => {
+const renderOrderReceipt = (receipt: ThermalOrderReceipt) => {
   const moduleLabel = receipt.module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
   const paymentMethod = String(receipt.paymentMethod || '').trim().toUpperCase();
   const paymentLabel = paymentMethodLabels[paymentMethod] || paymentMethod || 'Non renseigné';
@@ -84,7 +84,8 @@ export const printOrderReceipt = (receipt: ThermalOrderReceipt) => {
       <span>${escapeHtml(item.name)} ×${Number(item.quantity) || 0}</span>
       <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))} MGA</span>
     </div>`).join('');
-  const body = `
+  return `
+    <section class="order-receipt">
     ${thermalHeader(`Reçu — ${moduleLabel}`, [`Commande #${receipt.orderId}`])}
     <p><strong>Client :</strong> ${escapeHtml(receipt.client || 'Client anonyme')}</p>
     <p><strong>Table / emplacement :</strong> ${escapeHtml(receipt.table ?? '—')}</p>
@@ -101,8 +102,23 @@ export const printOrderReceipt = (receipt: ThermalOrderReceipt) => {
     <div class="row">
       <strong>Mode de paiement</strong>
       <span>${escapeHtml(paymentLabel)}</span>
-    </div>`;
-  return printThermal(`Reçu ${moduleLabel} — commande #${receipt.orderId}`, body);
+    </div>
+    </section>`;
+};
+
+export const printOrderReceipt = (receipt: ThermalOrderReceipt) => {
+  const moduleLabel = receipt.module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
+  return printThermal(`Reçu ${moduleLabel} — commande #${receipt.orderId}`, renderOrderReceipt(receipt));
+};
+
+export const printOrderReceipts = (receipts: ThermalOrderReceipt[]) => {
+  if (receipts.length === 0) return false;
+  const moduleLabel = receipts[0].module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
+  return printThermal(
+    `Reçus ${moduleLabel} — ${receipts.length} commandes`,
+    receipts.map(renderOrderReceipt).join(''),
+    { css: '.order-receipt + .order-receipt { margin-top: 8mm; padding-top: 3mm; border-top: 1px dashed #000; }' },
+  );
 };
 
 // En-tête standard des tickets (logo + titre + date d'impression).
