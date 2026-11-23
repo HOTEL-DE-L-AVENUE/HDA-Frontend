@@ -209,7 +209,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
 
   // Le caissier consulte les chiffres et l'onglet de caisse pour encaisser.
   if (role === 'caisse' || role === 'caissier') {
-    return tabs.filter(t => t.id === 'caisse' || t.id.includes('caisse'));
+    return tabs.filter(t => ['caisse', 'commandes', 'menu'].includes(t.id) || t.id.includes('caisse'));
   }
 
   // Historique Bar et Inventaire réservés uniquement à l'admin.

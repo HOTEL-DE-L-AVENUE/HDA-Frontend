@@ -599,7 +599,7 @@ export const RestaurantPage: React.FC = () => {
       <RestaurantHeader stats={userIsServer ? [] : stats} />
 
       {/* Barre de recherche et filtres - Masquée uniquement sur l'onglet menu */}
-      {!userIsCashier && activeTab !== 'menu' && (
+      {activeTab !== 'menu' && (
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <div className="relative flex-1">
             <input
@@ -656,7 +656,7 @@ export const RestaurantPage: React.FC = () => {
               setShowOrderModal(true);
             }}
             onMoveOrder={handleMoveOrder}
-            onInvoice={handlePrintInvoice}
+            onInvoice={userIsCashier || userIsAdmin ? handlePrintInvoice : undefined}
           />
         )}
         {activeTab === 'menu' && (
@@ -683,6 +683,8 @@ export const RestaurantPage: React.FC = () => {
               await restaurantService.closeAllOrders(orderIds);
             }}
             onRefresh={fetchOrders}
+            onNewOrder={handleNewOrder}
+            onInvoice={handlePrintInvoice}
           />
         )}
         {activeTab === 'historique' && <HistoryTab orders={orders} />}
