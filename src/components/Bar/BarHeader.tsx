@@ -9,7 +9,7 @@ interface BarHeaderProps {
 
 export const BarHeader: React.FC<BarHeaderProps> = ({
   title = 'Bar & Lounge',
-  subtitle = 'Cocktails premium & service bar',
+  subtitle = 'Gestion des commandes, cocktails, stock et caisse',
   compact = false,
 }) => (
   <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${compact ? 'gap-1 sm:gap-2' : 'gap-3'}`}>

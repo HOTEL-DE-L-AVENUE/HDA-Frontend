@@ -12,7 +12,7 @@ import { ModuleType } from '../types';
 import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import barService from '../services/bar.service';
 import type { BarSession } from '../types/bar.type';
-import { escapeHtml, printThermal, thermalHeader } from '../utils/thermalPrint';
+import { escapeHtml, printOrderReceipt, printThermal, thermalHeader } from '../utils/thermalPrint';
 
 interface StockItem {
   id: number;
@@ -538,7 +538,6 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
   const isBackendCaisse = module === 'restaurant' /* || module === 'hebergement' */ || module === 'hotel' || module === 'bar'; // COMMENTED OUT hebergement
-  const canViewBarBalance = !isBar || isAdmin(AuthService.getCurrentUser());
   const transactionTitle = isBar
     ? 'Transactions Bar'
     : isHebergement
@@ -910,36 +909,25 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   };
 
   const handlePrintSingleOrder = (order: any) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const orderDate = order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '-';
+    const currentUser = AuthService.getCurrentUser();
+    const connectedCashier = [currentUser?.prenom, currentUser?.nom].filter(Boolean).join(' ') || currentUser?.email || 'Utilisateur connecté';
     const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const orderTotal = Number(order.total || 0);
-    const paymentLabels: Record<string, string> = {
-      ESPECES: 'Espèces', CARTE: 'Carte bancaire', TPE: 'TPE', CREDIT: 'Crédit',
-      EURO: 'Euro', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', DOLLAR: 'Dollar',
-      VIREMENT: 'Virement', CHEQUE: 'Chèque', GRATUIT: 'Gratuit',
-    };
-    const paymentMethod = order.moyen_paiement ? String(order.moyen_paiement).toUpperCase() : '';
-    const paymentLabel = paymentLabels[paymentMethod] || (paymentMethod || 'Non renseigné');
-    
-    const itemsRows = (order.items || []).map((item: any) => {
-      const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
-      const lineTotal = unitPrice * Number(item.quantite || 0);
-      return `<div class="row"><span>${escapeHtml(item.nom || item.product_nom || 'Article')} x${item.quantite}</span><span>${formatCurrency(lineTotal)}</span></div>`;
-    }).join('');
-
-    const report = `<h1>Reçu de Commande</h1><p>Commande #${order.id}<br>Client : ${escapeHtml(order.client || 'Client anonyme')}<br>Table : ${escapeHtml(String(order.table || 'N/A'))}<br>Date : ${escapeHtml(orderDate)}<br>Caissier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}</p><div class="separator"></div><h2>Articles</h2>${itemsRows || '<p>Aucun article.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(orderTotal)}</strong></div><div class="separator"></div><div class="row"><span>Moyen de paiement</span><span>${escapeHtml(paymentLabel)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Commande</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    printOrderReceipt({
+      module: isBar ? 'BAR' : 'RESTAURANT',
+      orderId: order.id,
+      client: order.client || 'Client anonyme',
+      table: order.table ?? '—',
+      date: order.created_at,
+      cashier: connectedCashier,
+      terminal,
+      paymentMethod: order.moyen_paiement,
+      items: (order.items || []).map((item: any) => ({
+        name: item.nom || item.product_nom || 'Article',
+        quantity: Number(item.quantite) || 0,
+        unitPrice: Number(item.prix_unitaire ?? item.prix ?? 0),
+      })),
+      total: Number(order.total) || 0,
+    });
   };
 
   const handlePrintSingleTransaction = (transaction: any) => {
@@ -1134,7 +1122,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       </Modal>
       <div className="flex justify-end">
         <div className="flex flex-wrap justify-end gap-2">
-          {!isBar && !isHotel && (
+          {!isHotel && (
             <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
               Nouvelle transaction
             </Button>
@@ -1144,9 +1132,13 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
       <div className={isOrderRegister || isHotel ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
         {/* Caisse Card */}
-        {canViewBarBalance && (
-          <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
-        )}
+        <CaisseCard
+          solde={solde}
+          entrees={entrees}
+          sorties={sorties}
+          title={title || (isBar ? 'Caisse Bar & Lounge' : 'Caisse')}
+          gradient={gradient}
+        />
         {isOrderRegister && (
           <section className="rounded-2xl border border-accent/20 bg-surface p-4 shadow-xl shadow-black/10 sm:p-5">
             <div className="flex items-start justify-between gap-3">

@@ -284,10 +284,11 @@ export const RestaurantPage: React.FC = () => {
         await fetchOrders();
         return;
       }
+      throw new Error("Le statut de la commande n'a pas pu être mis à jour.");
     } catch (err) {
-      console.warn('API update status échoué, bascule vers mode local:', err);
+      console.error('Erreur mise à jour statut commande restaurant:', err);
+      throw err;
     }
-    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: status } : o));
   };
 
   const handlePayment = async (orderId: number | string, paymentMethod = 'ESPECES') => {

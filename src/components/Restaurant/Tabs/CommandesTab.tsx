@@ -5,7 +5,7 @@ import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin } from 'lucide-reac
 import type { Order } from '../types';
 import type { TableRestaurant } from '../../../types/restaurant';
 import AuthService from '../../../services/authService';
-import { isAdmin, isCashier } from '../../../utils/permissions';
+import { isAdmin, isCashier, isManager } from '../../../utils/permissions';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
@@ -47,11 +47,21 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   const [paymentMethod, setPaymentMethod] = useState('ESPECES');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [tableFilter, setTableFilter] = useState('');
   const [movingOrder, setMovingOrder] = useState<Order | null>(null);
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
+  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || currentUser?.role?.toLowerCase() === 'serveur';
   const canDeleteCommande = isAdmin(currentUser);
+  const handleChangeOrderStatus = async (orderId: number, status: Order['statut']) => {
+    try {
+      setStatusError(null);
+      await onUpdateStatus(orderId, status);
+    } catch (error: any) {
+      setStatusError(error?.response?.data?.message || error?.message || 'Le statut de la commande n’a pas pu être mis à jour.');
+    }
+  };
   const getLocationLabel = (order: Order) => {
     const normalized = order.location_type?.trim().toUpperCase();
     if (normalized === 'POCKER' || normalized === 'POCKER GRATUIT' || normalized === 'GRATUIT POCKER') return 'Gratuit Pocker';
@@ -116,11 +126,11 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           </Button>
         )}
 
-        {order.statut === 'EN_ATTENTE' && (
-          <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'EN_COURS')}>Démarrer</Button>
+        {canChangeOrderStatus && order.statut === 'EN_ATTENTE' && (
+          <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'EN_COURS')}>Démarrer</Button>
         )}
-        {order.statut === 'EN_COURS' && (
-          <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'SERVIE')}>Servir</Button>
+        {canChangeOrderStatus && order.statut === 'EN_COURS' && (
+          <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
           <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); setPaymentError(null); }}>Encaisser</Button>
@@ -186,6 +196,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           Nouvelle commande
         </Button>
       </div>
+      {statusError && <p role="alert" className="mx-3 mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400 sm:mx-6">{statusError}</p>}
       <div className="px-3 sm:px-6 py-3">
         <Select label="Afficher les commandes de" value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} options={[
           { value: '', label: 'Toutes les tables' },

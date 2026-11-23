@@ -1,5 +1,5 @@
 // src/utils/thermalPrint.ts
-// Impression unique pour toute l'application : imprimante thermique 80 mm MHT-P80A
+// Impression unique pour toute l'application : imprimante thermique 80 mm MTH-P80A
 // (ESC/POS, Bluetooth depuis la tablette via le service d'impression Android « Thermer »,
 // ou USB depuis un ordinateur avec le pilote de l'imprimante).
 //
@@ -42,6 +42,68 @@ export const THERMAL_BASE_CSS = `
 `;
 
 export const THERMAL_LOGO = '/logo_s.png';
+
+export interface ThermalOrderReceipt {
+  module: 'BAR' | 'RESTAURANT';
+  orderId: number | string;
+  client: string;
+  table?: string | number | null;
+  date?: string | Date | null;
+  cashier: string;
+  terminal: string;
+  paymentMethod?: string | null;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  total: number;
+}
+
+const paymentMethodLabels: Record<string, string> = {
+  ESPECES: 'Espèces',
+  CARTE: 'Carte bancaire',
+  TPE: 'TPE',
+  CREDIT: 'Crédit',
+  EURO: 'Euro',
+  ORANGE_MONEY: 'Orange Money',
+  MVOLA: 'MVola',
+  DOLLAR: 'Dollar',
+  VIREMENT: 'Virement',
+  CHEQUE: 'Chèque',
+  GRATUIT: 'Gratuit',
+};
+
+export const printOrderReceipt = (receipt: ThermalOrderReceipt) => {
+  const moduleLabel = receipt.module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
+  const paymentMethod = String(receipt.paymentMethod || '').trim().toUpperCase();
+  const paymentLabel = paymentMethodLabels[paymentMethod] || paymentMethod || 'Non renseigné';
+  const receiptDate = receipt.date ? new Date(receipt.date).toLocaleString('fr-FR') : '—';
+  const itemRows = receipt.items.map((item) => `
+    <div class="row">
+      <span>${escapeHtml(item.name)} ×${Number(item.quantity) || 0}</span>
+      <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))} MGA</span>
+    </div>`).join('');
+  const body = `
+    ${thermalHeader(`Reçu — ${moduleLabel}`, [`Commande #${receipt.orderId}`])}
+    <p><strong>Client :</strong> ${escapeHtml(receipt.client || 'Client anonyme')}</p>
+    <p><strong>Table / emplacement :</strong> ${escapeHtml(receipt.table ?? '—')}</p>
+    <p><strong>Date :</strong> ${escapeHtml(receiptDate)}</p>
+    <p><strong>Caissier :</strong> ${escapeHtml(receipt.cashier)}</p>
+    <p><strong>Terminal :</strong> ${escapeHtml(receipt.terminal)}</p>
+    <div class="sep"></div>
+    <h2>Articles</h2>
+    ${itemRows || '<p class="center">Aucun article.</p>'}
+    <div class="row total">
+      <span>TOTAL</span>
+      <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(receipt.total) || 0))} MGA</span>
+    </div>
+    <div class="row">
+      <strong>Mode de paiement</strong>
+      <span>${escapeHtml(paymentLabel)}</span>
+    </div>`;
+  return printThermal(`Reçu ${moduleLabel} — commande #${receipt.orderId}`, body);
+};
 
 // En-tête standard des tickets (logo + titre + date d'impression).
 export const thermalHeader = (title: string, lines: string[] = []) => `

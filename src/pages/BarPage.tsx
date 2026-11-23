@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Plus } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
+import { Button } from '../components/UI';
 import barService from '../services/bar.service';
 import * as restaurantService from '../services/restaurantService';
 import { BarPaymentMethod, BarProduct, BarStockItem } from '../types/bar.type';
@@ -49,6 +50,8 @@ export const BarPage: React.FC = () => {
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
   const [createBarOrderRequest, setCreateBarOrderRequest] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const orderStatusLabels: Record<string, BarCommande['statut']> = {
     EN_ATTENTE: 'En attente',
@@ -303,6 +306,17 @@ export const BarPage: React.FC = () => {
     );
   }
 
+  const filteredCommandes = commandes.filter((commande) => {
+    const search = searchQuery.trim().toLowerCase();
+    const matchesSearch = !search
+      || String(commande.client || '').toLowerCase().includes(search)
+      || String(commande.table || '').toLowerCase().includes(search)
+      || String(commande.id).includes(search);
+    const matchesStatus = !filterStatus
+      || String(commande.statut).toUpperCase().replaceAll(' ', '_') === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="space-y-6">
       <BarHeader compact={activeTab === 'bar'} />
@@ -317,6 +331,30 @@ export const BarPage: React.FC = () => {
       {!userIsBarman && !userIsHostess && !userIsServer && (
         <div>
           <BarStats commandes={commandes} stockMap={stockMap} compact={activeTab === 'bar'} />
+        </div>
+      )}
+
+      {activeTab !== 'bar' && (
+        <div className="flex w-full flex-col gap-3 sm:flex-row">
+          <input
+            type="text"
+            placeholder="Rechercher..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="h-10 flex-1 rounded-xl border border-base bg-surface-2 px-4 pl-9 text-sm text-primary placeholder:text-subtle outline-none"
+          />
+          <select
+            value={filterStatus}
+            onChange={(event) => setFilterStatus(event.target.value)}
+            className="h-10 w-full rounded-xl border border-base bg-surface-2 px-4 text-sm text-primary outline-none sm:w-48"
+          >
+            <option value="">Tous les statuts</option>
+            <option value="EN_ATTENTE">En attente</option>
+            <option value="EN_PREPARATION">En préparation</option>
+            <option value="PRETE">Prête</option>
+            <option value="SERVIE">Servie</option>
+            <option value="ENCAISSEE">Payée</option>
+          </select>
         </div>
       )}
 
@@ -355,7 +393,7 @@ export const BarPage: React.FC = () => {
           visible={activeTab === 'commandes'}
           createOrderRequest={createBarOrderRequest}
           onCreateOrderRequestHandled={() => setCreateBarOrderRequest(0)}
-          commandes={commandes}
+          commandes={filteredCommandes}
           onCreateCommande={handleCreateCommande}
           onUpdateCommande={handleUpdateCommande}
           onDeleteCommande={handleDeleteCommande}
@@ -381,47 +419,55 @@ export const BarPage: React.FC = () => {
       {userIsAdmin && activeTab === 'historique-produits' && <ProductHistory />}
 
       {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
-        <CaisseManager
-          module="bar"
-          categories={['Ventes Bar', 'Stock', 'Personnel', 'Événement', 'Autre']}
-          title="Caisse Bar & Lounge"
-          gradient="from-accent to-accent-2"
-          pendingOrders={commandes.filter((commande) => commande.statut === 'Servie').map((commande) => ({
-            id: commande.id,
-            client: commande.client,
-            table: commande.table,
-            total: commande.total,
-            created_at: commande.created_at,
-            nombre_personnes: commande.nombre_personnes,
-            moyen_paiement: commande.moyen_paiement,
-            items: commande.items,
-          }))}
-          allOrders={commandes.map((commande) => ({
-            id: commande.id,
-            client: commande.client,
-            table: commande.table,
-            total: commande.total,
-            statut: commande.statut,
-            moyen_paiement: commande.moyen_paiement,
-            created_at: commande.created_at,
-            items: commande.items.map((item) => ({
-              nom: item.nom,
-              quantite: item.quantite,
-              prix: item.prix,
-              categorie: cocktails.find((product) => product.id === item.product_id)?.categorie || 'Autre',
-            })),
-          }))}
-          onEncaisserCommande={async (orderId, paymentMethod) => {
-            await handleUpdateStatut(orderId, 'Encaissée', paymentMethod as BarPaymentMethod);
-          }}
-          onCloseAllOrders={async (orderIds) => {
-            await barService.closeAllBarOrders(orderIds);
-          }}
-          onRefresh={async () => {
-            await Promise.all([loadOrders(), fetchData()]);
-          }}
-          onCreateBarOrder={userIsCashier ? () => setCreateBarOrderRequest((request) => request + 1) : undefined}
-        />
+        <div className="w-full">
+          <div className="mb-4 flex justify-end gap-2">
+            {userIsCashier && (
+              <Button icon={<Plus size={16} />} onClick={() => setCreateBarOrderRequest((request) => request + 1)}>
+                Nouvelle commande
+              </Button>
+            )}
+          </div>
+          <CaisseManager
+            module="bar"
+            categories={['Ventes Bar', 'Stock', 'Personnel', 'Événement', 'Autre']}
+            title="Caisse Bar & Lounge"
+            gradient="from-accent to-accent-2"
+            pendingOrders={commandes.filter((commande) => commande.statut === 'Servie').map((commande) => ({
+              id: commande.id,
+              client: commande.client,
+              table: commande.table,
+              total: commande.total,
+              created_at: commande.created_at,
+              nombre_personnes: commande.nombre_personnes,
+              moyen_paiement: commande.moyen_paiement,
+              items: commande.items,
+            }))}
+            allOrders={commandes.map((commande) => ({
+              id: commande.id,
+              client: commande.client,
+              table: commande.table,
+              total: commande.total,
+              statut: commande.statut,
+              moyen_paiement: commande.moyen_paiement,
+              created_at: commande.created_at,
+              items: commande.items.map((item) => ({
+                nom: item.nom,
+                quantite: item.quantite,
+                prix: item.prix,
+                categorie: cocktails.find((product) => product.id === item.product_id)?.categorie || 'Autre',
+              })),
+            }))}
+            onEncaisserCommande={async (orderId, paymentMethod) => {
+              await handleUpdateStatut(orderId, 'Encaissée', paymentMethod as BarPaymentMethod);
+            }}
+            onCloseAllOrders={async (orderIds) => {
+              await barService.closeAllBarOrders(orderIds);
+            }}
+            onRefresh={async () => {
+              await Promise.all([loadOrders(), fetchData()]);
+            }}
+          />
+        </div>
       )}
     </div>
   );

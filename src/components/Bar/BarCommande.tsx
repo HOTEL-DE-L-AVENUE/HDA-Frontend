@@ -56,6 +56,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser) || isManager(currentUser);
   const userIsHostess = isHostess(currentUser);
   const userIsServer = currentUser?.role?.toLowerCase() === 'serveur';
+  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsServer;
   const canModifyCommande = isAdmin(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
   const canCreateCommande = canModifyCommande || isCashier(currentUser) || userIsServer;
   const canDeleteCommande = isAdmin(currentUser) || isManager(currentUser);
@@ -756,7 +757,7 @@ export const BarCommandeView: React.FC<Props> = ({
         const isUpdating = updatingId === commande.id;
         return (
           <>
-            {commande.statut === 'En attente' && (
+            {canChangeOrderStatus && commande.statut === 'En attente' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -767,7 +768,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Démarrer'}
               </Button>
             )}
-            {commande.statut === 'En préparation' && (
+            {canChangeOrderStatus && commande.statut === 'En préparation' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -778,7 +779,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Marquer prête'}
               </Button>
             )}
-            {commande.statut === 'Prête' && (
+            {canChangeOrderStatus && commande.statut === 'Prête' && (
               <Button
                 size="sm"
                 variant="secondary"

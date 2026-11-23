@@ -15,7 +15,7 @@ export const BarTabs: React.FC<Props> = ({ activeTab, onTabChange, compact = fal
     .filter((tab) => tab.id !== 'equipement' || currentUser?.role?.toLowerCase() === 'admin');
 
   return (
-    <div className={`flex gap-1 overflow-x-auto border border-base bg-surface scrollbar-hide ${compact ? 'rounded-xl p-0.5' : 'rounded-2xl p-1'}`}>
+    <div className={`flex w-full gap-1 overflow-x-auto border border-base bg-surface scrollbar-hide ${compact ? 'rounded-xl p-0.5' : 'rounded-2xl p-1'}`}>
       {visibleTabs.map(tab => (
         <button
           key={tab.id}
