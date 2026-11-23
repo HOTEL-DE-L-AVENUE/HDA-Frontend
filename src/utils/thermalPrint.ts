@@ -24,7 +24,8 @@ export const THERMAL_BASE_CSS = `
   th, td { padding: 2px 1px; text-align: left; vertical-align: top; border-bottom: 1px dashed #000; overflow-wrap: anywhere; }
   th { font-size: 11px; border-bottom: 1px solid #000; }
   .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
-  .header img, img.logo { width: 40px; height: 40px; object-fit: contain; }
+  .header .logo-wrap { width: 68mm; max-width: 100%; height: 29mm; overflow: hidden; margin: 0 auto 2mm; }
+  .header img.logo { display: block; width: 68mm; max-width: 100%; height: auto; margin-top: -14.5mm; object-fit: contain; filter: grayscale(1) contrast(1.35); }
   .center { text-align: center; }
   .right, .number { text-align: right; }
   .muted { color: #000; font-size: 10px; }
@@ -41,7 +42,7 @@ export const THERMAL_BASE_CSS = `
   pre.report { margin: 0; white-space: pre-wrap; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.4; }
 `;
 
-export const THERMAL_LOGO = '/logo_s.png';
+export const THERMAL_LOGO = '/logo_n.png';
 
 export interface ThermalOrderReceipt {
   module: 'BAR' | 'RESTAURANT';
@@ -64,9 +65,11 @@ export interface ThermalOrderInvoice {
   module: 'BAR' | 'RESTAURANT';
   orderId: number | string;
   client: string;
+  status: string;
   table?: string | number | null;
   date?: string | Date | null;
   notes?: string | null;
+  paymentMethod?: string | null;
   items: Array<{
     name: string;
     quantity: number;
@@ -74,6 +77,8 @@ export interface ThermalOrderInvoice {
   }>;
   total: number;
 }
+
+export interface ThermalOrderTicket extends Omit<ThermalOrderInvoice, 'paymentMethod'> {}
 
 const paymentMethodLabels: Record<string, string> = {
   ESPECES: 'Espèces',
@@ -87,6 +92,71 @@ const paymentMethodLabels: Record<string, string> = {
   VIREMENT: 'Virement',
   CHEQUE: 'Chèque',
   GRATUIT: 'Gratuit',
+};
+
+const normalizeOrderStatus = (status: string) => status
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toUpperCase();
+
+const getOrderStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    EN_ATTENTE: 'En attente',
+    EN_COURS: 'En cours',
+    EN_PREPARATION: 'En préparation',
+    PRETE: 'Prête',
+    SERVIE: 'Servie',
+    PAYE: 'Payée',
+    PAYEE: 'Payée',
+    ENCAISSEE: 'Encaissée',
+    ANNULEE: 'Annulée',
+  };
+  return labels[normalizeOrderStatus(status)] || status || 'Non renseigné';
+};
+
+const getAmountDue = (status: string, total: number) =>
+  normalizeOrderStatus(status) === 'ANNULEE' ? 0 : Math.max(Number(total) || 0, 0);
+
+const formatMGA = (amount: number) =>
+  `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(amount)} MGA`;
+
+const renderOrderDetail = (order: ThermalOrderTicket) => {
+  const status = getOrderStatusLabel(order.status);
+  const amountDue = getAmountDue(order.status, order.total);
+  const orderDate = order.date ? new Date(order.date).toLocaleString('fr-FR') : '—';
+  const itemRows = order.items.map((item) => `
+    <div class="line">
+      <div class="row">
+        <span>${escapeHtml(item.name)} ×${Number(item.quantity) || 0}</span>
+        <span>${escapeHtml(formatMGA((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))}</span>
+      </div>
+      <div class="sub">PU ${escapeHtml(formatMGA(Number(item.unitPrice) || 0))}</div>
+    </div>`).join('');
+  return `
+    <p><strong>Statut :</strong> ${escapeHtml(status)}</p>
+    <p><strong>Client :</strong> ${escapeHtml(order.client || 'Client anonyme')}</p>
+    <p><strong>Table / emplacement :</strong> ${escapeHtml(order.table ?? '—')}</p>
+    <p><strong>Date :</strong> ${escapeHtml(orderDate)}</p>
+    ${order.notes ? `<p><strong>Notes :</strong> ${escapeHtml(order.notes)}</p>` : ''}
+    <div class="sep"></div>
+    <h2>Articles</h2>
+    ${itemRows || '<p class="center">Aucun article.</p>'}
+    <div class="row total">
+      <span>TOTAL À PAYER</span>
+      <span>${escapeHtml(formatMGA(amountDue))}</span>
+    </div>`;
+};
+
+export const printOrderTicket = (ticket: ThermalOrderTicket) => {
+  const moduleLabel = ticket.module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
+  return printThermal(
+    `Ticket de commande — ${moduleLabel} #${ticket.orderId}`,
+    `
+      ${thermalHeader(`TICKET DE COMMANDE — ${moduleLabel}`, [`Commande #${ticket.orderId}`])}
+      ${renderOrderDetail(ticket)}
+    `,
+  );
 };
 
 const renderOrderReceipt = (receipt: ThermalOrderReceipt) => {
@@ -121,33 +191,18 @@ const renderOrderReceipt = (receipt: ThermalOrderReceipt) => {
     </section>`;
 };
 
-export const printOrderInvoice = (invoice: ThermalOrderInvoice) => {
+export const printOrderInvoice = (invoice: ThermalOrderInvoice, target?: Window | null) => {
   const moduleLabel = invoice.module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
-  const invoiceDate = invoice.date ? new Date(invoice.date).toLocaleString('fr-FR') : '—';
-  const itemRows = invoice.items.map((item) => `
-    <div class="line">
-      <div class="row">
-        <span>${escapeHtml(item.name)} ×${Number(item.quantity) || 0}</span>
-        <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))} MGA</span>
-      </div>
-      <div class="sub">PU ${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(item.unitPrice) || 0))} MGA</div>
-    </div>`).join('');
+  const paymentMethod = String(invoice.paymentMethod || '').trim().toUpperCase();
+  const paymentLabel = paymentMethodLabels[paymentMethod] || paymentMethod;
   return printThermal(
     `FACTURE — ${moduleLabel} — commande #${invoice.orderId}`,
     `
       ${thermalHeader(`FACTURE — ${moduleLabel}`, [`Commande #${invoice.orderId}`])}
-      <p><strong>Client :</strong> ${escapeHtml(invoice.client || 'Client anonyme')}</p>
-      <p><strong>Table / emplacement :</strong> ${escapeHtml(invoice.table ?? '—')}</p>
-      <p><strong>Date :</strong> ${escapeHtml(invoiceDate)}</p>
-      ${invoice.notes ? `<p><strong>Notes :</strong> ${escapeHtml(invoice.notes)}</p>` : ''}
-      <div class="sep"></div>
-      <h2>Détail de la facture</h2>
-      ${itemRows || '<p class="center">Aucun article.</p>'}
-      <div class="row total">
-        <span>TOTAL À PAYER</span>
-        <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(invoice.total) || 0))} MGA</span>
-      </div>
+      ${renderOrderDetail(invoice)}
+      ${paymentLabel ? `<div class="row"><strong>Mode de paiement</strong><span>${escapeHtml(paymentLabel)}</span></div>` : ''}
     `,
+    { target },
   );
 };
 
@@ -169,7 +224,7 @@ export const printOrderReceipts = (receipts: ThermalOrderReceipt[]) => {
 // En-tête standard des tickets (logo + titre + date d'impression).
 export const thermalHeader = (title: string, lines: string[] = []) => `
   <div class="header">
-    <img class="logo" src="${THERMAL_LOGO}" alt="HDA" />
+    <div class="logo-wrap"><img class="logo" src="${THERMAL_LOGO}" alt="HDA" /></div>
     <h1>${escapeHtml(title)}</h1>
     ${lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')}
     <p class="muted">Imprimé le ${escapeHtml(new Date().toLocaleString('fr-FR'))}</p>

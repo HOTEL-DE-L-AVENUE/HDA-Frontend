@@ -6,7 +6,7 @@ import type { Order } from '../types';
 import type { TableRestaurant } from '../../../types/restaurant';
 import AuthService from '../../../services/authService';
 import { isAdmin, isCashier, isManager } from '../../../utils/permissions';
-import { escapeHtml, printThermal, thermalHeader } from '../../../utils/thermalPrint';
+import { printOrderTicket } from '../../../utils/thermalPrint';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
@@ -69,22 +69,21 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     return order.table?.numero || order.table_numero || order.table_id || 'N/A';
   };
   const handlePrintOrder = (order: Order) => {
-    const items = (order.items || []).map((item) => {
-      const quantity = Number(item.quantite || 0);
-      const unitPrice = Number(item.prix_unitaire || 0);
-      const name = item.product_nom || item.product?.nom || products.find((product) => product.id === item.product_id)?.nom || `Article #${item.product_id}`;
-      return `<div class="line"><div class="row"><span>${quantity} x ${escapeHtml(name)}${item.cuisson ? ` (${escapeHtml(item.cuisson)})` : ''}</span><span>${escapeHtml(formatCurrency(quantity * unitPrice))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(unitPrice))}</div></div>`;
-    }).join('');
-    const total = Number(order.montant_total || 0);
-    printThermal(`Commande Restaurant #${order.id}`, `
-      ${thermalHeader(`Commande Restaurant #${order.id}`)}
-      <p><strong>Emplacement :</strong> ${escapeHtml(getLocationLabel(order))}</p>
-      <p><strong>Date :</strong> ${escapeHtml(formatDate(order.created_at))}</p>
-      ${order.notes ? `<p><strong>Notes :</strong> ${escapeHtml(order.notes)}</p>` : ''}
-      <div class="sep"></div>
-      ${items || '<p class="center">Aucun article.</p>'}
-      <div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(total))}</span></div>
-    `);
+    printOrderTicket({
+      module: 'RESTAURANT',
+      orderId: order.id,
+      status: order.statut,
+      client: [order.client_prenom, order.client_nom].filter(Boolean).join(' '),
+      table: getLocationLabel(order),
+      date: order.created_at,
+      notes: order.notes,
+      items: (order.items || []).map((item) => ({
+        name: item.product_nom || item.product?.nom || products.find((product) => product.id === item.product_id)?.nom || `Article #${item.product_id}`,
+        quantity: Number(item.quantite) || 0,
+        unitPrice: Number(item.prix_unitaire) || 0,
+      })),
+      total: Number(order.montant_total) || 0,
+    });
   };
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => {

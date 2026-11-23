@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { BarCommande, BarTable, BarProduct } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
-import { escapeHtml, printThermal, thermalHeader } from '../../utils/thermalPrint';
+import { printOrderTicket } from '../../utils/thermalPrint';
 import api from '../../lib/api';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
@@ -652,10 +652,21 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handlePrintCommande = (commande: BarCommande) => {
     const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
-    const items = commande.items.map((item) => `
-      <div class="line"><div class="row"><span>${item.quantite} x ${escapeHtml(item.nom)}</span><span>${escapeHtml(formatCurrency(item.prix * item.quantite))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(item.prix))}</div></div>`).join('');
-
-    const printed = printThermal(`Commande #${commande.id}`, `${thermalHeader(`Commande Bar #${commande.id}`)}<p><strong>Client :</strong> ${escapeHtml(commande.client)}</p><p><strong>Table :</strong> ${escapeHtml(tableName)}</p><div class="sep"></div>${items}<div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(commande.total))}</span></div><div class="footer"><p>Merci de votre visite</p></div>`);
+    const printed = printOrderTicket({
+      module: 'BAR',
+      orderId: commande.id,
+      status: commande.statut,
+      client: commande.client,
+      table: tableName,
+      date: commande.created_at,
+      notes: commande.observation,
+      items: commande.items.map((item) => ({
+        name: item.nom,
+        quantity: item.quantite,
+        unitPrice: item.prix,
+      })),
+      total: commande.total,
+    });
     if (!printed) setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
   };
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
-import { escapeHtml, openPrintWindow, printThermal, thermalHeader } from '../utils/thermalPrint';
+import { openPrintWindow, printOrderInvoice } from '../utils/thermalPrint';
 import { ShoppingCart, Clock, CheckCircle, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react';
 
 // Composants du module Restaurant
@@ -427,26 +427,25 @@ export const RestaurantPage: React.FC = () => {
         };
         const paymentMethod = order.moyen_paiement
           ? paymentLabels[String(order.moyen_paiement).toUpperCase()] || String(order.moyen_paiement)
-          : 'Non renseigné';
+          : '';
         const client = clients.find((candidate) => candidate.id === order.client_id);
         const clientName = client ? `${client.nom || ''} ${client.prenom || ''}`.trim() : `${order.client_nom || ''} ${order.client_prenom || ''}`.trim();
-        const lines = items.map((item) => {
-          const quantity = Number(item.quantite || 0);
-          const unitPrice = Number(item.prix_unitaire || 0);
-          return `<div class="line"><div class="row"><span>${quantity} x ${escapeHtml(item.product_nom || `#${item.product_id || ''}`)}${item.cuisson ? ` (${escapeHtml(item.cuisson)})` : ''}</span><span>${escapeHtml(formatCurrency(quantity * unitPrice))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(unitPrice))}</div></div>`;
-        }).join('');
-        printThermal(`FACTURE — Restaurant #${numericId}`, `
-          ${thermalHeader('FACTURE — Restaurant', [`Facture #${numericId}`, "Hotel de L'avenue — Restaurant"])}
-          <p>Date : ${escapeHtml(order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '—')}</p>
-          ${order.table_numero ? `<p>Table : ${escapeHtml(order.table_numero)}</p>` : ''}
-          ${clientName ? `<p>Client : ${escapeHtml(clientName)}</p>` : ''}
-          <p>Mode de paiement : ${escapeHtml(paymentMethod)}</p>
-          ${order.notes ? `<p>Notes : ${escapeHtml(order.notes)}</p>` : ''}
-          <div class="sep"></div>
-          ${lines}
-          <div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(total))}</span></div>
-          <div class="footer"><p>Merci de votre visite</p></div>
-        `, { target: printWindow });
+        printOrderInvoice({
+          module: 'RESTAURANT',
+          orderId: numericId,
+          status: order.statut || 'EN_ATTENTE',
+          client: clientName || 'Client anonyme',
+          table: order.table_numero || order.table?.numero || order.location_type || order.table_id || '—',
+          date: order.created_at,
+          notes: order.notes,
+          paymentMethod,
+          items: items.map((item) => ({
+            name: `${item.product_nom || `#${item.product_id || ''}`}${item.cuisson ? ` (${item.cuisson})` : ''}`,
+            quantity: Number(item.quantite) || 0,
+            unitPrice: Number(item.prix_unitaire) || 0,
+          })),
+          total,
+        }, printWindow);
       } catch (err) {
         printWindow.close();
         console.error('Erreur récupération facture', err);

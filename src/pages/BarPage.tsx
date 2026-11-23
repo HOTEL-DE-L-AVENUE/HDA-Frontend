@@ -237,6 +237,7 @@ export const BarPage: React.FC = () => {
     printOrderInvoice({
       module: 'BAR',
       orderId: order.id,
+      status: order.statut,
       client: order.client,
       table: order.table ? `Table ${order.table}` : order.observation || 'Sans table',
       date: order.created_at,
