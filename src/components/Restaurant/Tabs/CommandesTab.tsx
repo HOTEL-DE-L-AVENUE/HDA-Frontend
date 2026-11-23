@@ -134,16 +134,16 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
             <XCircle size={14} />
           </Button>
         )}
-        <Button
+        {(canDeleteCommande || String(order.statut).trim().toUpperCase() === 'EN_ATTENTE') && <Button
           size="sm"
           variant="danger"
           title="Supprimer la commande"
           aria-label={`Supprimer la commande ${order.id}`}
           onClick={() => onDelete(order.id)}
-          disabled={!canDeleteCommande}
+          disabled={!canDeleteCommande && String(order.statut).trim().toUpperCase() !== 'EN_ATTENTE'}
         >
           <Trash2 size={14} />
-        </Button>
+        </Button>}
       </div>
     )},
   ];

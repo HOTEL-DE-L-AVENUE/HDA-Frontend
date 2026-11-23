@@ -133,8 +133,7 @@ export const RestaurantPage: React.FC = () => {
     };
     fetchTables();
     fetchOrders();
-    if (userIsCashier) return;
-    barService.getBarProducts()
+    if (!userIsCashier) barService.getBarProducts()
       .then((response) => {
         const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
         setBarDrinks(Array.isArray(data) ? data : []);
@@ -143,14 +142,14 @@ export const RestaurantPage: React.FC = () => {
         console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
         setBarDrinks([]);
       });
-    alcoholService.getAlcoholProducts()
+    if (!userIsCashier) alcoholService.getAlcoholProducts()
       .then((response) => setAlcoholDrinks(Array.isArray(response) ? response : []))
       .catch((error) => {
         console.error('Erreur lors du chargement des boissons alcoolisées', error);
         setAlcoholDrinks([]);
       });
 
-    const restaurantDataRequest = userIsServer
+    const restaurantDataRequest = (userIsServer || userIsCashier)
       ? Promise.all([restaurantService.getProducts({ actif: true }), restaurantService.getCategories()])
           .then(([productsRes, categoriesRes]) => [productsRes, categoriesRes, [], []] as const)
       : Promise.all([
@@ -209,7 +208,7 @@ export const RestaurantPage: React.FC = () => {
             source_product_id: item.source_product_id,
             nom: item.nom,
             quantite: item.quantite,
-            prix_unitaire: item.prix_unitaire,
+            prix_unitaire: item.prix_unitaire ?? item.prix,
             cuisson: item.cuisson,
           })),
           notes: formData.notes,
@@ -237,7 +236,7 @@ export const RestaurantPage: React.FC = () => {
           source_product_id: item.source_product_id,
           nom: item.nom,
           quantite: item.quantite,
-          prix_unitaire: item.prix_unitaire,
+          prix_unitaire: item.prix_unitaire ?? item.prix,
           cuisson: item.cuisson,
         })),
         notes: formData.notes,
