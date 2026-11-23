@@ -180,8 +180,8 @@ export default function BarTransactionsCard({ title = 'Transactions Caisse', ref
               <button
                 onClick={() => handlePrintTransaction(transaction)}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-                title="Imprimer la transaction"
-                aria-label={`Imprimer la commande ${transaction.orderId}`}
+                title="Imprimer le reçu de paiement"
+                aria-label={`Imprimer le reçu de paiement de la commande ${transaction.orderId}`}
               >
                 <Printer size={15} />
               </button>

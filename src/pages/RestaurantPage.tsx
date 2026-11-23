@@ -435,8 +435,8 @@ export const RestaurantPage: React.FC = () => {
           const unitPrice = Number(item.prix_unitaire || 0);
           return `<div class="line"><div class="row"><span>${quantity} x ${escapeHtml(item.product_nom || `#${item.product_id || ''}`)}${item.cuisson ? ` (${escapeHtml(item.cuisson)})` : ''}</span><span>${escapeHtml(formatCurrency(quantity * unitPrice))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(unitPrice))}</div></div>`;
         }).join('');
-        printThermal(`Facture #${numericId}`, `
-          ${thermalHeader(`Facture #${numericId}`, ["Hotel de L'avenue — Restaurant"])}
+        printThermal(`FACTURE — Restaurant #${numericId}`, `
+          ${thermalHeader('FACTURE — Restaurant', [`Facture #${numericId}`, "Hotel de L'avenue — Restaurant"])}
           <p>Date : ${escapeHtml(order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '—')}</p>
           ${order.table_numero ? `<p>Table : ${escapeHtml(order.table_numero)}</p>` : ''}
           ${clientName ? `<p>Client : ${escapeHtml(clientName)}</p>` : ''}
@@ -665,7 +665,6 @@ export const RestaurantPage: React.FC = () => {
               setShowOrderModal(true);
             }}
             onMoveOrder={handleMoveOrder}
-            onInvoice={userIsCashier || userIsAdmin ? handlePrintInvoice : undefined}
           />
         )}
         {activeTab === 'menu' && (

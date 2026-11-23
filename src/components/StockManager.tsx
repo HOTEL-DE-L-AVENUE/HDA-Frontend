@@ -1200,7 +1200,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {onCreateBarOrder && <Button size="md" icon={<Plus size={16} />} onClick={onCreateBarOrder} className="w-full justify-center">Nouvelle commande</Button>}
               <Button size="md" variant="secondary" icon={<Printer size={16} />} onClick={() => handlePrintDailyOrderDetails()} disabled={paidOrders.length === 0} className="w-full justify-center">
-                Imprimer les commandes encaissées
+              Imprimer les reçus de paiement
               </Button>
               <Button size="md" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="w-full justify-center">
                 Clôturer toutes
@@ -1323,7 +1323,17 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                         <p className="mt-0.5 text-xl font-bold text-accent tabular-nums">{formatCurrency(order.total)}</p>
                       </div>
                       <div className="flex w-full gap-2 lg:w-auto">
-                        {onInvoiceOrder && <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => onInvoiceOrder(order.id)} className="min-h-10 flex-1 lg:flex-none">Facture</Button>}
+                        {onInvoiceOrder && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Printer size={14} />}
+                            onClick={() => onInvoiceOrder(order.id)}
+                            className="min-h-10 flex-1 lg:flex-none"
+                          >
+                            Facture
+                          </Button>
+                        )}
                         {onEncaisserCommande && <Button size="sm" icon={isProcessing ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} onClick={() => {
                           if (isBar) {
                             setPaymentOrderId(order.id);
@@ -1409,7 +1419,8 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                   <button
                     onClick={() => handlePrintSingleOrder(order)}
                     className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
-                    title="Imprimer la transaction"
+                    title="Imprimer le reçu de paiement"
+                    aria-label={`Imprimer le reçu de paiement de la commande ${order.id}`}
                   >
                     <Printer size={14} />
                   </button>
@@ -1444,7 +1455,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                     <button
                       onClick={() => handlePrintSingleTransaction(t)}
                       className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
-                      title="Imprimer la transaction"
+                      title="Imprimer le reçu de paiement"
                     >
                       <Printer size={14} />
                     </button>

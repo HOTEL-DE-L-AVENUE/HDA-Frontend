@@ -92,7 +92,7 @@ export const AlcoholPage: React.FC = () => {
 
   // Fonction handleUpdateStatut corrigée avec 'Prête'
   const handleUpdateStatut = async (id: number, statut: BarCommande['statut']) => {
-    const statuses: Record<BarCommande['statut'], AlcoholOrderStatus> = {
+    const statuses: Partial<Record<BarCommande['statut'], AlcoholOrderStatus>> = {
       'En attente': 'EN_ATTENTE',
       'En préparation': 'EN_PREPARATION',
       'Prête': 'SERVIE',

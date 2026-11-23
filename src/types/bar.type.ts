@@ -61,7 +61,7 @@ export interface BarCommande {
   nombre_personnes?: number;
   moyen_paiement?: BarPaymentMethod;
   observation?: string;
-  statut: 'En attente' | 'En préparation' | 'Prête' | 'Servie' | 'Encaissée';
+  statut: 'En attente' | 'En préparation' | 'Prête' | 'Servie' | 'Encaissée' | 'Annulée';
   total: number;
   cloture_at?: string;
   items: BarCommandeItem[];

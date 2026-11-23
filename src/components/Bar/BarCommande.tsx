@@ -32,6 +32,7 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
   'Prête': { label: 'Prête', variant: 'success' },
   'Servie': { label: 'Servie', variant: 'success' },
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
+  'Annulée': { label: 'Annulée', variant: 'danger' },
 };
 
 type OrderLocationOption = {
@@ -594,12 +595,13 @@ export const BarCommandeView: React.FC<Props> = ({
       if (onUpdateStatut) {
         await onUpdateStatut(commandeId, nouveauStatut);
       } else {
-        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE'> = {
+        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE' | 'ANNULEE'> = {
           'En attente': 'EN_ATTENTE',
           'En préparation': 'EN_PREPARATION',
           'Prête': 'PRETE',
           'Servie': 'SERVIE',
           'Encaissée': 'ENCAISSEE',
+          'Annulée': 'ANNULEE',
         };
         await barService.updateBarOrderStatus(commandeId, statuses[nouveauStatut]);
       }
@@ -752,7 +754,7 @@ export const BarCommandeView: React.FC<Props> = ({
     },
     {
       key: 'actions',
-      label: '',
+      label: 'Actions',
       render: (commande: BarCommande) => {
         const isUpdating = updatingId === commande.id;
         return (
@@ -779,6 +781,22 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Marquer prête'}
               </Button>
             )}
+            {canChangeOrderStatus && ['En attente', 'En préparation'].includes(commande.statut) && (
+              <Button
+                size="sm"
+                variant="danger"
+                icon={<XCircle size={14} />}
+                onClick={() => {
+                  if (window.confirm('Annuler cette commande ?')) {
+                    void handleStatusChange(commande.id, 'Annulée');
+                  }
+                }}
+                disabled={isUpdating}
+                title="Annuler la commande"
+              >
+                Annuler
+              </Button>
+            )}
             {canChangeOrderStatus && commande.statut === 'Prête' && (
               <Button
                 size="sm"
@@ -790,7 +808,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Servir'}
               </Button>
             )}
-            {canModifyCommande && (
+            {canModifyCommande && commande.statut !== 'Annulée' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -812,7 +830,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Encaisser'}
               </Button>
             )}
-            <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
+            <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)} title="Imprimer le ticket de commande">Ticket</Button>
             {canDeleteCommande && (
               <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => handleRequestDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
                 {deletingId === commande.id ? '...' : 'Supprimer'}
@@ -824,8 +842,9 @@ export const BarCommandeView: React.FC<Props> = ({
     },
   ];
 
-  const activeCommandes = localCommandes.filter((commande) => commande.statut !== 'Encaissée');
-  const filteredCommandes = activeCommandes.filter((commande) => {
+  const displayedCommandes = localCommandes.filter((commande) => commande.statut !== 'Encaissée');
+  const activeCommandes = displayedCommandes.filter((commande) => commande.statut !== 'Annulée');
+  const filteredCommandes = displayedCommandes.filter((commande) => {
     const query = commandeSearchTerm.trim().toLocaleLowerCase('fr-FR');
     if (!query) return true;
 

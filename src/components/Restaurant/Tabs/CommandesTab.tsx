@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Badge, Button, DataTable, Modal, Select } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin, Printer } from 'lucide-react';
 import type { Order } from '../types';
 import type { TableRestaurant } from '../../../types/restaurant';
 import AuthService from '../../../services/authService';
 import { isAdmin, isCashier, isManager } from '../../../utils/permissions';
+import { escapeHtml, printThermal, thermalHeader } from '../../../utils/thermalPrint';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
@@ -27,7 +28,6 @@ interface CommandesTabProps {
   onNewOrder: () => void;
   onEditOrder: (order: Order) => void;
   onMoveOrder: (order: Order, tableId: number, locationType?: string) => void | Promise<void>;
-  onInvoice?: (orderId: number) => void;
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
@@ -40,8 +40,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onDelete,
   onNewOrder,
   onEditOrder,
-  onMoveOrder,
-  onInvoice
+  onMoveOrder
 }) => {
   const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('ESPECES');
@@ -69,10 +68,28 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     if (normalized === 'CHAMBRE') return 'Chambre';
     return order.table?.numero || order.table_numero || order.table_id || 'N/A';
   };
+  const handlePrintOrder = (order: Order) => {
+    const items = (order.items || []).map((item) => {
+      const quantity = Number(item.quantite || 0);
+      const unitPrice = Number(item.prix_unitaire || 0);
+      const name = item.product_nom || item.product?.nom || products.find((product) => product.id === item.product_id)?.nom || `Article #${item.product_id}`;
+      return `<div class="line"><div class="row"><span>${quantity} x ${escapeHtml(name)}${item.cuisson ? ` (${escapeHtml(item.cuisson)})` : ''}</span><span>${escapeHtml(formatCurrency(quantity * unitPrice))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(unitPrice))}</div></div>`;
+    }).join('');
+    const total = Number(order.montant_total || 0);
+    printThermal(`Commande Restaurant #${order.id}`, `
+      ${thermalHeader(`Commande Restaurant #${order.id}`)}
+      <p><strong>Emplacement :</strong> ${escapeHtml(getLocationLabel(order))}</p>
+      <p><strong>Date :</strong> ${escapeHtml(formatDate(order.created_at))}</p>
+      ${order.notes ? `<p><strong>Notes :</strong> ${escapeHtml(order.notes)}</p>` : ''}
+      <div class="sep"></div>
+      ${items || '<p class="center">Aucun article.</p>'}
+      <div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(total))}</span></div>
+    `);
+  };
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => {
       const locationLabel = getLocationLabel(order);
-      const isSpecialLocation = ['Gratuit', 'Gratuit Pocker', 'Chambre'].includes(locationLabel);
+      const isSpecialLocation = ['Gratuit', 'Gratuit Pocker', 'Chambre'].includes(String(locationLabel));
       return (
         <div className={`flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-center ${isSpecialLocation ? 'min-w-[92px]' : 'min-w-10'}`} style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
           <span className="text-black text-sm font-bold leading-tight">
@@ -113,7 +130,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     { key: 'date', label: 'Heure', render: (order: Order) => (
       <span className="text-subtle text-xs">{formatDate(order.created_at)}</span>
     )},
-    { key: 'actions', label: '', render: (order: Order) => (
+    { key: 'actions', label: 'Actions', render: (order: Order) => (
       <div className="flex items-center gap-2">
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
@@ -135,22 +152,20 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
         {canEncaisser && order.statut === 'SERVIE' && (
           <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); setPaymentError(null); }}>Encaisser</Button>
         )}
-        {/* Invoice button */}
-        {onInvoice && canEncaisser && (
-          <Button size="sm" variant="secondary" onClick={() => onInvoice(order.id)}>Facture</Button>
-        )}
+        <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintOrder(order)} title="Imprimer le ticket de commande">
+          Ticket
+        </Button>
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="danger" onClick={() => onCancel(order.id)}>
             <XCircle size={14} />
           </Button>
         )}
-        {(canDeleteCommande || String(order.statut).trim().toUpperCase() === 'EN_ATTENTE') && <Button
+        {canDeleteCommande && <Button
           size="sm"
           variant="danger"
           title="Supprimer la commande"
           aria-label={`Supprimer la commande ${order.id}`}
           onClick={() => onDelete(order.id)}
-          disabled={!canDeleteCommande && String(order.statut).trim().toUpperCase() !== 'EN_ATTENTE'}
         >
           <Trash2 size={14} />
         </Button>}

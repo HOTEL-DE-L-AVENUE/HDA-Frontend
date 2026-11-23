@@ -1167,14 +1167,16 @@ export const AlcoholCommandeView: React.FC<Props> = ({
       if (onUpdateStatut) {
         await onUpdateStatut(commandeId, nouveauStatut);
       } else {
-        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'SERVIE' | 'ENCAISSEE'> = {
+        const statuses: Partial<Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'SERVIE' | 'ENCAISSEE'>> = {
           'En attente': 'EN_ATTENTE',
           'En préparation': 'EN_PREPARATION',
           'Prête': 'EN_PREPARATION',
           'Servie': 'SERVIE',
           'Encaissée': 'ENCAISSEE',
         };
-        await alcoholService.updateAlcoholOrderStatus(commandeId, statuses[nouveauStatut]);
+        const status = statuses[nouveauStatut];
+        if (!status) throw new Error(`Statut non pris en charge : ${nouveauStatut}`);
+        await alcoholService.updateAlcoholOrderStatus(commandeId, status);
       }
 
       setLocalCommandes((prev) =>

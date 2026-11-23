@@ -108,7 +108,7 @@ export const getBarTransactions = () =>
   get<{ id: number; order_id?: number | null; table_id?: number | null; client_name?: string; moyen_paiement?: BarPaymentMethod; product_id: number; quantite: number; prix_unitaire: number; montant: number; created_at: string; nom: string; categorie: string }[]>('/transactions');
 
 type BarOrderResponse = { id: number; client: string; table: number; nombre_personnes?: number; moyen_paiement?: BarPaymentMethod; observation?: string; statut: string; total: number; created_at?: string; cloture_at?: string; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean; items: Array<{ product_id?: number; source_module?: 'BAR' | 'RESTAURANT'; nom: string; quantite: number; prix: number }> };
-export type BarOrderStatus = 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE';
+export type BarOrderStatus = 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE' | 'ANNULEE';
 
 export const getBarOrders = async () => {
   const response = await get<BarOrderResponse[] | { data?: BarOrderResponse[] }>('/orders');

@@ -60,6 +60,21 @@ export interface ThermalOrderReceipt {
   total: number;
 }
 
+export interface ThermalOrderInvoice {
+  module: 'BAR' | 'RESTAURANT';
+  orderId: number | string;
+  client: string;
+  table?: string | number | null;
+  date?: string | Date | null;
+  notes?: string | null;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  total: number;
+}
+
 const paymentMethodLabels: Record<string, string> = {
   ESPECES: 'Espèces',
   CARTE: 'Carte bancaire',
@@ -86,7 +101,7 @@ const renderOrderReceipt = (receipt: ThermalOrderReceipt) => {
     </div>`).join('');
   return `
     <section class="order-receipt">
-    ${thermalHeader(`Reçu — ${moduleLabel}`, [`Commande #${receipt.orderId}`])}
+    ${thermalHeader(`REÇU DE PAIEMENT — ${moduleLabel}`, [`Commande #${receipt.orderId}`])}
     <p><strong>Client :</strong> ${escapeHtml(receipt.client || 'Client anonyme')}</p>
     <p><strong>Table / emplacement :</strong> ${escapeHtml(receipt.table ?? '—')}</p>
     <p><strong>Date :</strong> ${escapeHtml(receiptDate)}</p>
@@ -104,6 +119,36 @@ const renderOrderReceipt = (receipt: ThermalOrderReceipt) => {
       <span>${escapeHtml(paymentLabel)}</span>
     </div>
     </section>`;
+};
+
+export const printOrderInvoice = (invoice: ThermalOrderInvoice) => {
+  const moduleLabel = invoice.module === 'BAR' ? 'Bar & Lounge' : 'Restaurant';
+  const invoiceDate = invoice.date ? new Date(invoice.date).toLocaleString('fr-FR') : '—';
+  const itemRows = invoice.items.map((item) => `
+    <div class="line">
+      <div class="row">
+        <span>${escapeHtml(item.name)} ×${Number(item.quantity) || 0}</span>
+        <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))} MGA</span>
+      </div>
+      <div class="sub">PU ${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(item.unitPrice) || 0))} MGA</div>
+    </div>`).join('');
+  return printThermal(
+    `FACTURE — ${moduleLabel} — commande #${invoice.orderId}`,
+    `
+      ${thermalHeader(`FACTURE — ${moduleLabel}`, [`Commande #${invoice.orderId}`])}
+      <p><strong>Client :</strong> ${escapeHtml(invoice.client || 'Client anonyme')}</p>
+      <p><strong>Table / emplacement :</strong> ${escapeHtml(invoice.table ?? '—')}</p>
+      <p><strong>Date :</strong> ${escapeHtml(invoiceDate)}</p>
+      ${invoice.notes ? `<p><strong>Notes :</strong> ${escapeHtml(invoice.notes)}</p>` : ''}
+      <div class="sep"></div>
+      <h2>Détail de la facture</h2>
+      ${itemRows || '<p class="center">Aucun article.</p>'}
+      <div class="row total">
+        <span>TOTAL À PAYER</span>
+        <span>${escapeHtml(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(invoice.total) || 0))} MGA</span>
+      </div>
+    `,
+  );
 };
 
 export const printOrderReceipt = (receipt: ThermalOrderReceipt) => {

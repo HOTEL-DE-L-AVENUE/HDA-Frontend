@@ -28,6 +28,7 @@ import type { BarOrderStatus } from '../services/bar.service';
 import AuthService from '../services/authService';
 import { getDefaultTabForRole, isAdmin, isCashier, isBarman, isHostess, parseUserModules } from '../utils/permissions';
 import { useToast } from '../context/ToastContext';
+import { printOrderInvoice } from '../utils/thermalPrint';
 
 export const BarPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
@@ -59,6 +60,7 @@ export const BarPage: React.FC = () => {
     PRETE: 'Prête',
     SERVIE: 'Servie',
     ENCAISSEE: 'Encaissée',
+    ANNULEE: 'Annulée',
   };
 
   const playOrderAlert = () => {
@@ -212,6 +214,7 @@ export const BarPage: React.FC = () => {
       'Prête': 'PRETE',
       'Servie': 'SERVIE',
       'Encaissée': 'ENCAISSEE',
+      'Annulée': 'ANNULEE',
     };
 
     try {
@@ -222,6 +225,29 @@ export const BarPage: React.FC = () => {
       setError("Le statut de la commande bar n'a pas pu être mis à jour.");
       throw error;
     }
+  };
+
+  const handlePrintBarInvoice = (orderId: number) => {
+    const order = commandes.find((commande) => commande.id === orderId);
+    if (!order) {
+      showToast('La commande est introuvable ; la facture ne peut pas être imprimée.', 'error');
+      return;
+    }
+
+    printOrderInvoice({
+      module: 'BAR',
+      orderId: order.id,
+      client: order.client,
+      table: order.table ? `Table ${order.table}` : order.observation || 'Sans table',
+      date: order.created_at,
+      notes: order.observation,
+      items: order.items.map((item) => ({
+        name: item.nom,
+        quantity: item.quantite,
+        unitPrice: item.prix,
+      })),
+      total: order.total,
+    });
   };
 
   const handleProductAdded = (newProduct: BarProduct) => {
@@ -442,7 +468,7 @@ export const BarPage: React.FC = () => {
               moyen_paiement: commande.moyen_paiement,
               items: commande.items,
             }))}
-            allOrders={commandes.map((commande) => ({
+            allOrders={commandes.filter((commande) => commande.statut !== 'Annulée').map((commande) => ({
               id: commande.id,
               client: commande.client,
               table: commande.table,
@@ -460,6 +486,7 @@ export const BarPage: React.FC = () => {
             onEncaisserCommande={async (orderId, paymentMethod) => {
               await handleUpdateStatut(orderId, 'Encaissée', paymentMethod as BarPaymentMethod);
             }}
+            onInvoiceOrder={handlePrintBarInvoice}
             onCloseAllOrders={async (orderIds) => {
               await barService.closeAllBarOrders(orderIds);
             }}
