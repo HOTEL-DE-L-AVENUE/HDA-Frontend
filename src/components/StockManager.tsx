@@ -1,6 +1,6 @@
 // src/components/StockManager.tsx
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, AlertCircle, Package, Loader2, DollarSign, RefreshCw, Printer, LockKeyhole } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, AlertCircle, Package, Loader2, DollarSign, RefreshCw, Printer, LockKeyhole, Clock3, MapPin, UsersRound } from 'lucide-react';
 import api from '../lib/api';
 import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from './UI';
 import BarTransactionsCard from './Bar/BarTransactionsCard';
@@ -12,7 +12,7 @@ import { ModuleType } from '../types';
 import { financeService, FinancialTransaction, isFinancialInflow, isFinancialOutflow } from '../services/finance.service';
 import barService from '../services/bar.service';
 import type { BarSession } from '../types/bar.type';
-import { escapeHtml, printThermal, thermalHeader } from '../utils/thermalPrint';
+import { escapeHtml, printOrderReceipt, printOrderReceipts, printThermal, thermalHeader } from '../utils/thermalPrint';
 
 interface StockItem {
   id: number;
@@ -478,9 +478,11 @@ interface CaisseManagerProps {
     created_at?: string;
     items?: Array<{ nom?: string; quantite: number; prix?: number; categorie?: string }>;
   }>;
-  onEncaisserCommande?: (orderId: number) => Promise<void> | void;
+  onEncaisserCommande?: (orderId: number, paymentMethod?: string) => Promise<void> | void;
+  onInvoiceOrder?: (orderId: number) => void;
   onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
+  onCreateBarOrder?: () => void;
 }
 
 const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
@@ -508,7 +510,22 @@ const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
   return { transactions: latestCloseBatch, isClosed: true };
 };
 
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onCloseAllOrders, onRefresh }) => {
+const isPaidOrder = (order: { statut?: string }) => {
+  const status = (order.statut || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+  return ['ENCAISSEE', 'PAYE', 'PAYEE', 'CLOTUREE'].includes(status);
+};
+
+const isServedOrder = (order: { statut?: string }) => (order.statut || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toUpperCase() === 'SERVIE';
+
+export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onInvoiceOrder, onCloseAllOrders, onRefresh, onCreateBarOrder }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
@@ -521,18 +538,26 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [isClosingBarSession, setIsClosingBarSession] = useState(false);
   const [showCloseOrdersModal, setShowCloseOrdersModal] = useState(false);
   const [isClosingOrders, setIsClosingOrders] = useState(false);
+  const [closeOrdersError, setCloseOrdersError] = useState<string | null>(null);
   const [showCloseHotelModal, setShowCloseHotelModal] = useState(false);
   const [isClosingHotel, setIsClosingHotel] = useState(false);
   const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
+  const [processingOrderId, setProcessingOrderId] = useState<number | null>(null);
+  const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
+  const [orderPaymentMethod, setOrderPaymentMethod] = useState('ESPECES');
+  const [orderPaymentError, setOrderPaymentError] = useState<string | null>(null);
 
   const isBar = module === 'bar';
   const isRestaurant = module === 'restaurant';
   const isOrderRegister = isBar || isRestaurant;
+  const paidOrders = allOrders.filter(isPaidOrder);
+  const unpaidOrders = allOrders.filter((order) => !isPaidOrder(order));
+  const nextUnpaidOrder = unpaidOrders[0];
+  const nextUnpaidOrderCanBePaid = nextUnpaidOrder ? isServedOrder(nextUnpaidOrder) : false;
   // const isHebergement = module === 'hebergement'; // COMMENTED OUT
   const isHebergement = false; // Disabled
   const isHotel = module === 'hotel';
   const isBackendCaisse = module === 'restaurant' /* || module === 'hebergement' */ || module === 'hotel' || module === 'bar'; // COMMENTED OUT hebergement
-  const canViewBarBalance = !isBar || isAdmin(AuthService.getCurrentUser());
   const transactionTitle = isBar
     ? 'Transactions Bar'
     : isHebergement
@@ -694,21 +719,26 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       }))
     : allRestaurantTransactions;
 
-  const handleEncaisserCommande = async (orderId: number) => {
+  const handleEncaisserCommande = async (orderId: number, paymentMethod?: string) => {
     if (onEncaisserCommande) {
-      await onEncaisserCommande(orderId);
-      if (isBackendCaisse) {
-        try {
-          const [txs, stats] = await Promise.all([
-            financeService.getTransactions({ module: module.toUpperCase() }),
-            financeService.getFinancialStats(),
-          ]);
-          setBackendTransactions(txs);
-          const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
-          setModuleStockSummary(summary || null);
-        } catch (err) {
-          console.warn('Failed to refresh backend caisse after encaissement:', err);
+      setProcessingOrderId(orderId);
+      try {
+        await onEncaisserCommande(orderId, paymentMethod);
+        if (isBackendCaisse) {
+          try {
+            const [txs, stats] = await Promise.all([
+              financeService.getTransactions({ module: module.toUpperCase() }),
+              financeService.getFinancialStats(),
+            ]);
+            setBackendTransactions(txs);
+            const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
+            setModuleStockSummary(summary || null);
+          } catch (err) {
+            console.warn('Failed to refresh backend caisse after encaissement:', err);
+          }
         }
+      } finally {
+        setProcessingOrderId(null);
       }
     }
   };
@@ -764,50 +794,25 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   };
 
   const handlePrintDailyOrderDetails = () => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const moduleLabel = module === 'restaurant' ? 'Restaurant' : 'Bar & Lounge';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const orderDates = allOrders.map((order) => order.created_at).filter(Boolean).sort();
-    const startDate = orderDates[0] ? new Date(orderDates[0]).toLocaleString('fr-FR') : '-';
+    const currentUser = AuthService.getCurrentUser();
+    const cashier = [currentUser?.prenom, currentUser?.nom].filter(Boolean).join(' ') || currentUser?.email || 'Utilisateur connecté';
     const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const total = allOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const itemCount = allOrders.reduce((sum, order) => sum + (order.items || []).reduce((itemSum, item) => itemSum + Number(item.quantite || 0), 0), 0);
-    const sales = new Map<string, { sold: number; net: number; category: string }>();
-    const categories = new Map<string, { sold: number; total: number }>();
-    allOrders.forEach((order) => (order.items || []).forEach((item) => {
-      const name = item.nom || 'Article';
-      const sold = Number(item.quantite || 0);
-      const net = sold * Number(item.prix || 0);
-      const sale = sales.get(name) || { sold: 0, net: 0, category: item.categorie || 'Autre' };
-      sales.set(name, { sold: sale.sold + sold, net: sale.net + net, category: sale.category });
-    }));
-    sales.forEach((sale) => {
-      const category = categories.get(sale.category) || { sold: 0, total: 0 };
-      categories.set(sale.category, { sold: category.sold + sale.sold, total: category.total + sale.net });
-    });
-    const paymentLabels: Record<string, string> = { ESPECES: 'Cash', CREDIT: 'Credit', TPE: 'TPE', ORANGE_MONEY: 'Orange Money', MVOLA: 'Mvola', GRATUIT: 'Gratuit' };
-    const paymentMethods = ['ESPECES', 'CREDIT', 'TPE', 'ORANGE_MONEY', 'MVOLA', 'GRATUIT'];
-    const paymentTotals = new Map<string, number>();
-    allOrders.forEach((order) => {
-      const payment = order.moyen_paiement || 'ESPECES';
-      paymentTotals.set(payment, (paymentTotals.get(payment) || 0) + Number(order.total || 0));
-    });
-    const salesRows = Array.from(sales.entries()).map(([name, sale]) => `<div class="row four"><span>${escapeHtml(name)}</span><span>${sale.sold}</span><span>${formatCurrency(sale.net)}</span><span>${formatCurrency(sale.net)}</span></div>`).join('');
-    const categoryRows = Array.from(categories.entries()).map(([name, category]) => `<div class="row three"><span>${escapeHtml(name)}</span><span>${category.sold}</span><span>${formatCurrency(category.total)}</span></div>`).join('');
-    const paymentRows = paymentMethods.map((payment) => `<div class="row two"><span>${paymentLabels[payment]}</span><span>${formatCurrency(paymentTotals.get(payment) || 0)}</span></div>`).join('');
-    const paidOrders = allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || ''));
-    const ticketLines = allOrders.reduce((sum, order) => sum + (order.items || []).length, 0);
-    const report = `<h1>Partial Cash Report</h1><p>Module : ${escapeHtml(moduleLabel)}</p><p>Cashier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}<br>Sequence : ${allOrders.length}<br>Start Date : ${escapeHtml(startDate)}<br>End Date : ${escapeHtml(generatedAt)}</p><div class="separator"></div><h2>Sales</h2><div class="row four head"><span>Name</span><span>Sold</span><span>Net</span><span>Total</span></div>${salesRows || '<p>Aucune vente.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Product Categories</h2><div class="row three head"><span>Category</span><span>Sold</span><span>Total</span></div>${categoryRows || '<p>Aucune catégorie.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>Lines Removed</h2><div class="row two"><span>${escapeHtml(connectedCashier)}</span><span>${formatCurrency(0)}</span></div><h2>Taxes</h2><div class="row two"><span>Tax Exempt</span><span>${formatCurrency(0)}</span></div><h2>Payments</h2><div class="row two head"><span>Type</span><span>Total</span></div>${paymentRows}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(total)}</strong></div><div class="separator"></div><h2>SUMMARY</h2><div class="row two"><span>Tickets</span><span>${allOrders.length}</span></div><div class="row two"><span>Ticket Lines</span><span>${ticketLines}</span></div><div class="row two"><span>Payments</span><span>${paidOrders.length}</span></div><div class="row two"><span>Net Sales</span><span>${formatCurrency(total)}</span></div><div class="row two"><span>Tax</span><span>${formatCurrency(0)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Partial Cash Report</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.four{grid-template-columns:minmax(0,1fr) 7ch 12ch 12ch;column-gap:7px}.row.four span:not(:first-child){white-space:nowrap}.row.three{grid-template-columns:minmax(0,1fr) 28px 60px}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:not(:first-child){text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    printOrderReceipts(paidOrders.map((order) => ({
+      module: isBar ? 'BAR' : 'RESTAURANT',
+      orderId: order.id,
+      client: order.client || 'Client anonyme',
+      table: order.table ?? '—',
+      date: order.created_at,
+      cashier,
+      terminal,
+      paymentMethod: order.moyen_paiement,
+      items: (order.items || []).map((item) => ({
+        name: item.nom || 'Article',
+        quantity: Number(item.quantite) || 0,
+        unitPrice: Number(item.prix) || 0,
+      })),
+      total: Number(order.total) || 0,
+    })));
   };
 
   const handlePrintCloseReport = (closedFund?: number) => {
@@ -899,30 +904,25 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   };
 
   const handlePrintSingleOrder = (order: any) => {
-    const printWindow = window.open('', '_blank', 'width=420,height=720');
-    if (!printWindow) return;
-
-    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-    } as Record<string, string>)[character] || character);
-    const connectedCashier = [AuthService.getCurrentUser()?.prenom, AuthService.getCurrentUser()?.nom].filter(Boolean).join(' ') || AuthService.getCurrentUser()?.email || 'Utilisateur connecté';
-    const generatedAt = new Date().toLocaleString('fr-FR');
-    const orderDate = order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '-';
+    const currentUser = AuthService.getCurrentUser();
+    const connectedCashier = [currentUser?.prenom, currentUser?.nom].filter(Boolean).join(' ') || currentUser?.email || 'Utilisateur connecté';
     const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
-    const orderTotal = Number(order.total || 0);
-    const paymentLabel = order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces';
-    
-    const itemsRows = (order.items || []).map((item: any) => {
-      const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
-      const lineTotal = unitPrice * Number(item.quantite || 0);
-      return `<div class="row"><span>${escapeHtml(item.nom || item.product_nom || 'Article')} x${item.quantite}</span><span>${formatCurrency(lineTotal)}</span></div>`;
-    }).join('');
-
-    const report = `<h1>Reçu de Commande</h1><p>Commande #${order.id}<br>Client : ${escapeHtml(order.client || 'Client anonyme')}<br>Table : ${escapeHtml(String(order.table || 'N/A'))}<br>Date : ${escapeHtml(orderDate)}<br>Caissier : ${escapeHtml(connectedCashier)}<br>Terminal : ${escapeHtml(terminal)}</p><div class="separator"></div><h2>Articles</h2>${itemsRows || '<p>Aucun article.</p>'}<div class="separator"></div><div class="total">Total <strong>${formatCurrency(orderTotal)}</strong></div><div class="separator"></div><div class="row"><span>Moyen de paiement</span><span>${escapeHtml(paymentLabel)}</span></div>`;
-    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Reçu Commande</title><style>@page{size:80mm auto;margin:4mm}body{font-family:monospace;width:72mm;margin:0;color:#111;font-size:10px;line-height:1.3}h1{text-align:center;font-size:14px;margin:0 0 8px}h2{text-align:center;font-size:11px;margin:10px 0 4px}.separator{border-top:1px dashed #111;margin:7px 0}.row{display:grid;gap:3px;padding:2px 0}.row.two{grid-template-columns:minmax(0,1fr) 90px}.row span:last-child{text-align:right}.head{font-weight:bold;border-bottom:1px solid #111}.total{display:flex;justify-content:space-between;font-weight:bold}.total strong{margin-left:auto}</style></head><body>${report}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    printOrderReceipt({
+      module: isBar ? 'BAR' : 'RESTAURANT',
+      orderId: order.id,
+      client: order.client || 'Client anonyme',
+      table: order.table ?? '—',
+      date: order.created_at,
+      cashier: connectedCashier,
+      terminal,
+      paymentMethod: order.moyen_paiement,
+      items: (order.items || []).map((item: any) => ({
+        name: item.nom || item.product_nom || 'Article',
+        quantity: Number(item.quantite) || 0,
+        unitPrice: Number(item.prix_unitaire ?? item.prix ?? 0),
+      })),
+      total: Number(order.total) || 0,
+    });
   };
 
   const handlePrintSingleTransaction = (transaction: any) => {
@@ -948,21 +948,36 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
   const handleCloseAllOrders = async () => {
     if (!onCloseAllOrders || allOrders.length === 0) return;
-
+    setCloseOrdersError(null);
     setShowCloseOrdersModal(true);
   };
 
+  const startOrderPayment = (orderId: number) => {
+    setCloseOrdersError(null);
+    if (isBar) {
+      setPaymentOrderId(orderId);
+      setOrderPaymentMethod('ESPECES');
+      setOrderPaymentError(null);
+      return;
+    }
+    void handleEncaisserCommande(orderId);
+  };
+
   const confirmCloseAllOrders = async () => {
-    if (!onCloseAllOrders || allOrders.length === 0) return;
+    if (!onCloseAllOrders || paidOrders.length === 0 || unpaidOrders.length > 0) {
+      setCloseOrdersError('Encaissez toutes les commandes une par une avant de clôturer la caisse.');
+      return;
+    }
 
     setIsClosingOrders(true);
     try {
-      handlePrintClosingReport();
-      await onCloseAllOrders(allOrders.map((order) => order.id));
+      handlePrintDailyOrderDetails();
+      await onCloseAllOrders(paidOrders.map((order) => order.id));
       setBackendTransactions([]);
       setTransactionsRefreshTrigger((value) => value + 1);
       await onRefresh?.();
       setShowCloseOrdersModal(false);
+      setCloseOrdersError(null);
     } catch (error) {
       setBackendError(error instanceof Error ? error.message : 'Impossible de clôturer les commandes.');
     } finally {
@@ -1042,7 +1057,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     <div className="space-y-6">
       <Modal
         isOpen={showCloseOrdersModal}
-        onClose={() => { if (!isClosingOrders) setShowCloseOrdersModal(false); }}
+        onClose={() => { if (!isClosingOrders) { setShowCloseOrdersModal(false); setCloseOrdersError(null); } }}
         title="Clôturer les commandes"
         size="sm"
       >
@@ -1052,34 +1067,68 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
               <AlertCircle size={21} />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
-              <p className="mt-1 text-sm leading-relaxed text-secondary">
-                Les <strong>{allOrders.length} commande{allOrders.length > 1 ? 's' : ''}</strong> seront clôturées de la caisse.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted">
-                Elles resteront disponibles dans l’historique administrateur.
-              </p>
+              {unpaidOrders.length > 0 ? (
+                <>
+                  <p className="font-semibold text-primary">Encaissement requis avant la clôture</p>
+                  <p className="mt-1 text-sm leading-relaxed text-secondary">
+                    Il reste <strong>{unpaidOrders.length} commande{unpaidOrders.length > 1 ? 's' : ''}</strong> à encaisser. Traitez-les une par une ; l’impression et la clôture seront disponibles après le dernier encaissement.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-primary">Imprimer puis clôturer ?</p>
+                  <p className="mt-1 text-sm leading-relaxed text-secondary">
+                    Les <strong>{paidOrders.length} commande{paidOrders.length > 1 ? 's' : ''} encaissée{paidOrders.length > 1 ? 's' : ''}</strong> seront imprimées individuellement puis clôturées.
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">Elles resteront disponibles dans l’historique administrateur.</p>
+                </>
+              )}
             </div>
           </div>
+          {closeOrdersError && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400">{closeOrdersError}</p>}
+          {nextUnpaidOrder && (
+            <div className="rounded-xl border border-base bg-surface-2 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-primary">Commande #{nextUnpaidOrder.id} · {nextUnpaidOrder.client || 'Client anonyme'}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {nextUnpaidOrder.table ? `Table ${nextUnpaidOrder.table} · ` : ''}
+                    {nextUnpaidOrder.statut || 'Statut inconnu'} · {formatCurrency(nextUnpaidOrder.total)}
+                  </p>
+                  {!nextUnpaidOrderCanBePaid && (
+                    <p className="mt-2 text-xs text-amber-300">Cette commande doit d’abord être marquée « Servie » par le personnel autorisé.</p>
+                  )}
+                </div>
+                {nextUnpaidOrderCanBePaid && onEncaisserCommande && (
+                  <Button type="button" size="sm" onClick={() => startOrderPayment(nextUnpaidOrder.id)} className="shrink-0">
+                    Encaisser
+                  </Button>
+                )}
+              </div>
+              {unpaidOrders.length > 1 && <p className="mt-3 border-t border-base pt-3 text-xs text-muted">Les commandes restantes seront proposées une par une après cet encaissement.</p>}
+            </div>
+          )}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setShowCloseOrdersModal(false)}
+              onClick={() => { setShowCloseOrdersModal(false); setCloseOrdersError(null); }}
               disabled={isClosingOrders}
               className="w-full sm:w-auto"
             >
-              Annuler
+              {unpaidOrders.length > 0 ? 'Fermer' : 'Annuler'}
             </Button>
-            <Button
-              type="button"
-              onClick={() => void confirmCloseAllOrders()}
-              disabled={isClosingOrders}
-              className="w-full sm:w-auto"
-            >
-              <Printer size={16} />
-              {isClosingOrders ? 'Clôture...' : 'Imprimer et clôturer'}
-            </Button>
+            {unpaidOrders.length === 0 && (
+              <Button
+                type="button"
+                onClick={() => void confirmCloseAllOrders()}
+                disabled={isClosingOrders || paidOrders.length === 0}
+                className="w-full sm:w-auto"
+              >
+                <Printer size={16} />
+                {isClosingOrders ? 'Clôture...' : 'Imprimer et clôturer'}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
@@ -1117,7 +1166,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       </Modal>
       <div className="flex justify-end">
         <div className="flex flex-wrap justify-end gap-2">
-          {!isBar && !isHotel && (
+          {!isHotel && (
             <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>
               Nouvelle transaction
             </Button>
@@ -1127,39 +1176,49 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
 
       <div className={isOrderRegister || isHotel ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]' : ''}>
         {/* Caisse Card */}
-        {canViewBarBalance && (
-          <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
-        )}
+        <CaisseCard
+          solde={solde}
+          entrees={entrees}
+          sorties={sorties}
+          title={title || (isBar ? 'Caisse Bar & Lounge' : 'Caisse')}
+          gradient={gradient}
+        />
         {isOrderRegister && (
-          <section className="rounded-2xl border border-accent/30 bg-surface p-5">
+          <section className="rounded-2xl border border-accent/20 bg-surface p-4 shadow-xl shadow-black/10 sm:p-5">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-primary">Commandes de la caisse</h3>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-primary">Commandes de la caisse</h3>
                 <p className="mt-1 text-xs text-muted">Impression et clôture globales</p>
               </div>
-              <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{allOrders.length}</span>
+              <span
+                className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 px-2 text-sm font-bold text-accent"
+                aria-label={`${allOrders.length} commande${allOrders.length > 1 ? 's' : ''}`}
+              >
+                {allOrders.length}
+              </span>
             </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintDailyOrderDetails()} disabled={allOrders.length === 0} className="justify-center">
-                Imprimer toutes
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {onCreateBarOrder && <Button size="md" icon={<Plus size={16} />} onClick={onCreateBarOrder} className="w-full justify-center">Nouvelle commande</Button>}
+              <Button size="md" variant="secondary" icon={<Printer size={16} />} onClick={() => handlePrintDailyOrderDetails()} disabled={paidOrders.length === 0} className="w-full justify-center">
+              Imprimer les reçus de paiement
               </Button>
-              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="justify-center">
+              <Button size="md" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="w-full justify-center">
                 Clôturer toutes
               </Button>
               {currentBarSession && (
-                <Button size="sm" variant="secondary" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la session de caisse'} className="justify-center sm:col-span-2 lg:col-span-1 xl:col-span-2">
+                <Button size="md" variant="secondary" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la session de caisse'} className="w-full justify-center">
                   {isClosingBarSession ? 'Clôture...' : 'Clôturer la caisse'}
                 </Button>
               )}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base pt-4 text-center">
-              <div>
-                <p className="text-lg font-semibold text-primary">{pendingOrders.length}</p>
-                <p className="text-[11px] text-muted">À encaisser</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base/70 pt-4">
+              <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.06] px-3 py-3 text-center">
+                <p className="text-xl font-bold text-amber-300">{pendingOrders.length}</p>
+                <p className="mt-0.5 text-[11px] font-medium text-muted">À encaisser</p>
               </div>
-              <div>
-                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || '')).length}</p>
-                <p className="text-[11px] text-muted">Encaissées</p>
+              <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.06] px-3 py-3 text-center">
+                <p className="text-xl font-bold text-emerald-400">{paidOrders.length}</p>
+                <p className="mt-0.5 text-[11px] font-medium text-muted">Encaissées</p>
               </div>
             </div>
           </section>
@@ -1195,45 +1254,146 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         )}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface">
-        <div className="flex items-center justify-between border-b border-base px-6 py-4">
+      <section className="overflow-hidden rounded-2xl border border-base bg-surface shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base px-4 py-4 sm:px-5">
           <div>
             <h3 className="font-semibold text-primary">Commandes à encaisser</h3>
-            <p className="text-xs text-muted">Commandes servies en attente de paiement</p>
+            <p className="mt-0.5 text-xs text-muted">Commandes servies en attente de paiement</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{pendingOrders.length}</span>
-            {onRefresh && <button type="button" onClick={() => void onRefresh()} title="Actualiser les commandes" className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted transition hover:bg-surface-3 hover:text-primary"><RefreshCw size={14} /></button>}
+            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300 tabular-nums">
+              {pendingOrders.length} à encaisser
+            </span>
+            {onRefresh && (
+              <button type="button" onClick={() => void onRefresh()} title="Actualiser les commandes" aria-label="Actualiser les commandes" className="flex h-10 w-10 items-center justify-center rounded-xl border border-base bg-surface-2 text-muted transition-colors hover:bg-surface-3 hover:text-primary">
+                <RefreshCw size={15} />
+              </button>
+            )}
           </div>
         </div>
         {pendingOrders.length === 0 ? (
-          <p className="px-6 py-6 text-center text-sm text-muted">Aucune commande à encaisser.</p>
+          <div className="flex flex-col items-center px-5 py-10 text-center">
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
+              <DollarSign size={20} />
+            </span>
+            <p className="text-sm font-medium text-primary">Tout est à jour</p>
+            <p className="mt-1 text-xs text-muted">Aucune commande servie n’attend d’encaissement.</p>
+          </div>
         ) : (
-          <div className="divide-y divide-base">
-            {pendingOrders.map((order) => (
-              <div key={order.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
-                  <p className="text-xs text-muted">{order.table ? `Table ${order.table}` : 'Sans table'}{order.nombre_personnes ? ` · ${order.nombre_personnes} personne${order.nombre_personnes > 1 ? 's' : ''}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
-                  {order.moyen_paiement && <p className="text-xs text-muted">Paiement : {order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>}
-                  {order.items && order.items.length > 0 && (
-                    <div className="mt-2 space-y-1 border-l-2 border-accent/40 pl-3">
-                      {order.items.map((item, index) => {
-                        const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
-                        return <p key={`${order.id}-item-${index}`} className="text-xs text-secondary">{item.quantite} × {item.nom || item.product_nom || 'Article'} <span className="text-muted">({formatCurrency(unitPrice)} / unité = {formatCurrency(unitPrice * item.quantite)})</span></p>;
-                      })}
+          <div className="grid gap-3 p-3 sm:p-4">
+            {pendingOrders.map((order) => {
+              const paymentLabels: Record<string, string> = {
+                CARTE: 'Carte bancaire', TPE: 'TPE', CREDIT: 'Crédit', EURO: 'Euro',
+                ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', DOLLAR: 'Dollar',
+                VIREMENT: 'Virement', CHEQUE: 'Chèque', ESPECES: 'Espèces',
+              };
+              const isProcessing = processingOrderId === order.id;
+              return (
+                <article key={order.id} className="rounded-xl border border-base bg-surface-2/60 p-4 transition-colors hover:border-accent/30 sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-accent/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">Commande #{order.id}</span>
+                        <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">Servie</span>
+                        {order.created_at && <span className="inline-flex items-center gap-1 text-[11px] text-muted"><Clock3 size={12} />{new Date(order.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
+                      <h4 className="mt-2 truncate text-base font-semibold text-primary">{order.client || 'Client anonyme'}</h4>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                        <span className="inline-flex items-center gap-1.5"><MapPin size={13} />{order.table ? `Table ${order.table}` : 'Sans table'}</span>
+                        {!!order.nombre_personnes && <span className="inline-flex items-center gap-1.5"><UsersRound size={13} />{order.nombre_personnes} personne{order.nombre_personnes > 1 ? 's' : ''}</span>}
+                        {order.moyen_paiement && <span>Paiement prévu : {paymentLabels[order.moyen_paiement] || order.moyen_paiement}</span>}
+                      </div>
+                      {order.items && order.items.length > 0 && (
+                        <div className="mt-4 space-y-2 border-t border-base pt-3">
+                          {order.items.map((item, index) => {
+                            const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
+                            return (
+                              <div key={`${order.id}-item-${index}`} className="flex items-start justify-between gap-3 text-xs">
+                                <span className="min-w-0 text-secondary"><span className="mr-2 inline-flex min-w-7 justify-center rounded-md bg-surface-3 px-1.5 py-0.5 font-semibold text-primary tabular-nums">{item.quantite}×</span>{item.nom || item.product_nom || 'Article'}</span>
+                                <span className="shrink-0 text-muted tabular-nums">{formatCurrency(unitPrice * Number(item.quantite || 0))}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-4 sm:justify-end">
-                  <span className="font-bold text-accent">{formatCurrency(order.total)}</span>
-                  {onEncaisserCommande && <Button size="sm" icon={<DollarSign size={14} />} onClick={() => void handleEncaisserCommande(order.id)}>Encaisser</Button>}
-                </div>
-              </div>
-            ))}
+                    <div className="flex flex-col gap-3 border-t border-base pt-3 lg:min-w-48 lg:items-end lg:border-0 lg:pt-0">
+                      <div className="lg:text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Total à payer</p>
+                        <p className="mt-0.5 text-xl font-bold text-accent tabular-nums">{formatCurrency(order.total)}</p>
+                      </div>
+                      <div className="flex w-full gap-2 lg:w-auto">
+                        {onInvoiceOrder && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Printer size={14} />}
+                            onClick={() => onInvoiceOrder(order.id)}
+                            className="min-h-10 flex-1 lg:flex-none"
+                          >
+                            Facture
+                          </Button>
+                        )}
+                        {onEncaisserCommande && <Button size="sm" icon={isProcessing ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} onClick={() => {
+                          if (isBar) {
+                            setPaymentOrderId(order.id);
+                            setOrderPaymentMethod('ESPECES');
+                            setOrderPaymentError(null);
+                          } else {
+                            void handleEncaisserCommande(order.id);
+                          }
+                        }} disabled={isProcessing} className="min-h-10 flex-1 lg:flex-none">{isProcessing ? 'Encaissement…' : 'Encaisser'}</Button>}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
+
+      {isBar && (
+        <Modal
+          isOpen={paymentOrderId !== null}
+          onClose={() => { if (processingOrderId === null) { setPaymentOrderId(null); setOrderPaymentError(null); } }}
+          title={`Encaisser la commande #${paymentOrderId ?? ''}`}
+          size="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-secondary">Choisissez le mode de paiement avant de confirmer l’encaissement.</p>
+            {orderPaymentError && <div role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">{orderPaymentError}</div>}
+            <Select
+              label="Mode de paiement"
+              value={orderPaymentMethod}
+              onChange={(event) => setOrderPaymentMethod(event.target.value)}
+              options={[
+                { value: 'ESPECES', label: 'Espèces' },
+                { value: 'TPE', label: 'TPE' },
+                { value: 'ORANGE_MONEY', label: 'Mobile Money — Orange Money' },
+                { value: 'MVOLA', label: 'Mobile Money — MVola' },
+                { value: 'CREDIT', label: 'Crédit' },
+                { value: 'GRATUIT', label: 'Gratuit' },
+              ]}
+            />
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" type="button" onClick={() => { setPaymentOrderId(null); setOrderPaymentError(null); }} disabled={processingOrderId !== null} className="flex-1">Annuler</Button>
+              <Button type="button" onClick={async () => {
+                if (paymentOrderId === null) return;
+                setOrderPaymentError(null);
+                try {
+                  await handleEncaisserCommande(paymentOrderId, orderPaymentMethod);
+                  setPaymentOrderId(null);
+                } catch (error: any) {
+                  setOrderPaymentError(error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Le paiement n’a pas pu être confirmé.');
+                }
+              }} disabled={processingOrderId !== null} className="flex-1">
+                {processingOrderId !== null ? 'Confirmation…' : 'Confirmer l’encaissement'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Transactions adaptées au module */}
       {!isHotel || !hotelTransactionsAreClosed ? (isBar ? (
@@ -1259,7 +1419,8 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                   <button
                     onClick={() => handlePrintSingleOrder(order)}
                     className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
-                    title="Imprimer la transaction"
+                    title="Imprimer le reçu de paiement"
+                    aria-label={`Imprimer le reçu de paiement de la commande ${order.id}`}
                   >
                     <Printer size={14} />
                   </button>
@@ -1294,7 +1455,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                     <button
                       onClick={() => handlePrintSingleTransaction(t)}
                       className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all"
-                      title="Imprimer la transaction"
+                      title="Imprimer le reçu de paiement"
                     >
                       <Printer size={14} />
                     </button>

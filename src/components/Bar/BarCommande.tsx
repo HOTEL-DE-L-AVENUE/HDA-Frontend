@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { BarCommande, BarTable, BarProduct } from '../../types/bar.type';
 import { formatCurrency } from '../../utils/data';
-import { escapeHtml, printThermal, thermalHeader } from '../../utils/thermalPrint';
+import { printOrderTicket } from '../../utils/thermalPrint';
 import api from '../../lib/api';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
@@ -21,6 +21,9 @@ interface Props {
   onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string }>;
+  visible?: boolean;
+  createOrderRequest?: number;
+  onCreateOrderRequestHandled?: () => void;
 }
 
 const statusClasses: Record<string, { label: string; variant: string }> = {
@@ -29,6 +32,7 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
   'Prête': { label: 'Prête', variant: 'success' },
   'Servie': { label: 'Servie', variant: 'success' },
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
+  'Annulée': { label: 'Annulée', variant: 'danger' },
 };
 
 type OrderLocationOption = {
@@ -44,13 +48,19 @@ export const BarCommandeView: React.FC<Props> = ({
   onDeleteCommande,
   onUpdateStatut,
   cocktails = [],
-  stockMap = {}
+  stockMap = {},
+  visible = true,
+  createOrderRequest = 0,
+  onCreateOrderRequestHandled,
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser) || isManager(currentUser);
   const userIsHostess = isHostess(currentUser);
-  const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
-  const canDeleteCommande = isAdmin(currentUser) || isManager(currentUser);
+  const userIsServer = currentUser?.role?.toLowerCase() === 'serveur';
+  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsServer;
+  const canModifyCommande = isAdmin(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
+  const canCreateCommande = canModifyCommande || isCashier(currentUser) || userIsServer;
+  const canDeleteCommande = isAdmin(currentUser);
   const canDeleteTicketItem = isAdmin(currentUser) || isManager(currentUser);
   const canAdjustTicketQuantity = isAdmin(currentUser) || isManager(currentUser);
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
@@ -221,6 +231,13 @@ export const BarCommandeView: React.FC<Props> = ({
     setIsLocationSelectionOpen(true);
     void loadClients();
   };
+
+  useEffect(() => {
+    if (createOrderRequest > 0) {
+      handleOpenModal();
+      onCreateOrderRequestHandled?.();
+    }
+  }, [createOrderRequest, onCreateOrderRequestHandled]);
 
   const handleSelectLocation = (location: OrderLocationOption) => {
     setSelectedLocation(location);
@@ -578,12 +595,13 @@ export const BarCommandeView: React.FC<Props> = ({
       if (onUpdateStatut) {
         await onUpdateStatut(commandeId, nouveauStatut);
       } else {
-        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE'> = {
+        const statuses: Record<BarCommande['statut'], 'EN_ATTENTE' | 'EN_PREPARATION' | 'PRETE' | 'SERVIE' | 'ENCAISSEE' | 'ANNULEE'> = {
           'En attente': 'EN_ATTENTE',
           'En préparation': 'EN_PREPARATION',
           'Prête': 'PRETE',
           'Servie': 'SERVIE',
           'Encaissée': 'ENCAISSEE',
+          'Annulée': 'ANNULEE',
         };
         await barService.updateBarOrderStatus(commandeId, statuses[nouveauStatut]);
       }
@@ -634,10 +652,21 @@ export const BarCommandeView: React.FC<Props> = ({
 
   const handlePrintCommande = (commande: BarCommande) => {
     const tableName = tables.find((tableItem) => tableItem.id === commande.table)?.numero || `Table ${commande.table}`;
-    const items = commande.items.map((item) => `
-      <div class="line"><div class="row"><span>${item.quantite} x ${escapeHtml(item.nom)}</span><span>${escapeHtml(formatCurrency(item.prix * item.quantite))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(item.prix))}</div></div>`).join('');
-
-    const printed = printThermal(`Commande #${commande.id}`, `${thermalHeader(`Commande Bar #${commande.id}`)}<p><strong>Client :</strong> ${escapeHtml(commande.client)}</p><p><strong>Table :</strong> ${escapeHtml(tableName)}</p><div class="sep"></div>${items}<div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(commande.total))}</span></div><div class="footer"><p>Merci de votre visite</p></div>`);
+    const printed = printOrderTicket({
+      module: 'BAR',
+      orderId: commande.id,
+      status: commande.statut,
+      client: commande.client,
+      table: tableName,
+      date: commande.created_at,
+      notes: commande.observation,
+      items: commande.items.map((item) => ({
+        name: item.nom,
+        quantity: item.quantite,
+        unitPrice: item.prix,
+      })),
+      total: commande.total,
+    });
     if (!printed) setFeedback({ type: 'error', message: 'Autorisez les fenetres pop-up pour imprimer la commande.' });
   };
 
@@ -736,12 +765,12 @@ export const BarCommandeView: React.FC<Props> = ({
     },
     {
       key: 'actions',
-      label: '',
+      label: 'Actions',
       render: (commande: BarCommande) => {
         const isUpdating = updatingId === commande.id;
         return (
           <>
-            {commande.statut === 'En attente' && (
+            {canChangeOrderStatus && commande.statut === 'En attente' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -752,7 +781,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Démarrer'}
               </Button>
             )}
-            {commande.statut === 'En préparation' && (
+            {canChangeOrderStatus && commande.statut === 'En préparation' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -763,7 +792,23 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Marquer prête'}
               </Button>
             )}
-            {commande.statut === 'Prête' && (
+            {canChangeOrderStatus && ['En attente', 'En préparation'].includes(commande.statut) && (
+              <Button
+                size="sm"
+                variant="danger"
+                icon={<XCircle size={14} />}
+                onClick={() => {
+                  if (window.confirm('Annuler cette commande ?')) {
+                    void handleStatusChange(commande.id, 'Annulée');
+                  }
+                }}
+                disabled={isUpdating}
+                title="Annuler la commande"
+              >
+                Annuler
+              </Button>
+            )}
+            {canChangeOrderStatus && commande.statut === 'Prête' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -774,7 +819,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Servir'}
               </Button>
             )}
-            {canModifyCommande && (
+            {canModifyCommande && commande.statut !== 'Annulée' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -796,7 +841,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Encaisser'}
               </Button>
             )}
-            <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)}>Imprimer</Button>
+            <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintCommande(commande)} title="Imprimer le ticket de commande">Ticket</Button>
             {canDeleteCommande && (
               <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => handleRequestDeleteCommande(commande)} disabled={deletingId === commande.id} title="Supprimer la commande">
                 {deletingId === commande.id ? '...' : 'Supprimer'}
@@ -808,8 +853,9 @@ export const BarCommandeView: React.FC<Props> = ({
     },
   ];
 
-  const activeCommandes = localCommandes.filter((commande) => commande.statut !== 'Encaissée');
-  const filteredCommandes = activeCommandes.filter((commande) => {
+  const displayedCommandes = localCommandes.filter((commande) => commande.statut !== 'Encaissée');
+  const activeCommandes = displayedCommandes.filter((commande) => commande.statut !== 'Annulée');
+  const filteredCommandes = displayedCommandes.filter((commande) => {
     const query = commandeSearchTerm.trim().toLocaleLowerCase('fr-FR');
     if (!query) return true;
 
@@ -855,7 +901,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const selectedLocationInfo = getSelectedLocationInfo();
 
   return (
-    <div className="space-y-4">
+    <div className={visible ? 'space-y-4' : 'hidden'}>
       <div className="rounded-2xl border border-base bg-surface p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -866,9 +912,11 @@ export const BarCommandeView: React.FC<Props> = ({
             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-sm text-accent">
               {activeCommandes.length} commande{activeCommandes.length > 1 ? 's' : ''} active{activeCommandes.length > 1 ? 's' : ''}
             </div>
-            <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
-              {BAR_COMMANDES_ACTIONS.newOrderLabel}
-            </Button>
+            {canCreateCommande && (
+              <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
+                {BAR_COMMANDES_ACTIONS.newOrderLabel}
+              </Button>
+            )}
           </div>
         </div>
       </div>

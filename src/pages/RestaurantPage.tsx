@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
-import { escapeHtml, openPrintWindow, printThermal, thermalHeader } from '../utils/thermalPrint';
+import { openPrintWindow, printOrderInvoice } from '../utils/thermalPrint';
 import { ShoppingCart, Clock, CheckCircle, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react';
 
 // Composants du module Restaurant
@@ -133,8 +133,7 @@ export const RestaurantPage: React.FC = () => {
     };
     fetchTables();
     fetchOrders();
-    if (userIsCashier) return;
-    barService.getBarProducts()
+    if (!userIsCashier) barService.getBarProducts()
       .then((response) => {
         const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
         setBarDrinks(Array.isArray(data) ? data : []);
@@ -143,14 +142,14 @@ export const RestaurantPage: React.FC = () => {
         console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
         setBarDrinks([]);
       });
-    alcoholService.getAlcoholProducts()
+    if (!userIsCashier) alcoholService.getAlcoholProducts()
       .then((response) => setAlcoholDrinks(Array.isArray(response) ? response : []))
       .catch((error) => {
         console.error('Erreur lors du chargement des boissons alcoolisées', error);
         setAlcoholDrinks([]);
       });
 
-    const restaurantDataRequest = userIsServer
+    const restaurantDataRequest = (userIsServer || userIsCashier)
       ? Promise.all([restaurantService.getProducts({ actif: true }), restaurantService.getCategories()])
           .then(([productsRes, categoriesRes]) => [productsRes, categoriesRes, [], []] as const)
       : Promise.all([
@@ -209,7 +208,7 @@ export const RestaurantPage: React.FC = () => {
             source_product_id: item.source_product_id,
             nom: item.nom,
             quantite: item.quantite,
-            prix_unitaire: item.prix_unitaire,
+            prix_unitaire: item.prix_unitaire ?? item.prix,
             cuisson: item.cuisson,
           })),
           notes: formData.notes,
@@ -237,7 +236,7 @@ export const RestaurantPage: React.FC = () => {
           source_product_id: item.source_product_id,
           nom: item.nom,
           quantite: item.quantite,
-          prix_unitaire: item.prix_unitaire,
+          prix_unitaire: item.prix_unitaire ?? item.prix,
           cuisson: item.cuisson,
         })),
         notes: formData.notes,
@@ -285,10 +284,11 @@ export const RestaurantPage: React.FC = () => {
         await fetchOrders();
         return;
       }
+      throw new Error("Le statut de la commande n'a pas pu être mis à jour.");
     } catch (err) {
-      console.warn('API update status échoué, bascule vers mode local:', err);
+      console.error('Erreur mise à jour statut commande restaurant:', err);
+      throw err;
     }
-    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: status } : o));
   };
 
   const handlePayment = async (orderId: number | string, paymentMethod = 'ESPECES') => {
@@ -336,7 +336,7 @@ export const RestaurantPage: React.FC = () => {
     }
 
     // Mise à jour locale uniquement après le succès confirmé ci-dessus.
-    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE' } : o));
+    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE', moyen_paiement: paymentMethod } : o));
     if (order?.table) {
       setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
@@ -420,24 +420,32 @@ export const RestaurantPage: React.FC = () => {
         const order = (res as any).data ?? res;
         const items: any[] = order.items || [];
         const total = Number(order.montant_total || items.reduce((sum, item) => sum + Number(item.quantite) * Number(item.prix_unitaire || 0), 0));
+        const paymentLabels: Record<string, string> = {
+          ESPECES: 'Espèces', TPE: 'TPE', CARTE: 'Carte bancaire', CREDIT: 'Crédit',
+          ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit',
+          VIREMENT: 'Virement', CHEQUE: 'Chèque', EURO: 'Euro', DOLLAR: 'Dollar',
+        };
+        const paymentMethod = order.moyen_paiement
+          ? paymentLabels[String(order.moyen_paiement).toUpperCase()] || String(order.moyen_paiement)
+          : '';
         const client = clients.find((candidate) => candidate.id === order.client_id);
         const clientName = client ? `${client.nom || ''} ${client.prenom || ''}`.trim() : `${order.client_nom || ''} ${order.client_prenom || ''}`.trim();
-        const lines = items.map((item) => {
-          const quantity = Number(item.quantite || 0);
-          const unitPrice = Number(item.prix_unitaire || 0);
-          return `<div class="line"><div class="row"><span>${quantity} x ${escapeHtml(item.product_nom || `#${item.product_id || ''}`)}${item.cuisson ? ` (${escapeHtml(item.cuisson)})` : ''}</span><span>${escapeHtml(formatCurrency(quantity * unitPrice))}</span></div><div class="sub">PU ${escapeHtml(formatCurrency(unitPrice))}</div></div>`;
-        }).join('');
-        printThermal(`Facture #${numericId}`, `
-          ${thermalHeader(`Facture #${numericId}`, ["Hotel de L'avenue — Restaurant"])}
-          <p>Date : ${escapeHtml(order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '—')}</p>
-          ${order.table_numero ? `<p>Table : ${escapeHtml(order.table_numero)}</p>` : ''}
-          ${clientName ? `<p>Client : ${escapeHtml(clientName)}</p>` : ''}
-          ${order.notes ? `<p>Notes : ${escapeHtml(order.notes)}</p>` : ''}
-          <div class="sep"></div>
-          ${lines}
-          <div class="row total"><span>TOTAL</span><span>${escapeHtml(formatCurrency(total))}</span></div>
-          <div class="footer"><p>Merci de votre visite</p></div>
-        `, { target: printWindow });
+        printOrderInvoice({
+          module: 'RESTAURANT',
+          orderId: numericId,
+          status: order.statut || 'EN_ATTENTE',
+          client: clientName || 'Client anonyme',
+          table: order.table_numero || order.table?.numero || order.location_type || order.table_id || '—',
+          date: order.created_at,
+          notes: order.notes,
+          paymentMethod,
+          items: items.map((item) => ({
+            name: `${item.product_nom || `#${item.product_id || ''}`}${item.cuisson ? ` (${item.cuisson})` : ''}`,
+            quantity: Number(item.quantite) || 0,
+            unitPrice: Number(item.prix_unitaire) || 0,
+          })),
+          total,
+        }, printWindow);
       } catch (err) {
         printWindow.close();
         console.error('Erreur récupération facture', err);
@@ -599,7 +607,7 @@ export const RestaurantPage: React.FC = () => {
       <RestaurantHeader stats={userIsServer ? [] : stats} />
 
       {/* Barre de recherche et filtres - Masquée uniquement sur l'onglet menu */}
-      {!userIsCashier && activeTab !== 'menu' && (
+      {activeTab !== 'menu' && (
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <div className="relative flex-1">
             <input
@@ -656,7 +664,6 @@ export const RestaurantPage: React.FC = () => {
               setShowOrderModal(true);
             }}
             onMoveOrder={handleMoveOrder}
-            onInvoice={handlePrintInvoice}
           />
         )}
         {activeTab === 'menu' && (
@@ -683,6 +690,8 @@ export const RestaurantPage: React.FC = () => {
               await restaurantService.closeAllOrders(orderIds);
             }}
             onRefresh={fetchOrders}
+            onNewOrder={handleNewOrder}
+            onInvoice={handlePrintInvoice}
           />
         )}
         {activeTab === 'historique' && <HistoryTab orders={orders} />}

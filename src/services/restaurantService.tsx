@@ -106,7 +106,7 @@ export const getOrders = (params?: {
   api.get<ApiResponse<Order[]>>('/api/restaurant/orders', { params }).then(res => res.data);
 
 export const getOrderById = (id: number) =>
-  api.get<ApiResponse<Order>>(`/api/restaurant/orders/${id}`).then(res => res.data);
+  api.get<ApiResponse<Order>>(`/api/restaurant/orders/${id}/detail`).then(res => res.data);
 
 export const getHistoryTotal = (dateDebut: string, dateFin: string) =>
   api.get<ApiResponse<{

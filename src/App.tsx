@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from 'react';
 import HotelPage from "./pages/HotelPage";
 import ClientsPage from "./pages/ClientsPage";
 // Hébergement module temporarily disabled - import and route commented out
@@ -19,11 +20,46 @@ import SettingsPage from "./pages/SettingsPage";
 import { RHPage } from "./pages/RHPage";
 import PlanningPage from "./pages/PlanningPage";
 import StockPage from "./pages/StockPage";
+import AuthService from './services/authService';
+
+const routeTitles: Record<string, string> = {
+  '/dashboard': 'Tableau de bord', '/hotel': 'Hôtel', '/hebergement': 'Hébergement',
+  '/restaurant': 'Restaurant', '/bar': 'Bar & Lounge', '/alcool': 'Alcool',
+  '/casino': 'Casino', '/stock': 'Stock', '/finances': 'Finances',
+  '/planning': 'Planning', '/rh': 'Ressources humaines', '/clients': 'Clients',
+  '/utilisateurs': 'Utilisateurs', '/profile': 'Profil', '/settings': 'Paramètres',
+};
+const roleTitles: Record<string, string> = {
+  admin: 'Administrateur', manager: 'Manager', caisse: 'Caissier', caissier: 'Caissier',
+  hotesse: 'Hôtesse', water: 'Serveur', barman: 'Barman', serveur: 'Serveur',
+  receptioniste: 'Réception', stock_manager: 'Gestionnaire de stock',
+  croupier: 'Croupier', housekeeping: 'Entretien',
+};
+
+function DocumentTitle() {
+  const { pathname } = useLocation();
+  const [user, setUser] = useState(() => AuthService.getCurrentUser());
+
+  useEffect(() => {
+    const syncUser = () => setUser(AuthService.getCurrentUser());
+    window.addEventListener('auth-change', syncUser);
+    return () => window.removeEventListener('auth-change', syncUser);
+  }, []);
+
+  useEffect(() => {
+    const page = routeTitles[pathname] || 'Gestion';
+    const role = user?.role ? roleTitles[user.role.toLowerCase()] || user.role : '';
+    document.title = role ? `HDA - ${page} | ${role}` : `HDA - ${page}`;
+  }, [pathname, user]);
+
+  return null;
+}
 
 function App() {
   return (
     <ToastProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <DocumentTitle />
         <Routes>
           {/* Auth */}
           <Route path="/" element={<LoginPage />} />

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Badge, Button, DataTable, Modal, Select } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin, Printer } from 'lucide-react';
 import type { Order } from '../types';
 import type { TableRestaurant } from '../../../types/restaurant';
 import AuthService from '../../../services/authService';
-import { isAdmin, isCashier } from '../../../utils/permissions';
+import { isAdmin, isCashier, isManager } from '../../../utils/permissions';
+import { printOrderTicket } from '../../../utils/thermalPrint';
 
 const STATUTS_ORDER: Record<string, { label: string; variant: string }> = {
   EN_ATTENTE: { label: 'En attente', variant: 'warning' },
@@ -27,7 +28,6 @@ interface CommandesTabProps {
   onNewOrder: () => void;
   onEditOrder: (order: Order) => void;
   onMoveOrder: (order: Order, tableId: number, locationType?: string) => void | Promise<void>;
-  onInvoice?: (orderId: number) => void;
 }
 
 export const CommandesTab: React.FC<CommandesTabProps> = ({
@@ -40,18 +40,27 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   onDelete,
   onNewOrder,
   onEditOrder,
-  onMoveOrder,
-  onInvoice
+  onMoveOrder
 }) => {
   const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('ESPECES');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [tableFilter, setTableFilter] = useState('');
   const [movingOrder, setMovingOrder] = useState<Order | null>(null);
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
+  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || currentUser?.role?.toLowerCase() === 'serveur';
   const canDeleteCommande = isAdmin(currentUser);
+  const handleChangeOrderStatus = async (orderId: number, status: Order['statut']) => {
+    try {
+      setStatusError(null);
+      await onUpdateStatus(orderId, status);
+    } catch (error: any) {
+      setStatusError(error?.response?.data?.message || error?.message || 'Le statut de la commande n’a pas pu être mis à jour.');
+    }
+  };
   const getLocationLabel = (order: Order) => {
     const normalized = order.location_type?.trim().toUpperCase();
     if (normalized === 'POCKER' || normalized === 'POCKER GRATUIT' || normalized === 'GRATUIT POCKER') return 'Gratuit Pocker';
@@ -59,10 +68,27 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     if (normalized === 'CHAMBRE') return 'Chambre';
     return order.table?.numero || order.table_numero || order.table_id || 'N/A';
   };
+  const handlePrintOrder = (order: Order) => {
+    printOrderTicket({
+      module: 'RESTAURANT',
+      orderId: order.id,
+      status: order.statut,
+      client: [order.client_prenom, order.client_nom].filter(Boolean).join(' '),
+      table: getLocationLabel(order),
+      date: order.created_at,
+      notes: order.notes,
+      items: (order.items || []).map((item) => ({
+        name: item.product_nom || item.product?.nom || products.find((product) => product.id === item.product_id)?.nom || `Article #${item.product_id}`,
+        quantity: Number(item.quantite) || 0,
+        unitPrice: Number(item.prix_unitaire) || 0,
+      })),
+      total: Number(order.montant_total) || 0,
+    });
+  };
   const columns = [
     { key: 'table', label: 'Table', render: (order: Order) => {
       const locationLabel = getLocationLabel(order);
-      const isSpecialLocation = ['Gratuit', 'Gratuit Pocker', 'Chambre'].includes(locationLabel);
+      const isSpecialLocation = ['Gratuit', 'Gratuit Pocker', 'Chambre'].includes(String(locationLabel));
       return (
         <div className={`flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-center ${isSpecialLocation ? 'min-w-[92px]' : 'min-w-10'}`} style={{ background: 'var(--color-accent)', boxShadow: 'var(--shadow-accent)' }}>
           <span className="text-black text-sm font-bold leading-tight">
@@ -103,7 +129,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     { key: 'date', label: 'Heure', render: (order: Order) => (
       <span className="text-subtle text-xs">{formatDate(order.created_at)}</span>
     )},
-    { key: 'actions', label: '', render: (order: Order) => (
+    { key: 'actions', label: 'Actions', render: (order: Order) => (
       <div className="flex items-center gap-2">
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
@@ -116,34 +142,32 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           </Button>
         )}
 
-        {order.statut === 'EN_ATTENTE' && (
-          <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'EN_COURS')}>Démarrer</Button>
+        {canChangeOrderStatus && order.statut === 'EN_ATTENTE' && (
+          <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'EN_COURS')}>Démarrer</Button>
         )}
-        {order.statut === 'EN_COURS' && (
-          <Button size="sm" variant="secondary" onClick={() => onUpdateStatus(order.id, 'SERVIE')}>Servir</Button>
+        {canChangeOrderStatus && order.statut === 'EN_COURS' && (
+          <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
           <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); setPaymentError(null); }}>Encaisser</Button>
         )}
-        {/* Invoice button */}
-        {onInvoice && (
-          <Button size="sm" variant="secondary" onClick={() => onInvoice(order.id)}>Facture</Button>
-        )}
+        <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintOrder(order)} title="Imprimer le ticket de commande">
+          Ticket
+        </Button>
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
           <Button size="sm" variant="danger" onClick={() => onCancel(order.id)}>
             <XCircle size={14} />
           </Button>
         )}
-        <Button
+        {canDeleteCommande && <Button
           size="sm"
           variant="danger"
           title="Supprimer la commande"
           aria-label={`Supprimer la commande ${order.id}`}
           onClick={() => onDelete(order.id)}
-          disabled={!canDeleteCommande}
         >
           <Trash2 size={14} />
-        </Button>
+        </Button>}
       </div>
     )},
   ];
@@ -186,10 +210,14 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           Nouvelle commande
         </Button>
       </div>
+      {statusError && <p role="alert" className="mx-3 mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400 sm:mx-6">{statusError}</p>}
       <div className="px-3 sm:px-6 py-3">
         <Select label="Afficher les commandes de" value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} options={[
           { value: '', label: 'Toutes les tables' },
-          ...tables.map((table) => ({ value: String(table.id), label: `Table ${String(table.numero).toUpperCase().startsWith('T') ? table.numero : `T${table.numero}`}` })),
+          ...Array.from(new Map(tables.map((table) => [String(table.id), {
+            value: String(table.id),
+            label: `Table ${String(table.numero).toUpperCase().startsWith('T') ? table.numero : `T${table.numero}`}`,
+          }])).values()),
           { value: '0', label: 'Autres emplacements' },
         ]} />
       </div>

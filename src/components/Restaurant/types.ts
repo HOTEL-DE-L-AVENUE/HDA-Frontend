@@ -13,6 +13,8 @@ export interface Order {
   montant_total: number;
   statut: 'EN_ATTENTE' | 'EN_COURS' | 'SERVIE' | 'PAYE' | 'PAYEE' | 'ANNULEE';
   created_at: string;
+  client_nom?: string;
+  client_prenom?: string;
   moyen_paiement?: string | null;
   table_numero?: string;
   table?: TableRestaurant;
