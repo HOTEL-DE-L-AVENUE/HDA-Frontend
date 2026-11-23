@@ -126,7 +126,7 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); setPaymentError(null); }}>Encaisser</Button>
         )}
         {/* Invoice button */}
-        {onInvoice && (
+        {onInvoice && canEncaisser && (
           <Button size="sm" variant="secondary" onClick={() => onInvoice(order.id)}>Facture</Button>
         )}
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
