@@ -21,6 +21,9 @@ interface Props {
   onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string }>;
+  visible?: boolean;
+  createOrderRequest?: number;
+  onCreateOrderRequestHandled?: () => void;
 }
 
 const statusClasses: Record<string, { label: string; variant: string }> = {
@@ -44,12 +47,17 @@ export const BarCommandeView: React.FC<Props> = ({
   onDeleteCommande,
   onUpdateStatut,
   cocktails = [],
-  stockMap = {}
+  stockMap = {},
+  visible = true,
+  createOrderRequest = 0,
+  onCreateOrderRequestHandled,
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser) || isManager(currentUser);
   const userIsHostess = isHostess(currentUser);
-  const canModifyCommande = isAdmin(currentUser) || isCashier(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
+  const userIsServer = currentUser?.role?.toLowerCase() === 'serveur';
+  const canModifyCommande = isAdmin(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
+  const canCreateCommande = canModifyCommande || isCashier(currentUser) || userIsServer;
   const canDeleteCommande = isAdmin(currentUser) || isManager(currentUser);
   const canDeleteTicketItem = isAdmin(currentUser) || isManager(currentUser);
   const canAdjustTicketQuantity = isAdmin(currentUser) || isManager(currentUser);
@@ -221,6 +229,13 @@ export const BarCommandeView: React.FC<Props> = ({
     setIsLocationSelectionOpen(true);
     void loadClients();
   };
+
+  useEffect(() => {
+    if (createOrderRequest > 0) {
+      handleOpenModal();
+      onCreateOrderRequestHandled?.();
+    }
+  }, [createOrderRequest, onCreateOrderRequestHandled]);
 
   const handleSelectLocation = (location: OrderLocationOption) => {
     setSelectedLocation(location);
@@ -855,7 +870,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const selectedLocationInfo = getSelectedLocationInfo();
 
   return (
-    <div className="space-y-4">
+    <div className={visible ? 'space-y-4' : 'hidden'}>
       <div className="rounded-2xl border border-base bg-surface p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -866,9 +881,11 @@ export const BarCommandeView: React.FC<Props> = ({
             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-sm text-accent">
               {activeCommandes.length} commande{activeCommandes.length > 1 ? 's' : ''} active{activeCommandes.length > 1 ? 's' : ''}
             </div>
-            <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
-              {BAR_COMMANDES_ACTIONS.newOrderLabel}
-            </Button>
+            {canCreateCommande && (
+              <Button icon={<Plus size={16} />} onClick={handleOpenModal}>
+                {BAR_COMMANDES_ACTIONS.newOrderLabel}
+              </Button>
+            )}
           </div>
         </div>
       </div>

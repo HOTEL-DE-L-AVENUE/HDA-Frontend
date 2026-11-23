@@ -47,6 +47,7 @@ export const BarPage: React.FC = () => {
   const [restaurantBarProducts, setRestaurantBarProducts] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
+  const [createBarOrderRequest, setCreateBarOrderRequest] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const orderStatusLabels: Record<string, BarCommande['statut']> = {
@@ -136,12 +137,15 @@ export const BarPage: React.FC = () => {
       const createdOrder = await barService.createBarOrder({ client, table: safeTable, nombre_personnes: safeGuestCount, moyen_paiement: safePayment, observation, items: normalizedItems, hotel_reservation_id, room_id, room_guest_name, room_account_paid });
       if (createdOrder) {
         await Promise.all([loadOrders(), fetchData()]);
+        setError(null);
+        showToast('Commande créée avec succès.', 'success');
       }
     } catch (error) {
       console.error('Erreur création commande bar:', error);
       const apiError = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
       const message = apiError.response?.data?.error?.message || apiError.message || "La commande bar n'a pas pu être créée.";
       setError(message);
+      showToast(message, 'error');
       throw error;
     }
   };
@@ -346,8 +350,11 @@ export const BarPage: React.FC = () => {
 
       {userIsAdmin && activeTab === 'equipement' && <BarEquipmentManager />}
 
-      {!userIsCashier && activeTab === 'commandes' && (
+      {(activeTab === 'commandes' || (userIsCashier && activeTab === 'caisse')) && (
         <BarCommandeView
+          visible={activeTab === 'commandes'}
+          createOrderRequest={createBarOrderRequest}
+          onCreateOrderRequestHandled={() => setCreateBarOrderRequest(0)}
           commandes={commandes}
           onCreateCommande={handleCreateCommande}
           onUpdateCommande={handleUpdateCommande}
@@ -404,8 +411,8 @@ export const BarPage: React.FC = () => {
               categorie: cocktails.find((product) => product.id === item.product_id)?.categorie || 'Autre',
             })),
           }))}
-          onEncaisserCommande={async (orderId) => {
-            await handleUpdateStatut(orderId, 'Encaissée');
+          onEncaisserCommande={async (orderId, paymentMethod) => {
+            await handleUpdateStatut(orderId, 'Encaissée', paymentMethod as BarPaymentMethod);
           }}
           onCloseAllOrders={async (orderIds) => {
             await barService.closeAllBarOrders(orderIds);
@@ -413,6 +420,7 @@ export const BarPage: React.FC = () => {
           onRefresh={async () => {
             await Promise.all([loadOrders(), fetchData()]);
           }}
+          onCreateBarOrder={userIsCashier ? () => setCreateBarOrderRequest((request) => request + 1) : undefined}
         />
       )}
     </div>

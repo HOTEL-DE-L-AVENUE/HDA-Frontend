@@ -335,7 +335,7 @@ export const RestaurantPage: React.FC = () => {
     }
 
     // Mise à jour locale uniquement après le succès confirmé ci-dessus.
-    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE' } : o));
+    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE', moyen_paiement: paymentMethod } : o));
     if (order?.table) {
       setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
@@ -419,6 +419,14 @@ export const RestaurantPage: React.FC = () => {
         const order = (res as any).data ?? res;
         const items: any[] = order.items || [];
         const total = Number(order.montant_total || items.reduce((sum, item) => sum + Number(item.quantite) * Number(item.prix_unitaire || 0), 0));
+        const paymentLabels: Record<string, string> = {
+          ESPECES: 'Espèces', TPE: 'TPE', CARTE: 'Carte bancaire', CREDIT: 'Crédit',
+          ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', GRATUIT: 'Gratuit',
+          VIREMENT: 'Virement', CHEQUE: 'Chèque', EURO: 'Euro', DOLLAR: 'Dollar',
+        };
+        const paymentMethod = order.moyen_paiement
+          ? paymentLabels[String(order.moyen_paiement).toUpperCase()] || String(order.moyen_paiement)
+          : 'Non renseigné';
         const client = clients.find((candidate) => candidate.id === order.client_id);
         const clientName = client ? `${client.nom || ''} ${client.prenom || ''}`.trim() : `${order.client_nom || ''} ${order.client_prenom || ''}`.trim();
         const lines = items.map((item) => {
@@ -431,6 +439,7 @@ export const RestaurantPage: React.FC = () => {
           <p>Date : ${escapeHtml(order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '—')}</p>
           ${order.table_numero ? `<p>Table : ${escapeHtml(order.table_numero)}</p>` : ''}
           ${clientName ? `<p>Client : ${escapeHtml(clientName)}</p>` : ''}
+          <p>Mode de paiement : ${escapeHtml(paymentMethod)}</p>
           ${order.notes ? `<p>Notes : ${escapeHtml(order.notes)}</p>` : ''}
           <div class="sep"></div>
           ${lines}

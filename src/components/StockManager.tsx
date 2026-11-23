@@ -1,6 +1,6 @@
 // src/components/StockManager.tsx
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, AlertCircle, Package, Loader2, DollarSign, RefreshCw, Printer, LockKeyhole } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, AlertCircle, Package, Loader2, DollarSign, RefreshCw, Printer, LockKeyhole, Clock3, MapPin, UsersRound } from 'lucide-react';
 import api from '../lib/api';
 import { DataTable, Modal, Input, Select, Button, Badge, CaisseCard } from './UI';
 import BarTransactionsCard from './Bar/BarTransactionsCard';
@@ -478,10 +478,11 @@ interface CaisseManagerProps {
     created_at?: string;
     items?: Array<{ nom?: string; quantite: number; prix?: number; categorie?: string }>;
   }>;
-  onEncaisserCommande?: (orderId: number) => Promise<void> | void;
+  onEncaisserCommande?: (orderId: number, paymentMethod?: string) => Promise<void> | void;
   onInvoiceOrder?: (orderId: number) => void;
   onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
+  onCreateBarOrder?: () => void;
 }
 
 const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
@@ -509,7 +510,7 @@ const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
   return { transactions: latestCloseBatch, isClosed: true };
 };
 
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onInvoiceOrder, onCloseAllOrders, onRefresh }) => {
+export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onInvoiceOrder, onCloseAllOrders, onRefresh, onCreateBarOrder }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
@@ -525,6 +526,10 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
   const [showCloseHotelModal, setShowCloseHotelModal] = useState(false);
   const [isClosingHotel, setIsClosingHotel] = useState(false);
   const [transactionsRefreshTrigger, setTransactionsRefreshTrigger] = useState(0);
+  const [processingOrderId, setProcessingOrderId] = useState<number | null>(null);
+  const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
+  const [orderPaymentMethod, setOrderPaymentMethod] = useState('ESPECES');
+  const [orderPaymentError, setOrderPaymentError] = useState<string | null>(null);
 
   const isBar = module === 'bar';
   const isRestaurant = module === 'restaurant';
@@ -695,21 +700,26 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
       }))
     : allRestaurantTransactions;
 
-  const handleEncaisserCommande = async (orderId: number) => {
+  const handleEncaisserCommande = async (orderId: number, paymentMethod?: string) => {
     if (onEncaisserCommande) {
-      await onEncaisserCommande(orderId);
-      if (isBackendCaisse) {
-        try {
-          const [txs, stats] = await Promise.all([
-            financeService.getTransactions({ module: module.toUpperCase() }),
-            financeService.getFinancialStats(),
-          ]);
-          setBackendTransactions(txs);
-          const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
-          setModuleStockSummary(summary || null);
-        } catch (err) {
-          console.warn('Failed to refresh backend caisse after encaissement:', err);
+      setProcessingOrderId(orderId);
+      try {
+        await onEncaisserCommande(orderId, paymentMethod);
+        if (isBackendCaisse) {
+          try {
+            const [txs, stats] = await Promise.all([
+              financeService.getTransactions({ module: module.toUpperCase() }),
+              financeService.getFinancialStats(),
+            ]);
+            setBackendTransactions(txs);
+            const summary = stats.modules.find((item) => item.module.toLowerCase() === module.toLowerCase());
+            setModuleStockSummary(summary || null);
+          } catch (err) {
+            console.warn('Failed to refresh backend caisse after encaissement:', err);
+          }
         }
+      } finally {
+        setProcessingOrderId(null);
       }
     }
   };
@@ -911,7 +921,13 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
     const orderDate = order.created_at ? new Date(order.created_at).toLocaleString('fr-FR') : '-';
     const terminal = isBar && currentBarSession?.id ? `BAR-${currentBarSession.id}` : `${module.toUpperCase()}-CAISSE`;
     const orderTotal = Number(order.total || 0);
-    const paymentLabel = order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces';
+    const paymentLabels: Record<string, string> = {
+      ESPECES: 'Espèces', CARTE: 'Carte bancaire', TPE: 'TPE', CREDIT: 'Crédit',
+      EURO: 'Euro', ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', DOLLAR: 'Dollar',
+      VIREMENT: 'Virement', CHEQUE: 'Chèque', GRATUIT: 'Gratuit',
+    };
+    const paymentMethod = order.moyen_paiement ? String(order.moyen_paiement).toUpperCase() : '';
+    const paymentLabel = paymentLabels[paymentMethod] || (paymentMethod || 'Non renseigné');
     
     const itemsRows = (order.items || []).map((item: any) => {
       const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
@@ -1132,35 +1148,41 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
           <CaisseCard solde={solde} entrees={entrees} sorties={sorties} title={title || 'Caisse'} gradient={gradient} />
         )}
         {isOrderRegister && (
-          <section className="rounded-2xl border border-accent/30 bg-surface p-5">
+          <section className="rounded-2xl border border-accent/20 bg-surface p-4 shadow-xl shadow-black/10 sm:p-5">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-primary">Commandes de la caisse</h3>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-primary">Commandes de la caisse</h3>
                 <p className="mt-1 text-xs text-muted">Impression et clôture globales</p>
               </div>
-              <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{allOrders.length}</span>
+              <span
+                className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 px-2 text-sm font-bold text-accent"
+                aria-label={`${allOrders.length} commande${allOrders.length > 1 ? 's' : ''}`}
+              >
+                {allOrders.length}
+              </span>
             </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintDailyOrderDetails()} disabled={allOrders.length === 0} className="justify-center">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {onCreateBarOrder && <Button size="md" icon={<Plus size={16} />} onClick={onCreateBarOrder} className="w-full justify-center">Nouvelle commande</Button>}
+              <Button size="md" variant="secondary" icon={<Printer size={16} />} onClick={() => handlePrintDailyOrderDetails()} disabled={allOrders.length === 0} className="w-full justify-center">
                 Imprimer toutes
               </Button>
-              <Button size="sm" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="justify-center">
+              <Button size="md" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseAllOrders()} disabled={!onCloseAllOrders || allOrders.length === 0} className="w-full justify-center">
                 Clôturer toutes
               </Button>
               {currentBarSession && (
-                <Button size="sm" variant="secondary" icon={<LockKeyhole size={14} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la session de caisse'} className="justify-center sm:col-span-2 lg:col-span-1 xl:col-span-2">
+                <Button size="md" variant="secondary" icon={<LockKeyhole size={16} />} onClick={() => void handleCloseBarSession()} disabled={isClosingBarSession || pendingOrders.length > 0} title={pendingOrders.length > 0 ? 'Encaissez les commandes restantes avant la clôture' : 'Clôturer la session de caisse'} className="w-full justify-center">
                   {isClosingBarSession ? 'Clôture...' : 'Clôturer la caisse'}
                 </Button>
               )}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base pt-4 text-center">
-              <div>
-                <p className="text-lg font-semibold text-primary">{pendingOrders.length}</p>
-                <p className="text-[11px] text-muted">À encaisser</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-base/70 pt-4">
+              <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.06] px-3 py-3 text-center">
+                <p className="text-xl font-bold text-amber-300">{pendingOrders.length}</p>
+                <p className="mt-0.5 text-[11px] font-medium text-muted">À encaisser</p>
               </div>
-              <div>
-                <p className="text-lg font-semibold text-emerald-400">{allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || '')).length}</p>
-                <p className="text-[11px] text-muted">Encaissées</p>
+              <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.06] px-3 py-3 text-center">
+                <p className="text-xl font-bold text-emerald-400">{allOrders.filter((order) => ['Encaissée', 'PAYE', 'PAYEE'].includes(order.statut || '')).length}</p>
+                <p className="mt-0.5 text-[11px] font-medium text-muted">Encaissées</p>
               </div>
             </div>
           </section>
@@ -1196,46 +1218,136 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
         )}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface">
-        <div className="flex items-center justify-between border-b border-base px-6 py-4">
+      <section className="overflow-hidden rounded-2xl border border-base bg-surface shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base px-4 py-4 sm:px-5">
           <div>
             <h3 className="font-semibold text-primary">Commandes à encaisser</h3>
-            <p className="text-xs text-muted">Commandes servies en attente de paiement</p>
+            <p className="mt-0.5 text-xs text-muted">Commandes servies en attente de paiement</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-accent/15 px-3 py-1 text-sm font-semibold text-accent">{pendingOrders.length}</span>
-            {onRefresh && <button type="button" onClick={() => void onRefresh()} title="Actualiser les commandes" className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted transition hover:bg-surface-3 hover:text-primary"><RefreshCw size={14} /></button>}
+            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300 tabular-nums">
+              {pendingOrders.length} à encaisser
+            </span>
+            {onRefresh && (
+              <button type="button" onClick={() => void onRefresh()} title="Actualiser les commandes" aria-label="Actualiser les commandes" className="flex h-10 w-10 items-center justify-center rounded-xl border border-base bg-surface-2 text-muted transition-colors hover:bg-surface-3 hover:text-primary">
+                <RefreshCw size={15} />
+              </button>
+            )}
           </div>
         </div>
         {pendingOrders.length === 0 ? (
-          <p className="px-6 py-6 text-center text-sm text-muted">Aucune commande à encaisser.</p>
+          <div className="flex flex-col items-center px-5 py-10 text-center">
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
+              <DollarSign size={20} />
+            </span>
+            <p className="text-sm font-medium text-primary">Tout est à jour</p>
+            <p className="mt-1 text-xs text-muted">Aucune commande servie n’attend d’encaissement.</p>
+          </div>
         ) : (
-          <div className="divide-y divide-base">
-            {pendingOrders.map((order) => (
-              <div key={order.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-medium text-primary">Commande #{order.id} · {order.client || 'Client anonyme'}</p>
-                  <p className="text-xs text-muted">{order.table ? `Table ${order.table}` : 'Sans table'}{order.nombre_personnes ? ` · ${order.nombre_personnes} personne${order.nombre_personnes > 1 ? 's' : ''}` : ''}{order.created_at ? ` · ${new Date(order.created_at).toLocaleString('fr-FR')}` : ''}</p>
-                  {order.moyen_paiement && <p className="text-xs text-muted">Paiement : {order.moyen_paiement === 'CARTE' ? 'Carte bancaire' : order.moyen_paiement === 'TPE' ? 'TPE' : order.moyen_paiement === 'CREDIT' ? 'Crédit' : order.moyen_paiement === 'EURO' ? 'Euro' : order.moyen_paiement === 'ORANGE_MONEY' ? 'Orange Money' : order.moyen_paiement === 'MVOLA' ? 'MVola' : order.moyen_paiement === 'DOLLAR' ? 'Dollar' : order.moyen_paiement === 'VIREMENT' ? 'Virement' : order.moyen_paiement === 'CHEQUE' ? 'Chèque' : 'Espèces'}</p>}
-                  {order.items && order.items.length > 0 && (
-                    <div className="mt-2 space-y-1 border-l-2 border-accent/40 pl-3">
-                      {order.items.map((item, index) => {
-                        const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
-                        return <p key={`${order.id}-item-${index}`} className="text-xs text-secondary">{item.quantite} × {item.nom || item.product_nom || 'Article'} <span className="text-muted">({formatCurrency(unitPrice)} / unité = {formatCurrency(unitPrice * item.quantite)})</span></p>;
-                      })}
+          <div className="grid gap-3 p-3 sm:p-4">
+            {pendingOrders.map((order) => {
+              const paymentLabels: Record<string, string> = {
+                CARTE: 'Carte bancaire', TPE: 'TPE', CREDIT: 'Crédit', EURO: 'Euro',
+                ORANGE_MONEY: 'Orange Money', MVOLA: 'MVola', DOLLAR: 'Dollar',
+                VIREMENT: 'Virement', CHEQUE: 'Chèque', ESPECES: 'Espèces',
+              };
+              const isProcessing = processingOrderId === order.id;
+              return (
+                <article key={order.id} className="rounded-xl border border-base bg-surface-2/60 p-4 transition-colors hover:border-accent/30 sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-accent/10 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">Commande #{order.id}</span>
+                        <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">Servie</span>
+                        {order.created_at && <span className="inline-flex items-center gap-1 text-[11px] text-muted"><Clock3 size={12} />{new Date(order.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
+                      <h4 className="mt-2 truncate text-base font-semibold text-primary">{order.client || 'Client anonyme'}</h4>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                        <span className="inline-flex items-center gap-1.5"><MapPin size={13} />{order.table ? `Table ${order.table}` : 'Sans table'}</span>
+                        {!!order.nombre_personnes && <span className="inline-flex items-center gap-1.5"><UsersRound size={13} />{order.nombre_personnes} personne{order.nombre_personnes > 1 ? 's' : ''}</span>}
+                        {order.moyen_paiement && <span>Paiement prévu : {paymentLabels[order.moyen_paiement] || order.moyen_paiement}</span>}
+                      </div>
+                      {order.items && order.items.length > 0 && (
+                        <div className="mt-4 space-y-2 border-t border-base pt-3">
+                          {order.items.map((item, index) => {
+                            const unitPrice = Number(item.prix_unitaire ?? item.prix ?? 0);
+                            return (
+                              <div key={`${order.id}-item-${index}`} className="flex items-start justify-between gap-3 text-xs">
+                                <span className="min-w-0 text-secondary"><span className="mr-2 inline-flex min-w-7 justify-center rounded-md bg-surface-3 px-1.5 py-0.5 font-semibold text-primary tabular-nums">{item.quantite}×</span>{item.nom || item.product_nom || 'Article'}</span>
+                                <span className="shrink-0 text-muted tabular-nums">{formatCurrency(unitPrice * Number(item.quantite || 0))}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-4 sm:justify-end">
-                  <span className="font-bold text-accent">{formatCurrency(order.total)}</span>
-                  {onInvoiceOrder && <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => onInvoiceOrder(order.id)}>Facture</Button>}
-                  {onEncaisserCommande && <Button size="sm" icon={<DollarSign size={14} />} onClick={() => void handleEncaisserCommande(order.id)}>Encaisser</Button>}
-                </div>
-              </div>
-            ))}
+                    <div className="flex flex-col gap-3 border-t border-base pt-3 lg:min-w-48 lg:items-end lg:border-0 lg:pt-0">
+                      <div className="lg:text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Total à payer</p>
+                        <p className="mt-0.5 text-xl font-bold text-accent tabular-nums">{formatCurrency(order.total)}</p>
+                      </div>
+                      <div className="flex w-full gap-2 lg:w-auto">
+                        {onInvoiceOrder && <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => onInvoiceOrder(order.id)} className="min-h-10 flex-1 lg:flex-none">Facture</Button>}
+                        {onEncaisserCommande && <Button size="sm" icon={isProcessing ? <Loader2 size={14} className="animate-spin" /> : <DollarSign size={14} />} onClick={() => {
+                          if (isBar) {
+                            setPaymentOrderId(order.id);
+                            setOrderPaymentMethod('ESPECES');
+                            setOrderPaymentError(null);
+                          } else {
+                            void handleEncaisserCommande(order.id);
+                          }
+                        }} disabled={isProcessing} className="min-h-10 flex-1 lg:flex-none">{isProcessing ? 'Encaissement…' : 'Encaisser'}</Button>}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
+
+      {isBar && (
+        <Modal
+          isOpen={paymentOrderId !== null}
+          onClose={() => { if (processingOrderId === null) { setPaymentOrderId(null); setOrderPaymentError(null); } }}
+          title={`Encaisser la commande #${paymentOrderId ?? ''}`}
+          size="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-secondary">Choisissez le mode de paiement avant de confirmer l’encaissement.</p>
+            {orderPaymentError && <div role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-300">{orderPaymentError}</div>}
+            <Select
+              label="Mode de paiement"
+              value={orderPaymentMethod}
+              onChange={(event) => setOrderPaymentMethod(event.target.value)}
+              options={[
+                { value: 'ESPECES', label: 'Espèces' },
+                { value: 'TPE', label: 'TPE' },
+                { value: 'ORANGE_MONEY', label: 'Mobile Money — Orange Money' },
+                { value: 'MVOLA', label: 'Mobile Money — MVola' },
+                { value: 'CREDIT', label: 'Crédit' },
+                { value: 'GRATUIT', label: 'Gratuit' },
+              ]}
+            />
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" type="button" onClick={() => { setPaymentOrderId(null); setOrderPaymentError(null); }} disabled={processingOrderId !== null} className="flex-1">Annuler</Button>
+              <Button type="button" onClick={async () => {
+                if (paymentOrderId === null) return;
+                setOrderPaymentError(null);
+                try {
+                  await handleEncaisserCommande(paymentOrderId, orderPaymentMethod);
+                  setPaymentOrderId(null);
+                } catch (error: any) {
+                  setOrderPaymentError(error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Le paiement n’a pas pu être confirmé.');
+                }
+              }} disabled={processingOrderId !== null} className="flex-1">
+                {processingOrderId !== null ? 'Confirmation…' : 'Confirmer l’encaissement'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Transactions adaptées au module */}
       {!isHotel || !hotelTransactionsAreClosed ? (isBar ? (
