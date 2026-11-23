@@ -45,7 +45,6 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
     <div className="w-full">
       <div className="mb-4 flex justify-end gap-2">
         {onNewOrder && <Button onClick={onNewOrder}>Nouvelle commande</Button>}
-        {orders.filter((order) => order.statut === 'SERVIE').map((order) => <span key={order.id} className="hidden" />)}
       </div>
       <CaisseManager
         module="restaurant"
@@ -53,7 +52,7 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
         title="Caisse Restaurant"
         gradient="from-accent to-accent-2"
         allOrders={allOrders}
-        pendingOrders={orders.filter((order) => order.statut !== 'PAYEE' && order.statut !== 'PAYE' && order.statut !== 'ANNULEE').map((order) => ({
+        pendingOrders={orders.filter((order) => order.statut === 'SERVIE').map((order) => ({
           id: Number(order.id),
           client: order.client_nom || order.client?.nom || 'Client anonyme',
           table: order.table?.numero || order.table_numero || order.table_id,
@@ -64,6 +63,7 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
           items: order.items,
         }))}
         onEncaisserCommande={onPayment ? async (orderId) => { setPaymentOrderId(orderId); } : undefined}
+        onInvoiceOrder={onInvoice}
         onCloseAllOrders={onCloseAllOrders}
         onRefresh={onRefresh}
       />

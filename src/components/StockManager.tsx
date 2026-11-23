@@ -479,6 +479,7 @@ interface CaisseManagerProps {
     items?: Array<{ nom?: string; quantite: number; prix?: number; categorie?: string }>;
   }>;
   onEncaisserCommande?: (orderId: number) => Promise<void> | void;
+  onInvoiceOrder?: (orderId: number) => void;
   onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
 }
@@ -508,7 +509,7 @@ const getHotelCashRegisterSnapshot = (transactions: FinancialTransaction[]) => {
   return { transactions: latestCloseBatch, isClosed: true };
 };
 
-export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onCloseAllOrders, onRefresh }) => {
+export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories, title, gradient = 'from-amber-500 to-orange-500', pendingOrders = [], allOrders = [], onEncaisserCommande, onInvoiceOrder, onCloseAllOrders, onRefresh }) => {
   const { state, dispatch, getModuleStock, getModuleCaisseSolde } = useHDA();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ type: 'entree', montant: 0, description: '', categorie: categories[0] });
@@ -1227,6 +1228,7 @@ export const CaisseManager: React.FC<CaisseManagerProps> = ({ module, categories
                 </div>
                 <div className="flex items-center justify-between gap-4 sm:justify-end">
                   <span className="font-bold text-accent">{formatCurrency(order.total)}</span>
+                  {onInvoiceOrder && <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => onInvoiceOrder(order.id)}>Facture</Button>}
                   {onEncaisserCommande && <Button size="sm" icon={<DollarSign size={14} />} onClick={() => void handleEncaisserCommande(order.id)}>Encaisser</Button>}
                 </div>
               </div>
