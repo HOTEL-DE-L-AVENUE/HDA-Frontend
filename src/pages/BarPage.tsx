@@ -37,7 +37,7 @@ export const BarPage: React.FC = () => {
   const userIsHostess = isHostess(currentUser);
   const userIsServer = currentUser?.role === 'serveur';
   const canLoadRestaurantProducts = !userIsCashier
-    && (!userIsServer || parseUserModules(currentUser?.module).includes('restaurant'));
+    && (!(userIsServer || userIsHostess) || parseUserModules(currentUser?.module).includes('restaurant'));
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
 
@@ -395,7 +395,7 @@ export const BarPage: React.FC = () => {
       )}
 
       <div>
-        <BarTabs activeTab={userIsBarman || userIsHostess ? 'commandes' : activeTab} onTabChange={setActiveTab} compact={activeTab === 'bar'} />
+        <BarTabs activeTab={userIsBarman ? 'commandes' : activeTab} onTabChange={setActiveTab} compact={activeTab === 'bar'} />
       </div>
 
       {!userIsCashier && activeTab === 'bar' && (

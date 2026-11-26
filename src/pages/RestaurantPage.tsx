@@ -62,7 +62,7 @@ export const RestaurantPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
   const userIsCashier = isCashier(currentUser);
-  const userIsServer = currentUser?.role === 'serveur';
+  const userIsServer = currentUser?.role === 'serveur' || currentUser?.role === 'hotesse';
 
   // ---------- États ----------
   const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('commandes', currentUser?.role));

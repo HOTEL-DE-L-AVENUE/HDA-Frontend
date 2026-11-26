@@ -19,7 +19,7 @@ export const ROLE_MODULE_PERMISSIONS: Record<string, ModuleType[]> = {
   receptioniste: ['hebergement', 'hotel', 'bar', 'clients'],
   water: ['bar'],
   barman: ['bar'],
-  hotesse: ['bar'],
+  hotesse: [],
   housekeeping: ['hotel', 'hebergement'],
   croupier: ['casino'],
   serveur: [],
@@ -91,8 +91,8 @@ export function canAccessModule(
   // 2. Modules réservés strictement à l'admin
   if (ADMIN_ONLY_MODULES.includes(moduleId as ModuleType)) return false;
 
-  // Le serveur accède uniquement aux modules explicitement affectés à son compte.
-  if (role === 'serveur') return parseUserModules(user.module).includes(moduleId);
+  // Les serveurs et hôtesses accèdent uniquement aux modules affectés à leur compte.
+  if (role === 'serveur' || role === 'hotesse') return parseUserModules(user.module).includes(moduleId);
 
   // RH : tout utilisateur connecté y a accès (sa propre fiche + demande de congé),
   // y compris le barman — vérifié avant la restriction stricte ci-dessous pour ne
@@ -102,7 +102,7 @@ export function canAccessModule(
   if (moduleId === 'rh' && role !== 'hotesse') return true;
 
   // 3. Barman : accès UNIQUEMENT au module bar (en dehors de RH ci-dessus)
-  if (role === 'water' || role === 'barman' || role === 'hotesse') {
+  if (role === 'water' || role === 'barman') {
     return moduleId === 'bar';
   }
 
@@ -203,7 +203,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
     return tabs;
   }
 
-  if (role === 'serveur') {
+  if (role === 'serveur' || role === 'hotesse') {
     return tabs.filter(t => t.id === 'commandes' || t.id === 'menu' || t.id === 'bar');
   }
 
@@ -216,7 +216,7 @@ export function filterTabsByRole<T extends { id: string }>(tabs: T[], userRole?:
   const visibleTabs = tabs.filter(t => t.id !== 'historique' && t.id !== 'historique-produits' && t.id !== 'inventory');
 
   // 2. Barman : UNIQUEMENT l'onglet commandes
-  if (role === 'water' || role === 'barman' || role === 'hotesse') {
+  if (role === 'water' || role === 'barman') {
     return visibleTabs.filter(t => t.id === 'commandes');
   }
 

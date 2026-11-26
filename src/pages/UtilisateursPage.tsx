@@ -27,7 +27,7 @@ const formRoleLabels: Record<string, string> = {
   caisse: 'Caissier (encaissement uniquement)',
   water: 'Barman',
   croupier: 'Croupier (accès au casino)',
-  hotesse: 'Hôtesse (commandes du Bar uniquement)',
+  hotesse: 'Hôtesse (mêmes accès que le serveur)',
   serveur: 'Serveur (modules à autoriser)',
 };
 
@@ -261,8 +261,11 @@ export const UtilisateursPage: React.FC = () => {
       return;
     }
 
-    if (form.role === 'hotesse' && (parseModules(form.module).length !== 1 || parseModules(form.module)[0] !== 'bar')) {
-      setErrorMessage('Une hôtesse est affectée uniquement au module Bar.');
+    if (form.role === 'hotesse' && (
+      parseModules(form.module).length < 1
+      || parseModules(form.module).some(module => !['bar', 'restaurant'].includes(module))
+    )) {
+      setErrorMessage('Une hôtesse doit être affectée au Bar, au Restaurant ou aux deux.');
       return;
     }
 
@@ -333,7 +336,7 @@ export const UtilisateursPage: React.FC = () => {
     const currentModules = parseModules(form.module);
     const exists = currentModules.includes(mod);
 
-    if (form.role === 'croupier' || form.role === 'hotesse') return;
+    if (form.role === 'croupier') return;
 
     setErrorMessage('');
     setForm(prev => {
@@ -594,7 +597,7 @@ export const UtilisateursPage: React.FC = () => {
               <label className="text-muted text-sm font-medium">{form.role === 'caisse' ? 'Caisse(s) autorisée(s)' : 'Modules autorisés'}</label>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(form.role === 'serveur' ? serverModules : form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'water' || form.role === 'hotesse' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel', 'bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
+              {(form.role === 'serveur' ? serverModules : form.role === 'caisse' ? (['bar', 'restaurant', 'hotel'] as ModuleType[]) : form.role === 'hotesse' ? (['bar', 'restaurant'] as ModuleType[]) : form.role === 'water' ? (['bar'] as ModuleType[]) : form.role === 'receptioniste' ? (['hotel', 'bar'] as ModuleType[]) : form.role === 'croupier' ? (['casino'] as ModuleType[]) : allModules).map(mod => {
                 const currentModules = parseModules(form.module);
                 const isSelected = currentModules.includes(mod);
                 return (
@@ -602,7 +605,7 @@ export const UtilisateursPage: React.FC = () => {
                     key={mod}
                     type="button"
                     onClick={() => toggleModule(mod)}
-                    disabled={form.role === 'water' || form.role === 'hotesse' || form.role === 'croupier'}
+                    disabled={form.role === 'water' || form.role === 'croupier'}
                     className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${isSelected
                       ? 'bg-accent-4 text-accent border-accent/40'
                       : 'bg-surface-2 text-muted border-base hover:text-primary'
@@ -616,7 +619,7 @@ export const UtilisateursPage: React.FC = () => {
             {form.role === 'serveur' && <p className="mt-2 text-xs text-muted">Choisissez Restaurant et/ou Bar. Dans chaque module, le serveur accède aux produits et aux commandes.</p>}
             {form.role === 'caisse' && <p className="mt-2 text-xs text-muted">Le caissier peut être affecté à : Bar, Restaurant, Hôtel ou Casino.</p>}
             {form.role === 'water' && <p className="mt-2 text-xs text-muted">Le barman travaille dans le module Bar. Plusieurs barmans peuvent être ajoutés.</p>}
-            {form.role === 'hotesse' && <p className="mt-2 text-xs text-muted">L’hôtesse accède uniquement aux commandes du Bar qu’elle a créées.</p>}
+            {form.role === 'hotesse' && <p className="mt-2 text-xs text-muted">Choisissez Bar, Restaurant ou les deux. L’hôtesse accède aux commandes des modules attribués.</p>}
             {form.role === 'receptioniste' && <p className="mt-2 text-xs text-muted">Le réceptionniste travaille dans les modules Hôtel et Bar.</p>}
             {form.role === 'croupier' && <p className="mt-2 text-xs text-muted">Le croupier travaille uniquement dans le module Casino.</p>}
           </div>
