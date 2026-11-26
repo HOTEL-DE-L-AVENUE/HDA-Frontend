@@ -19,6 +19,7 @@ import type { AlcoholOrderStatus } from '../services/alcohol.service';
 
 import AuthService from '../services/authService';
 import { getDefaultTabForRole, isAdmin } from '../utils/permissions';
+import { onRealtimeChange } from '../services/realtime.service';
 
 export const AlcoholPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
@@ -147,8 +148,8 @@ export const AlcoholPage: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const [cocktailsRes, stockRes] = await Promise.all([
@@ -168,13 +169,27 @@ export const AlcoholPage: React.FC = () => {
     } catch (err) {
       console.error('Erreur chargement alcool:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     void fetchData();
     void loadOrders();
+    const refreshTimer = window.setInterval(() => {
+      void fetchData(false);
+      void loadOrders();
+    }, 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (['alcool', 'bar', 'stock', 'global'].includes(module)) {
+        void fetchData(false);
+        void loadOrders();
+      }
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+    };
   }, []);
 
   if (loading) {

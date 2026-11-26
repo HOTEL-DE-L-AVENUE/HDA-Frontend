@@ -28,6 +28,7 @@ import AuthService from '../services/authService';
 import { getDefaultTabForRole, isAdmin, isCashier, isBarman, isHostess, parseUserModules } from '../utils/permissions';
 import { useToast } from '../context/ToastContext';
 import { printOrderInvoice } from '../utils/thermalPrint';
+import { onRealtimeChange } from '../services/realtime.service';
 
 export const BarPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
@@ -40,6 +41,8 @@ export const BarPage: React.FC = () => {
     && (!(userIsServer || userIsHostess) || parseUserModules(currentUser?.module).includes('restaurant'));
   const { showToast } = useToast();
   const previousOrderStatuses = useRef<Record<number, string> | null>(null);
+  const ordersRequestVersion = useRef(0);
+  const dataRequestVersion = useRef(0);
 
   const [activeTab, setActiveTab] = useState<BarTabId>(() => getDefaultTabForRole('commandes', currentUser?.role) as BarTabId);
 
@@ -93,8 +96,10 @@ export const BarPage: React.FC = () => {
   };
 
   const loadOrders = async () => {
+    const requestVersion = ++ordersRequestVersion.current;
     try {
       const data = await barService.getBarOrders();
+      if (requestVersion !== ordersRequestVersion.current) return;
       const nextOrders = Array.isArray(data) ? data.map((order) => ({
         id: order.id,
         client: order.client,
@@ -123,7 +128,9 @@ export const BarPage: React.FC = () => {
       previousOrderStatuses.current = Object.fromEntries(nextOrders.map((order) => [order.id, order.statut]));
       setCommandes(nextOrders);
     } catch (error) {
-      console.error('Erreur chargement commandes bar:', error);
+      if (requestVersion === ordersRequestVersion.current) {
+        console.error('Erreur chargement commandes bar:', error);
+      }
     }
   };
 
@@ -265,8 +272,9 @@ export const BarPage: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (showLoading = true) => {
+    const requestVersion = ++dataRequestVersion.current;
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const [cocktailsRes, stockRes, restaurantProductsRes] = await Promise.all([
@@ -279,6 +287,7 @@ export const BarPage: React.FC = () => {
           return null;
           }),
       ]);
+      if (requestVersion !== dataRequestVersion.current) return;
       const cocktailsData = Array.isArray(cocktailsRes) ? cocktailsRes : (cocktailsRes as { data?: BarProduct[] }).data;
       const stock = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: BarStockItem[] }).data;
       const baseCocktails = Array.isArray(cocktailsData) ? (cocktailsData as BarProduct[]) : [];
@@ -320,18 +329,27 @@ export const BarPage: React.FC = () => {
         setStockMap(map);
       }
     } catch (err) {
-      console.error('Erreur chargement bar:', err);
+      if (requestVersion === dataRequestVersion.current) console.error('Erreur chargement bar:', err);
     } finally {
-      setLoading(false);
+      if (requestVersion === dataRequestVersion.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     void fetchData();
     void loadOrders();
-    // Les commandes et les statuts de table sont partagés entre les postes.
-    const refreshOrders = window.setInterval(() => void loadOrders(), 5_000);
-    return () => window.clearInterval(refreshOrders);
+    const refreshOrders = window.setInterval(() => {
+      void loadOrders();
+      void fetchData(false);
+    }, 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (['bar', 'restaurant', 'global'].includes(module)) void loadOrders();
+      if (['bar', 'restaurant', 'stock', 'alcool', 'global'].includes(module)) void fetchData(false);
+    });
+    return () => {
+      window.clearInterval(refreshOrders);
+      unsubscribeRealtime();
+    };
   }, []);
 
   if (loading) {

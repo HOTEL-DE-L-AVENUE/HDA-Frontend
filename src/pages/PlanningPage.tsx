@@ -6,6 +6,7 @@ import planningService, { PlanningAssignment } from '../services/planning.servic
 import rhService, { RHEmployee } from '../services/rh.service';
 import { exportWeeklyPlanningPdf } from '../utils/planningPdf';
 import { exportWeeklyPlanningJpg } from '../utils/planningJpg';
+import { onRealtimeChange } from '../services/realtime.service';
 
 const categories: Array<{ name: string; icon: LucideIcon; description: string; prefix: string; color: string }> = [
   { name: 'Videur', icon: ShieldCheck, description: 'Équipe de sécurité', prefix: 'V', color: '#ff6b00' },
@@ -126,6 +127,7 @@ export default function PlanningPage() {
   const [employees, setEmployees] = useState<RHEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [remoteRefreshVersion, setRemoteRefreshVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
@@ -170,7 +172,24 @@ export default function PlanningPage() {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [weekDates, category]);
+  }, [weekDates, category, remoteRefreshVersion]);
+
+  useEffect(() => {
+    const refreshIfClean = (module: string) => {
+      if (!['planning', 'rh', 'admin', 'global'].includes(module)) return;
+      if (dirtyDates.length || saving) {
+        setError('Le planning a été modifié sur un autre poste. Enregistrez ou actualisez après avoir conservé vos changements.');
+        return;
+      }
+      setRemoteRefreshVersion((version) => version + 1);
+    };
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => refreshIfClean(module));
+    const fallbackTimer = window.setInterval(() => refreshIfClean('planning'), 30_000);
+    return () => {
+      unsubscribeRealtime();
+      window.clearInterval(fallbackTimer);
+    };
+  }, [dirtyDates.length, saving]);
 
   const confirmSelectionChange = () => !dirtyDates.length || window.confirm('Des modifications ne sont pas enregistrées. Voulez-vous les abandonner ?');
 

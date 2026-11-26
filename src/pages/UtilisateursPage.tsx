@@ -6,6 +6,7 @@ import { formatDate } from '../utils/data';
 import { Modal, Input, Select, Button, Badge } from '../components/UI';
 import { Users, Plus, Edit2, Trash2, Shield, Eye, EyeOff, Key } from 'lucide-react';
 import api from '../lib/api';
+import { onRealtimeChange } from '../services/realtime.service';
 // import { clientService, Client } from '../services/client.service';
 
 const roleLabels: Record<string, string> = {
@@ -160,6 +161,10 @@ export const UtilisateursPage: React.FC = () => {
     fetchRealUsers();
     // fetchCasinoPlayers();
   }, [fetchRealUsers]);
+
+  useEffect(() => onRealtimeChange(({ module }) => {
+    if (module === 'admin' || module === 'global') void fetchRealUsers();
+  }), [fetchRealUsers]);
 
   // Statut en ligne : rafraîchi toutes les 30 secondes
   const fetchPresence = useCallback(async () => {

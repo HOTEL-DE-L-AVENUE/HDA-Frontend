@@ -53,6 +53,7 @@ import AuthService from '../services/authService';
 import { filterTabsByRole, getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
 import api from '../lib/api';
 import { useToast } from '../context/ToastContext';
+import { onRealtimeChange } from '../services/realtime.service';
 
 interface Tab {
   id: string;
@@ -316,6 +317,12 @@ const HotelPage: React.FC = () => {
     };
     void loadData();
   }, [refreshRooms, loadReservations]);
+
+  useEffect(() => onRealtimeChange(({ module }) => {
+    if (!['hotel', 'finance', 'stock', 'bar', 'restaurant', 'global'].includes(module)) return;
+    void Promise.all([refreshRooms(), loadReservations()]);
+    setDataRefreshKey((prev) => prev + 1);
+  }), [refreshRooms, loadReservations]);
 
   // Statistiques sécurisées
   const safeRooms = roomsData;

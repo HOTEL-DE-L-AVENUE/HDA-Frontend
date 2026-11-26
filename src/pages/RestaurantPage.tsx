@@ -36,6 +36,7 @@ import type {
 import AuthService from '../services/authService';
 import { clientService } from '../services/client.service';
 import { getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
+import { onRealtimeChange } from '../services/realtime.service';
 
 const RESTAURANT_TABLE_COUNT = 16;
 
@@ -82,6 +83,8 @@ export const RestaurantPage: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [restaurantStock, setRestaurantStock] = useState<Array<{ quantite: number; unite?: string }>>([]);
   const ordersRequestVersion = useRef(0);
+  const tablesRequestVersion = useRef(0);
+  const catalogRequestVersion = useRef(0);
 
   // Modales
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -113,11 +116,12 @@ export const RestaurantPage: React.FC = () => {
   }, []);
 
   const fetchTables = useCallback(async () => {
+    const requestVersion = ++tablesRequestVersion.current;
     try {
       const res = await restaurantService.getTables();
-      if (res.success) {
+      if (requestVersion === tablesRequestVersion.current && res.success) {
         setTables(buildRestaurantTables(Array.isArray(res.data) ? res.data : []));
-      } else {
+      } else if (requestVersion === tablesRequestVersion.current) {
         console.warn('Échec du chargement des tables :', res.message);
       }
     } catch (error) {
@@ -125,60 +129,59 @@ export const RestaurantPage: React.FC = () => {
     }
   }, []);
 
+  const refreshRestaurantCatalog = useCallback(async () => {
+    const requestVersion = ++catalogRequestVersion.current;
+    const stockRequest = userIsServer || userIsCashier
+      ? Promise.resolve([])
+      : restaurantService.getStocks();
+    const [productsRes, categoriesRes, stockRes, barProducts, alcoholProducts] = await Promise.all([
+      restaurantService.getProducts({ actif: true }),
+      restaurantService.getCategories(),
+      stockRequest,
+      barService.getBarProducts(),
+      alcoholService.getAlcoholProducts(),
+    ]);
+    if (requestVersion !== catalogRequestVersion.current) return;
+    setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
+    setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
+    const stockData = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: Array<{ quantite: number; unite?: string }> }).data;
+    setRestaurantStock(Array.isArray(stockData) ? stockData : []);
+    const barData = Array.isArray(barProducts) ? barProducts : (barProducts as { data?: BarProduct[] }).data;
+    setBarDrinks(Array.isArray(barData) ? barData : []);
+    setAlcoholDrinks(Array.isArray(alcoholProducts) ? alcoholProducts : []);
+  }, [userIsCashier, userIsServer]);
+
   useEffect(() => {
     void fetchTables();
     void fetchOrders();
+    void refreshRestaurantCatalog().catch((error) => console.error('Erreur lors du chargement du menu/stock Restaurant', error));
+    const clientsRequest = (userIsServer || userIsCashier)
+      ? Promise.resolve([])
+      : clientService.getClients();
+    void clientsRequest
+      .then((data) => setClients(Array.isArray(data) ? data as Client[] : []))
+      .catch((error) => console.error('Erreur lors du chargement des clients Restaurant', error));
 
-    // Les postes salle et caisse n'ont pas de connexion WebSocket : ce court
-    // rafraîchissement garde l'occupation des tables cohérente entre eux.
     const refreshTimer = window.setInterval(() => {
       void fetchTables();
       void fetchOrders();
-    }, 5_000);
-    // La carte des boissons fait partie du menu Restaurant pour tous les
-    // utilisateurs connectés, y compris les comptes de caisse.
-    barService.getBarProducts()
-      .then((response) => {
-        const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
-        setBarDrinks(Array.isArray(data) ? data : []);
-      })
-      .catch((error) => {
-        console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
-        setBarDrinks([]);
-      });
-    alcoholService.getAlcoholProducts()
-      .then((response) => setAlcoholDrinks(Array.isArray(response) ? response : []))
-      .catch((error) => {
-        console.error('Erreur lors du chargement des boissons alcoolisées', error);
-        setAlcoholDrinks([]);
-      });
-
-    const restaurantDataRequest = (userIsServer || userIsCashier)
-      ? Promise.all([restaurantService.getProducts({ actif: true }), restaurantService.getCategories()])
-          .then(([productsRes, categoriesRes]) => [productsRes, categoriesRes, [], []] as const)
-      : Promise.all([
-          restaurantService.getProducts({ actif: true }),
-          restaurantService.getCategories(),
-          clientService.getClients(),
-          restaurantService.getStocks(),
-        ]);
-    restaurantDataRequest
-      .then(([productsRes, categoriesRes, clientsData, stockRes]) => {
-        setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
-        setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
-        setClients(Array.isArray(clientsData) ? clientsData as Client[] : []);
-        const stockData = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: Array<{ quantite: number; unite?: string }> }).data;
-        setRestaurantStock(Array.isArray(stockData) ? stockData : []);
-      })
-      .catch(error => {
-        console.error('Erreur lors du chargement des données Restaurant', error);
-        setProducts([]);
-        setCategories([]);
-        setClients([]);
-        setRestaurantStock([]);
-      });
-    return () => window.clearInterval(refreshTimer);
-  }, [fetchOrders, fetchTables]);
+      void refreshRestaurantCatalog().catch((error) => console.error('Erreur actualisation menu/stock Restaurant', error));
+    }, 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (module === 'restaurant' || module === 'global') {
+        void fetchTables();
+        void fetchOrders();
+      }
+      if (['restaurant', 'stock', 'bar', 'alcool', 'global'].includes(module)) {
+        void refreshRestaurantCatalog().catch((error) => console.error('Erreur actualisation menu/stock Restaurant', error));
+      }
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+      catalogRequestVersion.current += 1;
+    };
+  }, [fetchOrders, fetchTables, refreshRestaurantCatalog, userIsCashier, userIsServer]);
 
   // ---------- Handlers Tables (API) ----------
   const handleNewOrder = () => {

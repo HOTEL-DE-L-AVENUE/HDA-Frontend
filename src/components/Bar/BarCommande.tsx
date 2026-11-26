@@ -11,6 +11,7 @@ import { clientService, type Client } from '../../services/client.service';
 import { reservationService } from '../../services/reservation.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/permissions';
+import { onRealtimeChange } from '../../services/realtime.service';
 
 
 interface Props {
@@ -141,9 +142,14 @@ export const BarCommandeView: React.FC<Props> = ({
 
   useEffect(() => {
     void loadTables();
-    // Synchronise les disponibilités avec les autres postes (serveur/caisse).
-    const refreshTimer = window.setInterval(() => void loadTables(), 5_000);
-    return () => window.clearInterval(refreshTimer);
+    const refreshTimer = window.setInterval(() => void loadTables(), 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (['bar', 'restaurant', 'global'].includes(module)) void loadTables();
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+    };
   }, []);
 
   const resetModal = () => {
