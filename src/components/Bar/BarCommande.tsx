@@ -16,7 +16,7 @@ import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/
 interface Props {
   commandes: BarCommande[];
   onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
-  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
+  onUpdateCommande?: (commande: { id: number; client: string; table?: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
   onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
@@ -32,6 +32,8 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
   'Annulée': { label: 'Annulée', variant: 'danger' },
 };
+
+const getProductKey = (sourceModule: string, productId: number) => `${sourceModule}:${productId}`;
 
 type OrderLocationOption = {
   kind: 'table' | 'special';
@@ -63,6 +65,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const canDeleteCommande = isAdmin(currentUser);
   const canDeleteTicketItem = isAdmin(currentUser) || isManager(currentUser);
   const canAdjustTicketQuantity = isAdmin(currentUser) || isManager(currentUser);
+  const canIncreaseTicketQuantity = canModifyCommande;
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
 
   useEffect(() => {
@@ -87,8 +90,10 @@ export const BarCommandeView: React.FC<Props> = ({
   const [paymentOrder, setPaymentOrder] = useState<BarCommande | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
   const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [isChangingOrderLocation, setIsChangingOrderLocation] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [selectedItems, setSelectedItems] = useState<BarCommande['items']>([]);
+  const [originalEditQuantities, setOriginalEditQuantities] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [menuCategory, setMenuCategory] = useState('Toutes');
   const [menuSubcategory, setMenuSubcategory] = useState('Toutes');
@@ -102,6 +107,11 @@ export const BarCommandeView: React.FC<Props> = ({
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<BarCommande | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  const getSelectedProductQuantity = (sourceModule: string, productId: number) =>
+    selectedItems
+      .filter((item) => (item.source_module || 'BAR') === sourceModule && Number(item.product_id) === productId)
+      .reduce((total, item) => total + Number(item.quantite || 0), 0);
 
   const resolveReservationClientLabel = (reservation: any) => {
     const firstName = String(reservation?.client?.prenom ?? reservation?.client_prenom ?? reservation?.prenom ?? '').trim();
@@ -142,6 +152,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setNombrePersonnes('1');
     setMoyenPaiement('ESPECES');
     setSelectedItems([]);
+    setOriginalEditQuantities({});
     setSearchTerm('');
     setSpecialPersonName('');
     setPokerActivePerson('');
@@ -149,6 +160,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setPokerOrders({});
     setFeedback(null);
     setIsEditingOrder(false);
+    setIsChangingOrderLocation(false);
     setEditingOrderId(null);
     setSelectedLocation(null);
     setChamberReservationSearch('');
@@ -216,16 +228,18 @@ export const BarCommandeView: React.FC<Props> = ({
   const handleOpenModal = () => {
     setClient('');
     setTable('');
+    setIsEditingOrder(false);
+    setIsChangingOrderLocation(false);
     setNombrePersonnes('1');
     setMoyenPaiement('ESPECES');
     setSelectedItems([]);
+    setOriginalEditQuantities({});
     setSearchTerm('');
     setSpecialPersonName('');
     setPokerActivePerson('');
     setPokerPeople([]);
     setPokerOrders({});
     setFeedback(null);
-    setIsEditingOrder(false);
     setEditingOrderId(null);
     setChamberReservationSearch('');
     setSelectedChamberRoomLabel('');
@@ -238,6 +252,7 @@ export const BarCommandeView: React.FC<Props> = ({
   const handleSelectLocation = (location: OrderLocationOption) => {
     setSelectedLocation(location);
     setTable(String(location.tableId));
+    setIsChangingOrderLocation(isEditingOrder);
     setIsLocationSelectionOpen(false);
     setIsModalOpen(true);
     if (location.label === 'Chambre') {
@@ -276,6 +291,11 @@ export const BarCommandeView: React.FC<Props> = ({
     setNombrePersonnes(String(commande.nombre_personnes || 1));
     setMoyenPaiement(commande.moyen_paiement || (isGratuit || isPoker ? 'GRATUIT' : isChambre ? 'CREDIT' : 'ESPECES'));
     setSelectedItems(commande.items.map((item) => ({ ...item })));
+    setOriginalEditQuantities(commande.items.reduce<Record<string, number>>((quantities, item) => {
+      const key = getProductKey(item.source_module || 'BAR', Number(item.product_id ?? 0));
+      quantities[key] = (quantities[key] || 0) + Number(item.quantite || 0);
+      return quantities;
+    }, {}));
     setSearchTerm('');
     setSelectedLocation(location);
     setSpecialPersonName(location.kind === 'special' ? chamberName : '');
@@ -286,6 +306,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setPokerOrders(location.label === 'Pocker gratuit' ? { [commande.client]: commande.items.map((item) => ({ ...item })) } : {});
     setFeedback(null);
     setIsEditingOrder(true);
+    setIsChangingOrderLocation(false);
     setEditingOrderId(commande.id);
     setIsLocationSelectionOpen(false);
     setIsModalOpen(true);
@@ -502,7 +523,9 @@ export const BarCommandeView: React.FC<Props> = ({
       if (!productId || !stock) {
         return `${item.nom} n'a pas de stock configuré. Ajoutez ce produit au stock du bar.`;
       }
-      if (!Number.isFinite(available) || Number(item.quantite) > available) {
+      const key = getProductKey(item.source_module || 'BAR', productId);
+      const addedQuantity = Math.max(0, Number(item.quantite) - (originalEditQuantities[key] || 0));
+      if (!Number.isFinite(available) || addedQuantity > available) {
         return `Stock insuffisant pour ${item.nom}. Disponible : ${Number.isFinite(available) ? available : 0}.`;
       }
       return null;
@@ -518,7 +541,7 @@ export const BarCommandeView: React.FC<Props> = ({
         await onUpdateCommande?.({
           id: editingOrderId,
           client: clientNom,
-          table: tableNumber,
+          table: isChangingOrderLocation ? tableNumber : undefined,
           nombre_personnes: guestCount,
           moyen_paiement: effectivePaymentMethod,
           items: selectedItems,
@@ -924,6 +947,9 @@ export const BarCommandeView: React.FC<Props> = ({
     const parts = menuParts(cocktail);
     return (menuCategory === 'Toutes' || parts.category === menuCategory) && (menuSubcategory === 'Toutes' || parts.subcategory === menuSubcategory);
   });
+  const editingOrderTableId = isEditingOrder
+    ? commandes.find((commande) => commande.id === editingOrderId)?.table
+    : undefined;
 
   const orderLocationOptions: OrderLocationOption[] = [
     ...[...tables]
@@ -976,20 +1002,25 @@ export const BarCommandeView: React.FC<Props> = ({
         <div className="space-y-4">
           <p className="text-sm text-secondary">Sélectionnez une table ou un type de réservation.</p>
           <div className="grid grid-cols-4 gap-2">
-            {orderLocationOptions.map((location) => (
-              <button
-                key={location.kind === 'table' ? location.tableId : location.label}
-                type="button"
-                disabled={location.kind === 'table' && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE'}
-                onClick={() => handleSelectLocation(location)}
-                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition ${location.kind === 'table' && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE' ? 'cursor-not-allowed border-red-500/30 bg-red-500/10 text-red-400' : location.kind === 'table' ? 'border-base bg-surface-2 text-primary hover:border-accent hover:bg-accent/10' : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-400'}`}
-              >
-                {location.label}
-                {location.kind === 'table' && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE' && (
-                  <span className="ml-1 block text-[10px]">Occupée</span>
-                )}
-              </button>
-            ))}
+            {orderLocationOptions.map((location) => {
+              const isOccupied = location.kind === 'table'
+                && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE';
+              const isCurrentOrderTable = location.kind === 'table' && location.tableId === editingOrderTableId;
+              const isUnavailable = isOccupied && !isCurrentOrderTable;
+              return (
+                <button
+                  key={location.kind === 'table' ? location.tableId : location.label}
+                  type="button"
+                  disabled={isUnavailable}
+                  onClick={() => handleSelectLocation(location)}
+                  className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition ${isUnavailable ? 'cursor-not-allowed border-red-500/30 bg-red-500/10 text-red-400' : location.kind === 'table' ? 'border-base bg-surface-2 text-primary hover:border-accent hover:bg-accent/10' : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-400'}`}
+                >
+                  {location.label}
+                  {isUnavailable && <span className="ml-1 block text-[10px]">Occupée</span>}
+                  {isCurrentOrderTable && <span className="ml-1 block text-[10px]">Actuelle</span>}
+                </button>
+              );
+            })}
           </div>
           <Button variant="danger" size="sm" type="button" onClick={handleCancelLocationSelection} className="w-auto self-end rounded-md px-3 py-1.5">
             Annuler
@@ -1162,7 +1193,12 @@ export const BarCommandeView: React.FC<Props> = ({
                           <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button>
                         </div>
                       ) : (
-                        <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
+                        <div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1">
+                          <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
+                          {canIncreaseTicketQuantity && (
+                            <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button>
+                          )}
+                        </div>
                       )}
                       <span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>
                       {canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}
@@ -1209,17 +1245,20 @@ export const BarCommandeView: React.FC<Props> = ({
                   {menuItems.map((cocktail) => {
                     const isRestaurantMenuItem = cocktail.source_module === 'RESTAURANT';
                     const isSpecialBillardItem = cocktail.id <= 0 && !isRestaurantMenuItem;
-                    const stock = stockMap[cocktail.id] ?? (cocktail.quantite != null
+                    const productId = Number(cocktail.restaurant_product_id ?? cocktail.id);
+                    const sourceModule = cocktail.source_module || 'BAR';
+                    const stock = stockMap[productId] ?? (cocktail.quantite != null
                       ? { quantite: Number(cocktail.quantite), unite: cocktail.unite || 'unités' }
                       : undefined);
-                    // Certains produits arrivent avec la quantité sur le catalogue,
-                    // mais sans entrée correspondante dans stockMap. Ne désactiver
-                    // l'article que si une quantité connue confirme un stock nul.
+                    const selectedQuantity = getSelectedProductQuantity(sourceModule, productId);
+                    const originalQuantity = originalEditQuantities[getProductKey(sourceModule, productId)] || 0;
+                    const addedQuantity = Math.max(0, selectedQuantity - originalQuantity);
+                    const availableQuantity = stock ? Number(stock.quantite) : 0;
+                    const remainingQuantity = availableQuantity - addedQuantity;
                     const unavailable = !isRestaurantMenuItem
                       && !isSpecialBillardItem
-                      && stock?.quantite != null
-                      && Number(stock.quantite) <= 0;
-                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[112px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed ${unavailable ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-950 bg-emerald-500 hover:bg-emerald-400'}`}><span className="text-sm font-bold leading-tight">{cocktail.nom}</span><span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>{!isRestaurantMenuItem && !isSpecialBillardItem && <span className={`mt-2 text-[11px] font-semibold ${unavailable ? 'text-white' : 'text-emerald-950'}`}>Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}</span>}</button>;
+                      && (!stock || !Number.isFinite(availableQuantity) || remainingQuantity <= 0);
+                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[112px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed ${unavailable ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-950 bg-emerald-500 hover:bg-emerald-400'}`}><span className="text-sm font-bold leading-tight">{cocktail.nom}</span><span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>{!isRestaurantMenuItem && !isSpecialBillardItem && <span className={`mt-2 text-[11px] font-semibold ${unavailable ? 'text-white' : 'text-emerald-950'}`}>{unavailable ? 'Stock insuffisant' : `Stock : ${remainingQuantity} ${stock?.unite || 'unités'}`}</span>}</button>;
                   })}
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
                 </div>

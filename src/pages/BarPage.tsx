@@ -164,7 +164,7 @@ export const BarPage: React.FC = () => {
     }
   };
 
-  const handleUpdateCommande = async ({ id, client, table, nombre_personnes, moyen_paiement, observation, items, hotel_reservation_id, room_id, room_guest_name, room_account_paid }: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => {
+  const handleUpdateCommande = async ({ id, client, table, nombre_personnes, moyen_paiement, observation, items, hotel_reservation_id, room_id, room_guest_name, room_account_paid }: { id: number; client: string; table?: number; nombre_personnes: number; moyen_paiement: BarPaymentMethod; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => {
     try {
       const normalizedItems = items
         .map((item) => ({
@@ -181,13 +181,12 @@ export const BarPage: React.FC = () => {
         throw new Error('La commande doit contenir au moins un article valide.');
       }
 
-      const safeTable = Number(table) || 0;
       const safeGuestCount = Number(nombre_personnes) || 1;
       const safePayment = String(moyen_paiement || 'ESPECES').trim().toUpperCase() as BarPaymentMethod;
 
       await barService.updateBarOrder(id, {
         client,
-        table: safeTable,
+        ...(table !== undefined ? { table: Number(table) || 0 } : {}),
         nombre_personnes: safeGuestCount,
         moyen_paiement: safePayment,
         observation,
