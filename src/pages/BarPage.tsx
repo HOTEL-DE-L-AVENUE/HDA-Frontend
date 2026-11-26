@@ -321,7 +321,8 @@ export const BarPage: React.FC = () => {
   useEffect(() => {
     void fetchData();
     void loadOrders();
-    const refreshOrders = window.setInterval(() => void loadOrders(), 15000);
+    // Les commandes et les statuts de table sont partagés entre les postes.
+    const refreshOrders = window.setInterval(() => void loadOrders(), 5_000);
     return () => window.clearInterval(refreshOrders);
   }, []);
 

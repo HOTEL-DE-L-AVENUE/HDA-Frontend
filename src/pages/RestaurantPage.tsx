@@ -1,5 +1,5 @@
 // src/pages/RestaurantPage.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
 import { openPrintWindow, printOrderInvoice } from '../utils/thermalPrint';
@@ -73,7 +73,6 @@ export const RestaurantPage: React.FC = () => {
 
   // Données réelles (tables)
   const [tables, setTables] = useState<TableRestaurant[]>([]);
-  const [tablesLoading, setTablesLoading] = useState(false);
 
   // Données mockées (produits, commandes, clients) – à migrer plus tard
   const [products, setProducts] = useState<Product[]>([]);
@@ -102,7 +101,7 @@ export const RestaurantPage: React.FC = () => {
   const [deleteOrderError, setDeleteOrderError] = useState<string | null>(null);
 
   // ---------- Chargement initial ----------
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     const requestVersion = ++ordersRequestVersion.current;
     try {
       const res = await restaurantService.getOrders({ source_module: 'RESTAURANT' });
@@ -112,27 +111,31 @@ export const RestaurantPage: React.FC = () => {
     } catch (error) {
       console.warn('Erreur lors du chargement des commandes live:', error);
     }
-  };
+  }, []);
+
+  const fetchTables = useCallback(async () => {
+    try {
+      const res = await restaurantService.getTables();
+      if (res.success) {
+        setTables(buildRestaurantTables(Array.isArray(res.data) ? res.data : []));
+      } else {
+        console.warn('Échec du chargement des tables :', res.message);
+      }
+    } catch (error) {
+      console.error('Erreur réseau lors du chargement des tables', error);
+    }
+  }, []);
 
   useEffect(() => {
-    // Charger les tables depuis l'API
-    const fetchTables = async () => {
-      setTablesLoading(true);
-      try {
-        const res = await restaurantService.getTables();
-        if (res.success) {
-          setTables(buildRestaurantTables(Array.isArray(res.data) ? res.data : []));
-        } else {
-          console.warn('Échec du chargement des tables :', res.message);
-        }
-      } catch (error) {
-        console.error('Erreur réseau lors du chargement des tables', error);
-      } finally {
-        setTablesLoading(false);
-      }
-    };
-    fetchTables();
-    fetchOrders();
+    void fetchTables();
+    void fetchOrders();
+
+    // Les postes salle et caisse n'ont pas de connexion WebSocket : ce court
+    // rafraîchissement garde l'occupation des tables cohérente entre eux.
+    const refreshTimer = window.setInterval(() => {
+      void fetchTables();
+      void fetchOrders();
+    }, 5_000);
     if (!userIsCashier) barService.getBarProducts()
       .then((response) => {
         const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
@@ -173,7 +176,8 @@ export const RestaurantPage: React.FC = () => {
         setClients([]);
         setRestaurantStock([]);
       });
-  }, []);
+    return () => window.clearInterval(refreshTimer);
+  }, [fetchOrders, fetchTables]);
 
   // ---------- Handlers Tables (API) ----------
   const handleNewOrder = () => {
@@ -216,7 +220,7 @@ export const RestaurantPage: React.FC = () => {
           special_person_name: formData.special_person_name,
         });
         if (!res.success) throw new Error(res.message || 'Modification de la commande impossible.');
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         setEditingOrder(null);
         setShowOrderModal(false);
         return;
@@ -244,7 +248,7 @@ export const RestaurantPage: React.FC = () => {
         special_person_name: formData.special_person_name,
       });
       if (res.success) {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         setShowOrderModal(false);
         return;
       }
@@ -273,7 +277,7 @@ export const RestaurantPage: React.FC = () => {
       special_person_name: order.special_person_name,
     });
     if (!response.success) throw new Error(response.message || "Le changement d'emplacement a échoué.");
-    await fetchOrders();
+    await Promise.all([fetchOrders(), fetchTables()]);
   };
 
   const handleUpdateOrderStatus = async (orderId: number | string, status: Order['statut']) => {
@@ -281,7 +285,7 @@ export const RestaurantPage: React.FC = () => {
     try {
       const res = await restaurantService.updateOrderStatus(numericId, status);
       if (res && res.success) {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         return;
       }
       throw new Error("Le statut de la commande n'a pas pu être mis à jour.");
@@ -318,12 +322,7 @@ export const RestaurantPage: React.FC = () => {
         client_id: order?.client_id || undefined,
       });
       if (res && res.success) {
-        try {
-          const tablesRes = await restaurantService.getTables();
-          if (tablesRes.success) setTables(buildRestaurantTables(Array.isArray(tablesRes.data) ? tablesRes.data : []));
-        } catch (tableError) {
-          console.warn('Rafraîchissement des tables après paiement échoué:', tableError);
-        }
+        await Promise.all([fetchOrders(), fetchTables()]);
       } else {
         throw new Error(res?.message || 'Le paiement n’a pas été confirmé.');
       }
@@ -333,12 +332,6 @@ export const RestaurantPage: React.FC = () => {
         await fetchOrders();
       }
       throw err;
-    }
-
-    // Mise à jour locale uniquement après le succès confirmé ci-dessus.
-    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE', moyen_paiement: paymentMethod } : o));
-    if (order?.table) {
-      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
 
     // Enregistrement dans le HDAContext (Caisse)
@@ -364,16 +357,13 @@ export const RestaurantPage: React.FC = () => {
     try {
       const res = await restaurantService.updateOrderStatus(numericId, 'ANNULEE');
       if (res && res.success) {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         return;
       }
+      throw new Error(res?.message || "L'annulation de la commande a échoué.");
     } catch (err) {
-      console.warn('API cancel échoué, bascule vers mode local:', err);
-    }
-    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: 'ANNULEE' } : o));
-    const order = orders.find(o => o.id === numericId);
-    if (order?.table) {
-      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+      console.error('Erreur annulation commande restaurant:', err);
+      throw err;
     }
   };
 
@@ -390,7 +380,7 @@ export const RestaurantPage: React.FC = () => {
     try {
       setIsDeletingOrder(true);
       await restaurantService.deleteOrder(Number(pendingDeleteOrder.id));
-      setOrders(prev => prev.filter(order => order.id !== Number(pendingDeleteOrder.id)));
+      await Promise.all([fetchOrders(), fetchTables()]);
       setPendingDeleteOrder(null);
       setDeleteOrderError(null);
     } catch (error) {

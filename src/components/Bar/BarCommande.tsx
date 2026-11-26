@@ -132,6 +132,9 @@ export const BarCommandeView: React.FC<Props> = ({
 
   useEffect(() => {
     void loadTables();
+    // Synchronise les disponibilités avec les autres postes (serveur/caisse).
+    const refreshTimer = window.setInterval(() => void loadTables(), 5_000);
+    return () => window.clearInterval(refreshTimer);
   }, []);
 
   const resetModal = () => {
@@ -577,6 +580,7 @@ export const BarCommandeView: React.FC<Props> = ({
       setDeletingId(commande.id);
       setPendingDeleteOrder(null);
       await onDeleteCommande?.(commande.id);
+      await loadTables();
       setFeedback({ type: 'success', message: 'Commande supprimée avec succès.' });
     } catch (error) {
       console.error('Erreur suppression commande bar:', error);
