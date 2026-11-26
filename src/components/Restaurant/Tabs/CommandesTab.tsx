@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Badge, Button, DataTable, Modal, Select } from '../../UI';
 import { formatCurrency, formatDate } from '../../../utils/data';
-import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin, Printer } from 'lucide-react';
+import { Plus, Trash2, XCircle, Pencil, CheckCircle2, MapPin, Printer, ChefHat, DollarSign } from 'lucide-react';
 import type { Order } from '../types';
 import type { TableRestaurant } from '../../../types/restaurant';
 import AuthService from '../../../services/authService';
@@ -141,26 +141,25 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
       <span className="text-subtle text-xs">{formatDate(order.created_at)}</span>
     )},
     { key: 'actions', label: 'Actions', render: (order: Order) => (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-1">
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
-          <Button size="sm" variant="secondary" onClick={() => onEditOrder(order)} title="Modifier">
-            <Pencil size={14} />
-          </Button>
+          <Button size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={() => onEditOrder(order)} title="Modifier" aria-label="Modifier la commande" />
         )}
         {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
-          <Button size="sm" variant="secondary" onClick={() => setMovingOrder(order)} title="Changer d'emplacement" aria-label="Changer d'emplacement">
-            <MapPin size={14} />
-          </Button>
+          <Button size="sm" variant="secondary" icon={<MapPin size={14} />} onClick={() => setMovingOrder(order)} title="Changer d'emplacement" aria-label="Changer d'emplacement" />
         )}
 
         {canChangeOrderStatus && order.statut === 'EN_ATTENTE' && (
-          <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'EN_COURS')}>Démarrer</Button>
+          <Button size="sm" variant="secondary" icon={<ChefHat size={14} />} onClick={() => void handleChangeOrderStatus(order.id, 'EN_COURS')}>Démarrer</Button>
         )}
         {canChangeOrderStatus && order.statut === 'EN_COURS' && (
-          <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'SERVIE')}>Servir</Button>
+          <Button size="sm" variant="secondary" icon={<CheckCircle2 size={14} />} onClick={() => void handleChangeOrderStatus(order.id, 'SERVIE')}>Servir</Button>
+        )}
+        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
+          <Button size="sm" variant="danger" icon={<XCircle size={14} />} onClick={() => onCancel(order.id)} title="Annuler la commande" aria-label="Annuler la commande" />
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
-          <Button size="sm" onClick={() => {
+          <Button size="sm" icon={<DollarSign size={14} />} onClick={() => {
             setPaymentOrderId(order.id);
             setPaymentMethod(order.moyen_paiement_prevu || order.moyen_paiement || 'ESPECES');
             setPaymentError(null);
@@ -169,11 +168,6 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
         <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintOrder(order)} title="Imprimer le ticket de commande">
           Ticket
         </Button>
-        {(order.statut === 'EN_ATTENTE' || order.statut === 'EN_COURS') && (
-          <Button size="sm" variant="danger" onClick={() => onCancel(order.id)}>
-            <XCircle size={14} />
-          </Button>
-        )}
         {canDeleteCommande && <Button
           size="sm"
           variant="danger"

@@ -46,8 +46,7 @@ const buildRestaurantTables = (apiTables: TableRestaurant[] = []): TableRestaura
     const tableNumber = index + 1;
     const tableAliases = [`TB${tableNumber}`, `T${tableNumber}`, String(tableNumber)];
     const apiTable = apiTables.find((table) => tableAliases.includes(String(table.numero).trim().toUpperCase()))
-      ?? apiTables.find((table) => normalizeTableNumber(table.numero) === String(tableNumber))
-      ?? apiTables.find((table) => Number(table.id) === tableNumber);
+      ?? apiTables.find((table) => normalizeTableNumber(table.numero) === String(tableNumber));
 
     return {
       id: apiTable?.id ?? tableNumber,
@@ -425,11 +424,12 @@ export const RestaurantPage: React.FC = () => {
           : '';
         const client = clients.find((candidate) => candidate.id === order.client_id);
         const clientName = client ? `${client.nom || ''} ${client.prenom || ''}`.trim() : `${order.client_nom || ''} ${order.client_prenom || ''}`.trim();
+        const creatorName = `${order.creator_prenom || ''} ${order.creator_nom || ''}`.trim();
         printOrderInvoice({
           module: 'RESTAURANT',
           orderId: numericId,
           status: order.statut || 'EN_ATTENTE',
-          client: clientName || 'Client anonyme',
+          client: creatorName || clientName || order.special_person_name || 'Client anonyme',
           table: order.table_numero || order.table?.numero || order.location_type || order.table_id || '—',
           date: order.created_at,
           notes: order.notes,
@@ -685,7 +685,6 @@ export const RestaurantPage: React.FC = () => {
               await restaurantService.closeAllOrders(orderIds);
             }}
             onRefresh={fetchOrders}
-            onNewOrder={handleNewOrder}
             onInvoice={handlePrintInvoice}
           />
         )}

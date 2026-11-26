@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle, Plus } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { StockManager, CaisseManager } from '../components/StockManager';
-import { Button } from '../components/UI';
 import barService from '../services/bar.service';
 import * as restaurantService from '../services/restaurantService';
 import { BarPaymentMethod, BarProduct, BarStockItem } from '../types/bar.type';
@@ -49,7 +48,6 @@ export const BarPage: React.FC = () => {
   const [restaurantBarProducts, setRestaurantBarProducts] = useState<BarProduct[]>([]);
   const [stockMap, setStockMap] = useState<Record<number, { quantite: number; unite: string }>>({});
   const [commandes, setCommandes] = useState<BarCommande[]>([]);
-  const [createBarOrderRequest, setCreateBarOrderRequest] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -61,6 +59,14 @@ export const BarPage: React.FC = () => {
     SERVIE: 'Servie',
     ENCAISSEE: 'Encaissée',
     ANNULEE: 'Annulée',
+  };
+
+  const getOrderDisplayName = (order: BarCommande) => {
+    const clientName = String(order.client || '').trim();
+    if (clientName && clientName.toLocaleLowerCase('fr-FR') !== 'client anonyme') return clientName;
+
+    const creatorName = [order.creator_prenom, order.creator_nom].filter(Boolean).join(' ').trim();
+    return creatorName || clientName || 'Client anonyme';
   };
 
   const playOrderAlert = () => {
@@ -419,11 +425,9 @@ export const BarPage: React.FC = () => {
 
       {userIsAdmin && activeTab === 'equipement' && <BarEquipmentManager />}
 
-      {(activeTab === 'commandes' || (userIsCashier && activeTab === 'caisse')) && (
+      {activeTab === 'commandes' && (
         <BarCommandeView
-          visible={activeTab === 'commandes'}
-          createOrderRequest={createBarOrderRequest}
-          onCreateOrderRequestHandled={() => setCreateBarOrderRequest(0)}
+          visible
           commandes={filteredCommandes}
           onCreateCommande={handleCreateCommande}
           onUpdateCommande={handleUpdateCommande}
@@ -451,13 +455,6 @@ export const BarPage: React.FC = () => {
 
       {(userIsAdmin || userIsCashier) && activeTab === 'caisse' && (
         <div className="w-full">
-          <div className="mb-4 flex justify-end gap-2">
-            {userIsCashier && (
-              <Button icon={<Plus size={16} />} onClick={() => setCreateBarOrderRequest((request) => request + 1)}>
-                Nouvelle commande
-              </Button>
-            )}
-          </div>
           <CaisseManager
             module="bar"
             categories={['Ventes Bar', 'Stock', 'Personnel', 'Événement', 'Autre']}
@@ -465,7 +462,7 @@ export const BarPage: React.FC = () => {
             gradient="from-accent to-accent-2"
             pendingOrders={commandes.filter((commande) => commande.statut === 'Servie').map((commande) => ({
               id: commande.id,
-              client: commande.client,
+              client: getOrderDisplayName(commande),
               table: commande.table,
               total: commande.total,
               created_at: commande.created_at,
@@ -475,7 +472,7 @@ export const BarPage: React.FC = () => {
             }))}
             allOrders={commandes.filter((commande) => commande.statut !== 'Annulée').map((commande) => ({
               id: commande.id,
-              client: commande.client,
+              client: getOrderDisplayName(commande),
               table: commande.table,
               total: commande.total,
               statut: commande.statut,
