@@ -821,10 +821,12 @@ export const RestaurantPage: React.FC = () => {
               <button
                 key={restaurantTable.id}
                 type="button"
+                disabled={String(restaurantTable.statut).toUpperCase() === 'OCCUPEE'}
                 onClick={() => handleSelectOrderLocation(restaurantTable.id)}
-                className="flex min-h-16 items-center justify-center rounded-lg border border-base bg-surface-2 px-2 py-2 text-center text-xs font-semibold text-primary transition hover:border-accent hover:bg-accent/10"
+                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition ${String(restaurantTable.statut).toUpperCase() === 'OCCUPEE' ? 'cursor-not-allowed border-red-500/30 bg-red-500/10 text-red-400' : 'border-base bg-surface-2 text-primary hover:border-accent hover:bg-accent/10'}`}
               >
                 {String(restaurantTable.numero).toUpperCase().startsWith('T') ? restaurantTable.numero : `T${restaurantTable.numero}`}
+                {String(restaurantTable.statut).toUpperCase() === 'OCCUPEE' && <span className="ml-1 block text-[10px]">Occupée</span>}
               </button>
             ))}
             {tables.length === 0 && <p className="col-span-4 py-6 text-center text-xs text-muted">Aucune table disponible.</p>}

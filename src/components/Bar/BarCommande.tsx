@@ -56,8 +56,9 @@ export const BarCommandeView: React.FC<Props> = ({
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser) || isManager(currentUser);
   const userIsHostess = isHostess(currentUser);
+  const userIsCashier = isCashier(currentUser);
   const userIsServer = currentUser?.role?.toLowerCase() === 'serveur';
-  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsServer;
+  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsCashier || userIsServer;
   const canModifyCommande = isAdmin(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
   const canCreateCommande = canModifyCommande || isCashier(currentUser) || userIsServer;
   const canDeleteCommande = isAdmin(currentUser);
@@ -540,6 +541,7 @@ export const BarCommandeView: React.FC<Props> = ({
           room_account_paid: false,
         });
       }
+      await loadTables();
       resetModal();
     } catch (error) {
       console.error('Erreur commande bar:', error);
@@ -609,6 +611,7 @@ export const BarCommandeView: React.FC<Props> = ({
       setLocalCommandes((prev) =>
         prev.map((cmd) => (cmd.id === commandeId ? { ...cmd, statut: nouveauStatut } : cmd))
       );
+      await loadTables();
 
       setFeedback({ type: 'success', message: 'Statut de la commande mis à jour avec succès.' });
     } catch (error: any) {
@@ -639,6 +642,7 @@ export const BarCommandeView: React.FC<Props> = ({
         await barService.updateBarOrderStatus(paymentOrder.id, 'ENCAISSEE', paymentMethod);
       }
       setLocalCommandes((prev) => prev.map((cmd) => cmd.id === paymentOrder.id ? { ...cmd, statut: 'Encaissée', moyen_paiement: paymentMethod } : cmd));
+      await loadTables();
       setFeedback({ type: 'success', message: 'Commande encaissée avec succès.' });
     } catch (error: any) {
       console.error('Erreur encaissement commande bar:', error);
@@ -781,7 +785,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Démarrer'}
               </Button>
             )}
-            {canChangeOrderStatus && commande.statut === 'En préparation' && (
+            {canChangeOrderStatus && commande.statut === 'En préparation' && (isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsServer) && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -790,6 +794,17 @@ export const BarCommandeView: React.FC<Props> = ({
                 disabled={isUpdating}
               >
                 {isUpdating ? '...' : 'Marquer prête'}
+              </Button>
+            )}
+            {canChangeOrderStatus && commande.statut === 'En préparation' && (userIsCashier || userIsHostess) && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<CheckCircle2 size={14} />}
+                onClick={() => void handleStatusChange(commande.id, 'Servie')}
+                disabled={isUpdating}
+              >
+                {isUpdating ? '...' : 'Servir'}
               </Button>
             )}
             {canChangeOrderStatus && ['En attente', 'En préparation'].includes(commande.statut) && (
@@ -944,10 +959,14 @@ export const BarCommandeView: React.FC<Props> = ({
               <button
                 key={location.kind === 'table' ? location.tableId : location.label}
                 type="button"
+                disabled={location.kind === 'table' && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE'}
                 onClick={() => handleSelectLocation(location)}
-                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition hover:border-accent hover:bg-accent/10 ${location.kind === 'table' ? 'border-base bg-surface-2 text-primary' : 'border-amber-500/40 bg-amber-500/10 text-amber-300'}`}
+                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition ${location.kind === 'table' && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE' ? 'cursor-not-allowed border-red-500/30 bg-red-500/10 text-red-400' : location.kind === 'table' ? 'border-base bg-surface-2 text-primary hover:border-accent hover:bg-accent/10' : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-400'}`}
               >
                 {location.label}
+                {location.kind === 'table' && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE' && (
+                  <span className="ml-1 block text-[10px]">Occupée</span>
+                )}
               </button>
             ))}
           </div>

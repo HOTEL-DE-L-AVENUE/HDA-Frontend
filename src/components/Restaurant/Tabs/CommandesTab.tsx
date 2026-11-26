@@ -51,7 +51,13 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
   const [movingOrder, setMovingOrder] = useState<Order | null>(null);
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser);
-  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || currentUser?.role?.toLowerCase() === 'serveur';
+  const role = currentUser?.role?.toLowerCase();
+  const canChangeOrderStatus =
+    isAdmin(currentUser)
+    || isManager(currentUser)
+    || isCashier(currentUser)
+    || role === 'hotesse'
+    || role === 'serveur';
   const canDeleteCommande = isAdmin(currentUser);
   const handleChangeOrderStatus = async (orderId: number, status: Order['statut']) => {
     try {
