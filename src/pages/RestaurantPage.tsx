@@ -136,7 +136,9 @@ export const RestaurantPage: React.FC = () => {
       void fetchTables();
       void fetchOrders();
     }, 5_000);
-    if (!userIsCashier) barService.getBarProducts()
+    // La carte des boissons fait partie du menu Restaurant pour tous les
+    // utilisateurs connectés, y compris les comptes de caisse.
+    barService.getBarProducts()
       .then((response) => {
         const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
         setBarDrinks(Array.isArray(data) ? data : []);
@@ -145,7 +147,7 @@ export const RestaurantPage: React.FC = () => {
         console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
         setBarDrinks([]);
       });
-    if (!userIsCashier) alcoholService.getAlcoholProducts()
+    alcoholService.getAlcoholProducts()
       .then((response) => setAlcoholDrinks(Array.isArray(response) ? response : []))
       .catch((error) => {
         console.error('Erreur lors du chargement des boissons alcoolisées', error);
@@ -216,6 +218,7 @@ export const RestaurantPage: React.FC = () => {
             cuisson: item.cuisson,
           })),
           notes: formData.notes,
+          moyen_paiement: formData.moyen_paiement,
           location_type: formData.location_type,
           special_person_name: formData.special_person_name,
         });
@@ -244,6 +247,7 @@ export const RestaurantPage: React.FC = () => {
           cuisson: item.cuisson,
         })),
         notes: formData.notes,
+        moyen_paiement: formData.moyen_paiement,
         location_type: formData.location_type,
         special_person_name: formData.special_person_name,
       });
@@ -273,6 +277,7 @@ export const RestaurantPage: React.FC = () => {
         cuisson: item.cuisson,
       })),
       notes: order.notes,
+      moyen_paiement: order.moyen_paiement_prevu || order.moyen_paiement,
       location_type: locationType || (tableId ? undefined : order.location_type),
       special_person_name: order.special_person_name,
     });

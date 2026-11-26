@@ -759,6 +759,15 @@ export const BarCommandeView: React.FC<Props> = ({
       render: (commande: BarCommande) => <span className="text-sm text-slate-300">{formatCommandeDate(commande.created_at)}</span>,
     },
     {
+      key: 'creator',
+      label: 'Pris par',
+      render: (commande: BarCommande) => (
+        <span className="text-sm text-slate-300">
+          {[commande.creator_prenom, commande.creator_nom].filter(Boolean).join(' ') || 'Non renseigné'}
+        </span>
+      ),
+    },
+    {
       key: 'montant',
       label: 'Montant',
       render: (commande: BarCommande) => <span className="font-semibold text-accent">{formatCurrency(commande.total)}</span>,

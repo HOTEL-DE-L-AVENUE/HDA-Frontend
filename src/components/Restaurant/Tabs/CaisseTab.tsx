@@ -62,7 +62,11 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
           moyen_paiement: order.moyen_paiement,
           items: order.items,
         }))}
-        onEncaisserCommande={onPayment ? async (orderId) => { setPaymentOrderId(orderId); } : undefined}
+        onEncaisserCommande={onPayment ? async (orderId) => {
+          const order = orders.find((candidate) => Number(candidate.id) === Number(orderId));
+          setPaymentMethod(order?.moyen_paiement_prevu || order?.moyen_paiement || 'ESPECES');
+          setPaymentOrderId(orderId);
+        } : undefined}
         onInvoiceOrder={onInvoice}
         onCloseAllOrders={onCloseAllOrders}
         onRefresh={onRefresh}

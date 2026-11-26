@@ -128,6 +128,11 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
     { key: 'montant', label: 'Montant', render: (order: Order) => (
       <span className="text-accent font-bold">{formatCurrency(order.montant_total)}</span>
     )},
+    { key: 'creator', label: 'Pris par', render: (order: Order) => (
+      <span className="text-secondary text-sm">
+        {[order.creator_prenom, order.creator_nom].filter(Boolean).join(' ') || 'Non renseigné'}
+      </span>
+    )},
     { key: 'statut', label: 'Statut', render: (order: Order) => {
       const status = STATUTS_ORDER[order.statut] || STATUTS_ORDER.EN_ATTENTE;
       return <Badge variant={status.variant as any}>{status.label}</Badge>;
@@ -155,7 +160,11 @@ export const CommandesTab: React.FC<CommandesTabProps> = ({
           <Button size="sm" variant="secondary" onClick={() => void handleChangeOrderStatus(order.id, 'SERVIE')}>Servir</Button>
         )}
         {canEncaisser && order.statut === 'SERVIE' && (
-          <Button size="sm" onClick={() => { setPaymentOrderId(order.id); setPaymentMethod('ESPECES'); setPaymentError(null); }}>Encaisser</Button>
+          <Button size="sm" onClick={() => {
+            setPaymentOrderId(order.id);
+            setPaymentMethod(order.moyen_paiement_prevu || order.moyen_paiement || 'ESPECES');
+            setPaymentError(null);
+          }}>Encaisser</Button>
         )}
         <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={() => handlePrintOrder(order)} title="Imprimer le ticket de commande">
           Ticket

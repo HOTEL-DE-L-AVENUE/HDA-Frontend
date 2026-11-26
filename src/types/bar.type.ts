@@ -63,6 +63,9 @@ export interface BarCommande {
   observation?: string;
   statut: 'En attente' | 'En préparation' | 'Prête' | 'Servie' | 'Encaissée' | 'Annulée';
   total: number;
+  created_by?: number | null;
+  creator_nom?: string | null;
+  creator_prenom?: string | null;
   cloture_at?: string;
   items: BarCommandeItem[];
   created_at?: string;

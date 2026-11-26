@@ -99,6 +99,9 @@ export const BarPage: React.FC = () => {
         statut: orderStatusLabels[order.statut] || (order.statut as BarCommande['statut']),
         total: Number(order.total || 0),
         created_at: order.created_at,
+        created_by: order.created_by ?? null,
+        creator_nom: order.creator_nom || null,
+        creator_prenom: order.creator_prenom || null,
         items: order.items || [],
       })) : [];
       if (previousOrderStatuses.current) {
