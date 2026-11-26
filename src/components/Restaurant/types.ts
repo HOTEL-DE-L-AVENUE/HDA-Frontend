@@ -13,9 +13,13 @@ export interface Order {
   montant_total: number;
   statut: 'EN_ATTENTE' | 'EN_COURS' | 'SERVIE' | 'PAYE' | 'PAYEE' | 'ANNULEE';
   created_at: string;
+  created_by?: number | null;
+  creator_nom?: string | null;
+  creator_prenom?: string | null;
   client_nom?: string;
   client_prenom?: string;
   moyen_paiement?: string | null;
+  moyen_paiement_prevu?: string | null;
   table_numero?: string;
   table?: TableRestaurant;
   items?: OrderItem[];

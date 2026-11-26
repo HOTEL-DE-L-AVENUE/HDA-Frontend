@@ -3,6 +3,7 @@ import { AlertTriangle, BarChart3, CalendarDays, Camera, Check, ChevronRight, Cl
 import { FaceEnrollModal, FaceKioskModal } from '../components/RH/FaceAttendance';
 import { apiMessage } from '../lib/api';
 import { useToast } from '../context/ToastContext';
+import { onRealtimeChange } from '../services/realtime.service';
 import AuthService from '../services/authService';
 import rhService, { RHAttendance, RHDashboard, RHDepartmentBudget, RHDocument, RHDocumentType, RHEmployee, RHEmployeeMeta, RHEvaluation, RHLeave, RHPayroll } from '../services/rh.service';
 import { madagascarDate } from '../lib/timezone';
@@ -81,7 +82,18 @@ const MyRHSpace: React.FC = () => {
       else setError('Vos données RH ne peuvent pas être chargées. Vérifiez votre connexion.');
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    void load();
+    const refresh = (module: string) => {
+      if (module === 'rh' || module === 'global') void load();
+    };
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => refresh(module));
+    const fallbackTimer = window.setInterval(() => refresh('rh'), 30_000);
+    return () => {
+      unsubscribeRealtime();
+      window.clearInterval(fallbackTimer);
+    };
+  }, []);
 
   if (notLinked) {
     return <div className="min-h-[calc(100vh-120px)] space-y-4 pb-8">
@@ -188,6 +200,19 @@ const RHManagerView: React.FC = () => {
   useEffect(() => { rhService.listPayroll({ period, limit: 100 }).then((r) => applyPayroll(r.rows)).catch(() => setError('Impossible de charger la paie.')); }, [period]);
   useEffect(() => { loadEmployees(); }, [statusFilter, contractFilter]);
   useEffect(() => { loadEvaluationData(); }, [evalFrom, evalTo]);
+  useEffect(() => {
+    const refresh = (module: string) => {
+      if (module !== 'rh' && module !== 'global') return;
+      void load();
+      void loadEvaluationData();
+    };
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => refresh(module));
+    const fallbackTimer = window.setInterval(() => refresh('rh'), 30_000);
+    return () => {
+      unsubscribeRealtime();
+      window.clearInterval(fallbackTimer);
+    };
+  }, [search, statusFilter, contractFilter, attendanceDate, period, evalFrom, evalTo]);
   useLockPageScroll(!!(payrollAdjustment || payrollToDelete || employeeModal || viewedEmployee || leaveForm || kioskOpen || faceEnrollFor));
   useEffect(() => { if (!payrollToDelete) return; const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !deletingPayroll) setPayrollToDelete(null); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, [payrollToDelete, deletingPayroll]);
   const pendingLeaves = leaves.filter((l) => l.status === 'EN_ATTENTE'); const totals = useMemo(() => payroll.reduce((a, p) => ({ base: a.base + Number(p.base_salary), extras: a.extras + Number(p.overtime_amount) + Number(p.bonuses) + Number(p.pourboire || 0) + Number(p.allowances), deductions: a.deductions + Number(p.advances) + Number(p.deductions), contributions: a.contributions + Number(p.cnaps || 0) + Number(p.ostie || 0) + Number(p.irsa || 0), net: a.net + Number(p.net_amount) }), { base: 0, extras: 0, deductions: 0, contributions: 0, net: 0 }), [payroll]);

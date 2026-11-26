@@ -14,6 +14,7 @@ import {
 import { escapeHtml, printThermal, thermalHeader } from '../utils/thermalPrint';
 import { Modal } from '../components/Modal';
 import { madagascarDate } from '../lib/timezone';
+import { onRealtimeChange } from '../services/realtime.service';
 
 const MODULE_LABELS: Record<string, string> = {
   BAR: 'Bar & Lounge',
@@ -804,7 +805,17 @@ const StockHistoryModal: React.FC<{ month: string; onClose: () => void }> = ({ m
     }
   }, [month, moduleFilter, typeFilter, page]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refreshTimer = window.setInterval(() => void load(), 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (['stock', 'bar', 'restaurant', 'alcool', 'hotel', 'global'].includes(module)) void load();
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+    };
+  }, [load]);
   useEffect(() => { setPage(0); }, [moduleFilter, typeFilter]);
 
   const typeLabel = (row: StockHistoryEntry) => {

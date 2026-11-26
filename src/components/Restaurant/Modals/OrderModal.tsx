@@ -4,12 +4,15 @@ import { formatCurrency } from '../../../utils/data';
 import { Plus, Search, XCircle, MapPin } from 'lucide-react';
 import type { TableRestaurant, Product, Client, Category } from '../types';
 import type { BarProduct } from '../../../types/bar.type';
+import AuthService from '../../../services/authService';
 
 const COOKING_LEVELS = ['Bleu', 'Saignant', 'Saignant Plus', 'À point', 'À point Plus', 'Bien cuit'];
 type SelectedItem = { product_id: number; source_module?: 'RESTAURANT' | 'BAR'; source_product_id?: number; nom: string; quantite: number; prix: number; cuisson?: string };
 interface OrderModalProps { isOpen: boolean; onClose: () => void; tables: TableRestaurant[]; products: Product[]; barDrinks: BarProduct[]; categories: Category[]; clients: Client[]; onSubmit: (data: any) => void | Promise<void>; onNewClient: () => void; orderToEdit?: any; initialTableId?: string; initialLocation?: string; }
 
 export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables, products, barDrinks, categories, clients, onSubmit, onNewClient, orderToEdit, initialTableId, initialLocation }) => {
+  const currentUser = AuthService.getCurrentUser();
+  const canOnlyAddItems = ['caisse', 'caissier', 'hotesse', 'serveur'].includes(currentUser?.role?.toLowerCase() || '');
   const [table, setTable] = useState('');
   const [client, setClient] = useState('');
   const [nombrePersonnes, setNombrePersonnes] = useState('1');
@@ -71,7 +74,36 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, tables,
       {selectedLocation && <div className="rounded-xl border border-accent/20 bg-accent/5 p-3"><Input label="Nom de la personne" value={specialPersonName} onChange={(event) => setSpecialPersonName(event.target.value)} placeholder={selectedLocation === 'Chambre' ? 'Ex. Nom du client' : 'Ex. Théophile'} /></div>}
       <section className="rounded-xl border border-base bg-[#171b1c] p-3 shadow-inner">
         <div className="mb-3 flex items-center justify-between border-b border-base pb-2"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Ticket</p>{orderToEdit && selectedLocation && <p className="mt-1 text-lg font-semibold text-primary">{specialPersonName || 'Nom de la personne'}</p>}</div><span className="text-xs text-muted">{selectedItems.length} article{selectedItems.length > 1 ? 's' : ''}</span></div>
-        {selectedItems.length === 0 ? <p className="py-4 text-center text-xs text-muted">Sélectionnez un article</p> : <div className="space-y-2">{selectedItems.map((item, index) => <div key={`${item.product_id}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base bg-surface-2 px-3 py-2 text-xs"><span className="min-w-0 flex-1 truncate text-secondary">{item.nom}{item.cuisson ? ` (${item.cuisson})` : ''}</span><div className="flex items-center gap-2"><div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1"><button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="px-1 text-slate-400 hover:text-white">-</button><input type="number" min="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none" /><button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 hover:text-white">+</button></div><span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span><button type="button" onClick={() => setSelectedItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} className="text-red-400"><XCircle size={14} /></button></div></div>)}</div>}
+        {selectedItems.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted">Sélectionnez un article</p>
+        ) : (
+          <div className="space-y-2">
+            {selectedItems.map((item, index) => (
+              <div key={`${item.product_id}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-base bg-surface-2 px-3 py-2 text-xs">
+                <span className="min-w-0 flex-1 truncate text-secondary">{item.nom}{item.cuisson ? ` (${item.cuisson})` : ''}</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1">
+                    {!canOnlyAddItems && (
+                      <button type="button" onClick={() => handleUpdateItemQuantity(index, -1)} className="px-1 text-slate-400 hover:text-white" aria-label={`Diminuer ${item.nom}`}>-</button>
+                    )}
+                    {canOnlyAddItems ? (
+                      <span className="w-6 text-center text-primary">×{item.quantite}</span>
+                    ) : (
+                      <input type="number" min="1" value={item.quantite} onChange={(event) => handleSetItemQuantity(index, Number(event.target.value))} className="w-10 border-0 bg-transparent px-0 text-center text-primary outline-none" aria-label={`Quantité de ${item.nom}`} />
+                    )}
+                    <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 hover:text-white" aria-label={`Ajouter une unité de ${item.nom}`}>+</button>
+                  </div>
+                  <span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>
+                  {!canOnlyAddItems && (
+                    <button type="button" onClick={() => setSelectedItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} className="text-red-400" aria-label={`Retirer ${item.nom}`}>
+                      <XCircle size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="mt-3 flex items-center justify-between border-t border-base pt-3 text-sm font-bold"><span>Total</span><span className="text-accent">{formatCurrency(total)}</span></div>
       </section>
       <div className="overflow-hidden rounded-xl border border-base bg-[#101415] shadow-inner">

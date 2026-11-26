@@ -129,6 +129,7 @@ export const createOrder = (data: {
   table_id?: number;
   items: { product_id?: number; source_module?: 'RESTAURANT' | 'BAR'; source_product_id?: number; nom?: string; quantite: number; prix_unitaire: number; cuisson?: string }[];
   notes?: string;
+  moyen_paiement?: string;
   location_type?: string;
   special_person_name?: string;
 }) =>
@@ -139,6 +140,7 @@ export const updateOrder = (id: number, data: {
   table_id?: number;
   items: { product_id?: number; source_module?: 'RESTAURANT' | 'BAR'; source_product_id?: number; nom?: string; quantite: number; prix_unitaire: number; cuisson?: string }[];
   notes?: string;
+  moyen_paiement?: string;
   location_type?: string;
   special_person_name?: string;
 }) => api.put<ApiResponse<Order>>(`/api/restaurant/orders/${id}`, data).then(res => res.data);

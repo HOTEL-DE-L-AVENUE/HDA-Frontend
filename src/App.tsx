@@ -21,6 +21,7 @@ import { RHPage } from "./pages/RHPage";
 import PlanningPage from "./pages/PlanningPage";
 import StockPage from "./pages/StockPage";
 import AuthService from './services/authService';
+import { RealtimeBridge } from './components/RealtimeBridge';
 
 const routeTitles: Record<string, string> = {
   '/dashboard': 'Tableau de bord', '/hotel': 'Hôtel', '/hebergement': 'Hébergement',
@@ -59,6 +60,7 @@ function App() {
   return (
     <ToastProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <RealtimeBridge />
         <DocumentTitle />
         <Routes>
           {/* Auth */}
@@ -107,7 +109,7 @@ function App() {
                 element={
                   <ProtectedRoute
                     moduleId="restaurant"
-                    allowedRoles={['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager', 'serveur']}
+                    allowedRoles={['admin', 'manager', 'receptioniste', 'caisse', 'caissier', 'stock_manager', 'serveur', 'hotesse']}
                   />
                 }
               >

@@ -8,16 +8,26 @@ interface CaisseTabProps {
   onPayment?: (orderId: number, paymentMethod?: string) => void | Promise<void>;
   onCloseAllOrders?: (orderIds: number[]) => Promise<void> | void;
   onRefresh?: () => Promise<void> | void;
-  onNewOrder?: () => void;
   onInvoice?: (orderId: number) => void;
 }
    
 
 
 
-export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, onCloseAllOrders, onRefresh, onNewOrder, onInvoice }) => {
+export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, onCloseAllOrders, onRefresh, onInvoice }) => {
   const [paymentOrderId, setPaymentOrderId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('ESPECES');
+  const getOrderPersonName = (order: any) => {
+    const creatorName = [order.creator_prenom, order.creator_nom].filter(Boolean).join(' ').trim();
+    if (creatorName) return creatorName;
+
+    const clientName = [order.client_prenom, order.client_nom].filter(Boolean).join(' ').trim();
+    if (clientName) return clientName;
+    if (order.client?.prenom || order.client?.nom) {
+      return [order.client.prenom, order.client.nom].filter(Boolean).join(' ').trim();
+    }
+    return order.special_person_name?.trim() || 'Client anonyme';
+  };
   const getOrderTotal = (order: any) => {
     const itemTotal = (order.items || []).reduce((sum: number, item: any) => (
       sum + Number(item.prix_unitaire || item.prix || 0) * Number(item.quantite || 0)
@@ -27,7 +37,7 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
 
   const allOrders = orders.filter((order) => order.statut !== 'ANNULEE').map((order) => ({
     id: Number(order.id),
-    client: order.client_nom || order.client?.nom || 'Client anonyme',
+    client: getOrderPersonName(order),
     table: order.table?.numero || order.table_numero || order.table_id,
     total: getOrderTotal(order),
     statut: order.statut,
@@ -43,9 +53,6 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
 
   return (
     <div className="w-full">
-      <div className="mb-4 flex justify-end gap-2">
-        {onNewOrder && <Button onClick={onNewOrder}>Nouvelle commande</Button>}
-      </div>
       <CaisseManager
         module="restaurant"
         categories={['Ventes Restaurant', 'Stock', 'Personnel', 'Autre']}
@@ -54,7 +61,7 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
         allOrders={allOrders}
         pendingOrders={orders.filter((order) => order.statut === 'SERVIE').map((order) => ({
           id: Number(order.id),
-          client: order.client_nom || order.client?.nom || 'Client anonyme',
+          client: getOrderPersonName(order),
           table: order.table?.numero || order.table_numero || order.table_id,
           total: getOrderTotal(order),
           created_at: order.created_at,
@@ -62,7 +69,11 @@ export const CaisseTab: React.FC<CaisseTabProps> = ({ orders = [], onPayment, on
           moyen_paiement: order.moyen_paiement,
           items: order.items,
         }))}
-        onEncaisserCommande={onPayment ? async (orderId) => { setPaymentOrderId(orderId); } : undefined}
+        onEncaisserCommande={onPayment ? async (orderId) => {
+          const order = orders.find((candidate) => Number(candidate.id) === Number(orderId));
+          setPaymentMethod(order?.moyen_paiement_prevu || order?.moyen_paiement || 'ESPECES');
+          setPaymentOrderId(orderId);
+        } : undefined}
         onInvoiceOrder={onInvoice}
         onCloseAllOrders={onCloseAllOrders}
         onRefresh={onRefresh}

@@ -8,6 +8,7 @@ import { RecordPaymentModal } from '../components/Finance/modals/RecordPaymentMo
 import { Modal } from '../components/ui/Modal';
 import { toast } from 'react-hot-toast';
 import { useHDA } from '../context/HDAContext';
+import { onRealtimeChange } from '../services/realtime.service';
 
 // Module configuration for financial tracking and reporting
 // Note: 'hebergement' module removed from display as it's disabled in the main application
@@ -91,6 +92,12 @@ export const FinancesPage: React.FC = () => {
   useEffect(() => {
     fetchFinancialData();
   }, []);
+
+  useEffect(() => onRealtimeChange(({ module }) => {
+    if (['finance', 'hotel', 'restaurant', 'bar', 'casino', 'global'].includes(module)) {
+      void fetchFinancialData();
+    }
+  }), []);
 
   // Fetch the monthly/department breakdown whenever the year filter changes.
   // Fetched for all backend departments (not just the selected one) because

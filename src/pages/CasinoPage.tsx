@@ -13,6 +13,7 @@ import type { TableJeu } from '../types/casinoTablesJeu.types';
 import AuthService from '../services/authService';
 import { isAdmin } from '../utils/permissions';
 import { useHDA } from '../context/HDAContext';
+import { onRealtimeChange } from '../services/realtime.service';
 
 const getCurrentTime = () => {
   const now = new Date();
@@ -103,7 +104,7 @@ export const CasinoPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    tablesJeuApi.list().then((rows) => {
+    const loadGameTables = () => tablesJeuApi.list().then((rows) => {
       if (!active) return;
       const allTables = [...rows].sort((first, second) =>
         first.numero.localeCompare(second.numero, undefined, { numeric: true, sensitivity: 'base' })
@@ -114,7 +115,16 @@ export const CasinoPage: React.FC = () => {
     }).finally(() => {
       if (active) setTablesLoading(false);
     });
-    return () => { active = false; };
+    void loadGameTables();
+    const fallbackTimer = window.setInterval(() => void loadGameTables(), 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (module === 'casino' || module === 'global') void loadGameTables();
+    });
+    return () => {
+      active = false;
+      window.clearInterval(fallbackTimer);
+      unsubscribeRealtime();
+    };
   }, []);
 
   useEffect(() => {

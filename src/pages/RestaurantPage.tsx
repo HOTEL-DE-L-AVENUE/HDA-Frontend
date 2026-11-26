@@ -1,5 +1,5 @@
 // src/pages/RestaurantPage.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useHDA } from '../context/HDAContext';
 import { formatCurrency } from '../utils/data';
 import { openPrintWindow, printOrderInvoice } from '../utils/thermalPrint';
@@ -36,6 +36,7 @@ import type {
 import AuthService from '../services/authService';
 import { clientService } from '../services/client.service';
 import { getDefaultTabForRole, isAdmin, isCashier } from '../utils/permissions';
+import { onRealtimeChange } from '../services/realtime.service';
 
 const RESTAURANT_TABLE_COUNT = 16;
 
@@ -46,8 +47,7 @@ const buildRestaurantTables = (apiTables: TableRestaurant[] = []): TableRestaura
     const tableNumber = index + 1;
     const tableAliases = [`TB${tableNumber}`, `T${tableNumber}`, String(tableNumber)];
     const apiTable = apiTables.find((table) => tableAliases.includes(String(table.numero).trim().toUpperCase()))
-      ?? apiTables.find((table) => normalizeTableNumber(table.numero) === String(tableNumber))
-      ?? apiTables.find((table) => Number(table.id) === tableNumber);
+      ?? apiTables.find((table) => normalizeTableNumber(table.numero) === String(tableNumber));
 
     return {
       id: apiTable?.id ?? tableNumber,
@@ -63,7 +63,7 @@ export const RestaurantPage: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const userIsAdmin = isAdmin(currentUser);
   const userIsCashier = isCashier(currentUser);
-  const userIsServer = currentUser?.role === 'serveur';
+  const userIsServer = currentUser?.role === 'serveur' || currentUser?.role === 'hotesse';
 
   // ---------- États ----------
   const [activeTab, setActiveTab] = useState(() => getDefaultTabForRole('commandes', currentUser?.role));
@@ -73,7 +73,6 @@ export const RestaurantPage: React.FC = () => {
 
   // Données réelles (tables)
   const [tables, setTables] = useState<TableRestaurant[]>([]);
-  const [tablesLoading, setTablesLoading] = useState(false);
 
   // Données mockées (produits, commandes, clients) – à migrer plus tard
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,6 +83,8 @@ export const RestaurantPage: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [restaurantStock, setRestaurantStock] = useState<Array<{ quantite: number; unite?: string }>>([]);
   const ordersRequestVersion = useRef(0);
+  const tablesRequestVersion = useRef(0);
+  const catalogRequestVersion = useRef(0);
 
   // Modales
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -102,7 +103,7 @@ export const RestaurantPage: React.FC = () => {
   const [deleteOrderError, setDeleteOrderError] = useState<string | null>(null);
 
   // ---------- Chargement initial ----------
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     const requestVersion = ++ordersRequestVersion.current;
     try {
       const res = await restaurantService.getOrders({ source_module: 'RESTAURANT' });
@@ -112,68 +113,75 @@ export const RestaurantPage: React.FC = () => {
     } catch (error) {
       console.warn('Erreur lors du chargement des commandes live:', error);
     }
-  };
+  }, []);
+
+  const fetchTables = useCallback(async () => {
+    const requestVersion = ++tablesRequestVersion.current;
+    try {
+      const res = await restaurantService.getTables();
+      if (requestVersion === tablesRequestVersion.current && res.success) {
+        setTables(buildRestaurantTables(Array.isArray(res.data) ? res.data : []));
+      } else if (requestVersion === tablesRequestVersion.current) {
+        console.warn('Échec du chargement des tables :', res.message);
+      }
+    } catch (error) {
+      console.error('Erreur réseau lors du chargement des tables', error);
+    }
+  }, []);
+
+  const refreshRestaurantCatalog = useCallback(async () => {
+    const requestVersion = ++catalogRequestVersion.current;
+    const stockRequest = userIsServer || userIsCashier
+      ? Promise.resolve([])
+      : restaurantService.getStocks();
+    const [productsRes, categoriesRes, stockRes, barProducts, alcoholProducts] = await Promise.all([
+      restaurantService.getProducts({ actif: true }),
+      restaurantService.getCategories(),
+      stockRequest,
+      barService.getBarProducts(),
+      alcoholService.getAlcoholProducts(),
+    ]);
+    if (requestVersion !== catalogRequestVersion.current) return;
+    setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
+    setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
+    const stockData = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: Array<{ quantite: number; unite?: string }> }).data;
+    setRestaurantStock(Array.isArray(stockData) ? stockData : []);
+    const barData = Array.isArray(barProducts) ? barProducts : (barProducts as { data?: BarProduct[] }).data;
+    setBarDrinks(Array.isArray(barData) ? barData : []);
+    setAlcoholDrinks(Array.isArray(alcoholProducts) ? alcoholProducts : []);
+  }, [userIsCashier, userIsServer]);
 
   useEffect(() => {
-    // Charger les tables depuis l'API
-    const fetchTables = async () => {
-      setTablesLoading(true);
-      try {
-        const res = await restaurantService.getTables();
-        if (res.success) {
-          setTables(buildRestaurantTables(Array.isArray(res.data) ? res.data : []));
-        } else {
-          console.warn('Échec du chargement des tables :', res.message);
-        }
-      } catch (error) {
-        console.error('Erreur réseau lors du chargement des tables', error);
-      } finally {
-        setTablesLoading(false);
-      }
-    };
-    fetchTables();
-    fetchOrders();
-    if (!userIsCashier) barService.getBarProducts()
-      .then((response) => {
-        const data = Array.isArray(response) ? response : (response as { data?: BarProduct[] }).data;
-        setBarDrinks(Array.isArray(data) ? data : []);
-      })
-      .catch((error) => {
-        console.error('Erreur lors du chargement des boissons du Bar & Cocktails', error);
-        setBarDrinks([]);
-      });
-    if (!userIsCashier) alcoholService.getAlcoholProducts()
-      .then((response) => setAlcoholDrinks(Array.isArray(response) ? response : []))
-      .catch((error) => {
-        console.error('Erreur lors du chargement des boissons alcoolisées', error);
-        setAlcoholDrinks([]);
-      });
+    void fetchTables();
+    void fetchOrders();
+    void refreshRestaurantCatalog().catch((error) => console.error('Erreur lors du chargement du menu/stock Restaurant', error));
+    const clientsRequest = (userIsServer || userIsCashier)
+      ? Promise.resolve([])
+      : clientService.getClients();
+    void clientsRequest
+      .then((data) => setClients(Array.isArray(data) ? data as Client[] : []))
+      .catch((error) => console.error('Erreur lors du chargement des clients Restaurant', error));
 
-    const restaurantDataRequest = (userIsServer || userIsCashier)
-      ? Promise.all([restaurantService.getProducts({ actif: true }), restaurantService.getCategories()])
-          .then(([productsRes, categoriesRes]) => [productsRes, categoriesRes, [], []] as const)
-      : Promise.all([
-          restaurantService.getProducts({ actif: true }),
-          restaurantService.getCategories(),
-          clientService.getClients(),
-          restaurantService.getStocks(),
-        ]);
-    restaurantDataRequest
-      .then(([productsRes, categoriesRes, clientsData, stockRes]) => {
-        setProducts(productsRes.success && Array.isArray(productsRes.data) ? productsRes.data as Product[] : []);
-        setCategories(categoriesRes.success && Array.isArray(categoriesRes.data) ? categoriesRes.data as Category[] : []);
-        setClients(Array.isArray(clientsData) ? clientsData as Client[] : []);
-        const stockData = Array.isArray(stockRes) ? stockRes : (stockRes as { data?: Array<{ quantite: number; unite?: string }> }).data;
-        setRestaurantStock(Array.isArray(stockData) ? stockData : []);
-      })
-      .catch(error => {
-        console.error('Erreur lors du chargement des données Restaurant', error);
-        setProducts([]);
-        setCategories([]);
-        setClients([]);
-        setRestaurantStock([]);
-      });
-  }, []);
+    const refreshTimer = window.setInterval(() => {
+      void fetchTables();
+      void fetchOrders();
+      void refreshRestaurantCatalog().catch((error) => console.error('Erreur actualisation menu/stock Restaurant', error));
+    }, 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (module === 'restaurant' || module === 'global') {
+        void fetchTables();
+        void fetchOrders();
+      }
+      if (['restaurant', 'stock', 'bar', 'alcool', 'global'].includes(module)) {
+        void refreshRestaurantCatalog().catch((error) => console.error('Erreur actualisation menu/stock Restaurant', error));
+      }
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+      catalogRequestVersion.current += 1;
+    };
+  }, [fetchOrders, fetchTables, refreshRestaurantCatalog, userIsCashier, userIsServer]);
 
   // ---------- Handlers Tables (API) ----------
   const handleNewOrder = () => {
@@ -212,11 +220,12 @@ export const RestaurantPage: React.FC = () => {
             cuisson: item.cuisson,
           })),
           notes: formData.notes,
+          moyen_paiement: formData.moyen_paiement,
           location_type: formData.location_type,
           special_person_name: formData.special_person_name,
         });
         if (!res.success) throw new Error(res.message || 'Modification de la commande impossible.');
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         setEditingOrder(null);
         setShowOrderModal(false);
         return;
@@ -240,11 +249,12 @@ export const RestaurantPage: React.FC = () => {
           cuisson: item.cuisson,
         })),
         notes: formData.notes,
+        moyen_paiement: formData.moyen_paiement,
         location_type: formData.location_type,
         special_person_name: formData.special_person_name,
       });
       if (res.success) {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         setShowOrderModal(false);
         return;
       }
@@ -269,11 +279,12 @@ export const RestaurantPage: React.FC = () => {
         cuisson: item.cuisson,
       })),
       notes: order.notes,
+      moyen_paiement: order.moyen_paiement_prevu || order.moyen_paiement,
       location_type: locationType || (tableId ? undefined : order.location_type),
       special_person_name: order.special_person_name,
     });
     if (!response.success) throw new Error(response.message || "Le changement d'emplacement a échoué.");
-    await fetchOrders();
+    await Promise.all([fetchOrders(), fetchTables()]);
   };
 
   const handleUpdateOrderStatus = async (orderId: number | string, status: Order['statut']) => {
@@ -281,7 +292,7 @@ export const RestaurantPage: React.FC = () => {
     try {
       const res = await restaurantService.updateOrderStatus(numericId, status);
       if (res && res.success) {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         return;
       }
       throw new Error("Le statut de la commande n'a pas pu être mis à jour.");
@@ -318,12 +329,7 @@ export const RestaurantPage: React.FC = () => {
         client_id: order?.client_id || undefined,
       });
       if (res && res.success) {
-        try {
-          const tablesRes = await restaurantService.getTables();
-          if (tablesRes.success) setTables(buildRestaurantTables(Array.isArray(tablesRes.data) ? tablesRes.data : []));
-        } catch (tableError) {
-          console.warn('Rafraîchissement des tables après paiement échoué:', tableError);
-        }
+        await Promise.all([fetchOrders(), fetchTables()]);
       } else {
         throw new Error(res?.message || 'Le paiement n’a pas été confirmé.');
       }
@@ -333,12 +339,6 @@ export const RestaurantPage: React.FC = () => {
         await fetchOrders();
       }
       throw err;
-    }
-
-    // Mise à jour locale uniquement après le succès confirmé ci-dessus.
-    setOrders(prev => prev.map(o => Number(o.id) === numericId ? { ...o, statut: 'PAYEE', moyen_paiement: paymentMethod } : o));
-    if (order?.table) {
-      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
     }
 
     // Enregistrement dans le HDAContext (Caisse)
@@ -364,16 +364,13 @@ export const RestaurantPage: React.FC = () => {
     try {
       const res = await restaurantService.updateOrderStatus(numericId, 'ANNULEE');
       if (res && res.success) {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchTables()]);
         return;
       }
+      throw new Error(res?.message || "L'annulation de la commande a échoué.");
     } catch (err) {
-      console.warn('API cancel échoué, bascule vers mode local:', err);
-    }
-    setOrders(prev => prev.map(o => o.id === numericId ? { ...o, statut: 'ANNULEE' } : o));
-    const order = orders.find(o => o.id === numericId);
-    if (order?.table) {
-      setTables(prev => prev.map(t => t.id === order.table!.id ? { ...t, statut: 'LIBRE' } : t));
+      console.error('Erreur annulation commande restaurant:', err);
+      throw err;
     }
   };
 
@@ -390,7 +387,7 @@ export const RestaurantPage: React.FC = () => {
     try {
       setIsDeletingOrder(true);
       await restaurantService.deleteOrder(Number(pendingDeleteOrder.id));
-      setOrders(prev => prev.filter(order => order.id !== Number(pendingDeleteOrder.id)));
+      await Promise.all([fetchOrders(), fetchTables()]);
       setPendingDeleteOrder(null);
       setDeleteOrderError(null);
     } catch (error) {
@@ -430,11 +427,12 @@ export const RestaurantPage: React.FC = () => {
           : '';
         const client = clients.find((candidate) => candidate.id === order.client_id);
         const clientName = client ? `${client.nom || ''} ${client.prenom || ''}`.trim() : `${order.client_nom || ''} ${order.client_prenom || ''}`.trim();
+        const creatorName = `${order.creator_prenom || ''} ${order.creator_nom || ''}`.trim();
         printOrderInvoice({
           module: 'RESTAURANT',
           orderId: numericId,
           status: order.statut || 'EN_ATTENTE',
-          client: clientName || 'Client anonyme',
+          client: creatorName || clientName || order.special_person_name || 'Client anonyme',
           table: order.table_numero || order.table?.numero || order.location_type || order.table_id || '—',
           date: order.created_at,
           notes: order.notes,
@@ -690,7 +688,6 @@ export const RestaurantPage: React.FC = () => {
               await restaurantService.closeAllOrders(orderIds);
             }}
             onRefresh={fetchOrders}
-            onNewOrder={handleNewOrder}
             onInvoice={handlePrintInvoice}
           />
         )}
@@ -821,10 +818,12 @@ export const RestaurantPage: React.FC = () => {
               <button
                 key={restaurantTable.id}
                 type="button"
+                disabled={String(restaurantTable.statut).toUpperCase() === 'OCCUPEE'}
                 onClick={() => handleSelectOrderLocation(restaurantTable.id)}
-                className="flex min-h-16 items-center justify-center rounded-lg border border-base bg-surface-2 px-2 py-2 text-center text-xs font-semibold text-primary transition hover:border-accent hover:bg-accent/10"
+                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition ${String(restaurantTable.statut).toUpperCase() === 'OCCUPEE' ? 'cursor-not-allowed border-red-500/30 bg-red-500/10 text-red-400' : 'border-base bg-surface-2 text-primary hover:border-accent hover:bg-accent/10'}`}
               >
                 {String(restaurantTable.numero).toUpperCase().startsWith('T') ? restaurantTable.numero : `T${restaurantTable.numero}`}
+                {String(restaurantTable.statut).toUpperCase() === 'OCCUPEE' && <span className="ml-1 block text-[10px]">Occupée</span>}
               </button>
             ))}
             {tables.length === 0 && <p className="col-span-4 py-6 text-center text-xs text-muted">Aucune table disponible.</p>}

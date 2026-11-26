@@ -31,6 +31,7 @@ import { signatureService } from '../services/signature.service';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
 import { printThermal } from '../utils/thermalPrint';
+import { onRealtimeChange } from '../services/realtime.service';
 
 const ClientsPage: React.FC = () => {
   const { 
@@ -127,6 +128,22 @@ const ClientsPage: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(timer);
+  }, [searchTerm, searchClients, loadClients]);
+
+  useEffect(() => {
+    const refreshTimer = window.setInterval(() => {
+      if (searchTerm) void searchClients(searchTerm);
+      else void loadClients();
+    }, 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (!['clients', 'hotel', 'bar', 'restaurant', 'casino', 'global'].includes(module)) return;
+      if (searchTerm) void searchClients(searchTerm);
+      else void loadClients();
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+    };
   }, [searchTerm, searchClients, loadClients]);
 
   // Filtrer les clients

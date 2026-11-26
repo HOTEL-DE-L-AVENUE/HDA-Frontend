@@ -6,24 +6,23 @@ import api from '../../lib/api';
 import barService from '../../services/bar.service';
 import { BAR_COMMANDES_ACTIONS } from '../../data/Bar.data';
 import { Badge, Button, Input, Modal, Select } from '../UI';
-import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle, Gift, Dices, Hotel, MapPin } from 'lucide-react';
+import { Plus, Printer, XCircle, ChefHat, CheckCircle2, DollarSign, AlertTriangle, Gift, Dices, Hotel, MapPin, Pencil } from 'lucide-react';
 import { clientService, type Client } from '../../services/client.service';
 import { reservationService } from '../../services/reservation.service';
 import AuthService from '../../services/authService';
 import { isAdmin, isCashier, isBarman, isHostess, isManager } from '../../utils/permissions';
+import { onRealtimeChange } from '../../services/realtime.service';
 
 
 interface Props {
   commandes: BarCommande[];
   onCreateCommande?: (commande: { client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
-  onUpdateCommande?: (commande: { id: number; client: string; table: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
+  onUpdateCommande?: (commande: { id: number; client: string; table?: number; nombre_personnes: number; moyen_paiement: NonNullable<BarCommande['moyen_paiement']>; observation?: string; items: BarCommande['items']; hotel_reservation_id?: number | null; room_id?: number | null; room_guest_name?: string | null; room_account_paid?: boolean }) => Promise<void> | void;
   onDeleteCommande?: (id: number) => Promise<void> | void;
   onUpdateStatut?: (id: number, statut: BarCommande['statut'], moyenPaiement?: NonNullable<BarCommande['moyen_paiement']>) => Promise<void> | void;
   cocktails?: BarProduct[];
   stockMap?: Record<number, { quantite: number; unite: string }>;
   visible?: boolean;
-  createOrderRequest?: number;
-  onCreateOrderRequestHandled?: () => void;
 }
 
 const statusClasses: Record<string, { label: string; variant: string }> = {
@@ -34,6 +33,8 @@ const statusClasses: Record<string, { label: string; variant: string }> = {
   'Encaissée': { label: 'Encaissée', variant: 'accent' },
   'Annulée': { label: 'Annulée', variant: 'danger' },
 };
+
+const getProductKey = (sourceModule: string, productId: number) => `${sourceModule}:${productId}`;
 
 type OrderLocationOption = {
   kind: 'table' | 'special';
@@ -50,19 +51,22 @@ export const BarCommandeView: React.FC<Props> = ({
   cocktails = [],
   stockMap = {},
   visible = true,
-  createOrderRequest = 0,
-  onCreateOrderRequestHandled,
 }) => {
   const currentUser = AuthService.getCurrentUser();
   const canEncaisser = isAdmin(currentUser) || isCashier(currentUser) || isManager(currentUser);
   const userIsHostess = isHostess(currentUser);
+  const userIsCashier = isCashier(currentUser);
   const userIsServer = currentUser?.role?.toLowerCase() === 'serveur';
-  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsServer;
-  const canModifyCommande = isAdmin(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser);
-  const canCreateCommande = canModifyCommande || isCashier(currentUser) || userIsServer;
+  const canChangeOrderStatus = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsServer || userIsCashier;
+  const canStartOrder = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser) || userIsHostess || userIsServer || userIsCashier;
+  const canServeOrder = isAdmin(currentUser) || isManager(currentUser) || userIsHostess || userIsServer || userIsCashier;
+  const canMarkReady = isAdmin(currentUser) || isManager(currentUser) || isBarman(currentUser);
+  const canCreateCommande = isAdmin(currentUser) || isBarman(currentUser) || userIsHostess || isManager(currentUser) || userIsCashier || userIsServer;
+  const canModifyCommande = canCreateCommande;
   const canDeleteCommande = isAdmin(currentUser);
   const canDeleteTicketItem = isAdmin(currentUser) || isManager(currentUser);
   const canAdjustTicketQuantity = isAdmin(currentUser) || isManager(currentUser);
+  const canIncreaseTicketQuantity = canModifyCommande;
   const [localCommandes, setLocalCommandes] = useState<BarCommande[]>(commandes);
 
   useEffect(() => {
@@ -87,8 +91,10 @@ export const BarCommandeView: React.FC<Props> = ({
   const [paymentOrder, setPaymentOrder] = useState<BarCommande | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<NonNullable<BarCommande['moyen_paiement']>>('ESPECES');
   const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [isChangingOrderLocation, setIsChangingOrderLocation] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [selectedItems, setSelectedItems] = useState<BarCommande['items']>([]);
+  const [originalEditQuantities, setOriginalEditQuantities] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [menuCategory, setMenuCategory] = useState('Toutes');
   const [menuSubcategory, setMenuSubcategory] = useState('Toutes');
@@ -102,6 +108,11 @@ export const BarCommandeView: React.FC<Props> = ({
   const [pendingDeleteOrder, setPendingDeleteOrder] = useState<BarCommande | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  const getSelectedProductQuantity = (sourceModule: string, productId: number) =>
+    selectedItems
+      .filter((item) => (item.source_module || 'BAR') === sourceModule && Number(item.product_id) === productId)
+      .reduce((total, item) => total + Number(item.quantite || 0), 0);
 
   const resolveReservationClientLabel = (reservation: any) => {
     const firstName = String(reservation?.client?.prenom ?? reservation?.client_prenom ?? reservation?.prenom ?? '').trim();
@@ -131,6 +142,14 @@ export const BarCommandeView: React.FC<Props> = ({
 
   useEffect(() => {
     void loadTables();
+    const refreshTimer = window.setInterval(() => void loadTables(), 30_000);
+    const unsubscribeRealtime = onRealtimeChange(({ module }) => {
+      if (['bar', 'restaurant', 'global'].includes(module)) void loadTables();
+    });
+    return () => {
+      window.clearInterval(refreshTimer);
+      unsubscribeRealtime();
+    };
   }, []);
 
   const resetModal = () => {
@@ -139,6 +158,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setNombrePersonnes('1');
     setMoyenPaiement('ESPECES');
     setSelectedItems([]);
+    setOriginalEditQuantities({});
     setSearchTerm('');
     setSpecialPersonName('');
     setPokerActivePerson('');
@@ -146,6 +166,7 @@ export const BarCommandeView: React.FC<Props> = ({
     setPokerOrders({});
     setFeedback(null);
     setIsEditingOrder(false);
+    setIsChangingOrderLocation(false);
     setEditingOrderId(null);
     setSelectedLocation(null);
     setChamberReservationSearch('');
@@ -213,16 +234,18 @@ export const BarCommandeView: React.FC<Props> = ({
   const handleOpenModal = () => {
     setClient('');
     setTable('');
+    setIsEditingOrder(false);
+    setIsChangingOrderLocation(false);
     setNombrePersonnes('1');
     setMoyenPaiement('ESPECES');
     setSelectedItems([]);
+    setOriginalEditQuantities({});
     setSearchTerm('');
     setSpecialPersonName('');
     setPokerActivePerson('');
     setPokerPeople([]);
     setPokerOrders({});
     setFeedback(null);
-    setIsEditingOrder(false);
     setEditingOrderId(null);
     setChamberReservationSearch('');
     setSelectedChamberRoomLabel('');
@@ -232,16 +255,10 @@ export const BarCommandeView: React.FC<Props> = ({
     void loadClients();
   };
 
-  useEffect(() => {
-    if (createOrderRequest > 0) {
-      handleOpenModal();
-      onCreateOrderRequestHandled?.();
-    }
-  }, [createOrderRequest, onCreateOrderRequestHandled]);
-
   const handleSelectLocation = (location: OrderLocationOption) => {
     setSelectedLocation(location);
     setTable(String(location.tableId));
+    setIsChangingOrderLocation(isEditingOrder);
     setIsLocationSelectionOpen(false);
     setIsModalOpen(true);
     if (location.label === 'Chambre') {
@@ -251,7 +268,7 @@ export const BarCommandeView: React.FC<Props> = ({
       setMoyenPaiement('GRATUIT');
       setChamberReservationOptions([]);
       setChamberReservationSearch('');
-    } else {
+    } else if (!isEditingOrder) {
       setMoyenPaiement('ESPECES');
       setChamberReservationOptions([]);
       setChamberReservationSearch('');
@@ -280,6 +297,11 @@ export const BarCommandeView: React.FC<Props> = ({
     setNombrePersonnes(String(commande.nombre_personnes || 1));
     setMoyenPaiement(commande.moyen_paiement || (isGratuit || isPoker ? 'GRATUIT' : isChambre ? 'CREDIT' : 'ESPECES'));
     setSelectedItems(commande.items.map((item) => ({ ...item })));
+    setOriginalEditQuantities(commande.items.reduce<Record<string, number>>((quantities, item) => {
+      const key = getProductKey(item.source_module || 'BAR', Number(item.product_id ?? 0));
+      quantities[key] = (quantities[key] || 0) + Number(item.quantite || 0);
+      return quantities;
+    }, {}));
     setSearchTerm('');
     setSelectedLocation(location);
     setSpecialPersonName(location.kind === 'special' ? chamberName : '');
@@ -290,10 +312,17 @@ export const BarCommandeView: React.FC<Props> = ({
     setPokerOrders(location.label === 'Pocker gratuit' ? { [commande.client]: commande.items.map((item) => ({ ...item })) } : {});
     setFeedback(null);
     setIsEditingOrder(true);
+    setIsChangingOrderLocation(false);
     setEditingOrderId(commande.id);
     setIsLocationSelectionOpen(false);
     setIsModalOpen(true);
     void loadClients();
+  };
+
+  const handleOpenLocationModal = (commande: BarCommande) => {
+    handleOpenEditModal(commande);
+    setIsModalOpen(false);
+    setIsLocationSelectionOpen(true);
   };
 
   const handleCloseModal = () => {
@@ -500,7 +529,9 @@ export const BarCommandeView: React.FC<Props> = ({
       if (!productId || !stock) {
         return `${item.nom} n'a pas de stock configuré. Ajoutez ce produit au stock du bar.`;
       }
-      if (!Number.isFinite(available) || Number(item.quantite) > available) {
+      const key = getProductKey(item.source_module || 'BAR', productId);
+      const addedQuantity = Math.max(0, Number(item.quantite) - (originalEditQuantities[key] || 0));
+      if (!Number.isFinite(available) || addedQuantity > available) {
         return `Stock insuffisant pour ${item.nom}. Disponible : ${Number.isFinite(available) ? available : 0}.`;
       }
       return null;
@@ -516,7 +547,7 @@ export const BarCommandeView: React.FC<Props> = ({
         await onUpdateCommande?.({
           id: editingOrderId,
           client: clientNom,
-          table: tableNumber,
+          table: isChangingOrderLocation ? tableNumber : undefined,
           nombre_personnes: guestCount,
           moyen_paiement: effectivePaymentMethod,
           items: selectedItems,
@@ -540,6 +571,7 @@ export const BarCommandeView: React.FC<Props> = ({
           room_account_paid: false,
         });
       }
+      await loadTables();
       resetModal();
     } catch (error) {
       console.error('Erreur commande bar:', error);
@@ -575,6 +607,7 @@ export const BarCommandeView: React.FC<Props> = ({
       setDeletingId(commande.id);
       setPendingDeleteOrder(null);
       await onDeleteCommande?.(commande.id);
+      await loadTables();
       setFeedback({ type: 'success', message: 'Commande supprimée avec succès.' });
     } catch (error) {
       console.error('Erreur suppression commande bar:', error);
@@ -609,6 +642,7 @@ export const BarCommandeView: React.FC<Props> = ({
       setLocalCommandes((prev) =>
         prev.map((cmd) => (cmd.id === commandeId ? { ...cmd, statut: nouveauStatut } : cmd))
       );
+      await loadTables();
 
       setFeedback({ type: 'success', message: 'Statut de la commande mis à jour avec succès.' });
     } catch (error: any) {
@@ -639,6 +673,7 @@ export const BarCommandeView: React.FC<Props> = ({
         await barService.updateBarOrderStatus(paymentOrder.id, 'ENCAISSEE', paymentMethod);
       }
       setLocalCommandes((prev) => prev.map((cmd) => cmd.id === paymentOrder.id ? { ...cmd, statut: 'Encaissée', moyen_paiement: paymentMethod } : cmd));
+      await loadTables();
       setFeedback({ type: 'success', message: 'Commande encaissée avec succès.' });
     } catch (error: any) {
       console.error('Erreur encaissement commande bar:', error);
@@ -751,6 +786,15 @@ export const BarCommandeView: React.FC<Props> = ({
       render: (commande: BarCommande) => <span className="text-sm text-slate-300">{formatCommandeDate(commande.created_at)}</span>,
     },
     {
+      key: 'creator',
+      label: 'Pris par',
+      render: (commande: BarCommande) => (
+        <span className="text-sm text-slate-300">
+          {[commande.creator_prenom, commande.creator_nom].filter(Boolean).join(' ') || 'Non renseigné'}
+        </span>
+      ),
+    },
+    {
       key: 'montant',
       label: 'Montant',
       render: (commande: BarCommande) => <span className="font-semibold text-accent">{formatCurrency(commande.total)}</span>,
@@ -770,7 +814,29 @@ export const BarCommandeView: React.FC<Props> = ({
         const isUpdating = updatingId === commande.id;
         return (
           <>
-            {canChangeOrderStatus && commande.statut === 'En attente' && (
+            {canModifyCommande && commande.statut !== 'Annulée' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Pencil size={14} />}
+                onClick={() => handleOpenEditModal(commande)}
+                disabled={isUpdating}
+                title="Modifier la commande"
+                aria-label={`Modifier la commande ${commande.id}`}
+              />
+            )}
+            {canModifyCommande && ['En attente', 'En préparation'].includes(commande.statut) && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<MapPin size={14} />}
+                onClick={() => handleOpenLocationModal(commande)}
+                disabled={isUpdating}
+                title="Changer d'emplacement"
+                aria-label={`Changer l'emplacement de la commande ${commande.id}`}
+              />
+            )}
+            {canStartOrder && commande.statut === 'En attente' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -781,7 +847,7 @@ export const BarCommandeView: React.FC<Props> = ({
                 {isUpdating ? '...' : 'Démarrer'}
               </Button>
             )}
-            {canChangeOrderStatus && commande.statut === 'En préparation' && (
+            {canMarkReady && commande.statut === 'En préparation' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -790,6 +856,17 @@ export const BarCommandeView: React.FC<Props> = ({
                 disabled={isUpdating}
               >
                 {isUpdating ? '...' : 'Marquer prête'}
+              </Button>
+            )}
+            {canServeOrder && commande.statut === 'En préparation' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<CheckCircle2 size={14} />}
+                onClick={() => void handleStatusChange(commande.id, 'Servie')}
+                disabled={isUpdating}
+              >
+                {isUpdating ? '...' : 'Servir'}
               </Button>
             )}
             {canChangeOrderStatus && ['En attente', 'En préparation'].includes(commande.statut) && (
@@ -804,11 +881,10 @@ export const BarCommandeView: React.FC<Props> = ({
                 }}
                 disabled={isUpdating}
                 title="Annuler la commande"
-              >
-                Annuler
-              </Button>
+                aria-label={`Annuler la commande ${commande.id}`}
+              />
             )}
-            {canChangeOrderStatus && commande.statut === 'Prête' && (
+            {canServeOrder && commande.statut === 'Prête' && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -817,17 +893,6 @@ export const BarCommandeView: React.FC<Props> = ({
                 disabled={isUpdating}
               >
                 {isUpdating ? '...' : 'Servir'}
-              </Button>
-            )}
-            {canModifyCommande && commande.statut !== 'Annulée' && (
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Plus size={14} />}
-                onClick={() => handleOpenEditModal(commande)}
-                disabled={isUpdating}
-              >
-                Modifier
               </Button>
             )}
             {canEncaisser && commande.statut === 'Servie' && !isChambreOrder(commande) && (
@@ -888,6 +953,9 @@ export const BarCommandeView: React.FC<Props> = ({
     const parts = menuParts(cocktail);
     return (menuCategory === 'Toutes' || parts.category === menuCategory) && (menuSubcategory === 'Toutes' || parts.subcategory === menuSubcategory);
   });
+  const editingOrderTableId = isEditingOrder
+    ? commandes.find((commande) => commande.id === editingOrderId)?.table
+    : undefined;
 
   const orderLocationOptions: OrderLocationOption[] = [
     ...[...tables]
@@ -940,16 +1008,25 @@ export const BarCommandeView: React.FC<Props> = ({
         <div className="space-y-4">
           <p className="text-sm text-secondary">Sélectionnez une table ou un type de réservation.</p>
           <div className="grid grid-cols-4 gap-2">
-            {orderLocationOptions.map((location) => (
-              <button
-                key={location.kind === 'table' ? location.tableId : location.label}
-                type="button"
-                onClick={() => handleSelectLocation(location)}
-                className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition hover:border-accent hover:bg-accent/10 ${location.kind === 'table' ? 'border-base bg-surface-2 text-primary' : 'border-amber-500/40 bg-amber-500/10 text-amber-300'}`}
-              >
-                {location.label}
-              </button>
-            ))}
+            {orderLocationOptions.map((location) => {
+              const isOccupied = location.kind === 'table'
+                && String(tables.find((tableItem) => tableItem.id === location.tableId)?.statut || '').toUpperCase() === 'OCCUPEE';
+              const isCurrentOrderTable = location.kind === 'table' && location.tableId === editingOrderTableId;
+              const isUnavailable = isOccupied && !isCurrentOrderTable;
+              return (
+                <button
+                  key={location.kind === 'table' ? location.tableId : location.label}
+                  type="button"
+                  disabled={isUnavailable}
+                  onClick={() => handleSelectLocation(location)}
+                  className={`flex min-h-16 items-center justify-center rounded-lg border px-2 py-2 text-center text-xs font-semibold transition ${isUnavailable ? 'cursor-not-allowed border-red-500/30 bg-red-500/10 text-red-400' : location.kind === 'table' ? 'border-base bg-surface-2 text-primary hover:border-accent hover:bg-accent/10' : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-400'}`}
+                >
+                  {location.label}
+                  {isUnavailable && <span className="ml-1 block text-[10px]">Occupée</span>}
+                  {isCurrentOrderTable && <span className="ml-1 block text-[10px]">Actuelle</span>}
+                </button>
+              );
+            })}
           </div>
           <Button variant="danger" size="sm" type="button" onClick={handleCancelLocationSelection} className="w-auto self-end rounded-md px-3 py-1.5">
             Annuler
@@ -1122,7 +1199,12 @@ export const BarCommandeView: React.FC<Props> = ({
                           <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button>
                         </div>
                       ) : (
-                        <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
+                        <div className="flex items-center gap-1 rounded-lg border border-base bg-surface px-2 py-1">
+                          <span className="min-w-5 text-center text-primary">×{item.quantite}</span>
+                          {canIncreaseTicketQuantity && (
+                            <button type="button" onClick={() => handleUpdateItemQuantity(index, 1)} className="px-1 text-slate-400 transition hover:text-white" aria-label={`Augmenter la quantité de ${item.nom}`}>+</button>
+                          )}
+                        </div>
                       )}
                       <span className="shrink-0 text-accent">{formatCurrency(item.prix * item.quantite)}</span>
                       {canDeleteTicketItem && <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-400 transition hover:text-red-300" aria-label={`Supprimer ${item.nom}`}><XCircle size={14} /></button>}
@@ -1169,17 +1251,20 @@ export const BarCommandeView: React.FC<Props> = ({
                   {menuItems.map((cocktail) => {
                     const isRestaurantMenuItem = cocktail.source_module === 'RESTAURANT';
                     const isSpecialBillardItem = cocktail.id <= 0 && !isRestaurantMenuItem;
-                    const stock = stockMap[cocktail.id] ?? (cocktail.quantite != null
+                    const productId = Number(cocktail.restaurant_product_id ?? cocktail.id);
+                    const sourceModule = cocktail.source_module || 'BAR';
+                    const stock = stockMap[productId] ?? (cocktail.quantite != null
                       ? { quantite: Number(cocktail.quantite), unite: cocktail.unite || 'unités' }
                       : undefined);
-                    // Certains produits arrivent avec la quantité sur le catalogue,
-                    // mais sans entrée correspondante dans stockMap. Ne désactiver
-                    // l'article que si une quantité connue confirme un stock nul.
+                    const selectedQuantity = getSelectedProductQuantity(sourceModule, productId);
+                    const originalQuantity = originalEditQuantities[getProductKey(sourceModule, productId)] || 0;
+                    const addedQuantity = Math.max(0, selectedQuantity - originalQuantity);
+                    const availableQuantity = stock ? Number(stock.quantite) : 0;
+                    const remainingQuantity = availableQuantity - addedQuantity;
                     const unavailable = !isRestaurantMenuItem
                       && !isSpecialBillardItem
-                      && stock?.quantite != null
-                      && Number(stock.quantite) <= 0;
-                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[112px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed ${unavailable ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-950 bg-emerald-500 hover:bg-emerald-400'}`}><span className="text-sm font-bold leading-tight">{cocktail.nom}</span><span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>{!isRestaurantMenuItem && !isSpecialBillardItem && <span className={`mt-2 text-[11px] font-semibold ${unavailable ? 'text-white' : 'text-emerald-950'}`}>Stock : {stock?.quantite ?? 0} {stock?.unite || 'unités'}</span>}</button>;
+                      && (!stock || !Number.isFinite(availableQuantity) || remainingQuantity <= 0);
+                    return <button key={cocktail.id} type="button" disabled={unavailable} onClick={() => handleAddItem(cocktail)} className={`flex min-h-[112px] flex-col items-center justify-center rounded-xl border px-3 py-3 text-center text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed ${unavailable ? 'border-red-800 bg-red-600 hover:bg-red-600' : 'border-emerald-950 bg-emerald-500 hover:bg-emerald-400'}`}><span className="text-sm font-bold leading-tight">{cocktail.nom}</span><span className="mt-2 text-xs font-semibold text-emerald-950">{formatCurrency(cocktail.prix)}</span>{!isRestaurantMenuItem && !isSpecialBillardItem && <span className={`mt-2 text-[11px] font-semibold ${unavailable ? 'text-white' : 'text-emerald-950'}`}>{unavailable ? 'Stock insuffisant' : `Stock : ${remainingQuantity} ${stock?.unite || 'unités'}`}</span>}</button>;
                   })}
                   {menuItems.length === 0 && <p className="col-span-full py-10 text-center text-xs text-muted">Aucun article disponible.</p>}
                 </div>
@@ -1278,9 +1363,12 @@ export const BarCommandeView: React.FC<Props> = ({
                   <div className="text-slate-400">{columns[1].render(commande)}</div>
                   <div className="flex items-center justify-between pt-2 border-t border-base">
                     <div className="text-slate-400">{columns[2].render(commande)}</div>
-                    {columns[4].render(commande)}
+                    <div className="flex flex-col items-end gap-1">
+                      {columns[4].render(commande)}
+                      {columns[5].render(commande)}
+                    </div>
                   </div>
-                  <div className="flex gap-1 pt-2 border-t border-base">{columns[5].render(commande)}</div>
+                  <div className="flex flex-wrap gap-1 pt-2 border-t border-base">{columns[6].render(commande)}</div>
                 </div>
               ))}
             </div>
@@ -1292,6 +1380,7 @@ export const BarCommandeView: React.FC<Props> = ({
                     <th className="px-3 py-3 font-medium">Table</th>
                     <th className="px-3 py-3 font-medium">Articles</th>
                     <th className="px-3 py-3 font-medium">Date</th>
+                    <th className="px-3 py-3 font-medium">Pris par</th>
                     <th className="px-3 py-3 font-medium">Montant</th>
                     <th className="px-3 py-3 font-medium">Statut</th>
                     <th className="px-3 py-3 font-medium text-right">Actions</th>
@@ -1305,8 +1394,9 @@ export const BarCommandeView: React.FC<Props> = ({
                       <td className="px-3 py-3">{columns[2].render(commande)}</td>
                       <td className="px-3 py-3">{columns[3].render(commande)}</td>
                       <td className="px-3 py-3">{columns[4].render(commande)}</td>
+                      <td className="px-3 py-3">{columns[5].render(commande)}</td>
                       <td className="px-3 py-3 text-right">
-                        <div className="flex gap-1 justify-end">{columns[5].render(commande)}</div>
+                        <div className="flex gap-1 justify-end">{columns[6].render(commande)}</div>
                       </td>
                     </tr>
                   ))}
